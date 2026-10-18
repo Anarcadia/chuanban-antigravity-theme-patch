@@ -45,7 +45,7 @@ Anthropic 官方字体族（`AnthropicSans` / `AnthropicSerif` / `AnthropicMono`
 
 - 用 Antigravity 干活、受够了冷灰工程界面的人；
 - 想要 Claude Desktop 那种暖纸阅读质感的人；
-- 被设置按钮点不开 / 主题切了白屏折磨过的人。
+- 喜欢 美观字体 的颜控。
 
 ---
 
