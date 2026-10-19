@@ -9,6 +9,12 @@ description: 一次性安装型 Skill：引导执行端 Agent（Claude Code / Co
 
 **这是一份一次性的安装说明书，读者是执行端 Agent。** 按「执行流程」走完一遍，就在用户机器上做好并装好一套属于他自己的 Antigravity 界面补丁。§0–§6 是原方案的核心设计与 macOS 实现，数值与选择器都经过实测，**请照原样执行，不要自行“优化”**；§7 Windows、§8 轻量路线只给原则，细节由你自行调研解决。
 
+> 🕒 **最近版本更新记录（当前时间：2026-10-19 03:00）**
+
+> - **2026-10-19（v2 现行）**：界面排版扎实度与温润墨感（Solid Ink）深度实装；精准解耦左侧文件目录折叠标题（`📁 Root` 等）粗度过重问题；侧栏常规字重 450 与 0.2px 微润墨精细微调固化；探针升级为 `20261019-solid-consolidated-v2`。
+> - **2026-10-17**：增补 Antigravity 新版模型选择器等未汉化词典；初步试验 UI 字重加固与排版质感提升。
+> - **2026-10-13**：防白屏崩溃底层存储穿透修复（Codex 加固）；输入框独立引入 Codex 同款等宽粗衬线（`Sarasa Mono Slab SC`）；发布三大独立配色预设（高对比版/净白/复古深色）及 Google Drive 字体公开分享库。
+
 ### 执行流程（先读这里）
 
 1. **确认环境**：操作系统、Antigravity 是否已安装并运行、本机是否有 Node.js（建议 18+，需内置或安装 `ws` 等 WebSocket 能力）。
@@ -168,6 +174,17 @@ Antigravity 官方设置虽然提供了“外观”（Appearance）面板并允�
 | 2. 阅读正文层 | 对话区正文、Markdown 渲染区、`.prose`、`.markdown`、段落 `p`、列表 `li`、标题 `h1-h6` | `'Anthropic Serif', 'Tiempos Text', Georgia, Cambria, 'Sarasa Mono Slab SC', '等距更纱黑体 Slab SC', 'Sarasa Gothic SC', '更纱黑体 SC', serif` | **西文使用 Claude 官方原版 Anthropic Serif 书卷衬线**（行高 1.62、字距 -0.003em），**中文优先回退更纱粗衬线/黑体**，彻底消除官方原生硬塞苹方黑体所导致的“中西文拼凑割裂感”。 |
 | 3. 代码与终端层 | `code`、`pre`、`.monaco-editor`、`.xterm` 终端、文件名与路径、diff 变更器 | `'Anthropic Mono', 'Sarasa Mono Slab SC', '等距更纱黑体 Slab SC', ui-monospace, SFMono-Regular, monospace` | Claude 官方等宽与更纱等宽双重保障，严格 1:2 中英等宽打字机版，字符对齐、符号分明。 |
 | 4. 主输入框编辑区 | `div[contenteditable="true"]`、`textarea`、`[data-composer]`、`.ProseMirror` | `'Sarasa Mono Slab SC', '等距更纱黑体 Slab SC', 'Anthropic Mono', monospace` | **独立配置为 Codex 同款方案**：具备打字机板状粗衬线（Slab Serif）、数字 1 横底座与 0 带斜杠、严格 1:2 中西文等宽，打字手感与视觉极佳。 |
+
+#### 附：界面排版扎实度与温润墨感渲染（Solid Ink Optimization）
+
+为彻底解决更纱黑体在浅色暖底上笔画偏细、中西文排版略显散漫的问题，方案在 CSS 注入层附加了精细微调与解耦：
+
+1. **字重分级饱满化与精细微削**：侧栏常规列表与对话条目收敛为 `font-weight: 450 !important;`（笔画舒展通透，消除复杂中文字糊死感）；选中激活态精准限定为 `520` 并纯黑化（`#0A0A0A`）；侧栏小标题设为沉静的 `500`（`#7A7670`）。
+2. **项目目录标题精准解耦**：避免通用选择器误伤目录折叠按钮（`📁 Root` 等），将其精准限定为 `450` 并微弱化墨晕至 `0.15px`，与文件夹图标重回优雅平衡。
+3. **微负字距凝聚**：侧边栏与常用按钮加入 `letter-spacing: -0.012em`，消除更纱黑体西文在窄栏界面的稀疏感。
+4. **深暖炭墨色**：常规项使用 `#262422`，分类小标题设为 `#7A7670`。
+5. **0.2px 精细润墨柔化**：通过 `text-shadow: 0 0 0.2px rgba(38, 36, 34, 0.35);` 模拟真实纸墨微晕扩散，抚平硬角，温润通透。
+6. **控制栏加固**：输入框底部模型切换栏与状态图标同步设为 `#0A0A0A` 与 `500` 字重。
 
 ---
 
@@ -361,7 +378,7 @@ if (!window.__ag_preset_hooked) {
 }
 
 syncPresetAttribute();
-window.__ag_patch_version = "20261013-high-contrast-v1";
+window.__ag_patch_version = "20261019-solid-consolidated-v2";
 ```
 
 配套 CSS 规则：
@@ -401,6 +418,27 @@ html[data-ag-preset="vintage-deep"] body.theme-light {
   --sidebar-secondary: #E6DCCE !important;
   --sidebar-border: #E0D4C3 !important;
 }
+
+/* 4、界面排版扎实度与温润墨感渲染（Solid Ink Optimization） */
+.bg-sidebar a, .bg-sidebar button, .bg-sidebar [class*="truncate"], .bg-sidebar [class*="text-sm"], .bg-sidebar [class*="text-xs"], aside a, aside button {
+  font-weight: 450 !important; letter-spacing: -0.012em !important; color: #262422 !important; text-rendering: optimizeLegibility; text-shadow: 0 0 0.2px rgba(38, 36, 34, 0.35);
+}
+button[data-testid="project-header"], button[data-project-card="true"], [data-project-label], [data-subtext] span[class*="text-muted"], span:has(> svg) + span {
+  font-weight: 450 !important; color: #383533 !important; text-shadow: 0 0 0.15px rgba(38, 36, 34, 0.25) !important;
+}
+button[data-testid="project-header"] span, button[data-project-card="true"] span {
+  font-weight: 450 !important; color: #2C2B29 !important; text-shadow: 0 0 0.15px rgba(38, 36, 34, 0.25) !important; letter-spacing: -0.01em !important;
+}
+[data-testid="conversation-row-sidebar"][data-selected="true"], [data-testid="conversation-row-sidebar"][data-selected="true"] span, .bg-sidebar [data-active="true"], .bg-sidebar [data-active="true"] span, .bg-sidebar [aria-selected="true"] {
+  font-weight: 520 !important; color: #0A0A0A !important; text-shadow: 0 0 0.25px rgba(10, 10, 10, 0.4);
+}
+.bg-sidebar [class*="text-muted"], .bg-sidebar [class*="text-[11px]"], .bg-sidebar [class*="uppercase"] {
+  font-weight: 500 !important; letter-spacing: -0.005em !important; color: #7A7670 !important;
+}
+button, [role="button"], select { letter-spacing: -0.012em; }
+#antigravity\.agentSidePanelInputBox [class*="text-secondary-foreground"], #antigravity\.agentSidePanelInputBox button, #antigravity\.agentSidePanelInputBox span {
+  font-weight: 500 !important; letter-spacing: -0.012em !important; text-shadow: 0 0 0.25px rgba(10, 10, 10, 0.4);
+}
 ```
 
 #### 步骤 4：修复 TanStack Router 弹窗死锁 Bug
@@ -436,7 +474,7 @@ if (!window.__ag_settings_guard_installed) {
 - 守护脚本使用 `setInterval(sync, 2500)` 定期检查目标页面的样式与探针版本：
 
 ```JavaScript
-Boolean(document.getElementById("ag-custom-fonts") && window.__ag_patch_version === "20261013-high-contrast-v1")
+Boolean(document.getElementById("ag-custom-fonts") && window.__ag_patch_version === "20261019-solid-consolidated-v2")
 ```
 
 - 检查失败时通过 `Runtime.evaluate` 执行热注入自愈（不重复累加 `addScriptToEvaluateOnNewDocument`）。
