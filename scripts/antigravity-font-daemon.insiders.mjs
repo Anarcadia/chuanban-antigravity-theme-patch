@@ -1202,7 +1202,7 @@ const INJECT_SCRIPT = `
     }
 
     syncChuanbanPreset();
-    window.__ag_patch_version = "20261103-insiders-dev-v12";
+    window.__ag_patch_version = "20261103-insiders-dev-v13";
 
     // 3.5 模型名称同行实时指标胶囊 (Scheme C: TPS · TTFT · Ctx/256k · Out + Hover 详情卡)
     // 严格保证「左(模型) - 中(指标胶囊) - 右(模式与发送)」三栏结构；中间过窄(<150px)时物理跳至下方第二行。
@@ -1214,6 +1214,11 @@ const INJECT_SCRIPT = `
         if (m) return m[1];
         const q = new URLSearchParams(window.location.search).get("cascadeId");
         if (q && /^[0-9a-f-]{36}$/i.test(q)) return q;
+        const selected = document.querySelector('[data-testid=conversation-row-sidebar][data-selected=true]');
+        if (selected) {
+          const cid = selected.getAttribute("data-cascade-id");
+          if (cid && /^[0-9a-f-]{36}$/i.test(cid)) return cid;
+        }
       } catch (e) {}
       return "";
     }
@@ -1343,7 +1348,12 @@ const INJECT_SCRIPT = `
         const pill = ensureMetricsPill();
         const ttEl = ensureMetricsTooltip();
         if (!pill) return;
-        if (!currentId || !payload || !payload.hasData || payload.cascadeId !== currentId) {
+        if (!payload || !payload.hasData) {
+          pill.style.display = "none";
+          if (ttEl) ttEl.removeAttribute("data-visible");
+          return;
+        }
+        if (currentId && payload.cascadeId !== currentId) {
           pill.style.display = "none";
           if (ttEl) ttEl.removeAttribute("data-visible");
           return;
@@ -1362,17 +1372,19 @@ const INJECT_SCRIPT = `
     function checkRouteAndMountMetrics() {
       try {
         const cid = extractCascadeId();
-        if (cid !== window.__ag_watched_cascade_id) {
+        if (cid && cid !== window.__ag_watched_cascade_id) {
           window.__ag_watched_cascade_id = cid;
           const pill = document.getElementById("ag-live-metrics-pill");
           if (pill && (!window.__ag_last_metrics || window.__ag_last_metrics.cascadeId !== cid)) {
             pill.style.display = "none";
           }
-          if (cid && typeof window.__agRequestMetrics === "function") {
+          if (typeof window.__agRequestMetrics === "function") {
             window.__agRequestMetrics(cid);
           }
         } else if (cid && window.__ag_last_metrics && window.__ag_last_metrics.cascadeId === cid) {
           ensureMetricsPill();
+        } else if (!cid && typeof window.__agRequestMetrics === "function" && (!window.__ag_last_metrics || !window.__ag_last_metrics.hasData)) {
+          window.__agRequestMetrics("");
         }
       } catch (e) {}
     }
@@ -1812,6 +1824,22 @@ async function pushMetricsToSession(session, cascadeId, force = false) {
   } catch {}
 }
 
+function getLatestConversationId() {
+  try {
+    if (!fs.existsSync(CONVERSATIONS_DIR)) return "";
+    const files = fs.readdirSync(CONVERSATIONS_DIR)
+      .filter(f => f.endsWith(".db") && /^[0-9a-f-]{36}\.db$/i.test(f))
+      .map(f => {
+        const p = path.join(CONVERSATIONS_DIR, f);
+        return { id: f.replace(/\.db$/, ""), mtime: fs.statSync(p).mtimeMs };
+      })
+      .sort((a, b) => b.mtime - a.mtime);
+    return files.length > 0 ? files[0].id : "";
+  } catch {
+    return "";
+  }
+}
+
 async function syncMetricsForSession(session) {
   if (!session || session.isInjecting || session.ws?.readyState !== 1) return;
   try {
@@ -1819,7 +1847,10 @@ async function syncMetricsForSession(session) {
       expression: 'window.__ag_watched_cascade_id || ""',
       returnByValue: true
     });
-    const cid = res?.result?.value;
+    let cid = res?.result?.value;
+    if (!cid) {
+      cid = getLatestConversationId();
+    }
     if (cid) {
       await pushMetricsToSession(session, cid, false);
     }
@@ -1857,7 +1888,7 @@ async function checkAndHeal(session, targetId) {
   session.isChecking = true;
   try {
     const res = await sendCDP(session, 'Runtime.evaluate', {
-      expression: 'Boolean(document.getElementById("ag-custom-fonts") && window.__ag_patch_version === "20261103-insiders-dev-v12")',
+      expression: 'Boolean(document.getElementById("ag-custom-fonts") && window.__ag_patch_version === "20261103-insiders-dev-v13")',
       returnByValue: true
     });
     const isHealthy = res?.result?.value === true;
@@ -1919,7 +1950,8 @@ async function attachTarget(target) {
 
         // 前端切换会话时立即响应推送指标 (< 5ms)
         if (msg.method === 'Runtime.bindingCalled' && msg.params?.name === '__agRequestMetrics') {
-          const cid = msg.params.payload;
+          let cid = msg.params.payload;
+          if (!cid) cid = getLatestConversationId();
           if (cid) {
             pushMetricsToSession(session, cid, true);
           }
