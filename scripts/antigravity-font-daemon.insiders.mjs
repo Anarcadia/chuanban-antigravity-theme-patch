@@ -693,6 +693,16 @@ const I18N_DICT = {
   'Execution': '执行策略',
   'Queued Messages': '排队消息',
   'Global Permissions': '全局权限',
+  'Permissions': '全局权限',
+  'This Computer': '本机权限',
+  'Remote': '远程权限',
+  'Configure what the agent can do in local and remote conversations.': '配置智能体在本地与远程对话中的操作权限。',
+  'Configure what the agent can do in local and remote conversations': '配置智能体在本地与远程对话中的操作权限',
+  'Controls permissions for remote conversations.': '控制智能体在远程对话中的操作权限。',
+  'Controls permissions for remote conversations': '控制智能体在远程对话中的操作权限',
+  'Network Permissions': '网络权限',
+  'Terminal & Tooling Permissions': '终端与工具权限',
+  'Terminal & Tooling': '终端与工具',
   'Tool Permissions': '工具权限',
   'Network Access Rules': '网络访问规则',
   'Agent Behavior': '代理行为',
@@ -1243,7 +1253,7 @@ const INJECT_SCRIPT = `
     }
 
     syncChuanbanPreset();
-    window.__ag_patch_version = "20261104-insiders-dev-v15";
+    window.__ag_patch_version = "20261104-insiders-dev-v16";
 
     // 3.5 模型名称同行实时指标胶囊 (Scheme C: TPS · TTFT · Ctx/256k · Out + Hover 详情卡)
     // 严格保证「左(模型) - 中(指标胶囊) - 右(模式与发送)」三栏结构；中间过窄(<150px)时物理跳至下方第二行。
@@ -1929,7 +1939,7 @@ async function checkAndHeal(session, targetId) {
   session.isChecking = true;
   try {
     const res = await sendCDP(session, 'Runtime.evaluate', {
-      expression: 'Boolean(document.getElementById("ag-custom-fonts") && window.__ag_patch_version === "20261104-insiders-dev-v15")',
+      expression: 'Boolean(document.getElementById("ag-custom-fonts") && window.__ag_patch_version === "20261104-insiders-dev-v16")',
       returnByValue: true
     });
     const isHealthy = res?.result?.value === true;
