@@ -665,6 +665,8 @@ const I18N_DICT = {
   'Recommended': '推荐',
   'Sign Out': '退出登录',
   'Provide Feedback': '提供反馈',
+  'Give Feedback': '反馈建议',
+  'Font': '字体设置',
   'Bug Report': '错误反馈 (Bug)',
   'Feature Request': '新功能建议',
 
@@ -775,6 +777,16 @@ const I18N_DICT = {
   'Permanently delete': '永久删除',
 
   // --- 代理行为与内置浏览器 (Agent Behavior & Browser) ---
+  'Configure link opening and built-in browser preferences.': '配置链接打开方式与内置浏览器偏好设置。',
+  'Download Location': '下载位置',
+  'Folder where files downloaded in the built-in browser are saved.': '内置浏览器下载文件的保存目录。',
+  'Browsing History': '浏览历史记录',
+  'Clear visited URLs and autocomplete suggestions from the built-in browser.': '清除内置浏览器的已访问网址及自动补全建议。',
+  'Clear': '清除',
+  'Change...': '更改...',
+  'Change…': '更改…',
+  'Change': '更改',
+  'Browser Subagent': '内置浏览器子代理',
   'Whether the agent asks you to review its documents.': '控制智能体在生成文档时是否请求您进行审查。',
   'Type': '键入',
   'and select': '并选择',
@@ -786,8 +798,40 @@ const I18N_DICT = {
   'Controls whether the agent can run custom JavaScript to automate complex browser actions.': '控制智能体是否可以运行自定义 JavaScript 以自动化复杂的浏览器操作。',
   'Configure allowed and denied URLs for browser actuation.': '配置允许和拒绝进行浏览器交互操作的 URL 规则。',
 
+  // --- 语音模式 (Voice Mode) ---
+  'Voice mode': '语音模式',
+  'Voice': '音色',
+  'The voice used in Voice mode. Powered by Gemini Live.': '语音模式使用的音色。由 Gemini Live 提供支持。',
+  'Microphone': '麦克风',
+  'Input device for voice mode and dictation.': '用于语音模式与语音输入的输入设备。',
+  'System default': '系统默认',
+  'How loud Antigravity\'s voice is.': 'Antigravity 的语音播放音量。',
+
   // --- 应用配置 (Application Settings) ---
+  'Manage Antigravity Insiders app settings.': '管理 Antigravity Insiders 客户端应用设置。',
   'Manage Antigravity app settings.': '管理 Antigravity 客户端应用设置。',
+
+  // --- 对话与步骤详情 (Chat & Conversation Steps) ---
+  'Chat': '对话',
+  'Conversation Steps': '会话步骤详情',
+  'Choose how much detail is shown during a conversation.': '选择对话过程中显示的详细程度。',
+  'Verbose': '详细 (Verbose)',
+
+  // --- 标签页与编辑器右键菜单 (Context Menus & Tabs) ---
+  'Rename': '重命名',
+  'Pin': '固定',
+  'Unpin': '取消固定',
+  'Archive': '归档',
+  'Unarchive': '取消归档',
+  'Split': '分屏',
+  'Split Right': '向右分屏',
+  'Split Left': '向左分屏',
+  'Split Up': '向上分屏',
+  'Split Down': '向下分屏',
+  'Replace with New': '新建替换',
+  'Close Tab': '关闭标签页',
+  'Close Other Tabs': '关闭其他标签页',
+  'Close Tabs to the Right': '关闭右侧标签页',
   'Prevent the computer from sleeping while the app is running.': '在应用运行期间阻止系统进入休眠状态。',
   'Keep the app accessible from the menu bar and running in the background when all windows are closed.': '在所有窗口关闭后保持应用在后台运行，并可通过菜单栏快捷访问。',
   'Work with local agents from another device.': '允许从其他设备连接并协同本地智能体。',
@@ -1158,7 +1202,7 @@ const INJECT_SCRIPT = `
     }
 
     syncChuanbanPreset();
-    window.__ag_patch_version = "20261103-insiders-dev-v10";
+    window.__ag_patch_version = "20261103-insiders-dev-v12";
 
     // 3.5 模型名称同行实时指标胶囊 (Scheme C: TPS · TTFT · Ctx/256k · Out + Hover 详情卡)
     // 严格保证「左(模型) - 中(指标胶囊) - 右(模式与发送)」三栏结构；中间过窄(<150px)时物理跳至下方第二行。
@@ -1813,7 +1857,7 @@ async function checkAndHeal(session, targetId) {
   session.isChecking = true;
   try {
     const res = await sendCDP(session, 'Runtime.evaluate', {
-      expression: 'Boolean(document.getElementById("ag-custom-fonts") && window.__ag_patch_version === "20261103-insiders-dev-v10")',
+      expression: 'Boolean(document.getElementById("ag-custom-fonts") && window.__ag_patch_version === "20261103-insiders-dev-v12")',
       returnByValue: true
     });
     const isHealthy = res?.result?.value === true;
