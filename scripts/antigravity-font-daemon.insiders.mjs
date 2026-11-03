@@ -704,6 +704,8 @@ const I18N_DICT = {
   // --- 主设置：选项卡卡片与说明 ---
   'Permission Preset': '权限预设',
   'Turbo': '极速模式 (Turbo)',
+  'Auto': '自动模式 (Auto)',
+  'Auto (Preview)': '自动模式 (Auto Preview)',
   'Strict': '严格模式 (Strict)',
   'Always Proceed': '直接执行 (Always Proceed)',
   'Request Review': '请求审查 (Request Review)',
