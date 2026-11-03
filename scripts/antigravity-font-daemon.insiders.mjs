@@ -236,10 +236,10 @@ const CSS_CONTENT = `
   html[data-ag-preset="high-contrast"] #antigravity\\.agentSidePanelInputBox [class*="text-secondary-foreground"],
   html[data-ag-preset="chuanban-warm-white"] #antigravity\\.agentSidePanelInputBox button:not([data-testid="send-button"]):not([data-testid="voice-start-button"]),
   html[data-ag-preset="high-contrast"] #antigravity\\.agentSidePanelInputBox button:not([data-testid="send-button"]):not([data-testid="voice-start-button"]),
-  html[data-ag-preset="chuanban-warm-white"] #antigravity\\.agentSidePanelInputBox span:not([data-testid="voice-live-pill"]),
-  html[data-ag-preset="high-contrast"] #antigravity\\.agentSidePanelInputBox span:not([data-testid="voice-live-pill"]),
-  html[data-ag-preset="chuanban-warm-white"] #antigravity\\.agentSidePanelInputBox svg,
-  html[data-ag-preset="high-contrast"] #antigravity\\.agentSidePanelInputBox svg {
+  html[data-ag-preset="chuanban-warm-white"] #antigravity\\.agentSidePanelInputBox span:not([data-testid="voice-live-pill"]):not([data-testid="voice-live-pill"] *),
+  html[data-ag-preset="high-contrast"] #antigravity\\.agentSidePanelInputBox span:not([data-testid="voice-live-pill"]):not([data-testid="voice-live-pill"] *),
+  html[data-ag-preset="chuanban-warm-white"] #antigravity\\.agentSidePanelInputBox svg:not([data-testid="voice-live-pill"] *):not([data-testid="send-button"] *),
+  html[data-ag-preset="high-contrast"] #antigravity\\.agentSidePanelInputBox svg:not([data-testid="voice-live-pill"] *):not([data-testid="send-button"] *) {
     color: #0A0A0A !important;
     opacity: 1 !important;
   }
@@ -270,6 +270,26 @@ const CSS_CONTENT = `
   html[data-ag-preset] #antigravity\\.agentSidePanelInputBox .agy-send-button * {
     color: #FFFFFF !important;
     fill: #FFFFFF !important;
+  }
+
+  /* 严格保护 voice-live-pill 内部状态显隐 (消除默认态声波星芒与取消态 X 图标的双重重叠) */
+  html[data-ag-preset] #antigravity\\.agentSidePanelInputBox [data-testid="voice-live-pill"] .opacity-0,
+  html[data-ag-preset] #antigravity\\.agentSidePanelInputBox [data-testid="voice-live-pill"] [class*="opacity-0"],
+  html[data-ag-preset] #antigravity\\.agentSidePanelInputBox [data-testid="voice-live-pill"] [class*="opacity-0"] *,
+  [data-testid="voice-live-pill"] .opacity-0,
+  [data-testid="voice-live-pill"] [class*="opacity-0"],
+  [data-testid="voice-live-pill"] [class*="opacity-0"] * {
+    opacity: 0 !important;
+    visibility: hidden !important;
+    display: none !important;
+  }
+  html[data-ag-preset] #antigravity\\.agentSidePanelInputBox [data-testid="voice-live-pill"] .opacity-100,
+  html[data-ag-preset] #antigravity\\.agentSidePanelInputBox [data-testid="voice-live-pill"] [class*="opacity-100"],
+  [data-testid="voice-live-pill"] .opacity-100,
+  [data-testid="voice-live-pill"] [class*="opacity-100"] {
+    opacity: 1 !important;
+    visibility: visible !important;
+    display: flex !important;
   }
 
   /* 8. 界面排版扎实度与温润墨感增强（保留更纱黑体不变） */
@@ -1016,7 +1036,7 @@ const INJECT_SCRIPT = `
     }
 
     syncChuanbanPreset();
-    window.__ag_patch_version = "20261103-insiders-dev-v2";
+    window.__ag_patch_version = "20261103-insiders-dev-v3";
 
     // 3.5 模型名称同行实时指标胶囊 (Scheme C: TPS · TTFT · Ctx/256k · Out + Hover 详情卡)
     // 严格保证「左(模型) - 中(指标胶囊) - 右(模式与发送)」三栏结构；中间过窄(<150px)时物理跳至下方第二行。
@@ -1649,10 +1669,13 @@ async function inject(session, targetId) {
       const registered = await sendCDP(session, 'Page.addScriptToEvaluateOnNewDocument', { source: INJECT_SCRIPT });
       session.newDocumentScriptId = registered.identifier;
     }
-    await sendCDP(session, 'Runtime.evaluate', {
+    const res = await sendCDP(session, 'Runtime.evaluate', {
       expression: INJECT_SCRIPT,
       returnByValue: true
     });
+    if (res?.exceptionDetails) {
+      console.error(`[Daemon] Script exception on ${targetId}:`, res.exceptionDetails);
+    }
     session.lastPushedSig = '';
     console.log(`[Daemon] Injected font, i18n & live metrics into target ${targetId}`);
   } catch (err) {
@@ -1668,7 +1691,7 @@ async function checkAndHeal(session, targetId) {
   session.isChecking = true;
   try {
     const res = await sendCDP(session, 'Runtime.evaluate', {
-      expression: 'Boolean(document.getElementById("ag-custom-fonts") && window.__ag_patch_version === "20261103-insiders-dev-v2")',
+      expression: 'Boolean(document.getElementById("ag-custom-fonts") && window.__ag_patch_version === "20261103-insiders-dev-v3")',
       returnByValue: true
     });
     const isHealthy = res?.result?.value === true;
