@@ -73,6 +73,21 @@ const CSS_CONTENT = `
     --font-mono: ${MONO_FONT} !important;
     --default-font-family: var(--font-sans) !important;
     --default-mono-font-family: var(--font-mono) !important;
+
+    /* 恢复标准字重级阶，对齐稳定版（彻底消除 Insiders 强制引入的 250/350/450 细字重缺陷） */
+    --font-weight-light: 300 !important;
+    --font-weight-normal: 400 !important;
+    --font-weight-medium: 500 !important;
+    --font-weight-semibold: 600 !important;
+    --font-weight-bold: 700 !important;
+    --font-weight-black: 900 !important;
+    --agy-gsf-bold-wght: 600 !important;
+  }
+  /* 基础全局字重与平滑度：保证无衬线体基底扎实、对齐稳定版 400 */
+  body,
+  body[data-agy-font],
+  body[data-agy-font="google-sans"] {
+    font-weight: 400 !important;
   }
   /* 1. UI 控件与全局界面：Claude Anthropic Sans / 更纱 UI */
   html, body, body[data-agy-font], button, select, nav, header, aside {
@@ -358,6 +373,69 @@ const CSS_CONTENT = `
     font-weight: 500 !important;
     letter-spacing: -0.012em !important;
     text-shadow: 0 0 0.25px rgba(10, 10, 10, 0.4);
+  }
+
+  /* 8.5 菜单、弹出层与设置项目字重全面对齐稳定版 (Solid Ink Optimization) */
+  [role="menu"],
+  [role="menuitem"],
+  .agy-overlay,
+  .agy-overlay-item,
+  [data-radix-menu-content],
+  [data-radix-popper-content-wrapper],
+  [data-side] {
+    font-family: var(--font-sans) !important;
+  }
+
+  /* 下拉菜单项、二级子菜单项（如 View Usage / 子项）与模型名称：扎实字重与微字距 */
+  [role="menu"] [role="menuitem"],
+  [role="menu"] .agy-overlay-item,
+  .agy-overlay .agy-overlay-item,
+  [role="menu"] [class*="truncate"],
+  [role="menu"] [class*="text-xs"],
+  [role="menu"] [class*="text-[13px]"],
+  [role="menu"] span {
+    font-weight: 400 !important;
+    letter-spacing: -0.01em !important;
+    color: #1F1E1D !important;
+  }
+
+  /* 模型列表主标题与模型名称高亮（对齐稳定版） */
+  [role="menu"] .agy-overlay-item span.truncate,
+  [role="menu"] [role="menuitem"] span.truncate {
+    font-weight: 450 !important;
+    color: #1F1E1D !important;
+  }
+
+  /* 菜单与弹窗小标题、头部（如 "Model", "Usage", "Gemini 模型", "Claude 与 GPT 模型"） */
+  [role="menu"] [class*="font-medium"],
+  [role="menu"] [class*="text-muted-foreground"],
+  [role="menu"] h2,
+  [role="menu"] h3,
+  [role="menu"] h4,
+  .agy-overlay [class*="font-medium"],
+  .agy-overlay [class*="text-muted-foreground"] {
+    font-weight: 500 !important;
+    letter-spacing: -0.01em !important;
+    color: #1A1A1A !important;
+  }
+
+  /* 系统设置主菜单右侧二级菜单/配置卡片项目 (Settings Dialog Items) */
+  [role="dialog"] {
+    font-family: var(--font-sans) !important;
+  }
+  [role="dialog"] h2,
+  [role="dialog"] h3 {
+    font-weight: 500 !important;
+    letter-spacing: -0.01em !important;
+    color: #1F1E1D !important;
+  }
+  [role="dialog"] .agy-card span.text-sm,
+  [role="dialog"] [class*="agy-card"] span.text-sm,
+  [role="dialog"] [class*="divide-border"] span.text-sm {
+    font-weight: 450 !important;
+    letter-spacing: -0.01em !important;
+    color: #1F1E1D !important;
+    text-shadow: 0 0 0.15px rgba(31, 30, 29, 0.25) !important;
   }
 
   /* 9. 模型名称同行实时指标胶囊 (TPS / TTFT / Ctx 256k / Out)
@@ -1036,7 +1114,7 @@ const INJECT_SCRIPT = `
     }
 
     syncChuanbanPreset();
-    window.__ag_patch_version = "20261103-insiders-dev-v3";
+    window.__ag_patch_version = "20261103-insiders-dev-v4";
 
     // 3.5 模型名称同行实时指标胶囊 (Scheme C: TPS · TTFT · Ctx/256k · Out + Hover 详情卡)
     // 严格保证「左(模型) - 中(指标胶囊) - 右(模式与发送)」三栏结构；中间过窄(<150px)时物理跳至下方第二行。
@@ -1691,7 +1769,7 @@ async function checkAndHeal(session, targetId) {
   session.isChecking = true;
   try {
     const res = await sendCDP(session, 'Runtime.evaluate', {
-      expression: 'Boolean(document.getElementById("ag-custom-fonts") && window.__ag_patch_version === "20261103-insiders-dev-v3")',
+      expression: 'Boolean(document.getElementById("ag-custom-fonts") && window.__ag_patch_version === "20261103-insiders-dev-v4")',
       returnByValue: true
     });
     const isHealthy = res?.result?.value === true;
