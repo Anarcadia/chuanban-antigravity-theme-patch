@@ -3,8 +3,8 @@
 > **归档日期**：2026-11-04  
 > **归档分支**：`Factory/chuanban-antigravity-theme-patch` 的 `insiders-dev`  
 > **起始提交**：`b94445c`（建立 Insiders 独立分支与调试套件）  
-> **最新提交**：`bb930f2`（v13 终态）  
-> **探针版本**：`20261103-insiders-dev-v13`  
+> **最新提交**：`447a99b`（v14 终态）  
+> **探针版本**：`20261104-insiders-dev-v14`  
 > **目标宿主**：`/Applications/Antigravity - Insiders.app`（端口自愈监听，与稳定版环境完全隔离）
 
 ---
@@ -20,7 +20,7 @@
 | **会话数据库** | `~/.gemini/antigravity/conversations/*.db` | `~/.gemini/antigravity-insiders/conversations/*.db` |
 | **Git 分支** | `main` | `insiders-dev` |
 | **执行脚本** | `scripts/antigravity-font-daemon.mjs` | `scripts/antigravity-font-daemon.insiders.mjs` |
-| **探针标识** | `window.__ag_patch_version = "20261101-metrics-v4"` | `window.__ag_patch_version = "20261103-insiders-dev-v13"` |
+| **探针标识** | `window.__ag_patch_version = "20261101-metrics-v4"` | `window.__ag_patch_version = "20261104-insiders-dev-v14"` |
 | **后台守护** | LaunchAgent `com.chuanban.antigravity.font-patch` | 独立后台 Node 进程，日志位于 `/tmp/antigravity-font-insiders.log` |
 
 ---
@@ -55,8 +55,9 @@
   - 在 `:focus` 和 `:focus-visible` 状态下，直接将原位的 `border-color` 原地平滑切换为品牌暖橙色 `#D97757` 并附加 1px 紧贴微锁边。
   - **效果**：外圈彻底消隐，内圈原地高亮，**0 视觉跳动，0 同心圆割裂**。
 
-### 5. Insiders 新版特性全量汉化补全 (v12)
-针对新版界面中新增的 28+ 处英文，完成无死角字典匹配与动态 Observer 挂载拦截：
+### 5. Insiders 新版特性全量汉化补全 (v12, v14)
+针对新版界面中新增的 35+ 处英文，完成无死角字典匹配与动态 Observer 挂载拦截：
+- **权限预设与执行策略 (v14)**：`Every command requires approval.`（每条命令均需人工批准。）、`Ask before sensitive operations.`（执行敏感操作前进行询问。）、`Run all commands without restrictions.`（无限制执行所有命令。）、`Automatically decide if commands run.`（自动判断是否直接执行命令。）、生命周期钩子管理、命令前置初始化脚本、工作目录外文件访问策略等。
 - **内置浏览器偏好**：`Configure link opening...`（配置链接打开方式与内置浏览器偏好设置）、`Download Location`（下载位置）、`Folder where files downloaded...`（内置浏览器下载文件的保存目录）、`Browsing History`（浏览历史记录）、`Clear`（清除）、`Change…` / `Change...`（更改…，双重适配 Unicode 省略号与 ASCII 点号）、`Browser Subagent`（内置浏览器子代理）。
 - **Gemini Live 语音模式**：`Voice mode`（语音模式）、`Voice`（音色）、`The voice used in Voice mode...`（语音模式使用的音色。由 Gemini Live 提供支持）、`Change`（更改）、`Microphone`（麦克风）、`Input device for voice mode...`（用于语音模式与语音输入的输入设备）、`System default`（系统默认）、`How loud Antigravity's voice is.`（Antigravity 的语音播放音量）。
 - **右键上下文菜单**：`Rename`（重命名）、`Pin` / `Unpin`（固定/取消固定）、`Archive` / `Unarchive`（归档/取消归档）、`Split`（分屏）、`Split Right`（向右分屏）、`Split Down`（向下分屏）、`Replace with New`（新建替换）、`Close Tab`（关闭标签页）等。
@@ -88,6 +89,7 @@
 | `835f144` | `v10` | `feat(insiders)`: 优化搜索栏聚焦交互，消除突兀橙色外圈，将内圈灰线直接平滑切换为品牌橙色粗线 |
 | `f4b0641` | `v12` | `feat(insiders)`: 全量补充 Insiders 新版汉化词条（内置浏览器偏好、语音模式、应用配置、会话步骤详情、标签页右键菜单） |
 | `bb930f2` | `v13` | `feat(insiders)`: 全面恢复并加固模型吞吐仪表盘（Live Metrics Pill），支持 Insiders 路由与侧栏自适应回显 |
+| `447a99b` | `v14` | `feat(insiders)`: 补充权限预设模式说明与执行策略汉化（探针升级至 v14） |
 
 ---
 
