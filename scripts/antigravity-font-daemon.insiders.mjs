@@ -253,6 +253,21 @@ const CSS_CONTENT = `
     outline: none !important;
   }
 
+  /* 搜索栏聚焦优化（消除双层同心圈）：激活时外圈橙色轮廓彻底隐去，原位内圈灰线直接平滑切换为品牌橙色粗线 (方案三) */
+  input[placeholder*="Search"],
+  input[class*="focus:border-ring"] {
+    --nux-focus-ring: transparent !important;
+  }
+  input[placeholder*="Search"]:focus,
+  input[placeholder*="Search"]:focus-visible,
+  input[class*="focus:border-ring"]:focus,
+  input[class*="focus:border-ring"]:focus-visible {
+    outline: none !important;
+    outline-offset: 0 !important;
+    border-color: #D97757 !important;
+    box-shadow: 0 0 0 1px #D97757 !important;
+  }
+
   /* 高对比主轮廓线：新建对话、历史对话及操作胶囊 */
   html[data-ag-preset="chuanban-warm-white"] a[class*="inline-flex items-center"],
   html[data-ag-preset="high-contrast"] a[class*="inline-flex items-center"],
@@ -1143,7 +1158,7 @@ const INJECT_SCRIPT = `
     }
 
     syncChuanbanPreset();
-    window.__ag_patch_version = "20261103-insiders-dev-v8";
+    window.__ag_patch_version = "20261103-insiders-dev-v10";
 
     // 3.5 模型名称同行实时指标胶囊 (Scheme C: TPS · TTFT · Ctx/256k · Out + Hover 详情卡)
     // 严格保证「左(模型) - 中(指标胶囊) - 右(模式与发送)」三栏结构；中间过窄(<150px)时物理跳至下方第二行。
@@ -1798,7 +1813,7 @@ async function checkAndHeal(session, targetId) {
   session.isChecking = true;
   try {
     const res = await sendCDP(session, 'Runtime.evaluate', {
-      expression: 'Boolean(document.getElementById("ag-custom-fonts") && window.__ag_patch_version === "20261103-insiders-dev-v8")',
+      expression: 'Boolean(document.getElementById("ag-custom-fonts") && window.__ag_patch_version === "20261103-insiders-dev-v10")',
       returnByValue: true
     });
     const isHealthy = res?.result?.value === true;
