@@ -1,11 +1,11 @@
 # Antigravity Insiders 分支阶段性归档与稳定版合并指引
 
 > **归档日期**：2026-11-04  
-> **归档分支**：`Factory/chuanban-antigravity-theme-patch` 的 `insiders-dev`  
+> **归档分支**：`Factory/chuanban-antigravity-theme-patch` 的 `main`（已合流）与 `insiders-dev`  
 > **起始提交**：`b94445c`（建立 Insiders 独立分支与调试套件）  
-> **最新提交**：`447a99b`（v14 终态）  
-> **探针版本**：`20261104-insiders-dev-v14`  
-> **目标宿主**：`/Applications/Antigravity - Insiders.app`（端口自愈监听，与稳定版环境完全隔离）
+> **最新提交**：`ad96c2b`（v16 终态）  
+> **探针版本**：`20261104-stable-v16` / `20261104-insiders-dev-v16`  
+> **目标宿主**：`/Applications/Antigravity.app` (2.29.0 正式稳定版已全量加载生效) 与 `/Applications/Antigravity - Insiders.app`
 
 ---
 
@@ -90,6 +90,9 @@
 | `f4b0641` | `v12` | `feat(insiders)`: 全量补充 Insiders 新版汉化词条（内置浏览器偏好、语音模式、应用配置、会话步骤详情、标签页右键菜单） |
 | `bb930f2` | `v13` | `feat(insiders)`: 全面恢复并加固模型吞吐仪表盘（Live Metrics Pill），支持 Insiders 路由与侧栏自适应回显 |
 | `447a99b` | `v14` | `feat(insiders)`: 补充权限预设模式说明与执行策略汉化（探针升级至 v14） |
+| `78142e6` | `v14` | `feat(stable)`: 官方稳定版推送 2.29.0，正式将 Insiders 全量特性合并并加载到稳定版主线 |
+| `9bce787` | `v15` | `style(sidebar)`: 侧边栏任务清单与对话列表微降一个字重层级至 400（消除墨晕，西文清爽锐利） |
+| `ad96c2b` | `v16` | `feat(i18n)`: 补全 Permissions 全局权限、本机权限与远程权限说明词条（探针升级至 v16） |
 
 ---
 
