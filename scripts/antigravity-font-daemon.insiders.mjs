@@ -242,13 +242,15 @@ const CSS_CONTENT = `
     background-color: rgba(217, 119, 87, 0.08) !important;
     color: #1F1E1D !important;
   }
-  /* 内部输入区域卡片：纯净高白 (#FFFFFF)，微锁边分隔 */
+  /* 内部输入区域卡片：纯净高白 (#FFFFFF)，内框线隐去（完全透明无阴影无描边） */
   .surface-composer-card.bg-card,
   [id="antigravity.agentSidePanelInputBox"] .surface-composer-card,
   [id="antigravity.agentSidePanelInputBox"] > div.bg-card {
     background-color: #FFFFFF !important;
-    border: 1px solid rgba(0, 0, 0, 0.22) !important;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03) !important;
+    border: 1px solid transparent !important;
+    border-color: transparent !important;
+    box-shadow: none !important;
+    outline: none !important;
   }
 
   /* 高对比主轮廓线：新建对话、历史对话及操作胶囊 */
@@ -1141,7 +1143,7 @@ const INJECT_SCRIPT = `
     }
 
     syncChuanbanPreset();
-    window.__ag_patch_version = "20261103-insiders-dev-v7";
+    window.__ag_patch_version = "20261103-insiders-dev-v8";
 
     // 3.5 模型名称同行实时指标胶囊 (Scheme C: TPS · TTFT · Ctx/256k · Out + Hover 详情卡)
     // 严格保证「左(模型) - 中(指标胶囊) - 右(模式与发送)」三栏结构；中间过窄(<150px)时物理跳至下方第二行。
@@ -1796,7 +1798,7 @@ async function checkAndHeal(session, targetId) {
   session.isChecking = true;
   try {
     const res = await sendCDP(session, 'Runtime.evaluate', {
-      expression: 'Boolean(document.getElementById("ag-custom-fonts") && window.__ag_patch_version === "20261103-insiders-dev-v7")',
+      expression: 'Boolean(document.getElementById("ag-custom-fonts") && window.__ag_patch_version === "20261103-insiders-dev-v8")',
       returnByValue: true
     });
     const isHealthy = res?.result?.value === true;
