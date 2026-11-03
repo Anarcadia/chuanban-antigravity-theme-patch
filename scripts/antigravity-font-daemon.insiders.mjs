@@ -173,8 +173,8 @@ const CSS_CONTENT = `
     --sidebar-border: rgba(0, 0, 0, 0.35) !important;
     --border: rgba(0, 0, 0, 0.38) !important;
     --vscode-sideBar-background: #F7F5F0 !important;
-    --card: #F9F7F2 !important;
-    --card-border: rgba(0, 0, 0, 0.35) !important;
+    --card: #FFFFFF !important;
+    --card-border: #F7EFE6 !important;
     --secondary-foreground: #0A0A0A !important;
     --muted-foreground: #1A1A1A !important;
   }
@@ -187,14 +187,36 @@ const CSS_CONTENT = `
     background-color: var(--background) !important;
     color: var(--foreground) !important;
   }
-  html[data-ag-preset="chuanban-warm-white"] #antigravity\\.agentSidePanelInputBox,
-  html[data-ag-preset="high-contrast"] #antigravity\\.agentSidePanelInputBox {
-    background-color: var(--card-border) !important;
+
+  /* 输入框外层容器（含上方工具栏与延伸至下方的弧形外框轮廓）：与按钮同色系的高白度低干扰浅色 (#F7EFE6 / #E8DDD0) */
+  html[data-ag-preset] #antigravity\\.agentSidePanelInputBox,
+  html[data-ag-preset] [id="antigravity.agentSidePanelInputBox"],
+  #antigravity\\.agentSidePanelInputBox,
+  [id="antigravity.agentSidePanelInputBox"],
+  .surface-composer.bg-card-border {
+    background-color: #F7EFE6 !important;
+    border-color: #E8DDD0 !important;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03), 0 0 0 1px #E8DDD0 !important;
   }
-  html[data-ag-preset="chuanban-warm-white"] #antigravity\\.agentSidePanelInputBox > div.bg-card,
-  html[data-ag-preset="high-contrast"] #antigravity\\.agentSidePanelInputBox > div.bg-card {
-    background-color: var(--card) !important;
+  /* 上方工具栏文字与小按钮（No Project 及其箭头） */
+  [id="antigravity.agentSidePanelInputBox"] > div:first-child button,
+  [id="antigravity.agentSidePanelInputBox"] > div:first-child span,
+  [id="antigravity.agentSidePanelInputBox"] > div:first-child svg {
+    color: #383431 !important;
   }
+  [id="antigravity.agentSidePanelInputBox"] > div:first-child button:hover {
+    background-color: rgba(217, 119, 87, 0.08) !important;
+    color: #1F1E1D !important;
+  }
+  /* 内部输入区域卡片：纯净高白 (#FFFFFF)，与外层形成优雅的纸本质感阶梯 */
+  .surface-composer-card.bg-card,
+  [id="antigravity.agentSidePanelInputBox"] .surface-composer-card,
+  [id="antigravity.agentSidePanelInputBox"] > div.bg-card {
+    background-color: #FFFFFF !important;
+    border: 1px solid #ECE3D8 !important;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02) !important;
+  }
+
   /* 高对比主轮廓线：新建对话、历史对话及操作胶囊 */
   html[data-ag-preset="chuanban-warm-white"] a[class*="inline-flex items-center"],
   html[data-ag-preset="high-contrast"] a[class*="inline-flex items-center"],
@@ -212,14 +234,42 @@ const CSS_CONTENT = `
   /* 高对比输入框底部：模型名称、Turbo模式、图标字体深色近乎纯黑 */
   html[data-ag-preset="chuanban-warm-white"] #antigravity\\.agentSidePanelInputBox [class*="text-secondary-foreground"],
   html[data-ag-preset="high-contrast"] #antigravity\\.agentSidePanelInputBox [class*="text-secondary-foreground"],
-  html[data-ag-preset="chuanban-warm-white"] #antigravity\\.agentSidePanelInputBox button,
-  html[data-ag-preset="high-contrast"] #antigravity\\.agentSidePanelInputBox button,
-  html[data-ag-preset="chuanban-warm-white"] #antigravity\\.agentSidePanelInputBox span,
-  html[data-ag-preset="high-contrast"] #antigravity\\.agentSidePanelInputBox span,
+  html[data-ag-preset="chuanban-warm-white"] #antigravity\\.agentSidePanelInputBox button:not([data-testid="send-button"]):not([data-testid="voice-start-button"]),
+  html[data-ag-preset="high-contrast"] #antigravity\\.agentSidePanelInputBox button:not([data-testid="send-button"]):not([data-testid="voice-start-button"]),
+  html[data-ag-preset="chuanban-warm-white"] #antigravity\\.agentSidePanelInputBox span:not([data-testid="voice-live-pill"]),
+  html[data-ag-preset="high-contrast"] #antigravity\\.agentSidePanelInputBox span:not([data-testid="voice-live-pill"]),
   html[data-ag-preset="chuanban-warm-white"] #antigravity\\.agentSidePanelInputBox svg,
   html[data-ag-preset="high-contrast"] #antigravity\\.agentSidePanelInputBox svg {
     color: #0A0A0A !important;
     opacity: 1 !important;
+  }
+
+  /* 发送按钮与操作胶囊：Claude 陶土暖橙与暗金质感 (#D97757)，高对比纯白图标 */
+  html[data-ag-preset] #antigravity\\.agentSidePanelInputBox [data-testid="voice-live-pill"],
+  html[data-ag-preset] #antigravity\\.agentSidePanelInputBox button[data-testid="send-button"],
+  html[data-ag-preset] #antigravity\\.agentSidePanelInputBox .agy-send-button,
+  [data-testid="voice-live-pill"],
+  button[data-testid="send-button"],
+  .agy-send-button {
+    background-color: #D97757 !important;
+    color: #FFFFFF !important;
+    border: 1px solid #C45F40 !important;
+    box-shadow: 0 1px 2px rgba(217, 119, 87, 0.25) !important;
+  }
+  html[data-ag-preset] #antigravity\\.agentSidePanelInputBox [data-testid="voice-live-pill"]:hover,
+  html[data-ag-preset] #antigravity\\.agentSidePanelInputBox button[data-testid="send-button"]:hover,
+  html[data-ag-preset] #antigravity\\.agentSidePanelInputBox .agy-send-button:hover,
+  [data-testid="voice-live-pill"]:hover,
+  button[data-testid="send-button"]:hover,
+  .agy-send-button:hover {
+    background-color: #C86646 !important;
+    opacity: 1 !important;
+  }
+  html[data-ag-preset] #antigravity\\.agentSidePanelInputBox [data-testid="voice-live-pill"] *,
+  html[data-ag-preset] #antigravity\\.agentSidePanelInputBox button[data-testid="send-button"] *,
+  html[data-ag-preset] #antigravity\\.agentSidePanelInputBox .agy-send-button * {
+    color: #FFFFFF !important;
+    fill: #FFFFFF !important;
   }
 
   /* 8. 界面排版扎实度与温润墨感增强（保留更纱黑体不变） */
