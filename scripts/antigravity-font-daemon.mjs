@@ -62,17 +62,36 @@ const CSS_CONTENT = `
     font-display: swap;
   }
 
-  :root {
+  :root,
+  body,
+  body[data-agy-font],
+  body[data-agy-font="google-sans"],
+  body[data-agy-font="inter"] {
     --vscode-font-family: ${UI_FONT} !important;
     --editor-font-family: ${MONO_FONT} !important;
     --font-sans: ${UI_FONT} !important;
     --font-mono: ${MONO_FONT} !important;
     --default-font-family: var(--font-sans) !important;
     --default-mono-font-family: var(--font-mono) !important;
+
+    /* 恢复标准字重级阶，对齐稳定版（彻底消除 Insiders 强制引入的 250/350/450 细字重缺陷） */
+    --font-weight-light: 300 !important;
+    --font-weight-normal: 400 !important;
+    --font-weight-medium: 500 !important;
+    --font-weight-semibold: 600 !important;
+    --font-weight-bold: 700 !important;
+    --font-weight-black: 900 !important;
+    --agy-gsf-bold-wght: 600 !important;
+  }
+  /* 基础全局字重与平滑度：保证无衬线体基底扎实、对齐稳定版 400 */
+  body,
+  body[data-agy-font],
+  body[data-agy-font="google-sans"] {
+    font-weight: 400 !important;
   }
   /* 1. UI 控件与全局界面：Claude Anthropic Sans / 更纱 UI */
-  html, body, button, select, nav, header, aside {
-    font-family: var(--font-sans);
+  html, body, body[data-agy-font], button, select, nav, header, aside {
+    font-family: var(--font-sans) !important;
     -webkit-font-smoothing: antialiased;
   }
 
@@ -169,8 +188,10 @@ const CSS_CONTENT = `
     --sidebar-border: rgba(0, 0, 0, 0.35) !important;
     --border: rgba(0, 0, 0, 0.38) !important;
     --vscode-sideBar-background: #F7F5F0 !important;
-    --card: #F9F7F2 !important;
+    --card: #FFFFFF !important;
     --card-border: rgba(0, 0, 0, 0.35) !important;
+    --card-edge: rgba(0, 0, 0, 0.35) !important;
+    --sash-line: rgba(0, 0, 0, 0.35) !important;
     --secondary-foreground: #0A0A0A !important;
     --muted-foreground: #1A1A1A !important;
   }
@@ -183,14 +204,70 @@ const CSS_CONTENT = `
     background-color: var(--background) !important;
     color: var(--foreground) !important;
   }
-  html[data-ag-preset="chuanban-warm-white"] #antigravity\\.agentSidePanelInputBox,
-  html[data-ag-preset="high-contrast"] #antigravity\\.agentSidePanelInputBox {
-    background-color: var(--card-border) !important;
+
+  /* 7.5 右侧交互页面外框线：对齐稳定版高清晰度黑度 (rgba(0, 0, 0, 0.35)) */
+  .agy-inset-shell {
+    --card-edge: rgba(0, 0, 0, 0.35) !important;
+    --sash-line: rgba(0, 0, 0, 0.35) !important;
   }
-  html[data-ag-preset="chuanban-warm-white"] #antigravity\\.agentSidePanelInputBox > div.bg-card,
-  html[data-ag-preset="high-contrast"] #antigravity\\.agentSidePanelInputBox > div.bg-card {
-    background-color: var(--card) !important;
+  .agy-sheet[data-sheet-inset] [data-main-content-body]::after,
+  .agy-inset-shell [data-side-panel-body]::after,
+  [data-main-content-body]::after {
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.35) !important;
   }
+  /* 侧栏与主交互页面中缝分割线对齐稳定版 */
+  .relative.flex.w-full.h-full.outline-none > div.flex-shrink-0.relative.z-30.w-\[1px\] {
+    background-color: rgba(0, 0, 0, 0.35) !important;
+  }
+
+  /* 输入框外层容器（含上方工具栏与延伸至下方的弧形外框轮廓）：底色保持低干扰暖白，外框线隐去（完全透明无阴影） */
+  html[data-ag-preset] #antigravity\\.agentSidePanelInputBox,
+  html[data-ag-preset] [id="antigravity.agentSidePanelInputBox"],
+  #antigravity\\.agentSidePanelInputBox,
+  [id="antigravity.agentSidePanelInputBox"],
+  .surface-composer.bg-card-border {
+    background-color: #F7EFE6 !important;
+    border: 1px solid transparent !important;
+    border-color: transparent !important;
+    box-shadow: none !important;
+    outline: none !important;
+  }
+  /* 上方工具栏文字与小按钮（No Project 及其箭头） */
+  [id="antigravity.agentSidePanelInputBox"] > div:first-child button,
+  [id="antigravity.agentSidePanelInputBox"] > div:first-child span,
+  [id="antigravity.agentSidePanelInputBox"] > div:first-child svg {
+    color: #383431 !important;
+  }
+  [id="antigravity.agentSidePanelInputBox"] > div:first-child button:hover {
+    background-color: rgba(217, 119, 87, 0.08) !important;
+    color: #1F1E1D !important;
+  }
+  /* 内部输入区域卡片：纯净高白 (#FFFFFF)，内框线隐去（完全透明无阴影无描边） */
+  .surface-composer-card.bg-card,
+  [id="antigravity.agentSidePanelInputBox"] .surface-composer-card,
+  [id="antigravity.agentSidePanelInputBox"] > div.bg-card {
+    background-color: #FFFFFF !important;
+    border: 1px solid transparent !important;
+    border-color: transparent !important;
+    box-shadow: none !important;
+    outline: none !important;
+  }
+
+  /* 搜索栏聚焦优化（消除双层同心圈）：激活时外圈橙色轮廓彻底隐去，原位内圈灰线直接平滑切换为品牌橙色粗线 (方案三) */
+  input[placeholder*="Search"],
+  input[class*="focus:border-ring"] {
+    --nux-focus-ring: transparent !important;
+  }
+  input[placeholder*="Search"]:focus,
+  input[placeholder*="Search"]:focus-visible,
+  input[class*="focus:border-ring"]:focus,
+  input[class*="focus:border-ring"]:focus-visible {
+    outline: none !important;
+    outline-offset: 0 !important;
+    border-color: #D97757 !important;
+    box-shadow: 0 0 0 1px #D97757 !important;
+  }
+
   /* 高对比主轮廓线：新建对话、历史对话及操作胶囊 */
   html[data-ag-preset="chuanban-warm-white"] a[class*="inline-flex items-center"],
   html[data-ag-preset="high-contrast"] a[class*="inline-flex items-center"],
@@ -208,14 +285,62 @@ const CSS_CONTENT = `
   /* 高对比输入框底部：模型名称、Turbo模式、图标字体深色近乎纯黑 */
   html[data-ag-preset="chuanban-warm-white"] #antigravity\\.agentSidePanelInputBox [class*="text-secondary-foreground"],
   html[data-ag-preset="high-contrast"] #antigravity\\.agentSidePanelInputBox [class*="text-secondary-foreground"],
-  html[data-ag-preset="chuanban-warm-white"] #antigravity\\.agentSidePanelInputBox button,
-  html[data-ag-preset="high-contrast"] #antigravity\\.agentSidePanelInputBox button,
-  html[data-ag-preset="chuanban-warm-white"] #antigravity\\.agentSidePanelInputBox span,
-  html[data-ag-preset="high-contrast"] #antigravity\\.agentSidePanelInputBox span,
-  html[data-ag-preset="chuanban-warm-white"] #antigravity\\.agentSidePanelInputBox svg,
-  html[data-ag-preset="high-contrast"] #antigravity\\.agentSidePanelInputBox svg {
+  html[data-ag-preset="chuanban-warm-white"] #antigravity\\.agentSidePanelInputBox button:not([data-testid="send-button"]):not([data-testid="voice-start-button"]),
+  html[data-ag-preset="high-contrast"] #antigravity\\.agentSidePanelInputBox button:not([data-testid="send-button"]):not([data-testid="voice-start-button"]),
+  html[data-ag-preset="chuanban-warm-white"] #antigravity\\.agentSidePanelInputBox span:not([data-testid="voice-live-pill"]):not([data-testid="voice-live-pill"] *),
+  html[data-ag-preset="high-contrast"] #antigravity\\.agentSidePanelInputBox span:not([data-testid="voice-live-pill"]):not([data-testid="voice-live-pill"] *),
+  html[data-ag-preset="chuanban-warm-white"] #antigravity\\.agentSidePanelInputBox svg:not([data-testid="voice-live-pill"] *):not([data-testid="send-button"] *),
+  html[data-ag-preset="high-contrast"] #antigravity\\.agentSidePanelInputBox svg:not([data-testid="voice-live-pill"] *):not([data-testid="send-button"] *) {
     color: #0A0A0A !important;
     opacity: 1 !important;
+  }
+
+  /* 发送按钮与操作胶囊：Claude 陶土暖橙与暗金质感 (#D97757)，高对比纯白图标 */
+  html[data-ag-preset] #antigravity\\.agentSidePanelInputBox [data-testid="voice-live-pill"],
+  html[data-ag-preset] #antigravity\\.agentSidePanelInputBox button[data-testid="send-button"],
+  html[data-ag-preset] #antigravity\\.agentSidePanelInputBox .agy-send-button,
+  [data-testid="voice-live-pill"],
+  button[data-testid="send-button"],
+  .agy-send-button {
+    background-color: #D97757 !important;
+    color: #FFFFFF !important;
+    border: 1px solid #C45F40 !important;
+    box-shadow: 0 1px 2px rgba(217, 119, 87, 0.25) !important;
+  }
+  html[data-ag-preset] #antigravity\\.agentSidePanelInputBox [data-testid="voice-live-pill"]:hover,
+  html[data-ag-preset] #antigravity\\.agentSidePanelInputBox button[data-testid="send-button"]:hover,
+  html[data-ag-preset] #antigravity\\.agentSidePanelInputBox .agy-send-button:hover,
+  [data-testid="voice-live-pill"]:hover,
+  button[data-testid="send-button"]:hover,
+  .agy-send-button:hover {
+    background-color: #C86646 !important;
+    opacity: 1 !important;
+  }
+  html[data-ag-preset] #antigravity\\.agentSidePanelInputBox [data-testid="voice-live-pill"] *,
+  html[data-ag-preset] #antigravity\\.agentSidePanelInputBox button[data-testid="send-button"] *,
+  html[data-ag-preset] #antigravity\\.agentSidePanelInputBox .agy-send-button * {
+    color: #FFFFFF !important;
+    fill: #FFFFFF !important;
+  }
+
+  /* 严格保护 voice-live-pill 内部状态显隐 (消除默认态声波星芒与取消态 X 图标的双重重叠) */
+  html[data-ag-preset] #antigravity\\.agentSidePanelInputBox [data-testid="voice-live-pill"] .opacity-0,
+  html[data-ag-preset] #antigravity\\.agentSidePanelInputBox [data-testid="voice-live-pill"] [class*="opacity-0"],
+  html[data-ag-preset] #antigravity\\.agentSidePanelInputBox [data-testid="voice-live-pill"] [class*="opacity-0"] *,
+  [data-testid="voice-live-pill"] .opacity-0,
+  [data-testid="voice-live-pill"] [class*="opacity-0"],
+  [data-testid="voice-live-pill"] [class*="opacity-0"] * {
+    opacity: 0 !important;
+    visibility: hidden !important;
+    display: none !important;
+  }
+  html[data-ag-preset] #antigravity\\.agentSidePanelInputBox [data-testid="voice-live-pill"] .opacity-100,
+  html[data-ag-preset] #antigravity\\.agentSidePanelInputBox [data-testid="voice-live-pill"] [class*="opacity-100"],
+  [data-testid="voice-live-pill"] .opacity-100,
+  [data-testid="voice-live-pill"] [class*="opacity-100"] {
+    opacity: 1 !important;
+    visibility: visible !important;
+    display: flex !important;
   }
 
   /* 8. 界面排版扎实度与温润墨感增强（保留更纱黑体不变） */
@@ -284,6 +409,77 @@ const CSS_CONTENT = `
     font-weight: 500 !important;
     letter-spacing: -0.012em !important;
     text-shadow: 0 0 0.25px rgba(10, 10, 10, 0.4);
+  }
+
+  /* 8.5 菜单、弹出层与设置项目字重全面对齐稳定版 (Solid Ink Optimization) */
+  [role="menu"],
+  [role="menuitem"],
+  .agy-overlay,
+  .agy-overlay-item,
+  [data-radix-menu-content],
+  [data-radix-popper-content-wrapper],
+  [data-side] {
+    font-family: var(--font-sans) !important;
+  }
+
+  /* 下拉菜单项、二级子菜单项（如 View Usage / 子项）与模型名称：扎实字重与微字距 */
+  [role="menu"] [role="menuitem"],
+  [role="menu"] .agy-overlay-item,
+  .agy-overlay .agy-overlay-item,
+  [role="menu"] [class*="truncate"],
+  [role="menu"] [class*="text-xs"],
+  [role="menu"] [class*="text-[13px]"],
+  [role="menu"] span {
+    font-weight: 400 !important;
+    letter-spacing: -0.01em !important;
+    color: #1F1E1D !important;
+  }
+
+  /* 菜单主项目、动作按钮与模型名称统一扎实字重 450（彻底统一 View Usage、Main Agent、各模型名称等） */
+  [role="menu"] [role="menuitem"] > span,
+  [role="menu"] [role="menuitem"] span[class*="flex-1"],
+  [role="menu"] [role="menuitem"] span.truncate,
+  [role="menu"] .agy-overlay-item > span,
+  [role="menu"] .agy-overlay-item span[class*="flex-1"],
+  [role="menu"] .agy-overlay-item span.truncate,
+  .agy-overlay .agy-overlay-item > span,
+  .agy-overlay .agy-overlay-item span[class*="flex-1"],
+  .agy-overlay .agy-overlay-item span.truncate {
+    font-weight: 450 !important;
+    letter-spacing: -0.01em !important;
+    color: #1F1E1D !important;
+  }
+
+  /* 菜单与弹窗小标题、头部（如 "Model", "Usage", "Gemini 模型", "Claude 与 GPT 模型"） */
+  [role="menu"] [class*="font-medium"],
+  [role="menu"] [class*="text-muted-foreground"],
+  [role="menu"] h2,
+  [role="menu"] h3,
+  [role="menu"] h4,
+  .agy-overlay [class*="font-medium"],
+  .agy-overlay [class*="text-muted-foreground"] {
+    font-weight: 500 !important;
+    letter-spacing: -0.01em !important;
+    color: #1A1A1A !important;
+  }
+
+  /* 系统设置主菜单右侧二级菜单/配置卡片项目 (Settings Dialog Items) */
+  [role="dialog"] {
+    font-family: var(--font-sans) !important;
+  }
+  [role="dialog"] h2,
+  [role="dialog"] h3 {
+    font-weight: 500 !important;
+    letter-spacing: -0.01em !important;
+    color: #1F1E1D !important;
+  }
+  [role="dialog"] .agy-card span.text-sm,
+  [role="dialog"] [class*="agy-card"] span.text-sm,
+  [role="dialog"] [class*="divide-border"] span.text-sm {
+    font-weight: 450 !important;
+    letter-spacing: -0.01em !important;
+    color: #1F1E1D !important;
+    text-shadow: 0 0 0.15px rgba(31, 30, 29, 0.25) !important;
   }
 
   /* 9. 模型名称同行实时指标胶囊 (TPS / TTFT / Ctx 256k / Out)
@@ -469,6 +665,8 @@ const I18N_DICT = {
   'Recommended': '推荐',
   'Sign Out': '退出登录',
   'Provide Feedback': '提供反馈',
+  'Give Feedback': '反馈建议',
+  'Font': '字体设置',
   'Bug Report': '错误反馈 (Bug)',
   'Feature Request': '新功能建议',
 
@@ -515,6 +713,34 @@ const I18N_DICT = {
   'Send Immediately': '立即发送',
   'Queue': '排队等待',
   'Default': '默认',
+
+  // --- 权限预设与执行策略说明 (Permission Preset Descriptions) ---
+  'Every command requires approval.': '每条命令均需人工批准。',
+  'Every command requires approval': '每条命令均需人工批准',
+  'Ask before sensitive operations.': '执行敏感操作前进行询问。',
+  'Ask before sensitive operations': '执行敏感操作前进行询问',
+  'Run all commands without restrictions.': '无限制执行所有命令。',
+  'Run all commands without restrictions': '无限制执行所有命令',
+  'Automatically decide if commands run.': '自动判断是否直接执行命令。',
+  'Automatically decide if commands run': '自动判断是否直接执行命令',
+  'Delete All Remote Agents Data': '删除所有远程智能体数据',
+  'Permanently delete your remote conversations, projects, scheduled tasks, connected plugins and settings. Data in the desktop app and your Google account are not affected.': '永久删除您的远程对话、项目、定时自动化任务、已连接插件及设置。桌面客户端及 Google 账户中的数据不受影响。',
+  'Work with local agents from another device.': '在其他设备上远程协同本地智能体。',
+  'Only stored on your machine.': '仅保存在您的本地设备上。',
+  'Configure GitHub access policies.': '配置 GitHub 访问授权策略。',
+  'Outside of folders file access policy': '工作目录外文件访问策略',
+  'Configures how the agent tries to access files outside of its working folders.': '配置智能体尝试访问其工作目录以外文件时的行为策略。',
+  'Terminal Command Auto Execution': '终端命令自动执行',
+  'Controls whether terminal commands require your approval before running.': '控制终端命令在运行前是否需要您的批准。',
+  'New Conversation Button': '新建对话按钮默认工作区',
+  'Which workspace the New Conversation button and keyboard shortcut start you in.': '“新建对话”按钮及快捷键默认开启的工作区。',
+  'Manage Hooks': '管理生命周期钩子',
+  'Configure hooks that run on agent lifecycle events.': '配置在智能体生命周期事件中触发的 Hooks 脚本。',
+  'Command Setup Script': '命令前置初始化脚本',
+  'A shell setup script run before every command the agent executes in this project. Overrides the global script.': '智能体在此项目中执行每条命令前运行的 Shell 初始化脚本。将覆盖全局脚本。',
+  'Folders these agents can access.': '这些智能体可以访问的文件夹。',
+  'Access grants': '访问授权',
+  'Commands and files these agents can use.': '这些智能体可以使用的命令与文件权限。',
   'Strong': '高对比度',
   'Default Light': '默认浅色',
   'Default Dark': '默认深色',
@@ -579,6 +805,16 @@ const I18N_DICT = {
   'Permanently delete': '永久删除',
 
   // --- 代理行为与内置浏览器 (Agent Behavior & Browser) ---
+  'Configure link opening and built-in browser preferences.': '配置链接打开方式与内置浏览器偏好设置。',
+  'Download Location': '下载位置',
+  'Folder where files downloaded in the built-in browser are saved.': '内置浏览器下载文件的保存目录。',
+  'Browsing History': '浏览历史记录',
+  'Clear visited URLs and autocomplete suggestions from the built-in browser.': '清除内置浏览器的已访问网址及自动补全建议。',
+  'Clear': '清除',
+  'Change...': '更改...',
+  'Change…': '更改…',
+  'Change': '更改',
+  'Browser Subagent': '内置浏览器子代理',
   'Whether the agent asks you to review its documents.': '控制智能体在生成文档时是否请求您进行审查。',
   'Type': '键入',
   'and select': '并选择',
@@ -590,8 +826,40 @@ const I18N_DICT = {
   'Controls whether the agent can run custom JavaScript to automate complex browser actions.': '控制智能体是否可以运行自定义 JavaScript 以自动化复杂的浏览器操作。',
   'Configure allowed and denied URLs for browser actuation.': '配置允许和拒绝进行浏览器交互操作的 URL 规则。',
 
+  // --- 语音模式 (Voice Mode) ---
+  'Voice mode': '语音模式',
+  'Voice': '音色',
+  'The voice used in Voice mode. Powered by Gemini Live.': '语音模式使用的音色。由 Gemini Live 提供支持。',
+  'Microphone': '麦克风',
+  'Input device for voice mode and dictation.': '用于语音模式与语音输入的输入设备。',
+  'System default': '系统默认',
+  'How loud Antigravity\'s voice is.': 'Antigravity 的语音播放音量。',
+
   // --- 应用配置 (Application Settings) ---
+  'Manage Antigravity Insiders app settings.': '管理 Antigravity Insiders 客户端应用设置。',
   'Manage Antigravity app settings.': '管理 Antigravity 客户端应用设置。',
+
+  // --- 对话与步骤详情 (Chat & Conversation Steps) ---
+  'Chat': '对话',
+  'Conversation Steps': '会话步骤详情',
+  'Choose how much detail is shown during a conversation.': '选择对话过程中显示的详细程度。',
+  'Verbose': '详细 (Verbose)',
+
+  // --- 标签页与编辑器右键菜单 (Context Menus & Tabs) ---
+  'Rename': '重命名',
+  'Pin': '固定',
+  'Unpin': '取消固定',
+  'Archive': '归档',
+  'Unarchive': '取消归档',
+  'Split': '分屏',
+  'Split Right': '向右分屏',
+  'Split Left': '向左分屏',
+  'Split Up': '向上分屏',
+  'Split Down': '向下分屏',
+  'Replace with New': '新建替换',
+  'Close Tab': '关闭标签页',
+  'Close Other Tabs': '关闭其他标签页',
+  'Close Tabs to the Right': '关闭右侧标签页',
   'Prevent the computer from sleeping while the app is running.': '在应用运行期间阻止系统进入休眠状态。',
   'Keep the app accessible from the menu bar and running in the background when all windows are closed.': '在所有窗口关闭后保持应用在后台运行，并可通过菜单栏快捷访问。',
   'Work with local agents from another device.': '允许从其他设备连接并协同本地智能体。',
@@ -962,7 +1230,7 @@ const INJECT_SCRIPT = `
     }
 
     syncChuanbanPreset();
-    window.__ag_patch_version = "20261101-metrics-v4";
+    window.__ag_patch_version = "20261104-stable-v14";
 
     // 3.5 模型名称同行实时指标胶囊 (Scheme C: TPS · TTFT · Ctx/256k · Out + Hover 详情卡)
     // 严格保证「左(模型) - 中(指标胶囊) - 右(模式与发送)」三栏结构；中间过窄(<150px)时物理跳至下方第二行。
@@ -974,6 +1242,11 @@ const INJECT_SCRIPT = `
         if (m) return m[1];
         const q = new URLSearchParams(window.location.search).get("cascadeId");
         if (q && /^[0-9a-f-]{36}$/i.test(q)) return q;
+        const selected = document.querySelector('[data-testid=conversation-row-sidebar][data-selected=true]');
+        if (selected) {
+          const cid = selected.getAttribute("data-cascade-id");
+          if (cid && /^[0-9a-f-]{36}$/i.test(cid)) return cid;
+        }
       } catch (e) {}
       return "";
     }
@@ -1103,7 +1376,12 @@ const INJECT_SCRIPT = `
         const pill = ensureMetricsPill();
         const ttEl = ensureMetricsTooltip();
         if (!pill) return;
-        if (!currentId || !payload || !payload.hasData || payload.cascadeId !== currentId) {
+        if (!payload || !payload.hasData) {
+          pill.style.display = "none";
+          if (ttEl) ttEl.removeAttribute("data-visible");
+          return;
+        }
+        if (currentId && payload.cascadeId !== currentId) {
           pill.style.display = "none";
           if (ttEl) ttEl.removeAttribute("data-visible");
           return;
@@ -1122,17 +1400,19 @@ const INJECT_SCRIPT = `
     function checkRouteAndMountMetrics() {
       try {
         const cid = extractCascadeId();
-        if (cid !== window.__ag_watched_cascade_id) {
+        if (cid && cid !== window.__ag_watched_cascade_id) {
           window.__ag_watched_cascade_id = cid;
           const pill = document.getElementById("ag-live-metrics-pill");
           if (pill && (!window.__ag_last_metrics || window.__ag_last_metrics.cascadeId !== cid)) {
             pill.style.display = "none";
           }
-          if (cid && typeof window.__agRequestMetrics === "function") {
+          if (typeof window.__agRequestMetrics === "function") {
             window.__agRequestMetrics(cid);
           }
         } else if (cid && window.__ag_last_metrics && window.__ag_last_metrics.cascadeId === cid) {
           ensureMetricsPill();
+        } else if (!cid && typeof window.__agRequestMetrics === "function" && (!window.__ag_last_metrics || !window.__ag_last_metrics.hasData)) {
+          window.__agRequestMetrics("");
         }
       } catch (e) {}
     }
@@ -1572,6 +1852,22 @@ async function pushMetricsToSession(session, cascadeId, force = false) {
   } catch {}
 }
 
+function getLatestConversationId() {
+  try {
+    if (!fs.existsSync(CONVERSATIONS_DIR)) return "";
+    const files = fs.readdirSync(CONVERSATIONS_DIR)
+      .filter(f => f.endsWith(".db") && /^[0-9a-f-]{36}\.db$/i.test(f))
+      .map(f => {
+        const p = path.join(CONVERSATIONS_DIR, f);
+        return { id: f.replace(/\.db$/, ""), mtime: fs.statSync(p).mtimeMs };
+      })
+      .sort((a, b) => b.mtime - a.mtime);
+    return files.length > 0 ? files[0].id : "";
+  } catch {
+    return "";
+  }
+}
+
 async function syncMetricsForSession(session) {
   if (!session || session.isInjecting || session.ws?.readyState !== 1) return;
   try {
@@ -1579,7 +1875,10 @@ async function syncMetricsForSession(session) {
       expression: 'window.__ag_watched_cascade_id || ""',
       returnByValue: true
     });
-    const cid = res?.result?.value;
+    let cid = res?.result?.value;
+    if (!cid) {
+      cid = getLatestConversationId();
+    }
     if (cid) {
       await pushMetricsToSession(session, cid, false);
     }
@@ -1595,10 +1894,13 @@ async function inject(session, targetId) {
       const registered = await sendCDP(session, 'Page.addScriptToEvaluateOnNewDocument', { source: INJECT_SCRIPT });
       session.newDocumentScriptId = registered.identifier;
     }
-    await sendCDP(session, 'Runtime.evaluate', {
+    const res = await sendCDP(session, 'Runtime.evaluate', {
       expression: INJECT_SCRIPT,
       returnByValue: true
     });
+    if (res?.exceptionDetails) {
+      console.error(`[Daemon] Script exception on ${targetId}:`, res.exceptionDetails);
+    }
     session.lastPushedSig = '';
     console.log(`[Daemon] Injected font, i18n & live metrics into target ${targetId}`);
   } catch (err) {
@@ -1614,7 +1916,7 @@ async function checkAndHeal(session, targetId) {
   session.isChecking = true;
   try {
     const res = await sendCDP(session, 'Runtime.evaluate', {
-      expression: 'Boolean(document.getElementById("ag-custom-fonts") && window.__ag_patch_version === "20261101-metrics-v4")',
+      expression: 'Boolean(document.getElementById("ag-custom-fonts") && window.__ag_patch_version === "20261104-stable-v14")',
       returnByValue: true
     });
     const isHealthy = res?.result?.value === true;
@@ -1676,7 +1978,8 @@ async function attachTarget(target) {
 
         // 前端切换会话时立即响应推送指标 (< 5ms)
         if (msg.method === 'Runtime.bindingCalled' && msg.params?.name === '__agRequestMetrics') {
-          const cid = msg.params.payload;
+          let cid = msg.params.payload;
+          if (!cid) cid = getLatestConversationId();
           if (cid) {
             pushMetricsToSession(session, cid, true);
           }
@@ -1758,7 +2061,7 @@ async function syncAllMetrics() {
   }
 }
 
-console.log('[Antigravity Font, i18n & Live Metrics Daemon] Started with active self-healing.');
+console.log('[Antigravity Daemon] Started with active self-healing targeting Stable Antigravity (2.29.0+).');
 setInterval(sync, 2500);
 setInterval(syncAllMetrics, 1200);
 sync();
