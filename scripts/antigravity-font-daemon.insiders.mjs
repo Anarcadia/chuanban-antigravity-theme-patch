@@ -713,6 +713,34 @@ const I18N_DICT = {
   'Send Immediately': '立即发送',
   'Queue': '排队等待',
   'Default': '默认',
+
+  // --- 权限预设与执行策略说明 (Permission Preset Descriptions) ---
+  'Every command requires approval.': '每条命令均需人工批准。',
+  'Every command requires approval': '每条命令均需人工批准',
+  'Ask before sensitive operations.': '执行敏感操作前进行询问。',
+  'Ask before sensitive operations': '执行敏感操作前进行询问',
+  'Run all commands without restrictions.': '无限制执行所有命令。',
+  'Run all commands without restrictions': '无限制执行所有命令',
+  'Automatically decide if commands run.': '自动判断是否直接执行命令。',
+  'Automatically decide if commands run': '自动判断是否直接执行命令',
+  'Delete All Remote Agents Data': '删除所有远程智能体数据',
+  'Permanently delete your remote conversations, projects, scheduled tasks, connected plugins and settings. Data in the desktop app and your Google account are not affected.': '永久删除您的远程对话、项目、定时自动化任务、已连接插件及设置。桌面客户端及 Google 账户中的数据不受影响。',
+  'Work with local agents from another device.': '在其他设备上远程协同本地智能体。',
+  'Only stored on your machine.': '仅保存在您的本地设备上。',
+  'Configure GitHub access policies.': '配置 GitHub 访问授权策略。',
+  'Outside of folders file access policy': '工作目录外文件访问策略',
+  'Configures how the agent tries to access files outside of its working folders.': '配置智能体尝试访问其工作目录以外文件时的行为策略。',
+  'Terminal Command Auto Execution': '终端命令自动执行',
+  'Controls whether terminal commands require your approval before running.': '控制终端命令在运行前是否需要您的批准。',
+  'New Conversation Button': '新建对话按钮默认工作区',
+  'Which workspace the New Conversation button and keyboard shortcut start you in.': '“新建对话”按钮及快捷键默认开启的工作区。',
+  'Manage Hooks': '管理生命周期钩子',
+  'Configure hooks that run on agent lifecycle events.': '配置在智能体生命周期事件中触发的 Hooks 脚本。',
+  'Command Setup Script': '命令前置初始化脚本',
+  'A shell setup script run before every command the agent executes in this project. Overrides the global script.': '智能体在此项目中执行每条命令前运行的 Shell 初始化脚本。将覆盖全局脚本。',
+  'Folders these agents can access.': '这些智能体可以访问的文件夹。',
+  'Access grants': '访问授权',
+  'Commands and files these agents can use.': '这些智能体可以使用的命令与文件权限。',
   'Strong': '高对比度',
   'Default Light': '默认浅色',
   'Default Dark': '默认深色',
@@ -1202,7 +1230,7 @@ const INJECT_SCRIPT = `
     }
 
     syncChuanbanPreset();
-    window.__ag_patch_version = "20261103-insiders-dev-v13";
+    window.__ag_patch_version = "20261104-insiders-dev-v14";
 
     // 3.5 模型名称同行实时指标胶囊 (Scheme C: TPS · TTFT · Ctx/256k · Out + Hover 详情卡)
     // 严格保证「左(模型) - 中(指标胶囊) - 右(模式与发送)」三栏结构；中间过窄(<150px)时物理跳至下方第二行。
@@ -1888,7 +1916,7 @@ async function checkAndHeal(session, targetId) {
   session.isChecking = true;
   try {
     const res = await sendCDP(session, 'Runtime.evaluate', {
-      expression: 'Boolean(document.getElementById("ag-custom-fonts") && window.__ag_patch_version === "20261103-insiders-dev-v13")',
+      expression: 'Boolean(document.getElementById("ag-custom-fonts") && window.__ag_patch_version === "20261104-insiders-dev-v14")',
       returnByValue: true
     });
     const isHealthy = res?.result?.value === true;
