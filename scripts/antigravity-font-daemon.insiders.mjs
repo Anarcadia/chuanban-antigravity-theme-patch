@@ -189,7 +189,9 @@ const CSS_CONTENT = `
     --border: rgba(0, 0, 0, 0.38) !important;
     --vscode-sideBar-background: #F7F5F0 !important;
     --card: #FFFFFF !important;
-    --card-border: #F7EFE6 !important;
+    --card-border: rgba(0, 0, 0, 0.35) !important;
+    --card-edge: rgba(0, 0, 0, 0.35) !important;
+    --sash-line: rgba(0, 0, 0, 0.35) !important;
     --secondary-foreground: #0A0A0A !important;
     --muted-foreground: #1A1A1A !important;
   }
@@ -203,15 +205,30 @@ const CSS_CONTENT = `
     color: var(--foreground) !important;
   }
 
-  /* 输入框外层容器（含上方工具栏与延伸至下方的弧形外框轮廓）：与按钮同色系的高白度低干扰浅色 (#F7EFE6 / #E8DDD0) */
+  /* 7.5 右侧交互页面外框线：对齐稳定版高清晰度黑度 (rgba(0, 0, 0, 0.35)) */
+  .agy-inset-shell {
+    --card-edge: rgba(0, 0, 0, 0.35) !important;
+    --sash-line: rgba(0, 0, 0, 0.35) !important;
+  }
+  .agy-sheet[data-sheet-inset] [data-main-content-body]::after,
+  .agy-inset-shell [data-side-panel-body]::after,
+  [data-main-content-body]::after {
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.35) !important;
+  }
+  /* 侧栏与主交互页面中缝分割线对齐稳定版 */
+  .relative.flex.w-full.h-full.outline-none > div.flex-shrink-0.relative.z-30.w-\[1px\] {
+    background-color: rgba(0, 0, 0, 0.35) !important;
+  }
+
+  /* 输入框外层容器（含上方工具栏与延伸至下方的弧形外框轮廓）：底色保持低干扰暖白，外框线对齐稳定版足够黑度 (rgba(0, 0, 0, 0.35)) */
   html[data-ag-preset] #antigravity\\.agentSidePanelInputBox,
   html[data-ag-preset] [id="antigravity.agentSidePanelInputBox"],
   #antigravity\\.agentSidePanelInputBox,
   [id="antigravity.agentSidePanelInputBox"],
   .surface-composer.bg-card-border {
     background-color: #F7EFE6 !important;
-    border-color: #E8DDD0 !important;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03), 0 0 0 1px #E8DDD0 !important;
+    border: 1px solid rgba(0, 0, 0, 0.35) !important;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05), 0 0 0 1px rgba(0, 0, 0, 0.02) !important;
   }
   /* 上方工具栏文字与小按钮（No Project 及其箭头） */
   [id="antigravity.agentSidePanelInputBox"] > div:first-child button,
@@ -223,13 +240,13 @@ const CSS_CONTENT = `
     background-color: rgba(217, 119, 87, 0.08) !important;
     color: #1F1E1D !important;
   }
-  /* 内部输入区域卡片：纯净高白 (#FFFFFF)，与外层形成优雅的纸本质感阶梯 */
+  /* 内部输入区域卡片：纯净高白 (#FFFFFF)，微锁边分隔 */
   .surface-composer-card.bg-card,
   [id="antigravity.agentSidePanelInputBox"] .surface-composer-card,
   [id="antigravity.agentSidePanelInputBox"] > div.bg-card {
     background-color: #FFFFFF !important;
-    border: 1px solid #ECE3D8 !important;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02) !important;
+    border: 1px solid rgba(0, 0, 0, 0.22) !important;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03) !important;
   }
 
   /* 高对比主轮廓线：新建对话、历史对话及操作胶囊 */
@@ -1122,7 +1139,7 @@ const INJECT_SCRIPT = `
     }
 
     syncChuanbanPreset();
-    window.__ag_patch_version = "20261103-insiders-dev-v5";
+    window.__ag_patch_version = "20261103-insiders-dev-v6";
 
     // 3.5 模型名称同行实时指标胶囊 (Scheme C: TPS · TTFT · Ctx/256k · Out + Hover 详情卡)
     // 严格保证「左(模型) - 中(指标胶囊) - 右(模式与发送)」三栏结构；中间过窄(<150px)时物理跳至下方第二行。
@@ -1777,7 +1794,7 @@ async function checkAndHeal(session, targetId) {
   session.isChecking = true;
   try {
     const res = await sendCDP(session, 'Runtime.evaluate', {
-      expression: 'Boolean(document.getElementById("ag-custom-fonts") && window.__ag_patch_version === "20261103-insiders-dev-v5")',
+      expression: 'Boolean(document.getElementById("ag-custom-fonts") && window.__ag_patch_version === "20261103-insiders-dev-v6")',
       returnByValue: true
     });
     const isHealthy = res?.result?.value === true;
