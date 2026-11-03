@@ -399,10 +399,18 @@ const CSS_CONTENT = `
     color: #1F1E1D !important;
   }
 
-  /* 模型列表主标题与模型名称高亮（对齐稳定版） */
+  /* 菜单主项目、动作按钮与模型名称统一扎实字重 450（彻底统一 View Usage、Main Agent、各模型名称等） */
+  [role="menu"] [role="menuitem"] > span,
+  [role="menu"] [role="menuitem"] span[class*="flex-1"],
+  [role="menu"] [role="menuitem"] span.truncate,
+  [role="menu"] .agy-overlay-item > span,
+  [role="menu"] .agy-overlay-item span[class*="flex-1"],
   [role="menu"] .agy-overlay-item span.truncate,
-  [role="menu"] [role="menuitem"] span.truncate {
+  .agy-overlay .agy-overlay-item > span,
+  .agy-overlay .agy-overlay-item span[class*="flex-1"],
+  .agy-overlay .agy-overlay-item span.truncate {
     font-weight: 450 !important;
+    letter-spacing: -0.01em !important;
     color: #1F1E1D !important;
   }
 
@@ -1114,7 +1122,7 @@ const INJECT_SCRIPT = `
     }
 
     syncChuanbanPreset();
-    window.__ag_patch_version = "20261103-insiders-dev-v4";
+    window.__ag_patch_version = "20261103-insiders-dev-v5";
 
     // 3.5 模型名称同行实时指标胶囊 (Scheme C: TPS · TTFT · Ctx/256k · Out + Hover 详情卡)
     // 严格保证「左(模型) - 中(指标胶囊) - 右(模式与发送)」三栏结构；中间过窄(<150px)时物理跳至下方第二行。
@@ -1769,7 +1777,7 @@ async function checkAndHeal(session, targetId) {
   session.isChecking = true;
   try {
     const res = await sendCDP(session, 'Runtime.evaluate', {
-      expression: 'Boolean(document.getElementById("ag-custom-fonts") && window.__ag_patch_version === "20261103-insiders-dev-v4")',
+      expression: 'Boolean(document.getElementById("ag-custom-fonts") && window.__ag_patch_version === "20261103-insiders-dev-v5")',
       returnByValue: true
     });
     const isHealthy = res?.result?.value === true;
