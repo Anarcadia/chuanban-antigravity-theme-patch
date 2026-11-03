@@ -62,7 +62,11 @@ const CSS_CONTENT = `
     font-display: swap;
   }
 
-  :root {
+  :root,
+  body,
+  body[data-agy-font],
+  body[data-agy-font="google-sans"],
+  body[data-agy-font="inter"] {
     --vscode-font-family: ${UI_FONT} !important;
     --editor-font-family: ${MONO_FONT} !important;
     --font-sans: ${UI_FONT} !important;
@@ -71,8 +75,8 @@ const CSS_CONTENT = `
     --default-mono-font-family: var(--font-mono) !important;
   }
   /* 1. UI 控件与全局界面：Claude Anthropic Sans / 更纱 UI */
-  html, body, button, select, nav, header, aside {
-    font-family: var(--font-sans);
+  html, body, body[data-agy-font], button, select, nav, header, aside {
+    font-family: var(--font-sans) !important;
     -webkit-font-smoothing: antialiased;
   }
 
@@ -962,7 +966,7 @@ const INJECT_SCRIPT = `
     }
 
     syncChuanbanPreset();
-    window.__ag_patch_version = "20261103-insiders-dev-v1";
+    window.__ag_patch_version = "20261103-insiders-dev-v2";
 
     // 3.5 模型名称同行实时指标胶囊 (Scheme C: TPS · TTFT · Ctx/256k · Out + Hover 详情卡)
     // 严格保证「左(模型) - 中(指标胶囊) - 右(模式与发送)」三栏结构；中间过窄(<150px)时物理跳至下方第二行。
@@ -1614,7 +1618,7 @@ async function checkAndHeal(session, targetId) {
   session.isChecking = true;
   try {
     const res = await sendCDP(session, 'Runtime.evaluate', {
-      expression: 'Boolean(document.getElementById("ag-custom-fonts") && window.__ag_patch_version === "20261103-insiders-dev-v1")',
+      expression: 'Boolean(document.getElementById("ag-custom-fonts") && window.__ag_patch_version === "20261103-insiders-dev-v2")',
       returnByValue: true
     });
     const isHealthy = res?.result?.value === true;

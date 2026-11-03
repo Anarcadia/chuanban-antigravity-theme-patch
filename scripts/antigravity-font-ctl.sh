@@ -8,9 +8,13 @@
 #   antigravity-font-ctl.sh mode font     - 一键切换到【纯字体版】
 #   antigravity-font-ctl.sh mode i18n     - 一键切换到【字体+汉化版】
 #   antigravity-font-ctl.sh log           - 查看最新运行日志
-#   antigravity-font-ctl.sh insiders status - 查看 Insiders 独立调试端口与状态
-#   antigravity-font-ctl.sh insiders inject - 对 Insiders 实例执行单次热注入
-#   antigravity-font-ctl.sh insiders watch  - 前台运行 Insiders 守护（用于分支开发调试）
+#   antigravity-font-ctl.sh insiders status  - 查看 Insiders 独立调试端口、守护进程与生效字体
+#   antigravity-font-ctl.sh insiders start   - 启动 Insiders 后台常驻开发守护
+#   antigravity-font-ctl.sh insiders stop    - 停止 Insiders 后台常驻守护
+#   antigravity-font-ctl.sh insiders restart - 重启 Insiders 后台守护
+#   antigravity-font-ctl.sh insiders inject  - 对 Insiders 实例执行单次热注入
+#   antigravity-font-ctl.sh insiders watch   - 前台运行 Insiders 守护（用于分支开发调试）
+#   antigravity-font-ctl.sh insiders log     - 查看 Insiders 守护运行日志
 # ==============================================================================
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -22,6 +26,8 @@ PLIST_FILE="$HOME/Library/LaunchAgents/com.antigravity.customfont.plist"
 PORT_FILE="$HOME/Library/Application Support/Antigravity/DevToolsActivePort"
 INSIDERS_PORT_FILE="$HOME/Library/Application Support/Antigravity - Insiders/DevToolsActivePort"
 LOG_FILE="/tmp/antigravity-font.log"
+INSIDERS_LOG_FILE="/tmp/antigravity-font-insiders.log"
+INSIDERS_PID_FILE="/tmp/antigravity-font-insiders.pid"
 
 NODE_BIN="$HOME/.nvm/versions/node/v24.16.0/bin/node"
 if [ ! -x "$NODE_BIN" ]; then
@@ -148,14 +154,92 @@ case "$1" in
 
   insiders)
     case "$2" in
+      start)
+        echo "启动 Antigravity Insiders 后台常驻守护..."
+        if [ -f "$INSIDERS_PID_FILE" ]; then
+          OLD_PID=$(cat "$INSIDERS_PID_FILE" 2>/dev/null)
+          if [ -n "$OLD_PID" ] && ps -p "$OLD_PID" > /dev/null 2>&1; then
+            echo "Insiders 守护已在运行中 (PID: $OLD_PID)。"
+            exit 0
+          fi
+          rm -f "$INSIDERS_PID_FILE"
+        fi
+        pkill -f "antigravity-font-daemon.insiders.mjs" 2>/dev/null || true
+        sleep 0.5
+        nohup "$NODE_BIN" "$INSIDERS_DAEMON_SCRIPT" >> "$INSIDERS_LOG_FILE" 2>&1 &
+        echo $! > "$INSIDERS_PID_FILE"
+        echo "Insiders 后台守护已启动 (PID: $(cat "$INSIDERS_PID_FILE"))，日志写入 $INSIDERS_LOG_FILE"
+        ;;
+
+      stop)
+        echo "停止 Antigravity Insiders 后台常驻守护..."
+        if [ -f "$INSIDERS_PID_FILE" ]; then
+          PID=$(cat "$INSIDERS_PID_FILE" 2>/dev/null)
+          [ -n "$PID" ] && kill "$PID" 2>/dev/null || true
+          rm -f "$INSIDERS_PID_FILE"
+        fi
+        pkill -f "antigravity-font-daemon.insiders.mjs" 2>/dev/null || true
+        echo "Insiders 守护已停止。"
+        ;;
+
+      restart)
+        $0 insiders stop
+        sleep 1
+        $0 insiders start
+        ;;
+
       status)
-        echo "=== 1. Antigravity Insiders 调试端口 ==="
+        echo "=== 1. Antigravity Insiders 守护进程状态 ==="
+        ps aux | grep "[a]ntigravity-font-daemon.insiders.mjs" || echo "未找到运行中的 Insiders daemon 进程"
+
+        echo ""
+        echo "=== 2. Antigravity Insiders 调试端口 ==="
         if [ -f "$INSIDERS_PORT_FILE" ]; then
           PORT=$(head -n 1 "$INSIDERS_PORT_FILE")
           echo "Insiders 端口文件正常: $INSIDERS_PORT_FILE (端口: $PORT)"
-          curl -s "http://127.0.0.1:$PORT/json/list" | grep -E 'title|url|webSocketDebuggerUrl' || true
         else
           echo "未检测到 Antigravity Insiders 正在运行（端口文件不存在）"
+        fi
+
+        echo ""
+        echo "=== 3. Insiders 实时生效样式与字体检测 ==="
+        if [ -f "$INSIDERS_PORT_FILE" ]; then
+          "$NODE_BIN" -e '
+            const http = require("http");
+            const fs = require("fs");
+            const port = fs.readFileSync(process.env.HOME + "/Library/Application Support/Antigravity - Insiders/DevToolsActivePort", "utf8").trim().split("\n")[0];
+            http.get(`http://127.0.0.1:${port}/json`, res => {
+              let body = "";
+              res.on("data", c => body += c);
+              res.on("end", () => {
+                try {
+                  const list = JSON.parse(body);
+                  const target = list.find(t => t.type === "page" && t.title === "Antigravity Insiders");
+                  if (!target) { console.log("未找到活跃 Insiders 页面"); return; }
+                  const ws = new globalThis.WebSocket(target.webSocketDebuggerUrl);
+                  ws.onopen = () => {
+                    ws.send(JSON.stringify({
+                      id: 1,
+                      method: "Runtime.evaluate",
+                      params: {
+                        expression: "JSON.stringify({ hasCustomStyle: !!document.getElementById(\"ag-custom-fonts\"), patchVersion: window.__ag_patch_version, preset: document.documentElement.getAttribute(\"data-ag-preset\"), bodyFont: getComputedStyle(document.body).fontFamily })",
+                        returnByValue: true
+                      }
+                    }));
+                  };
+                  ws.onmessage = ev => {
+                    const data = JSON.parse(ev.data);
+                    if (data.id === 1) {
+                      console.log("DOM 样式状态:", JSON.parse(data.result?.result?.value || "{}"));
+                      ws.close();
+                    }
+                  };
+                } catch (e) {
+                  console.log("检测异常:", e.message);
+                }
+              });
+            }).on("error", err => console.log("连接 CDP 失败:", err.message));
+          ' 2>/dev/null
         fi
         ;;
 
@@ -173,8 +257,12 @@ case "$1" in
         exec "$NODE_BIN" "$INSIDERS_DAEMON_SCRIPT"
         ;;
 
+      log)
+        tail -n 30 "$INSIDERS_LOG_FILE"
+        ;;
+
       *)
-        echo "用法: $0 insiders {status|inject|watch}"
+        echo "用法: $0 insiders {status|start|stop|restart|inject|watch|log}"
         exit 1
         ;;
     esac
