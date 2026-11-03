@@ -220,15 +220,17 @@ const CSS_CONTENT = `
     background-color: rgba(0, 0, 0, 0.35) !important;
   }
 
-  /* 输入框外层容器（含上方工具栏与延伸至下方的弧形外框轮廓）：底色保持低干扰暖白，外框线对齐稳定版足够黑度 (rgba(0, 0, 0, 0.35)) */
+  /* 输入框外层容器（含上方工具栏与延伸至下方的弧形外框轮廓）：底色保持低干扰暖白，外框线隐去（完全透明无阴影） */
   html[data-ag-preset] #antigravity\\.agentSidePanelInputBox,
   html[data-ag-preset] [id="antigravity.agentSidePanelInputBox"],
   #antigravity\\.agentSidePanelInputBox,
   [id="antigravity.agentSidePanelInputBox"],
   .surface-composer.bg-card-border {
     background-color: #F7EFE6 !important;
-    border: 1px solid rgba(0, 0, 0, 0.35) !important;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05), 0 0 0 1px rgba(0, 0, 0, 0.02) !important;
+    border: 1px solid transparent !important;
+    border-color: transparent !important;
+    box-shadow: none !important;
+    outline: none !important;
   }
   /* 上方工具栏文字与小按钮（No Project 及其箭头） */
   [id="antigravity.agentSidePanelInputBox"] > div:first-child button,
@@ -1139,7 +1141,7 @@ const INJECT_SCRIPT = `
     }
 
     syncChuanbanPreset();
-    window.__ag_patch_version = "20261103-insiders-dev-v6";
+    window.__ag_patch_version = "20261103-insiders-dev-v7";
 
     // 3.5 模型名称同行实时指标胶囊 (Scheme C: TPS · TTFT · Ctx/256k · Out + Hover 详情卡)
     // 严格保证「左(模型) - 中(指标胶囊) - 右(模式与发送)」三栏结构；中间过窄(<150px)时物理跳至下方第二行。
@@ -1794,7 +1796,7 @@ async function checkAndHeal(session, targetId) {
   session.isChecking = true;
   try {
     const res = await sendCDP(session, 'Runtime.evaluate', {
-      expression: 'Boolean(document.getElementById("ag-custom-fonts") && window.__ag_patch_version === "20261103-insiders-dev-v6")',
+      expression: 'Boolean(document.getElementById("ag-custom-fonts") && window.__ag_patch_version === "20261103-insiders-dev-v7")',
       returnByValue: true
     });
     const isHealthy = res?.result?.value === true;
