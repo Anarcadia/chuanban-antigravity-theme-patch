@@ -25,14 +25,15 @@
 ## ✨ 核心特性（v5.0.0）
 
 - **📦 模块化成品包与零转义内核**：彻底告别将 CSS/JS 塞进单文件多重反斜杠转义字符串的历史。`core/theme.css`、`core/i18n.json`、`core/runtime.js`、`core/daemon.mjs` 四大模块全部以原生格式独立存在，附带 SHA-256 签名清单 `core/manifest.json`。
-- **🔧 `user/` 无损热改装层（2.5 秒热重载）**：所有个性化定制（`user/config.json`、`user/custom.css`、`user/i18n.override.json`、`user/custom.js`）均与 `core/` 黄金内核物理隔离。未来升级补丁永不覆盖你的个人配置，且修改保存后 **2.5 秒内自动热更新至 Antigravity 窗口**，无需重启守护进程。
+- **🔧 `user/` 无损热改装层（2.5 秒可逆热重载）**：所有个性化定制（`user/config.json`、`user/custom.css`、`user/i18n.override.json`、`user/custom.js`）均与 `core/` 黄金内核物理隔离。未来升级补丁永不覆盖你的个人配置，且修改保存后 **2.5 秒内自动热更新（含词条增删还原与预设切换）至 Antigravity 窗口**，无需重启守护进程。
 - **🕯️ 输入框「古朴暗红蜡封」三态解耦（设计 C / A / B）**：
   - **首页新建对话**：日常保持 **设计 C（透明外框）**，鼠标悬停或打字聚焦时浮现 **设计 A（`1.5px` 淡雅蜡封线）**；
   - **日常推进聊天会话**：日常常驻 **设计 A（`1.5px` 淡雅蜡封线）**，鼠标悬停或打字聚焦时加深变粗为 **设计 B（`2px` 浓郁古朴暗红蜡封 `#7A1F1A` + 微暖内发光）**；
   - 纯组件级 CSS `:has()` 驱动，页面切换 **0ms 瞬时响应**。
-- **⚡ Node.js 动态分级兼容**：
-  - **Node `>= 22.0`**：完整启用暖纸主题、字体排版、450 条深度汉化、死锁自愈与原生设置面板；
-  - **Node `>= 22.13`**：通过动态 `await import('node:sqlite')` 自动解锁底部 **实时会话指标胶囊**（精准展示模型名、每轮平均耗时、上下文窗口占用与真实缓存命中率）。
+- **⚡ Node.js 动态分级兼容与 Stable/Insiders 同进程双守护**：
+  - **Node `>= 22.0`**：完整启用暖纸主题、字体排版、450 条深度汉化、死锁自愈与三套色彩预设；
+  - **Node `>= 22.13`**：通过动态 `await import('node:sqlite')` 自动解锁底部 **实时会话指标胶囊**（精准展示模型名、每轮平均耗时、上下文窗口占用与真实缓存命中率）；
+  - 默认 `channel: "auto"` 单守护进程同时自动探测并服务 **Stable 正式版** 与 **Insiders 预览版**，互不覆盖。
 
 ---
 
@@ -53,7 +54,7 @@
    # 1. 环境与字体体检
    node install.mjs doctor
 
-   # 2. 一键安装并启动后台守护服务（支持 --channel stable 或 --channel insiders）
+   # 2. 一键安装并启动后台守护服务（默认 auto 同时兼容 stable 与 insiders）
    node install.mjs install
 
    # 3. 验证实时 CDP 注入状态
@@ -67,19 +68,19 @@
 | 命令 | 说明 |
 | :--- | :--- |
 | `node install.mjs doctor` | 全面诊断 Node 版本、`node:sqlite` 可用性、字体文件、核心文件 SHA-256、守护进程与 CDP 端口状态 |
-| `node install.mjs install [--channel stable\|insiders]` | 备份旧版、部署 `core/` 内核、保留 `user/` 改装层、配置 `argv.json` 并启动系统后台守护服务 |
+| `node install.mjs install [--channel auto\|stable\|insiders]` | 备份旧版、部署 `core/` 内核、保留 `user/` 改装层、配置 `argv.json` 并启动系统后台守护服务 |
 | `node install.mjs verify [--safe-mode]` | 立即通过 CDP 向当前 Antigravity 窗口推送注入并校验（加 `--safe-mode` 可临时屏蔽 `user/` 层排查冲突） |
-| `node install.mjs rollback` | 一键回滚至 `~/.gemini/antigravity/theme-patch/backups/` 下最近一次自动备份的版本 |
-| `node install.mjs uninstall` | 停止后台守护服务并移除包装脚本（保留 `theme-patch/user` 配置以备后用） |
+| `node install.mjs rollback` | 一键回滚至上一次自动备份的快照版本并立即重新注入 |
+| `node install.mjs uninstall` | 停止后台守护服务（保留 `theme-patch/user` 配置以备后用） |
 
 ---
 
 ## 📁 目录结构与二次定制指南
 
 详见 [SKILL.md](SKILL.md) 第五节。所有个人微调请直接编辑安装目录 `~/.gemini/antigravity/theme-patch/user/` 下的文件：
-- `user/config.json`：切换功能模块开关、覆盖全局 CSS 变量（如 `--ag-chat-font-size`）；
-- `user/custom.css`：追加自定义 CSS 样式；
-- `user/i18n.override.json`：覆盖或新增汉化词条；
-- `user/custom.js`：编写在独立沙箱内执行的自定义前端脚本。
+- `user/config.json`：切换功能模块开关（`modules` / `features`）、色彩预设（`preset`）、覆盖全局 CSS 变量（`themeVars`，如 `--ag-chat-font-size`、`--ag-wax-seal-hover`）；
+- `user/custom.css`：追加自定义 CSS 样式（独立挂载于 `#antigravity-user-custom-style`）；
+- `user/i18n.override.json`：覆盖或新增汉化词条（支持实时增删热还原）；
+- `user/custom.js`：编写在独立沙箱内执行的自定义前端脚本（提供 `ctx` / `boot` 上下文对象）。
 
 > 历史 v4 单文件架构技术蓝图已归档至 [`DOCS/BLUEPRINT_V4_LEGACY.md`](DOCS/BLUEPRINT_V4_LEGACY.md)。

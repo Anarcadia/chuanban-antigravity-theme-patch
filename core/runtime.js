@@ -8,12 +8,28 @@
   if (window.top !== window) return;
   if (!boot || typeof boot !== 'object') return;
 
-  const PATCH_VERSION = boot.version || '20261104-stable-v22';
+  const PATCH_VERSION = boot.version || '20261104-v5.0.0';
+  const ENABLED = boot.enabled !== false;
   const CSS_TEXT = boot.cssText || '';
+  const CUSTOM_CSS_TEXT = boot.customCss || '';
+  const THEME_VARS = boot.themeVars && typeof boot.themeVars === 'object' ? boot.themeVars : {};
+  const RAW_MODULES = Object.assign({}, boot.features || {}, boot.modules || {});
+  if (typeof RAW_MODULES.metricsCapsule === 'boolean' && typeof RAW_MODULES.metrics !== 'boolean') {
+    RAW_MODULES.metrics = RAW_MODULES.metricsCapsule;
+  }
   const MODULES = Object.assign(
-    { i18n: true, metrics: true, customCss: true, customJs: true },
-    boot.modules || {}
+    {
+      i18n: true,
+      metrics: true,
+      composerWaxSeal: true,
+      deadlockHealer: true,
+      customCss: true,
+      customJs: true
+    },
+    RAW_MODULES
   );
+  MODULES.metricsCapsule = MODULES.metrics;
+
   const DEFAULT_PRESET = boot.preset || 'high-contrast';
   const SELECTORS = Object.assign(
     {
@@ -27,26 +43,139 @@
     boot.selectors || {}
   );
 
+  // 全局持久化的原始英文文本映射表（支持 i18n.override.json 热重载增删改与一键还原）
+  if (!window.__ag_orig_text_map) {
+    window.__ag_orig_text_map = new WeakMap();
+  }
+  const origTextMap = window.__ag_orig_text_map;
+
+  function restoreAllTranslations(root = document.body) {
+    if (!root) return;
+    try {
+      const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+      while (walker.nextNode()) {
+        const node = walker.currentNode;
+        const rec = origTextMap.get(node);
+        if (rec && node.nodeValue === rec.lastVal) {
+          node.nodeValue = rec.origRaw;
+          origTextMap.delete(node);
+        }
+      }
+      const attrEls = root.querySelectorAll
+        ? root.querySelectorAll('[data-ag-orig-title], [data-ag-orig-placeholder], [data-ag-orig-aria-label]')
+        : [];
+      for (let i = 0; i < attrEls.length; i++) {
+        const el = attrEls[i];
+        if (el.hasAttribute('data-ag-orig-title')) {
+          el.setAttribute('title', el.getAttribute('data-ag-orig-title'));
+          el.removeAttribute('data-ag-orig-title');
+        }
+        if (el.hasAttribute('data-ag-orig-placeholder')) {
+          el.setAttribute('placeholder', el.getAttribute('data-ag-orig-placeholder'));
+          el.removeAttribute('data-ag-orig-placeholder');
+        }
+        if (el.hasAttribute('data-ag-orig-aria-label')) {
+          el.setAttribute('aria-label', el.getAttribute('data-ag-orig-aria-label'));
+          el.removeAttribute('data-ag-orig-aria-label');
+        }
+      }
+    } catch (e) {}
+  }
+
+  function applyThemeVars(varsObj) {
+    const prevKeys = Array.isArray(window.__ag_applied_theme_vars) ? window.__ag_applied_theme_vars : [];
+    const nextKeys = Object.keys(varsObj || {});
+    for (let i = 0; i < prevKeys.length; i++) {
+      const k = prevKeys[i];
+      if (!(k in (varsObj || {}))) {
+        document.documentElement.style.removeProperty(k);
+      }
+    }
+    for (let i = 0; i < nextKeys.length; i++) {
+      const k = nextKeys[i];
+      const v = varsObj[k];
+      if (v !== null && v !== undefined && String(v).trim() !== '') {
+        document.documentElement.style.setProperty(k, String(v).trim());
+      } else {
+        document.documentElement.style.removeProperty(k);
+      }
+    }
+    if (varsObj && varsObj['--ag-chat-font-size']) {
+      document.documentElement.setAttribute('data-ag-custom-font-size', 'true');
+    } else {
+      document.documentElement.removeAttribute('data-ag-custom-font-size');
+    }
+    window.__ag_applied_theme_vars = nextKeys;
+  }
+
+  // 若用户在 user/config.json 中将 enabled 设为 false，执行无损卸载还原
+  if (!ENABLED) {
+    const s1 = document.getElementById('ag-custom-fonts');
+    if (s1) s1.remove();
+    const s2 = document.getElementById('antigravity-user-custom-style');
+    if (s2) s2.remove();
+    const pill = document.getElementById('ag-live-metrics-pill');
+    if (pill) pill.remove();
+    const tt = document.getElementById('ag-live-metrics-tooltip');
+    if (tt) tt.remove();
+    if (window.__ag_i18n_observer) {
+      try {
+        window.__ag_i18n_observer.disconnect();
+      } catch (e) {}
+      window.__ag_i18n_observer = null;
+    }
+    if (window.__ag_metrics_route_watcher) {
+      try {
+        clearInterval(window.__ag_metrics_route_watcher);
+      } catch (e) {}
+      window.__ag_metrics_route_watcher = null;
+    }
+    applyThemeVars({});
+    document.documentElement.removeAttribute('data-ag-preset');
+    document.documentElement.removeAttribute('data-ag-page-type');
+    document.documentElement.removeAttribute('data-ag-wax-seal');
+    restoreAllTranslations(document.body);
+    window.__ag_patch_version = PATCH_VERSION + '-disabled';
+    return;
+  }
+
   // ============================================================================
-  // 1. 注入更纱黑体与主题样式（core/theme.css + user/custom.css 合并结果）
+  // 1. 注入更纱黑体与主题样式（#ag-custom-fonts 与独立 #antigravity-user-custom-style）
   // ============================================================================
+  const headTarget = document.head || document.getElementsByTagName('head')[0] || document.documentElement;
+
   let style = document.getElementById('ag-custom-fonts');
   if (!style) {
     style = document.createElement('style');
     style.id = 'ag-custom-fonts';
-    const target = document.head || document.getElementsByTagName('head')[0] || document.documentElement;
-    if (target) {
-      target.appendChild(style);
-    }
+    if (headTarget) headTarget.appendChild(style);
   }
   if (style && style.textContent !== CSS_TEXT) {
     style.textContent = CSS_TEXT;
   }
 
+  let userStyle = document.getElementById('antigravity-user-custom-style');
+  if (MODULES.customCss && CUSTOM_CSS_TEXT.trim()) {
+    if (!userStyle) {
+      userStyle = document.createElement('style');
+      userStyle.id = 'antigravity-user-custom-style';
+      if (headTarget) headTarget.appendChild(userStyle);
+    }
+    if (userStyle.textContent !== CUSTOM_CSS_TEXT) {
+      userStyle.textContent = CUSTOM_CSS_TEXT;
+    }
+  } else if (userStyle) {
+    userStyle.remove();
+  }
+
+  applyThemeVars(THEME_VARS);
+  document.documentElement.setAttribute('data-ag-wax-seal', MODULES.composerWaxSeal === false ? 'off' : 'on');
+
   // ============================================================================
   // 2. 防死锁守护：Antigravity 原生 TanStack Router 缺陷修复（支持热重载更新回调）
   // ============================================================================
   window.__ag_settings_click_fn = (e) => {
+    if (MODULES.deadlockHealer === false) return;
     const btn = e.target && e.target.closest && e.target.closest('[data-testid="settings-button"]');
     if (!btn) return;
 
@@ -78,6 +207,7 @@
   // 2.1 缩放快捷键原生缺陷修复（恢复 Cmd + - / Cmd + = / Cmd + 0）
   // ============================================================================
   window.__ag_zoom_keydown_fn = (e) => {
+    if (MODULES.deadlockHealer === false) return;
     if (e.metaKey && !e.ctrlKey && !e.altKey) {
       if (!e.shiftKey && (e.key === '-' || e.code === 'Minus' || e.code === 'NumpadSubtract' || e.keyCode === 189)) {
         e.preventDefault();
@@ -109,7 +239,7 @@
   }
 
   // ============================================================================
-  // 3. 专属预设状态联动与防白屏崩溃保护
+  // 3. 专属色彩预设状态联动（支持 user/config.json 热重载切换）与防白屏崩溃保护
   // ============================================================================
   const PRESETS = {
     HIGH_CONTRAST: 'high-contrast',
@@ -122,6 +252,14 @@
 
   const ALL_CUSTOM_PRESET_NAMES = new Set(Object.values(PRESETS));
 
+  // 当用户在 user/config.json 中修改了 preset 时，同步刷新 localStorage 中的 theme-color-flavor
+  if (DEFAULT_PRESET && window.__ag_last_boot_preset !== DEFAULT_PRESET) {
+    window.__ag_last_boot_preset = DEFAULT_PRESET;
+    try {
+      Storage.prototype.setItem.call(localStorage, 'theme-color-flavor', DEFAULT_PRESET);
+    } catch (e) {}
+  }
+
   function syncChuanbanPreset() {
     try {
       const stored = Storage.prototype.getItem.call(localStorage, 'theme-preset-light');
@@ -131,13 +269,10 @@
         } catch (e) {}
       }
 
-      const flavor = Storage.prototype.getItem.call(localStorage, 'theme-color-flavor') || DEFAULT_PRESET || PRESETS.HIGH_CONTRAST;
-      const currentBg = (window.getComputedStyle(document.documentElement).getPropertyValue('--background') || '')
-        .trim()
-        .toUpperCase();
-      const isWarmBg = currentBg === '#FBF9F5' || currentBg === '#FCFCFB';
+      const flavor =
+        Storage.prototype.getItem.call(localStorage, 'theme-color-flavor') || DEFAULT_PRESET || PRESETS.HIGH_CONTRAST;
 
-      let targetPreset = null;
+      let targetPreset = PRESETS.HIGH_CONTRAST;
       if (flavor === PRESETS.HIGH_CONTRAST || flavor === PRESETS.LEGACY_WARM_WHITE || flavor === '高对比版') {
         targetPreset = PRESETS.HIGH_CONTRAST;
       } else if (
@@ -146,16 +281,12 @@
         flavor === 'ClaudeDesktop 净白'
       ) {
         targetPreset = PRESETS.CLAUDE_PUREWHITE;
-      } else if (flavor === PRESETS.VINTAGE_DEEP || flavor === PRESETS.LEGACY_CHUANBAN || flavor === '复古深色' || isWarmBg) {
+      } else if (flavor === PRESETS.VINTAGE_DEEP || flavor === PRESETS.LEGACY_CHUANBAN || flavor === '复古深色') {
         targetPreset = PRESETS.VINTAGE_DEEP;
       }
 
-      if (targetPreset) {
-        if (document.documentElement.getAttribute('data-ag-preset') !== targetPreset) {
-          document.documentElement.setAttribute('data-ag-preset', targetPreset);
-        }
-      } else {
-        document.documentElement.removeAttribute('data-ag-preset');
+      if (document.documentElement.getAttribute('data-ag-preset') !== targetPreset) {
+        document.documentElement.setAttribute('data-ag-preset', targetPreset);
       }
     } catch (e) {}
   }
@@ -258,205 +389,218 @@
     const bottomRow = findFooterRow(box);
     if (!bottomRow || !bottomRow.children[0]) return null;
     const leftGroup = bottomRow.children[0];
-    const rightGroup = bottomRow.children[1] || null;
+    const rightGroup = bottomRow.children[1];
 
     let pill = document.getElementById('ag-live-metrics-pill');
-    if (pill && pill.getAttribute('data-v') !== '3') {
-      pill.remove();
-      pill = null;
-    }
-    let isNewPill = false;
     if (!pill) {
-      isNewPill = true;
-      pill = document.createElement('div');
+      pill = document.createElement('span');
       pill.id = 'ag-live-metrics-pill';
-      pill.setAttribute('data-v', '3');
-      pill.innerHTML = '<span id="ag-live-metrics-text"></span>';
+      pill.textContent = '…';
       pill.addEventListener('mouseenter', () => {
         const tt = ensureMetricsTooltip();
         if (!tt || !tt.innerHTML) return;
-        const r = pill.getBoundingClientRect();
-        const ttWidth = Math.min(440, Math.max(370, tt.offsetWidth || 400));
-        const left = Math.max(12, Math.min(r.left, window.innerWidth - ttWidth - 16));
-        const bottomPx = Math.min(window.innerHeight - r.top + 8, window.innerHeight - (tt.offsetHeight || 220) - 12);
-        tt.style.left = left + 'px';
-        tt.style.bottom = Math.max(8, bottomPx) + 'px';
-        tt.setAttribute('data-visible', '1');
+        const rect = pill.getBoundingClientRect();
+        tt.classList.add('ag-tt-visible');
+        const ttWidth = tt.offsetWidth || 270;
+        const ttHeight = tt.offsetHeight || 200;
+        let left = rect.left + rect.width / 2 - ttWidth / 2;
+        left = Math.max(12, Math.min(window.innerWidth - ttWidth - 12, left));
+        let top = rect.top - ttHeight - 10;
+        if (top < 12) top = rect.bottom + 10;
+        tt.style.left = Math.round(left) + 'px';
+        tt.style.top = Math.round(top) + 'px';
       });
       pill.addEventListener('mouseleave', () => {
         const tt = document.getElementById('ag-live-metrics-tooltip');
-        if (tt) tt.removeAttribute('data-visible');
+        if (tt) tt.classList.remove('ag-tt-visible');
       });
-    }
-
-    if (
-      typeof ResizeObserver !== 'undefined' &&
-      (window.__ag_metrics_ro_target !== bottomRow || window.__ag_metrics_ro_ver !== PATCH_VERSION)
-    ) {
-      if (window.__ag_metrics_ro) {
-        try {
-          window.__ag_metrics_ro.disconnect();
-        } catch (e) {}
-      }
-      window.__ag_metrics_ro_target = bottomRow;
-      window.__ag_metrics_ro_ver = PATCH_VERSION;
-      window.__ag_last_row_width = -1;
-      window.__ag_metrics_ro = new ResizeObserver(() => {
-        const w = bottomRow.clientWidth || 0;
-        if (w > 0 && Math.abs(w - (window.__ag_last_row_width || 0)) >= 1) {
-          window.__ag_last_row_width = w;
-          if (typeof window.__ag_ensure_metrics_pill_fn === 'function') {
-            window.__ag_ensure_metrics_pill_fn(true);
-          }
-        }
-      });
-      window.__ag_metrics_ro.observe(bottomRow);
-    }
-
-    const isMountedHere =
-      pill.parentElement === leftGroup ||
-      (bottomRow.parentElement && pill.parentElement === bottomRow.parentElement);
-    if (!forceLayout && !isNewPill && isMountedHere) {
-      return pill;
     }
 
     const rowW = bottomRow.clientWidth || 0;
-    window.__ag_last_row_width = rowW;
     const leftW = measureNaturalLeftWidth(leftGroup);
     const rightW = rightGroup ? rightGroup.offsetWidth || 0 : 0;
-    const availMiddleW = rowW - leftW - rightW - 14;
-    const useBottomRow = rowW > 0 && availMiddleW < MIDDLE_MIN_WIDTH_PX;
-    const rowMode = useBottomRow ? 'bottom' : 'middle';
+    const middleAvailW = rowW - leftW - rightW - 16;
+    const layoutSig = `${Math.round(rowW / 4)}:${Math.round(leftW / 4)}:${Math.round(rightW / 4)}`;
 
-    if (bottomRow.getAttribute('data-ag-row-mode') !== rowMode) {
-      bottomRow.setAttribute('data-ag-row-mode', rowMode);
+    if (!forceLayout && pill.isConnected && pill.getAttribute('data-ag-layout-sig') === layoutSig) {
+      return pill;
     }
-    if (pill.getAttribute('data-ag-row-mode') !== rowMode) {
-      pill.setAttribute('data-ag-row-mode', rowMode);
-    }
+    pill.setAttribute('data-ag-layout-sig', layoutSig);
 
-    if (useBottomRow) {
-      const cardParent = bottomRow.parentElement;
-      if (cardParent && (pill.parentElement !== cardParent || pill.previousElementSibling !== bottomRow)) {
-        bottomRow.after(pill);
+    bottomRow.classList.add('ag-footer-row-wrap');
+    leftGroup.style.flex = '0 0 auto';
+    if (rightGroup) rightGroup.style.flex = '0 0 auto';
+
+    if (rowW > 0 && middleAvailW < MIDDLE_MIN_WIDTH_PX) {
+      pill.classList.remove('ag-pill-middle');
+      pill.classList.add('ag-pill-wrapped');
+      if (pill.parentElement !== bottomRow || bottomRow.lastElementChild !== pill) {
+        bottomRow.appendChild(pill);
       }
     } else {
-      if (pill.parentElement !== leftGroup) {
-        leftGroup.appendChild(pill);
+      pill.classList.remove('ag-pill-wrapped');
+      pill.classList.add('ag-pill-middle');
+      if (rightGroup && (pill.parentElement !== bottomRow || pill.nextElementSibling !== rightGroup)) {
+        bottomRow.insertBefore(pill, rightGroup);
+      } else if (!rightGroup && pill.parentElement !== bottomRow) {
+        bottomRow.appendChild(pill);
       }
+    }
+
+    if (!window.__ag_pill_resize_observer && typeof ResizeObserver !== 'undefined') {
+      window.__ag_pill_resize_observer = new ResizeObserver(() => {
+        if (window.__ag_pill_ro_raf) return;
+        window.__ag_pill_ro_raf = requestAnimationFrame(() => {
+          window.__ag_pill_ro_raf = 0;
+          ensureMetricsPill(true);
+        });
+      });
+    }
+    if (window.__ag_pill_resize_observer && window.__ag_observed_row !== bottomRow) {
+      try {
+        window.__ag_pill_resize_observer.disconnect();
+        window.__ag_pill_resize_observer.observe(bottomRow);
+        window.__ag_observed_row = bottomRow;
+      } catch (e) {}
     }
 
     return pill;
   }
 
-  window.__ag_ensure_metrics_pill_fn = ensureMetricsPill;
+  window.__ag_update_live_metrics = function (data) {
+    if (!data || !MODULES.metrics) return;
+    window.__ag_last_metrics = data;
+    const pill = ensureMetricsPill();
+    if (!pill) return;
 
-  window.__ag_render_metrics = function (payload) {
-    try {
-      if (!MODULES.metrics) return;
-      window.__ag_last_metrics = payload;
-      const currentId = extractCascadeId();
-      const pill = ensureMetricsPill(false);
-      const ttEl = ensureMetricsTooltip();
-      if (!pill) return;
-      if (!currentId || !payload || !payload.hasData || payload.cascadeId !== currentId) {
-        if (pill.style.display !== 'none') pill.style.display = 'none';
-        if (ttEl) ttEl.removeAttribute('data-visible');
-        return;
-      }
-      const textEl = pill.querySelector('#ag-live-metrics-text');
-      let textChanged = false;
-      if (textEl && textEl.innerHTML !== payload.inlineHtml) {
-        textEl.innerHTML = payload.inlineHtml;
-        textChanged = true;
-      }
-      if (ttEl && ttEl.innerHTML !== payload.tooltipHtml) {
-        ttEl.innerHTML = payload.tooltipHtml;
-      }
-      if (pill.style.display !== 'inline-flex') {
-        pill.style.display = 'inline-flex';
-        textChanged = true;
-      }
-      if (textChanged) {
-        ensureMetricsPill(true);
-      }
-    } catch (e) {}
+    if (!data.hasData) {
+      pill.style.display = 'none';
+      return;
+    }
+    pill.style.display = 'inline-flex';
+
+    const tpsStr = data.tps > 0 ? data.tps + ' tok/s' : '-- tok/s';
+    const ttftNum = Number(data.ttftSec);
+    const ttftStr = ttftNum > 0 ? 'TTFT ' + ttftNum.toFixed(1) + 's' : 'TTFT --';
+    const ctxK = (data.contextUsed / 1000).toFixed(data.contextUsed >= 10000 ? 0 : 1) + 'k';
+    const limitK = Math.round((data.contextLimit || 256000) / 1000) + 'k';
+    const pctNum = Number(data.contextPct) || 0;
+    const ctxStr = 'Ctx ' + ctxK + '/' + limitK + ' (' + Math.round(pctNum) + '%)';
+    const outStr =
+      'Out ' + (data.lastOutput >= 1000 ? (data.lastOutput / 1000).toFixed(1) + 'k' : data.lastOutput || 0);
+
+    pill.innerHTML =
+      '<span class="ag-m-item">' +
+      tpsStr +
+      '</span>' +
+      '<span class="ag-m-sep">·</span>' +
+      '<span class="ag-m-item">' +
+      ttftStr +
+      '</span>' +
+      '<span class="ag-m-sep">·</span>' +
+      '<span class="ag-m-item ag-m-ctx">' +
+      ctxStr +
+      '</span>' +
+      '<span class="ag-m-sep">·</span>' +
+      '<span class="ag-m-item">' +
+      outStr +
+      '</span>';
+
+    if (pctNum >= 80) {
+      pill.setAttribute('data-ctx-warn', 'high');
+    } else {
+      pill.removeAttribute('data-ctx-warn');
+    }
+
+    const tt = ensureMetricsTooltip();
+    if (tt) {
+      const fmtNum = (n) => (Number(n) || 0).toLocaleString();
+      const hitPct = (Number(data.cacheHitRate) || 0).toFixed(1) + '%';
+      const thinkSec = (Number(data.thinkingSec) || 0).toFixed(1) + 's';
+      const genSec = (Number(data.genSec) || 0).toFixed(1) + 's';
+      tt.innerHTML =
+        '<div class="ag-tt-title"><span>会话实时指标 (真实 trajectory.pb)</span><span>#' +
+        (data.stepCount || 0) +
+        ' 步</span></div>' +
+        '<div class="ag-tt-row"><span class="ag-tt-label">当前步骤总输入 (Ctx)</span><span class="ag-tt-val">' +
+        fmtNum(data.contextUsed) +
+        ' / ' +
+        fmtNum(data.contextLimit || 256000) +
+        ' (' +
+        pctNum.toFixed(1) +
+        '%)</span></div>' +
+        '<div class="ag-tt-row"><span class="ag-tt-label">├─ 缓存读取 (Cache Read)</span><span class="ag-tt-val ag-tt-accent">' +
+        fmtNum(data.lastCacheRead) +
+        ' (' +
+        hitPct +
+        ')</span></div>' +
+        '<div class="ag-tt-row"><span class="ag-tt-label">└─ 增量输入 (Fresh Input)</span><span class="ag-tt-val">' +
+        fmtNum(data.lastInput) +
+        '</span></div>' +
+        '<div class="ag-tt-div"></div>' +
+        '<div class="ag-tt-row"><span class="ag-tt-label">本轮回复输出 (Turn Out)</span><span class="ag-tt-val">' +
+        fmtNum(data.lastOutput) +
+        ' tok (含思考 ' +
+        fmtNum(data.lastThinking) +
+        ')</span></div>' +
+        '<div class="ag-tt-row"><span class="ag-tt-label">本轮生成耗时 (TTFT / Gen)</span><span class="ag-tt-val">' +
+        thinkSec +
+        ' / ' +
+        genSec +
+        ' (' +
+        (data.turnSteps || 1) +
+        ' 步)</span></div>' +
+        '<div class="ag-tt-row"><span class="ag-tt-label">输出生成速度 (TPS)</span><span class="ag-tt-val ag-tt-accent">' +
+        (data.tps || 0) +
+        ' tokens / sec</span></div>' +
+        '<div class="ag-tt-div"></div>' +
+        '<div class="ag-tt-row"><span class="ag-tt-label">会话累计 Input / Cache</span><span class="ag-tt-val">' +
+        fmtNum(data.totalInput) +
+        ' / ' +
+        fmtNum(data.totalCacheRead) +
+        '</span></div>' +
+        '<div class="ag-tt-row"><span class="ag-tt-label">会话累计 Output / Tools</span><span class="ag-tt-val">' +
+        fmtNum(data.totalOutput) +
+        ' / ' +
+        (data.toolCalls || 0) +
+        ' 次调用</span></div>' +
+        '<div class="ag-tt-row"><span class="ag-tt-label">底层模型枚举</span><span class="ag-tt-val">' +
+        (data.modelName || 'Default') +
+        '</span></div>';
+    }
   };
 
   function checkRouteAndMountMetrics() {
     try {
-      const hasBranchPill = !!document.querySelector(SELECTORS.branchPillInBox);
-      const isHome =
-        hasBranchPill ||
-        !!document.querySelector(SELECTORS.homeGreeting) ||
-        window.location.pathname === '/' ||
-        !window.location.pathname.startsWith('/c/');
-      const pageType = isHome ? 'home' : 'chat';
+      const cid = extractCascadeId();
+      const box = document.getElementById(SELECTORS.inputBoxId);
+      const hasBranchPillInBox = !!(box && box.querySelector(SELECTORS.branchPillInBox));
+      const hasHomeGreeting = !!document.querySelector(SELECTORS.homeGreeting);
+      const pageType = hasBranchPillInBox || hasHomeGreeting ? 'home' : 'chat';
       if (document.documentElement.getAttribute('data-ag-page-type') !== pageType) {
         document.documentElement.setAttribute('data-ag-page-type', pageType);
       }
-      if (document.body && document.body.hasAttribute('data-ag-page-type')) {
-        document.body.removeAttribute('data-ag-page-type');
-      }
 
       if (!MODULES.metrics) {
-        const pill = document.getElementById('ag-live-metrics-pill');
-        if (pill && pill.style.display !== 'none') pill.style.display = 'none';
+        const existing = document.getElementById('ag-live-metrics-pill');
+        if (existing) existing.style.display = 'none';
         return;
       }
 
-      const cid = extractCascadeId();
-      if (!cid) {
-        window.__ag_watched_cascade_id = '';
-        const pill = document.getElementById('ag-live-metrics-pill');
-        if (pill && pill.style.display !== 'none') {
-          pill.style.display = 'none';
+      const pill = ensureMetricsPill();
+      if (cid && cid !== window.__ag_active_cascade_id) {
+        window.__ag_active_cascade_id = cid;
+        if (typeof window.__ag_on_session_change === 'function') {
+          try {
+            window.__ag_on_session_change(cid);
+          } catch (e) {}
         }
-        const ttEl = document.getElementById('ag-live-metrics-tooltip');
-        if (ttEl) ttEl.removeAttribute('data-visible');
-        return;
-      }
-
-      if (cid !== window.__ag_watched_cascade_id) {
-        window.__ag_watched_cascade_id = cid;
-        const pill = document.getElementById('ag-live-metrics-pill');
-        if (pill && (!window.__ag_last_metrics || window.__ag_last_metrics.cascadeId !== cid)) {
-          pill.style.display = 'none';
-        }
-        if (typeof window.__agRequestMetrics === 'function') {
-          window.__agRequestMetrics(cid);
-        }
-      } else if (window.__ag_last_metrics && window.__ag_last_metrics.cascadeId === cid) {
-        ensureMetricsPill(false);
+      } else if (pill && window.__ag_last_metrics && pill.textContent === '…') {
+        window.__ag_update_live_metrics(window.__ag_last_metrics);
       }
     } catch (e) {}
   }
 
-  if (!window.__ag_history_hook_installed) {
-    window.__ag_history_hook_installed = true;
-    const triggerRouteCheck = () => {
-      requestAnimationFrame(() => {
-        setTimeout(() => {
-          if (typeof window.__ag_check_route_fn === 'function') window.__ag_check_route_fn();
-        }, 0);
-      });
-      setTimeout(() => {
-        if (typeof window.__ag_check_route_fn === 'function') window.__ag_check_route_fn();
-      }, 120);
-    };
-    const wrapHistory = (type) => {
-      const orig = history[type];
-      if (typeof orig !== 'function') return;
-      history[type] = function (...args) {
-        const ret = orig.apply(this, args);
-        triggerRouteCheck();
-        return ret;
-      };
-    };
-    wrapHistory('pushState');
-    wrapHistory('replaceState');
-    window.addEventListener('popstate', triggerRouteCheck);
-  }
   window.__ag_check_route_fn = checkRouteAndMountMetrics;
 
   if (window.__ag_metrics_route_watcher) {
@@ -469,7 +613,7 @@
   checkRouteAndMountMetrics();
 
   // ============================================================================
-  // 4. 高性能界面汉化引擎（无原型词典 + TreeWalker 剪枝 + 双触发防后台堆积）
+  // 4. 高性能界面汉化引擎（无原型词典 + WeakMap 热重载还原 + 双触发防后台堆积）
   // ============================================================================
   if (window.__ag_i18n_observer) {
     try {
@@ -489,82 +633,59 @@
       return !!el.closest(EXCLUDE_SELECTOR);
     }
 
-    function setNodeVal(node, nextVal) {
-      if (node.nodeValue !== nextVal) {
-        node.nodeValue = nextVal;
-      }
-    }
-
-    function translateTextNode(node) {
-      const raw = node.nodeValue;
-      if (!raw) return;
+    function computeTextTranslation(raw) {
+      if (!raw) return null;
       const trimmed = raw.trim();
-      if (!trimmed) return;
+      if (!trimmed) return null;
 
       // 1. 无原型静态词典 O(1) 精确匹配
       const replacement = DICT[trimmed];
       if (typeof replacement === 'string') {
         if (/[\u4e00-\u9fa5]/.test(replacement) && /^\s*[a-zA-Z]+\s*$/.test(raw)) {
-          setNodeVal(node, replacement);
-        } else {
-          setNodeVal(node, raw.replace(trimmed, replacement));
+          return replacement;
         }
-        return;
+        return raw.replace(trimmed, replacement);
       }
 
       // 2. 快速短路：不含任何英文字母直接跳过后续 14 个正则
-      if (!/[a-zA-Z]/.test(trimmed)) return;
+      if (!/[a-zA-Z]/.test(trimmed)) return null;
 
       // 3. 动态正则匹配
       if (/^(\d+)\s+files?\s+changed$/i.test(trimmed)) {
-        setNodeVal(node, raw.replace(/^(\d+)\s+files?\s+changed$/i, '$1 个文件变更'));
-        return;
+        return raw.replace(/^(\d+)\s+files?\s+changed$/i, '$1 个文件变更');
       }
       if (/^See all\s*\((\d+)\)$/i.test(trimmed)) {
-        setNodeVal(node, raw.replace(/^See all\s*\((\d+)\)$/i, '查看全部 ($1)'));
-        return;
+        return raw.replace(/^See all\s*\((\d+)\)$/i, '查看全部 ($1)');
       }
       if (/^Show\s+(\d+)\s+breakdowns?$/i.test(trimmed)) {
-        setNodeVal(node, raw.replace(/^Show\s+(\d+)\s+breakdowns?$/i, '展开明细 ($1 项)'));
-        return;
+        return raw.replace(/^Show\s+(\d+)\s+breakdowns?$/i, '展开明细 ($1 项)');
       }
       if (/^(\d+)\s+tools?$/i.test(trimmed)) {
-        setNodeVal(node, raw.replace(/^(\d+)\s+tools?$/i, '$1 个工具'));
-        return;
+        return raw.replace(/^(\d+)\s+tools?$/i, '$1 个工具');
       }
       if (/^(\d+)\s+demoted$/i.test(trimmed)) {
-        setNodeVal(node, raw.replace(/^(\d+)\s+demoted$/i, '$1 项已降级'));
-        return;
+        return raw.replace(/^(\d+)\s+demoted$/i, '$1 项已降级');
       }
       if (/^(\d+)\s+excluded$/i.test(trimmed)) {
-        setNodeVal(node, raw.replace(/^(\d+)\s+excluded$/i, '$1 项已排除'));
-        return;
+        return raw.replace(/^(\d+)\s+excluded$/i, '$1 项已排除');
       }
       if (/^(\d+)\s+tools?\s+excluded$/i.test(trimmed)) {
-        setNodeVal(node, raw.replace(/^(\d+)\s+tools?\s+excluded$/i, '$1 个工具已排除'));
-        return;
+        return raw.replace(/^(\d+)\s+tools?\s+excluded$/i, '$1 个工具已排除');
       }
       if (/^(\d+)\s+active\s+conversations$/i.test(trimmed)) {
-        setNodeVal(node, raw.replace(/^(\d+)\s+active\s+conversations$/i, '$1 个进行中的会话'));
-        return;
+        return raw.replace(/^(\d+)\s+active\s+conversations$/i, '$1 个进行中的会话');
       }
       if (/^Permanently delete\s+(.*)\s+including\s+(\d+)\s+active\s+conversations\.?$/i.test(trimmed)) {
-        setNodeVal(
-          node,
-          raw.replace(
-            /^Permanently delete\s+(.*)\s+including\s+(\d+)\s+active\s+conversations\.?$/i,
-            '永久删除 $1 及 $2 个进行中的会话。'
-          )
+        return raw.replace(
+          /^Permanently delete\s+(.*)\s+including\s+(\d+)\s+active\s+conversations\.?$/i,
+          '永久删除 $1 及 $2 个进行中的会话。'
         );
-        return;
       }
       if (/^Worked for\s+(\d+[smhd])$/i.test(trimmed)) {
-        setNodeVal(node, raw.replace(/^Worked for\s+(\d+[smhd])$/i, '已工作 $1'));
-        return;
+        return raw.replace(/^Worked for\s+(\d+[smhd])$/i, '已工作 $1');
       }
       if (/^Thought for\s+(\d+[smhd])$/i.test(trimmed)) {
-        setNodeVal(node, raw.replace(/^Thought for\s+(\d+[smhd])$/i, '已思考 $1'));
-        return;
+        return raw.replace(/^Thought for\s+(\d+[smhd])$/i, '已思考 $1');
       }
 
       if (
@@ -587,47 +708,75 @@
           .replace(/(\d+)\s*seconds?/gi, '$1 秒')
           .replace(/,\s*/g, ' ')
           .trim();
-        setNodeVal(node, '您已消耗' + degree + type + '额度，将在 ' + timeStr + ' 后完全重置。');
-        return;
+        return '您已消耗' + degree + type + '额度，将在 ' + timeStr + ' 后完全重置。';
       }
       if (/^You have not used any of your (weekly|5-hour|five-hour|daily) limit\.?$/i.test(trimmed)) {
         const match = trimmed.match(/^You have not used any of your (weekly|5-hour|five-hour|daily) limit\.?$/i);
         const typeMap = { weekly: '每周', '5-hour': '5 小时', 'five-hour': '5 小时', daily: '每日' };
         const type = typeMap[match[1].toLowerCase()] || match[1];
-        setNodeVal(node, '您尚未消耗任何' + type + '额度。');
-        return;
+        return '您尚未消耗任何' + type + '额度。';
+      }
+
+      return null;
+    }
+
+    function translateTextNode(node) {
+      const currentVal = node.nodeValue;
+      if (!currentVal) return;
+
+      const rec = origTextMap.get(node);
+      const origRaw = rec && rec.lastVal === currentVal ? rec.origRaw : currentVal;
+
+      const nextVal = computeTextTranslation(origRaw);
+      if (nextVal !== null) {
+        origTextMap.set(node, { origRaw, lastVal: nextVal });
+        if (node.nodeValue !== nextVal) {
+          node.nodeValue = nextVal;
+        }
+      } else if (rec && rec.lastVal === currentVal) {
+        // 词条覆盖被用户在 i18n.override.json 中移除，恢复原始英文
+        node.nodeValue = origRaw;
+        origTextMap.delete(node);
+      }
+    }
+
+    function translateSingleAttr(el, attrName, origDataAttr, customResolver) {
+      const cur = el.getAttribute(attrName);
+      if (!cur) return;
+      const savedOrig = el.getAttribute(origDataAttr);
+      const savedLast = el.getAttribute(origDataAttr + '-last');
+      const origVal = savedOrig && savedLast === cur ? savedOrig : cur;
+      const trimmed = origVal.trim();
+      const nextVal = customResolver ? customResolver(trimmed) : typeof DICT[trimmed] === 'string' ? DICT[trimmed] : null;
+      if (typeof nextVal === 'string') {
+        el.setAttribute(origDataAttr, origVal);
+        el.setAttribute(origDataAttr + '-last', nextVal);
+        if (cur !== nextVal) {
+          el.setAttribute(attrName, nextVal);
+        }
+      } else if (savedOrig && savedLast === cur) {
+        el.setAttribute(attrName, savedOrig);
+        el.removeAttribute(origDataAttr);
+        el.removeAttribute(origDataAttr + '-last');
       }
     }
 
     function translateElementAttrs(el) {
       if (!el || el.nodeType !== 1) return;
-      const t = el.getAttribute('title');
-      if (t) {
-        const ttrim = t.trim();
-        const rep = DICT[ttrim];
-        if (typeof rep === 'string' && t !== rep) el.setAttribute('title', rep);
-      }
-      const p = el.getAttribute('placeholder');
-      if (p) {
-        const ptrim = p.trim();
-        const rep = DICT[ptrim];
-        if (typeof rep === 'string' && p !== rep) el.setAttribute('placeholder', rep);
-      }
-      const a = el.getAttribute('aria-label');
-      if (a) {
-        const atrim = a.trim();
-        let nextAria = null;
-        if (typeof DICT[atrim] === 'string') {
-          nextAria = DICT[atrim];
-        } else if (/^Branch, current:\s*(.*)$/i.test(atrim)) {
+      translateSingleAttr(el, 'title', 'data-ag-orig-title', null);
+      translateSingleAttr(el, 'placeholder', 'data-ag-orig-placeholder', null);
+      translateSingleAttr(el, 'aria-label', 'data-ag-orig-aria-label', (atrim) => {
+        if (typeof DICT[atrim] === 'string') return DICT[atrim];
+        if (/^Branch, current:\s*(.*)$/i.test(atrim)) {
           const bName = atrim.match(/^Branch, current:\s*(.*)$/i)[1].trim();
-          nextAria = '分支，当前：' + (bName === 'Select branch' ? '选择分支' : bName);
-        } else if (/^Select project, current:\s*(.*)$/i.test(atrim)) {
-          const pName = atrim.match(/^Select project, current:\s*(.*)$/i)[1].trim();
-          nextAria = '选择项目，当前：' + (pName === 'No project' ? '未关联项目' : pName);
+          return '分支，当前：' + (bName === 'Select branch' ? '选择分支' : bName);
         }
-        if (nextAria && a !== nextAria) el.setAttribute('aria-label', nextAria);
-      }
+        if (/^Select project, current:\s*(.*)$/i.test(atrim)) {
+          const pName = atrim.match(/^Select project, current:\s*(.*)$/i)[1].trim();
+          return '选择项目，当前：' + (pName === 'No project' ? '未关联项目' : pName);
+        }
+        return null;
+      });
     }
 
     const walkerFilter = {
@@ -771,24 +920,33 @@
         attributeFilter: ['title', 'aria-label', 'placeholder']
       });
     }
+  } else {
+    // 若用户在配置中关闭了 i18n 模块，实时将已翻译的文本与属性还原为原始英文
+    restoreAllTranslations(document.body);
   }
 
   // ============================================================================
-  // 5. 开放用户自定义前端脚本钩子 (user/custom.js，沙箱异常隔离)
+  // 5. 开放用户自定义前端脚本钩子 (user/custom.js，沙箱异常隔离，同时提供 ctx 与 boot)
   // ============================================================================
   window.__AG_PATCH_CTX__ = {
     version: PATCH_VERSION,
     preset: DEFAULT_PRESET,
+    config: boot.config || {},
     modules: MODULES,
+    features: MODULES,
+    themeVars: THEME_VARS,
     dict: DICT,
+    get metrics() {
+      return window.__ag_last_metrics || null;
+    },
     syncPreset: syncChuanbanPreset,
     ensureMetricsPill
   };
 
   if (MODULES.customJs && boot.customJs && typeof boot.customJs === 'string' && boot.customJs.trim()) {
     try {
-      const fn = new Function('ctx', boot.customJs);
-      fn(window.__AG_PATCH_CTX__);
+      const fn = new Function('ctx', 'boot', boot.customJs);
+      fn(window.__AG_PATCH_CTX__, window.__AG_PATCH_CTX__);
     } catch (err) {
       console.error('[Antigravity Patch] Error in user/custom.js:', err);
     }

@@ -1,60 +1,62 @@
 #!/usr/bin/env node
 /**
- * chuanban-antigravity-theme-patch · Core CDP Daemon (core/daemon.mjs)
+ * chuanban-antigravity-theme-patch · CDP Theme & Live Metrics Daemon (core/daemon.mjs)
  *
- * 特性：
- * 1. 动态 Node 版本分级：
- *    - Node >= 22.0：启用主题配色 + 三层字体 + 450条全量汉化 + 路由/缩放自愈；
- *    - Node >= 22.13（支持 node:sqlite）：动态加载 DatabaseSync，自动解锁模型同行实时指标胶囊。
- * 2. 只读内核 (core/) 与用户改装层 (user/) 分离，支持 user/ 文件修改后 2.5s 自动热重载注入。
- * 3. 统一支持 stable / insiders 双通道（--channel stable|insiders）与跨平台路径探测（macOS / Windows / Linux）。
- * 4. 单实例 PID 锁保护，防止多进程并发重复注入。
+ * 架构特性（v5.0.0）：
+ * 1. 动态 Node 分级：
+ *    - Node >= 22.0：完整启用暖白主题、更纱黑体、输入框蜡封三态、450条汉化、死锁自愈。
+ *    - Node >= 22.13：动态 `await import('node:sqlite')` 解锁底部实时会话指标胶囊；低版本优雅降级绝不崩溃。
+ * 2. 模块化与热重载：
+ *    - 周期性检测 `user/config.json`、`user/custom.css`、`user/i18n.override.json`、`user/custom.js` 的 mtime，
+ *      用户或对方 Agent 修改 `user/` 层后 2.5 秒内自动重新构建签名并热更新至所有打开的 Antigravity 窗口。
+ * 3. 双通道同进程共生：
+ *    - 默认 `channel: "auto"` 同时探测 Stable 与 Insiders 调试端口（亦可通过 `--channel stable|insiders` 锁定单通道）。
+ * 4. 安全模式隔离：
+ *    - 支持 `--safe-mode` 启动参数，一键绕过 `user/` 改装层，仅加载 `core/` 黄金内核用于故障定界。
  */
-import crypto from 'node:crypto';
+
 import fs from 'node:fs';
-import http from 'node:http';
-import os from 'node:os';
 import path from 'node:path';
+import os from 'node:os';
+import http from 'node:http';
+import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const ROOT_DIR = path.resolve(__dirname, '..');
-const CORE_DIR = __dirname;
+const CORE_DIR = path.join(ROOT_DIR, 'core');
 const USER_DIR = path.join(ROOT_DIR, 'user');
 
 // ============================================================================
-// 0. 运行时环境预检与动态 SQLite 分级加载
+// 0. 动态探测 node:sqlite（Node >= 22.13 自动解锁，低版本优雅降级）
 // ============================================================================
-if (typeof globalThis.WebSocket !== 'function') {
-  console.error(
-    `[Antigravity Daemon] Fatal: globalThis.WebSocket is unavailable in Node ${process.version}. Please upgrade to Node.js >= 22.0.0.`
-  );
-  process.exit(1);
-}
-
 let DatabaseSync = null;
 try {
-  const sqliteMod = await import('node:sqlite');
-  DatabaseSync = sqliteMod.DatabaseSync || null;
+  const sqliteMod = await import('node:sqlite').catch(() => null);
+  if (sqliteMod && typeof sqliteMod.DatabaseSync === 'function') {
+    DatabaseSync = sqliteMod.DatabaseSync;
+  }
 } catch {
-  console.warn(
-    `[Antigravity Daemon] Notice: node:sqlite is unavailable in Node ${process.version} (requires Node >= 22.13). Live metrics pill disabled; Theme + Fonts + i18n remain 100% active.`
-  );
+  DatabaseSync = null;
 }
 
 // ============================================================================
-// 1. CLI 参数与跨平台路径解析
+// 1. CLI 参数解析（同时兼容 --flag value 与 --flag=value）与跨平台路径探测
 // ============================================================================
 const args = process.argv.slice(2);
+const hasFlag = (f) => args.some((a) => a === f || a.startsWith(f + '='));
 function getArg(flag, fallback = null) {
-  const idx = args.indexOf(flag);
-  if (idx !== -1 && idx + 1 < args.length) return args[idx + 1];
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === flag && i + 1 < args.length) return args[i + 1];
+    if (args[i].startsWith(flag + '=')) return args[i].slice(flag.length + 1);
+  }
   return fallback;
 }
+
+const SAFE_MODE = hasFlag('--safe-mode');
+const RUN_ONCE = hasFlag('--once');
 const CLI_CHANNEL = getArg('--channel', null);
-const SAFE_MODE = args.includes('--safe-mode') || args.includes('--no-user');
-const RUN_ONCE = args.includes('--once');
 
 function readJsonSafe(filePath, fallback = {}) {
   try {
@@ -74,9 +76,9 @@ function readTextSafe(filePath, fallback = '') {
   }
 }
 
-function resolvePlatformPaths(channel = 'stable', userCfg = {}) {
+function resolveChannelPaths(singleChannel = 'stable', userCfg = {}) {
   const home = os.homedir();
-  const isInsiders = channel === 'insiders';
+  const isInsiders = singleChannel === 'insiders';
   const appDirName = isInsiders ? 'Antigravity - Insiders' : 'Antigravity';
   const geminiSubDir = isInsiders ? '.gemini/antigravity-insiders' : '.gemini/antigravity';
 
@@ -94,9 +96,26 @@ function resolvePlatformPaths(channel = 'stable', userCfg = {}) {
   const defaultConvDir = path.join(home, geminiSubDir, 'conversations');
 
   return {
+    channel: singleChannel,
     portFile: getArg('--port-file', userCfg.portFile || defaultPortFile),
     conversationsDir: getArg('--conversations-dir', userCfg.conversationsDir || defaultConvDir)
   };
+}
+
+function resolveActiveChannelEndpoints(channelMode = 'auto', userCfg = {}) {
+  const explicitPortFile = getArg('--port-file', userCfg.portFile || '');
+  if (explicitPortFile) {
+    const ch = channelMode === 'insiders' ? 'insiders' : 'stable';
+    return [resolveChannelPaths(ch, userCfg)];
+  }
+  if (channelMode === 'stable') {
+    return [resolveChannelPaths('stable', userCfg)];
+  }
+  if (channelMode === 'insiders') {
+    return [resolveChannelPaths('insiders', userCfg)];
+  }
+  // 'auto' 或 'both'：同时轮询 Stable 与 Insiders 两个通道，互不抢占
+  return [resolveChannelPaths('stable', userCfg), resolveChannelPaths('insiders', userCfg)];
 }
 
 // ============================================================================
@@ -107,13 +126,21 @@ let cachedBundleSig = '';
 let cachedInjectScript = '';
 let cachedPatchVersion = '';
 let activeConfig = {
-  channel: 'stable',
+  enabled: true,
+  channel: 'auto',
   preset: 'high-contrast',
   contextLimit: 256000,
-  modules: { i18n: true, metrics: true, customCss: true, customJs: true },
+  modules: {
+    i18n: true,
+    metrics: true,
+    composerWaxSeal: true,
+    deadlockHealer: true,
+    customCss: true,
+    customJs: true
+  },
+  themeVars: {},
   allowedOrigins: ['http://127.0.0.1', 'https://127.0.0.1', 'http://localhost', 'https://localhost', 'vscode-file://'],
-  portFile: '',
-  conversationsDir: ''
+  endpoints: []
 };
 
 function getFileMtimeSig(filePath) {
@@ -124,6 +151,19 @@ function getFileMtimeSig(filePath) {
   } catch {
     return '0:0';
   }
+}
+
+function normalizeOverrideDict(rawObj) {
+  if (!rawObj || typeof rawObj !== 'object') return {};
+  const source = rawObj.exact && typeof rawObj.exact === 'object' ? rawObj.exact : rawObj;
+  const clean = {};
+  for (const [k, v] of Object.entries(source)) {
+    if (k.startsWith('_')) continue;
+    if (typeof v === 'string') {
+      clean[k] = v;
+    }
+  }
+  return clean;
 }
 
 function rebuildBundleIfNeeded() {
@@ -147,37 +187,54 @@ function rebuildBundleIfNeeded() {
   }
 
   const userCfg = SAFE_MODE ? {} : readJsonSafe(path.join(USER_DIR, 'config.json'), {});
-  const channel = CLI_CHANNEL || userCfg.channel || 'stable';
+  const enabled = SAFE_MODE ? true : userCfg.enabled !== false;
+  const channel = CLI_CHANNEL || userCfg.channel || 'auto';
   const preset = userCfg.preset || 'high-contrast';
   const contextLimit = Number(userCfg.contextLimit) > 0 ? Number(userCfg.contextLimit) : 256000;
+
+  const rawModules = Object.assign({}, userCfg.features || {}, userCfg.modules || {});
+  if (typeof rawModules.metricsCapsule === 'boolean' && typeof rawModules.metrics !== 'boolean') {
+    rawModules.metrics = rawModules.metricsCapsule;
+  }
   const modules = Object.assign(
-    { i18n: true, metrics: true, customCss: true, customJs: true },
-    userCfg.modules || {}
+    {
+      i18n: true,
+      metrics: true,
+      composerWaxSeal: true,
+      deadlockHealer: true,
+      customCss: true,
+      customJs: true
+    },
+    rawModules
   );
   if (!DatabaseSync) {
     modules.metrics = false;
   }
+  modules.metricsCapsule = modules.metrics;
 
-  const paths = resolvePlatformPaths(channel, userCfg);
+  const themeVars = !SAFE_MODE && userCfg.themeVars && typeof userCfg.themeVars === 'object' ? userCfg.themeVars : {};
+  const endpoints = resolveActiveChannelEndpoints(channel, userCfg);
+
   activeConfig = {
+    enabled,
     channel,
     preset,
     contextLimit,
     modules,
+    themeVars,
     selectors: userCfg.selectors || {},
     allowedOrigins: Array.isArray(userCfg.allowedOrigins)
       ? userCfg.allowedOrigins
       : ['http://127.0.0.1', 'https://127.0.0.1', 'http://localhost', 'https://localhost', 'vscode-file://'],
-    portFile: paths.portFile,
-    conversationsDir: paths.conversationsDir
+    endpoints
   };
 
   const baseCss = readTextSafe(path.join(CORE_DIR, 'theme.css'), '');
   const customCss = !SAFE_MODE && modules.customCss ? readTextSafe(path.join(USER_DIR, 'custom.css'), '') : '';
-  const combinedCss = customCss.trim() ? `${baseCss}\n/* === user/custom.css === */\n${customCss}` : baseCss;
 
   const baseDict = readJsonSafe(path.join(CORE_DIR, 'i18n.json'), {});
-  const overrideDict = !SAFE_MODE ? readJsonSafe(path.join(USER_DIR, 'i18n.override.json'), {}) : {};
+  const rawOverrideDict = !SAFE_MODE ? readJsonSafe(path.join(USER_DIR, 'i18n.override.json'), {}) : {};
+  const overrideDict = normalizeOverrideDict(rawOverrideDict);
   const mergedDict = Object.assign({}, baseDict, overrideDict);
 
   const customJs = !SAFE_MODE && modules.customJs ? readTextSafe(path.join(USER_DIR, 'custom.js'), '') : '';
@@ -185,22 +242,37 @@ function rebuildBundleIfNeeded() {
 
   const hash = crypto
     .createHash('sha256')
-    .update(combinedCss)
+    .update(String(enabled))
+    .update(baseCss)
+    .update(customCss)
     .update(JSON.stringify(mergedDict))
     .update(customJs)
-    .update(JSON.stringify({ preset, modules, selectors: activeConfig.selectors }))
+    .update(JSON.stringify({ preset, modules, themeVars, selectors: activeConfig.selectors }))
     .digest('hex')
     .slice(0, 8);
 
-  cachedPatchVersion = `${BASE_VERSION}-${channel}-${hash}`;
+  const channelTag = channel === 'insiders' ? 'insiders' : 'stable';
+  cachedPatchVersion = `${BASE_VERSION}-${channelTag}-${hash}`;
 
   const bootPayload = {
     version: cachedPatchVersion,
+    enabled,
     preset,
-    cssText: combinedCss,
+    cssText: baseCss,
+    customCss,
+    themeVars,
     i18nDict: mergedDict,
     modules,
+    features: modules,
     selectors: activeConfig.selectors,
+    config: {
+      enabled,
+      channel,
+      preset,
+      contextLimit,
+      modules,
+      themeVars
+    },
     customJs
   };
 
@@ -214,7 +286,8 @@ rebuildBundleIfNeeded();
 // ============================================================================
 // 3. 单实例 PID 锁（防止重复启动守护进程）
 // ============================================================================
-const PID_FILE = path.join(os.tmpdir(), `ag-theme-daemon-${activeConfig.channel}.pid`);
+const pidKey = CLI_CHANNEL || 'default';
+const PID_FILE = path.join(os.tmpdir(), `ag-theme-daemon-${pidKey}.pid`);
 if (!RUN_ONCE) {
   try {
     if (fs.existsSync(PID_FILE)) {
@@ -222,7 +295,6 @@ if (!RUN_ONCE) {
       if (oldPid && oldPid !== process.pid) {
         try {
           process.kill(oldPid, 0);
-          // 若旧进程存活，温和终止旧实例以完成平滑接管
           process.kill(oldPid, 'SIGTERM');
         } catch {}
       }
@@ -248,60 +320,76 @@ if (!RUN_ONCE) {
 }
 
 // ============================================================================
-// 4. SQLite + Protobuf 实时会话指标解析器 (动态分级 + LRU 缓存)
+// 4. 零依赖 Protobuf 解析器（专用于解析 ~/.gemini/antigravity/conversations/<id>.pb）
 // ============================================================================
-const metricsCache = new Map();
-const MAX_METRICS_CACHE_SIZE = 30;
+const MODEL_ENUM_MAP = {
+  285: 'Gemini 3 Pro (High)',
+  286: 'Gemini 3 Pro (Low)',
+  334: 'Claude Sonnet 4.6',
+  342: 'GPT-OSS 120B (Medium)',
+  378: 'Gemini 3 Flash',
+  382: 'Claude Opus 4.6 (Thinking)',
+  402: 'Claude Opus 4.6 (High)',
+  405: 'Claude Sonnet 4.6 (High)'
+};
 
-function setMetricsCache(cascadeId, entry) {
-  if (metricsCache.has(cascadeId)) metricsCache.delete(cascadeId);
-  metricsCache.set(cascadeId, entry);
-  if (metricsCache.size > MAX_METRICS_CACHE_SIZE) {
-    const oldestKey = metricsCache.keys().next().value;
-    if (oldestKey) metricsCache.delete(oldestKey);
+const pbCache = new Map();
+const PB_CACHE_MAX_SIZE = 50;
+
+function readVarint(buf, offset) {
+  let res = 0n;
+  let shift = 0n;
+  let pos = offset;
+  while (pos < buf.length) {
+    const b = buf[pos++];
+    res |= BigInt(b & 0x7f) << shift;
+    if ((b & 0x80) === 0) return { val: res, pos };
+    shift += 7n;
+    if (shift > 64n) break;
   }
+  return null;
 }
 
-function parseProto(buf) {
+function parseProto(buf, maxDepth = 2) {
   let i = 0;
-  const out = new Map();
+  const out = {};
   while (i < buf.length) {
-    let tag = 0,
-      shift = 0;
-    while (i < buf.length) {
-      const b = buf[i++];
-      tag |= (b & 0x7f) << shift;
-      if (!(b & 0x80)) break;
-      shift += 7;
-    }
-    const fn = tag >>> 3,
-      wt = tag & 7;
+    const tag = readVarint(buf, i);
+    if (!tag) break;
+    i = tag.pos;
+    const wt = Number(tag.val & 7n);
+    const fn = Number(tag.val >> 3n);
+    if (fn <= 0 || fn > 10000) break;
+
     if (wt === 0) {
-      let val = 0,
-        s = 0;
-      while (i < buf.length) {
-        const b = buf[i++];
-        val += (b & 0x7f) * Math.pow(2, s);
-        if (!(b & 0x80)) break;
-        s += 7;
-      }
-      out.set(fn, val);
+      const v = readVarint(buf, i);
+      if (!v) break;
+      i = v.pos;
+      if (!out[fn]) out[fn] = [];
+      out[fn].push(Number(v.val));
     } else if (wt === 2) {
-      let len = 0,
-        s = 0;
+      let len = 0;
+      let s = 0;
       while (i < buf.length) {
         const b = buf[i++];
         len |= (b & 0x7f) << s;
-        if (!(b & 0x80)) break;
+        if ((b & 0x80) === 0) break;
         s += 7;
       }
-      out.set(fn, buf.subarray(i, i + len));
+      if (len < 0 || i + len > buf.length) break;
+      const sub = buf.subarray(i, i + len);
       i += len;
+      if (!out[fn]) out[fn] = [];
+      if (maxDepth > 0) {
+        out[fn].push({ _buf: sub, _parsed: parseProto(sub, maxDepth - 1) });
+      } else {
+        out[fn].push({ _buf: sub });
+      }
     } else if (wt === 1) {
-      out.set(fn, buf.subarray(i, i + 8));
+      if (i + 8 > buf.length) break;
       i += 8;
     } else if (wt === 5) {
-      out.set(fn, buf.subarray(i, i + 4));
+      if (i + 4 > buf.length) break;
       i += 4;
     } else {
       break;
@@ -310,505 +398,544 @@ function parseProto(buf) {
   return out;
 }
 
-function fmtTok(n) {
-  if (!n || n <= 0) return '0';
-  if (n >= 1000000) return (n / 1000000).toFixed(2) + 'M';
-  if (n >= 10000) return Math.round(n / 1000) + 'k';
-  if (n >= 1000) return (n / 1000).toFixed(1) + 'k';
-  return String(n);
+function tsToMs(tsParsed) {
+  if (!tsParsed) return 0;
+  const sec = tsParsed[1]?.[0] || 0;
+  const nanos = tsParsed[2]?.[0] || 0;
+  return sec * 1000 + nanos / 1e6;
 }
 
-function fmtNum(n) {
-  return (n || 0).toLocaleString('en-US');
-}
-
-function getDbSignature(cascadeId) {
-  try {
-    const dbPath = path.join(activeConfig.conversationsDir, `${cascadeId}.db`);
-    if (!fs.existsSync(dbPath)) return null;
-    const st = fs.statSync(dbPath);
-    let walSig = '0:0';
-    const walPath = `${dbPath}-wal`;
-    if (fs.existsSync(walPath)) {
-      const wst = fs.statSync(walPath);
-      walSig = `${wst.mtimeMs}:${wst.size}`;
-    }
-    return `${st.mtimeMs}:${st.size}|${walSig}|lim:${activeConfig.contextLimit}`;
-  } catch {
-    return null;
-  }
-}
-
-function readConversationMetrics(cascadeId) {
-  if (!DatabaseSync || !activeConfig.modules.metrics) return null;
+function parseConversationMetrics(cascadeId, conversationsDir) {
+  if (!DatabaseSync) return null;
   if (!cascadeId || !/^[0-9a-f-]{36}$/i.test(cascadeId)) return null;
-  const sig = getDbSignature(cascadeId);
-  if (!sig) return { cascadeId, hasData: false };
-
-  const cached = metricsCache.get(cascadeId);
-  if (cached && cached.sig === sig) {
-    return cached.payload;
+  const pbPath = path.join(conversationsDir, `${cascadeId}.pb`);
+  let stat;
+  try {
+    stat = fs.statSync(pbPath);
+  } catch {
+    return { cascadeId, hasData: false };
   }
 
-  const dbPath = path.join(activeConfig.conversationsDir, `${cascadeId}.db`);
+  const cached = pbCache.get(pbPath);
+  if (cached && cached.mtimeMs === stat.mtimeMs && cached.size === stat.size) {
+    return cached.metrics;
+  }
+
   let db;
   try {
-    db = new DatabaseSync(dbPath, { readOnly: true });
-    const rows = db.prepare('SELECT idx, data FROM gen_metadata ORDER BY idx ASC').all();
-    if (!rows || rows.length === 0) {
-      db.close();
-      db = null;
-      const emptyPayload = { cascadeId, hasData: false, sig };
-      setMetricsCache(cascadeId, { sig, payload: emptyPayload });
-      return emptyPayload;
+    db = new DatabaseSync(pbPath, { readOnly: true });
+    const stepRow = db
+      .prepare("SELECT value FROM [default] WHERE key = 'trajectory.steps'")
+      .get();
+    const metaRow = db
+      .prepare("SELECT value FROM [default] WHERE key = 'trajectory.generator_metadata'")
+      .get();
+
+    const stepList = stepRow?.value
+      ? parseProto(Buffer.from(stepRow.value, 'base64'), 1)[1] || []
+      : [];
+    const metaList = metaRow?.value
+      ? parseProto(Buffer.from(metaRow.value, 'base64'), 1)[1] || []
+      : [];
+
+    let toolCalls = 0;
+    let lastUserStepIdx = -1;
+    const stepTimingByIdx = new Map();
+
+    for (let idx = 0; idx < stepList.length; idx++) {
+      const s = stepList[idx]._parsed;
+      const type = s[1]?.[0];
+      if (type === 14) {
+        lastUserStepIdx = idx;
+      }
+      if (type === 15) {
+        const meta = parseProto(s[4]?.[0]?._buf || Buffer.alloc(0), 2);
+        const createdMs = tsToMs(meta[1]?.[0]?._parsed);
+        const completedMs = tsToMs(meta[7]?.[0]?._parsed);
+        const firstChunkMs = tsToMs(meta[12]?.[0]?._parsed);
+
+        const pr = parseProto(s[20]?.[0]?._buf || Buffer.alloc(0), 1);
+        const tcCount = pr[6] ? pr[6].length : 0;
+        toolCalls += tcCount;
+
+        const thinkDur = pr[8]?.[0]
+          ? parseProto(pr[8][0]._buf, 0)[1]?.[0] || 0
+          : 0;
+        stepTimingByIdx.set(idx, {
+          createdMs,
+          completedMs,
+          firstChunkMs,
+          thinkDurSec: thinkDur
+        });
+      }
     }
-    const userSteps = db.prepare('SELECT idx FROM steps WHERE step_type = 14 ORDER BY idx ASC').all();
-    const plannerSteps = db.prepare('SELECT idx FROM steps WHERE step_type = 15 ORDER BY idx ASC').all();
-    db.close();
-    db = null;
 
-    const lastUserStepIdx = userSteps.length > 0 ? userSteps[userSteps.length - 1].idx : -1;
-    let totalIn = 0,
-      totalCache = 0,
-      totalOut = 0,
-      totalThink = 0,
-      totalResp = 0;
+    let totalInput = 0;
+    let totalOutput = 0;
+    let totalThinking = 0;
+    let totalCacheRead = 0;
+    const valid = [];
 
-    const parsed = rows.map((r) => {
-      const top = parseProto(r.data);
-      const chat = top.has(1) ? parseProto(top.get(1)) : new Map();
-      const usage = chat.has(4) ? parseProto(chat.get(4)) : new Map();
-      const ttftMap = chat.has(11) ? parseProto(chat.get(11)) : new Map();
-      const streamMap = chat.has(12) ? parseProto(chat.get(12)) : new Map();
+    for (const gm of metaList) {
+      const g = gm._parsed;
+      const stepIndices = g[1] || [];
+      const cmBuf = g[2]?.[0]?._buf;
+      if (!cmBuf) continue;
+      const cm = parseProto(cmBuf, 2);
+      const u = cm[1]?.[0]?._parsed;
+      if (!u) continue;
 
-      const inTok = usage.get(2) || 0;
-      const outTok = usage.get(3) || 0;
-      const cacheRead = usage.get(5) || 0;
-      const thinkTok = usage.get(9) || 0;
-      const respTok = usage.get(10) || 0;
-      const ttft = (ttftMap.get(1) || 0) + (ttftMap.get(2) || 0) / 1e9;
-      const stream = (streamMap.get(1) || 0) + (streamMap.get(2) || 0) / 1e9;
+      const modelEnum = u[1]?.[0] || cm[3]?.[0] || 0;
+      const inputTokens = u[2]?.[0] || 0;
+      const outputTokens = u[3]?.[0] || 0;
+      const cacheReadTokens = u[5]?.[0] || 0;
+      const thinkingTokens = u[8]?.[0] || 0;
 
-      totalIn += inTok;
-      totalCache += cacheRead;
-      totalOut += outTok;
-      totalThink += thinkTok;
-      totalResp += respTok;
+      if (inputTokens === 0 && outputTokens === 0 && cacheReadTokens === 0) {
+        continue;
+      }
 
-      return {
-        idx: r.idx,
-        inTok,
-        outTok,
-        cacheRead,
-        ctx: inTok + cacheRead,
-        thinkTok,
-        respTok,
-        ttft,
-        stream,
-        totDur: ttft + stream
-      };
-    });
+      totalInput += inputTokens;
+      totalOutput += outputTokens;
+      totalThinking += thinkingTokens;
+      totalCacheRead += cacheReadTokens;
 
-    const valid = parsed.filter((p) => p.ctx > 0 || p.outTok > 0);
+      const lastStepIdx = stepIndices.length > 0 ? stepIndices[stepIndices.length - 1] : -1;
+      const timing = stepTimingByIdx.get(lastStepIdx);
+
+      let genMs = 0;
+      let ttftMs = 0;
+      if (timing && timing.completedMs > timing.createdMs) {
+        if (timing.firstChunkMs > timing.createdMs && timing.completedMs > timing.firstChunkMs) {
+          ttftMs = timing.firstChunkMs - timing.createdMs;
+          genMs = timing.completedMs - timing.firstChunkMs;
+        } else {
+          const totalMs = timing.completedMs - timing.createdMs;
+          ttftMs = timing.thinkDurSec > 0 ? timing.thinkDurSec * 1000 : Math.min(totalMs * 0.25, 2500);
+          genMs = Math.max(200, totalMs - ttftMs);
+        }
+      }
+
+      valid.push({
+        stepIndices,
+        lastStepIdx,
+        modelEnum,
+        inputTokens,
+        outputTokens,
+        cacheReadTokens,
+        thinkingTokens,
+        ttftMs,
+        genMs
+      });
+    }
+
     if (valid.length === 0) {
-      const emptyPayload = { cascadeId, hasData: false, sig };
-      setMetricsCache(cascadeId, { sig, payload: emptyPayload });
-      return emptyPayload;
+      const emptyRes = { cascadeId, hasData: false, stepCount: stepList.length };
+      if (pbCache.size >= PB_CACHE_MAX_SIZE) {
+        const oldestKey = pbCache.keys().next().value;
+        pbCache.delete(oldestKey);
+      }
+      pbCache.set(pbPath, { mtimeMs: stat.mtimeMs, size: stat.size, metrics: emptyRes });
+      return emptyRes;
     }
 
-    const rawTurnSteps = plannerSteps.filter((s) => s.idx > lastUserStepIdx).length;
-    const turnSlice = rawTurnSteps > 0 ? valid.slice(-rawTurnSteps) : [];
-    const turnSteps = turnSlice.length;
-    let turnOut = 0,
-      turnThink = 0,
-      turnResp = 0,
-      turnDur = 0;
-    for (let i = 0; i < turnSlice.length; i++) {
-      turnOut += turnSlice[i].outTok;
-      turnThink += turnSlice[i].thinkTok;
-      turnResp += turnSlice[i].respTok;
-      turnDur += turnSlice[i].totDur;
-    }
-
-    const ctxLimit = activeConfig.contextLimit || 256000;
-    const limitLabel = fmtTok(ctxLimit);
     const last = valid[valid.length - 1];
-    const streamTps = last.stream >= 0.25 ? last.outTok / last.stream : 0;
-    const e2eTps = last.totDur > 0 ? last.outTok / last.totDur : 0;
-    const displayTps = streamTps > 0 && streamTps <= 600 ? streamTps : e2eTps;
-    const ctxPct = Math.round((last.ctx / ctxLimit) * 100);
-    const ctxClass = ctxPct >= 90 ? 'ag-ctx-crit' : ctxPct >= 75 ? 'ag-ctx-warn' : 'ag-ctx-ok';
-    const lastCacheRate = last.ctx > 0 ? ((last.cacheRead / last.ctx) * 100).toFixed(1) : '0.0';
-    const sessionCacheRate =
-      totalIn + totalCache > 0 ? ((totalCache / (totalIn + totalCache)) * 100).toFixed(1) : '0.0';
-    const remainCtx = Math.max(0, ctxLimit - last.ctx);
+    let rawTurnSteps = 0;
+    for (let idx = Math.max(0, lastUserStepIdx + 1); idx < stepList.length; idx++) {
+      if (stepList[idx]._parsed[1]?.[0] === 15) {
+        rawTurnSteps++;
+      }
+    }
+    const turnRecords =
+      lastUserStepIdx >= 0 && rawTurnSteps > 0
+        ? valid.slice(-Math.min(rawTurnSteps, valid.length))
+        : [last];
 
-    const inlineHtml = [
-      `<span>${Math.round(displayTps)} tok/s</span>`,
-      `<span class="ag-sep">·</span>`,
-      `<span>TTFT ${last.ttft.toFixed(1)}s</span>`,
-      `<span class="ag-sep">·</span>`,
-      `<span>Ctx ${fmtTok(last.ctx)}/${limitLabel} <span class="${ctxClass}">(${ctxPct}%)</span></span>`,
-      `<span class="ag-sep">·</span>`,
-      `<span>Out ${fmtTok(last.outTok)}</span>`
-    ].join('');
+    let turnOutput = 0;
+    let turnThinking = 0;
+    let turnGenMs = 0;
+    let firstTurnTtftMs = turnRecords[0]?.ttftMs || last.ttftMs || 0;
 
-    const turnRowHtml =
-      turnSteps > 1
-        ? `<div class="ag-tt-row"><span class="ag-tt-lbl">本轮合计 (${turnSteps}步)</span><span class="ag-tt-val">输出 ${fmtNum(turnOut)} (思考 ${fmtNum(turnThink)} + 响应 ${fmtNum(turnResp)}) | 耗时 ${turnDur.toFixed(1)}s</span></div>`
-        : '';
+    for (const r of turnRecords) {
+      turnOutput += r.outputTokens;
+      turnThinking += r.thinkingTokens;
+      turnGenMs += r.genMs;
+    }
 
-    const tooltipHtml = [
-      `<div class="ag-tt-hdr">本轮最新调用 (Gen #${last.idx + 1})</div>`,
-      `<div class="ag-tt-row"><span class="ag-tt-lbl">生成速度</span><span class="ag-tt-val">${streamTps > 0 && streamTps <= 600 ? `流式 ${streamTps.toFixed(1)} tok/s | ` : ''}端到端 ${e2eTps.toFixed(1)} tok/s</span></div>`,
-      `<div class="ag-tt-row"><span class="ag-tt-lbl">响应耗时</span><span class="ag-tt-val">TTFT ${last.ttft.toFixed(2)}s | 流式 ${last.stream.toFixed(2)}s | 总计 ${last.totDur.toFixed(2)}s</span></div>`,
-      `<div class="ag-tt-row"><span class="ag-tt-lbl">当前上下文</span><span class="ag-tt-val">${fmtNum(last.ctx)} (新增 ${fmtNum(last.inTok)} + 缓存 ${fmtNum(last.cacheRead)}, ${lastCacheRate}%)</span></div>`,
-      `<div class="ag-tt-row"><span class="ag-tt-lbl">本步输出量</span><span class="ag-tt-val">${fmtNum(last.outTok)} (思考链 ${fmtNum(last.thinkTok)} + 正文/工具 ${fmtNum(last.respTok)})</span></div>`,
-      turnRowHtml,
-      `<div class="ag-tt-hdr ag-tt-sec">当前会话累计 (${userSteps.length} 轮提问 / ${valid.length} 次有效调用)</div>`,
-      `<div class="ag-tt-row"><span class="ag-tt-lbl">压缩水位线</span><span class="ag-tt-val">${fmtTok(last.ctx)} / ${limitLabel} (${ctxPct}%) · 距压缩余 ${fmtTok(remainCtx)}</span></div>`,
-      `<div class="ag-tt-row"><span class="ag-tt-lbl">累计输入量</span><span class="ag-tt-val">新增 ${fmtTok(totalIn)} + 缓存读取 ${fmtTok(totalCache)} (命中率 ${sessionCacheRate}%)</span></div>`,
-      `<div class="ag-tt-row"><span class="ag-tt-lbl">累计输出量</span><span class="ag-tt-val">总计 ${fmtTok(totalOut)} (思考链 ${fmtTok(totalThink)} + 正文/工具 ${fmtNum(totalResp)})</span></div>`
-    ].join('');
+    const effectiveGenMs = turnGenMs > 0 ? turnGenMs : last.genMs;
+    const effectiveOut = turnOutput > 0 ? turnOutput : last.outputTokens;
+    const tps =
+      effectiveGenMs > 100 && effectiveOut > 0
+        ? Math.round((effectiveOut / (effectiveGenMs / 1000)) * 10) / 10
+        : 0;
 
-    const payload = {
+    const contextLimit = activeConfig.contextLimit || 256000;
+    const contextUsed = last.inputTokens + last.cacheReadTokens;
+    const contextPct = Math.min(100, Math.round((contextUsed / contextLimit) * 1000) / 10);
+    const cacheHitRate =
+      totalInput + totalCacheRead > 0
+        ? Math.round((totalCacheRead / (totalInput + totalCacheRead)) * 1000) / 10
+        : 0;
+
+    const metrics = {
       cascadeId,
       hasData: true,
-      sig,
-      inlineHtml,
-      tooltipHtml
+      modelEnum: last.modelEnum,
+      modelName: MODEL_ENUM_MAP[last.modelEnum] || `Model #${last.modelEnum}`,
+      contextUsed,
+      contextLimit,
+      contextPct,
+      lastInput: last.inputTokens,
+      lastCacheRead: last.cacheReadTokens,
+      lastOutput: turnOutput || last.outputTokens,
+      lastThinking: turnThinking || last.thinkingTokens,
+      ttftSec: Math.round((firstTurnTtftMs / 1000) * 10) / 10,
+      thinkingSec: Math.round((firstTurnTtftMs / 1000) * 10) / 10,
+      genSec: Math.round((effectiveGenMs / 1000) * 10) / 10,
+      tps,
+      totalInput,
+      totalOutput,
+      totalThinking,
+      totalCacheRead,
+      cacheHitRate,
+      stepCount: stepList.length,
+      turnSteps: turnRecords.length,
+      toolCalls
     };
-    setMetricsCache(cascadeId, { sig, payload });
-    return payload;
-  } catch {
-    if (db) {
-      try {
-        db.close();
-      } catch {}
+
+    if (pbCache.size >= PB_CACHE_MAX_SIZE) {
+      const oldestKey = pbCache.keys().next().value;
+      pbCache.delete(oldestKey);
     }
-    return null;
+    pbCache.set(pbPath, { mtimeMs: stat.mtimeMs, size: stat.size, metrics });
+    return metrics;
+  } catch {
+    return { cascadeId, hasData: false };
+  } finally {
+    try {
+      db?.close();
+    } catch {}
+  }
+}
+
+function getLatestCascadeId(conversationsDir) {
+  try {
+    const files = fs
+      .readdirSync(conversationsDir)
+      .filter((f) => f.endsWith('.pb'))
+      .map((f) => {
+        const full = path.join(conversationsDir, f);
+        return { id: f.slice(0, -3), mtime: fs.statSync(full).mtimeMs };
+      })
+      .sort((a, b) => b.mtime - a.mtime);
+    return files[0]?.id || '';
+  } catch {
+    return '';
   }
 }
 
 // ============================================================================
-// 5. CDP 守护进程连接池与自愈调度
+// 5. CDP 目标发现、WebSocket 会话挂载与热更新推送
 // ============================================================================
-const activeSockets = new Map();
-let rpcCounter = 1;
-let isSyncingTargets = false;
+const attachedTargets = new Map();
 
-function isValidAppTarget(target) {
-  if (!target || target.type !== 'page' || !target.webSocketDebuggerUrl) return false;
-  const url = target.url || '';
-  return activeConfig.allowedOrigins.some((prefix) => url.startsWith(prefix));
-}
-
-function getDevToolsPort() {
+function readPort(portFile) {
   try {
-    if (!fs.existsSync(activeConfig.portFile)) return null;
-    const content = fs.readFileSync(activeConfig.portFile, 'utf8');
-    const port = content.trim().split('\n')[0];
-    return port ? parseInt(port, 10) : null;
+    if (!fs.existsSync(portFile)) return null;
+    const raw = fs.readFileSync(portFile, 'utf8').trim();
+    const lines = raw.split(/\r?\n/);
+    const port = parseInt(lines[0], 10);
+    return Number.isFinite(port) && port > 0 ? port : null;
   } catch {
     return null;
   }
 }
 
-function queryTargets(port) {
+function fetchTargets(port) {
   return new Promise((resolve) => {
-    const req = http.get(`http://127.0.0.1:${port}/json`, (res) => {
-      let body = '';
-      res.on('data', (c) => (body += c));
-      res.on('end', () => {
-        try {
-          resolve(JSON.parse(body));
-        } catch {
-          resolve([]);
-        }
-      });
-    });
+    const req = http.get(
+      { host: '127.0.0.1', port, path: '/json/list', timeout: 1500 },
+      (res) => {
+        let data = '';
+        res.on('data', (chunk) => (data += chunk));
+        res.on('end', () => {
+          try {
+            resolve(JSON.parse(data));
+          } catch {
+            resolve([]);
+          }
+        });
+      }
+    );
     req.on('error', () => resolve([]));
-    req.setTimeout(1500, () => {
+    req.on('timeout', () => {
       req.destroy();
       resolve([]);
     });
   });
 }
 
-function sendCDP(session, method, params = {}) {
-  return new Promise((resolve, reject) => {
-    const { ws, pendingRequests } = session;
-    if (!ws || ws.readyState !== 1) {
-      return reject(new Error('WebSocket not connected'));
-    }
-    const id = rpcCounter++;
-    const timer = setTimeout(() => {
-      pendingRequests.delete(id);
-      reject(new Error(`CDP request ${method} (id=${id}) timed out`));
-    }, 4000);
+function isAllowedOrigin(urlStr) {
+  if (!urlStr || typeof urlStr !== 'string') return false;
+  return activeConfig.allowedOrigins.some((prefix) => urlStr.startsWith(prefix));
+}
 
-    pendingRequests.set(id, { resolve, reject, timer, method });
-    ws.send(JSON.stringify({ id, method, params }));
+function attachTarget(target, endpoint) {
+  const wsUrl = target.webSocketDebuggerUrl;
+  if (!wsUrl) return Promise.resolve(false);
+
+  return new Promise((resolveAttach) => {
+    let settled = false;
+    const finishAttach = (ok) => {
+      if (!settled) {
+        settled = true;
+        resolveAttach(ok);
+      }
+    };
+    const attachTimeout = setTimeout(() => finishAttach(false), 2500);
+
+    try {
+      const ws = new WebSocket(wsUrl);
+      let msgId = 1;
+      let activeCascadeId = '';
+      let lastPushedHash = '';
+      const pendingCallbacks = new Map();
+
+      const send = (method, params = {}) =>
+        new Promise((resolve) => {
+          if (ws.readyState !== WebSocket.OPEN) return resolve(null);
+          const id = msgId++;
+          const timer = setTimeout(() => {
+            pendingCallbacks.delete(id);
+            resolve(null);
+          }, 2500);
+          pendingCallbacks.set(id, (msg) => {
+            clearTimeout(timer);
+            resolve(msg);
+          });
+          ws.send(JSON.stringify({ id, method, params }));
+        });
+
+      const inject = async () => {
+        const res = await send('Runtime.evaluate', {
+          expression: cachedInjectScript,
+          returnByValue: true
+        });
+        if (res?.error) {
+          console.error(`[Daemon] Injection error on ${target.id}:`, res.error.message || res.error);
+          return false;
+        } else if (res?.result?.exceptionDetails) {
+          console.error(
+            `[Daemon] Injection failed on ${target.id}: Script Exception:`,
+            res.result.exceptionDetails.exception?.description || res.result.exceptionDetails.text
+          );
+          return false;
+        } else {
+          console.log(`[Daemon] Injected (${cachedPatchVersion}) into target ${target.id} [${endpoint.channel}]`);
+          return true;
+        }
+      };
+
+      const syncMetricsForSession = async (force = false) => {
+        if (!DatabaseSync || !activeConfig.modules.metrics || !activeConfig.enabled) return;
+        if (!activeCascadeId) {
+          const evalRes = await send('Runtime.evaluate', {
+            expression: `(function(){
+              const m = window.location.pathname.match(/\\/c\\/([0-9a-f-]{36})/i);
+              if (m) return m[1];
+              const el = document.querySelector('[data-testid=conversation-row-sidebar][data-selected=true]');
+              return el ? (el.getAttribute('data-cascade-id') || '') : '';
+            })()`,
+            returnByValue: true
+          });
+          const detected = evalRes?.result?.result?.value;
+          if (detected && /^[0-9a-f-]{36}$/i.test(detected)) {
+            activeCascadeId = detected;
+          } else {
+            activeCascadeId = getLatestCascadeId(endpoint.conversationsDir);
+          }
+        }
+        if (!activeCascadeId) return;
+
+        const metrics = parseConversationMetrics(activeCascadeId, endpoint.conversationsDir);
+        if (!metrics) return;
+        const hash = `${metrics.cascadeId}:${metrics.stepCount}:${metrics.totalOutput}:${metrics.contextUsed}:${metrics.tps}`;
+        if (!force && hash === lastPushedHash) return;
+        lastPushedHash = hash;
+
+        await send('Runtime.evaluate', {
+          expression: `window.__ag_update_live_metrics && window.__ag_update_live_metrics(${JSON.stringify(metrics)})`,
+          returnByValue: false
+        });
+      };
+
+      const checkAndInject = async () => {
+        try {
+          const checkRes = await send('Runtime.evaluate', {
+            expression:
+              'window.__ag_patch_version === ' +
+              JSON.stringify(cachedPatchVersion) +
+              ' && (' +
+              JSON.stringify(!activeConfig.enabled) +
+              ' || !!document.getElementById("ag-custom-fonts"))',
+            returnByValue: true
+          });
+          if (checkRes?.result?.result?.value !== true) {
+            await inject();
+            await syncMetricsForSession(true);
+          }
+        } catch {}
+      };
+
+      let initialAttachDone = false;
+      let navDebounceTimer = null;
+
+      ws.addEventListener('open', async () => {
+        console.log(`[Daemon] Attached target: ${target.id} (${target.title || 'Untitled'}) [${endpoint.channel}]`);
+        await send('Page.enable');
+        await send('Runtime.enable');
+        await send('Runtime.addBinding', { name: '__ag_on_session_change' });
+        await send('Page.addScriptToEvaluateOnNewDocument', { source: cachedInjectScript });
+        const ok = await inject();
+        await syncMetricsForSession(true);
+        initialAttachDone = true;
+        clearTimeout(attachTimeout);
+        finishAttach(ok);
+      });
+
+      ws.addEventListener('message', (event) => {
+        try {
+          const msg = JSON.parse(String(event.data));
+          if (msg.id && pendingCallbacks.has(msg.id)) {
+            const cb = pendingCallbacks.get(msg.id);
+            pendingCallbacks.delete(msg.id);
+            cb(msg);
+            return;
+          }
+          if (msg.method === 'Runtime.bindingCalled' && msg.params?.name === '__ag_on_session_change') {
+            const nextId = String(msg.params.payload || '').trim();
+            if (/^[0-9a-f-]{36}$/i.test(nextId) && nextId !== activeCascadeId) {
+              activeCascadeId = nextId;
+              lastPushedHash = '';
+              syncMetricsForSession(true);
+            }
+            return;
+          }
+          if (!initialAttachDone) return;
+          if (
+            msg.method === 'Page.frameNavigated' ||
+            msg.method === 'Page.loadEventFired' ||
+            msg.method === 'Page.domContentEventFired'
+          ) {
+            if (!msg.params?.frame || !msg.params.frame.parentId) {
+              if (navDebounceTimer) clearTimeout(navDebounceTimer);
+              navDebounceTimer = setTimeout(() => {
+                navDebounceTimer = null;
+                checkAndInject();
+              }, 120);
+            }
+          }
+        } catch {}
+      });
+
+      const closeHandler = () => {
+        clearTimeout(attachTimeout);
+        for (const [, cb] of pendingCallbacks) cb(null);
+        pendingCallbacks.clear();
+        attachedTargets.delete(target.id);
+        finishAttach(false);
+      };
+      ws.addEventListener('close', closeHandler);
+      ws.addEventListener('error', closeHandler);
+
+      attachedTargets.set(target.id, {
+        ws,
+        send,
+        inject,
+        checkAndInject,
+        syncMetricsForSession,
+        endpoint,
+        setActiveCascade: (cid) => {
+          activeCascadeId = cid;
+          lastPushedHash = '';
+        }
+      });
+    } catch {
+      clearTimeout(attachTimeout);
+      finishAttach(false);
+    }
   });
 }
 
-async function pushMetricsToSession(session, cascadeId, force = false) {
-  if (!DatabaseSync || !activeConfig.modules.metrics) return;
-  if (!session || session.ws?.readyState !== 1 || !cascadeId) return;
-  try {
-    const sig = getDbSignature(cascadeId) || 'empty';
-    const sessionKey = `${cascadeId}@${sig}`;
-    if (!force && session.lastPushedSig === sessionKey) return;
-    const payload = readConversationMetrics(cascadeId);
-    if (!payload) return;
-    await sendCDP(session, 'Runtime.evaluate', {
-      expression: `window.__ag_render_metrics && window.__ag_render_metrics(${JSON.stringify(payload)})`,
-      returnByValue: false
-    });
-    session.lastPushedSig = sessionKey;
-  } catch {}
-}
-
-async function syncMetricsForSession(session) {
-  if (!DatabaseSync || !activeConfig.modules.metrics) return;
-  if (!session || session.isInjecting || session.isSyncingMetrics || session.ws?.readyState !== 1) return;
-  session.isSyncingMetrics = true;
-  try {
-    const res = await sendCDP(session, 'Runtime.evaluate', {
-      expression: 'window.__ag_watched_cascade_id || ""',
-      returnByValue: true
-    });
-    const cid = res?.result?.value;
-    if (cid) {
-      await pushMetricsToSession(session, cid, false);
-    }
-  } catch {
-  } finally {
-    session.isSyncingMetrics = false;
-  }
-}
-
-async function inject(session, targetId) {
-  if (session.isInjecting) return;
-  session.isInjecting = true;
-  try {
-    if (session.newDocumentScriptId && session.newDocumentVersion !== cachedPatchVersion) {
-      try {
-        await sendCDP(session, 'Page.removeScriptToEvaluateOnNewDocument', {
-          identifier: session.newDocumentScriptId
-        });
-      } catch {}
-      session.newDocumentScriptId = null;
-    }
-    if (!session.newDocumentScriptId) {
-      const registered = await sendCDP(session, 'Page.addScriptToEvaluateOnNewDocument', {
-        source: cachedInjectScript
-      });
-      session.newDocumentScriptId = registered.identifier;
-      session.newDocumentVersion = cachedPatchVersion;
-    }
-    const res = await sendCDP(session, 'Runtime.evaluate', {
-      expression: cachedInjectScript,
-      returnByValue: true
-    });
-    if (res?.exceptionDetails) {
-      console.error(`[Daemon] Script exception on ${targetId}:`, res.exceptionDetails);
-    }
-    session.lastPushedSig = '';
-    console.log(`[Daemon] Injected (${cachedPatchVersion}) into target ${targetId}`);
-  } catch (err) {
-    console.error(`[Daemon] Injection failed on ${targetId}:`, err.message || err);
-  } finally {
-    session.isInjecting = false;
-  }
-  await syncMetricsForSession(session);
-}
-
-function scheduleInject(session, targetId) {
-  if (session.injectTimer) clearTimeout(session.injectTimer);
-  session.injectTimer = setTimeout(() => {
-    session.injectTimer = null;
-    inject(session, targetId);
-  }, 120);
-}
-
-async function checkAndHeal(session, targetId, forceReinject = false) {
-  if (session.isChecking || session.isInjecting) return;
-  session.isChecking = true;
-  try {
-    if (forceReinject) {
-      await inject(session, targetId);
-      return;
-    }
-    const res = await sendCDP(session, 'Runtime.evaluate', {
-      expression: `Boolean(document.getElementById("ag-custom-fonts") && window.__ag_patch_version === "${cachedPatchVersion}")`,
-      returnByValue: true
-    });
-    const isHealthy = res?.result?.value === true;
-    if (!isHealthy) {
-      console.log(`[Self-Healing] Style or version mismatch in target ${targetId}, re-injecting (${cachedPatchVersion})...`);
-      await inject(session, targetId);
-    }
-  } catch {
-  } finally {
-    session.isChecking = false;
-  }
-}
-
-async function attachTarget(target) {
-  if (!isValidAppTarget(target)) return;
-  if (activeSockets.has(target.id)) return;
-
-  try {
-    const ws = new globalThis.WebSocket(target.webSocketDebuggerUrl);
-    const session = {
-      ws,
-      pendingRequests: new Map(),
-      isInjecting: false,
-      isChecking: false,
-      isSyncingMetrics: false,
-      lastPushedSig: '',
-      injectTimer: null,
-      newDocumentScriptId: null,
-      newDocumentVersion: ''
-    };
-    activeSockets.set(target.id, session);
-
-    ws.onopen = async () => {
-      console.log(`[Daemon] Attached target: ${target.id} (${target.title || 'untitled'})`);
-      try {
-        await sendCDP(session, 'Page.enable');
-        await sendCDP(session, 'Runtime.enable');
-        await sendCDP(session, 'Runtime.addBinding', { name: '__agRequestMetrics' });
-        await inject(session, target.id);
-      } catch (err) {
-        console.error(`[Daemon] Initialization failed on ${target.id}, closing for clean retry:`, err.message || err);
-        if (session.injectTimer) clearTimeout(session.injectTimer);
-        try {
-          ws.close();
-        } catch {}
-        activeSockets.delete(target.id);
-      }
-    };
-
-    ws.onmessage = (event) => {
-      try {
-        const msg = JSON.parse(event.data);
-        if (msg.id && session.pendingRequests.has(msg.id)) {
-          const req = session.pendingRequests.get(msg.id);
-          clearTimeout(req.timer);
-          session.pendingRequests.delete(msg.id);
-          if (msg.error) {
-            req.reject(new Error(msg.error.message || JSON.stringify(msg.error)));
-          } else if (msg.result?.exceptionDetails) {
-            const desc = msg.result.exceptionDetails.exception?.description || msg.result.exceptionDetails.text;
-            req.reject(new Error(`Script Exception: ${desc}`));
-          } else {
-            req.resolve(msg.result);
-          }
-          return;
-        }
-
-        if (msg.method === 'Runtime.bindingCalled' && msg.params?.name === '__agRequestMetrics') {
-          const cid = msg.params.payload;
-          if (cid) {
-            pushMetricsToSession(session, cid, true);
-          }
-          return;
-        }
-
-        if (
-          msg.method === 'Page.domContentEventFired' ||
-          (msg.method === 'Page.frameNavigated' && !msg.params?.frame?.parentId)
-        ) {
-          scheduleInject(session, target.id);
-        }
-      } catch {}
-    };
-
-    ws.onclose = () => {
-      if (session.injectTimer) clearTimeout(session.injectTimer);
-      for (const req of session.pendingRequests.values()) {
-        clearTimeout(req.timer);
-        req.reject(new Error('WS closed'));
-      }
-      activeSockets.delete(target.id);
-    };
-
-    ws.onerror = () => {
-      if (session.injectTimer) clearTimeout(session.injectTimer);
-      try {
-        ws.close();
-      } catch {}
-      activeSockets.delete(target.id);
-    };
-  } catch {
-    activeSockets.delete(target.id);
-  }
-}
-
+let isSyncing = false;
 async function sync() {
-  if (isSyncingTargets) return;
-  isSyncingTargets = true;
+  if (isSyncing) return;
+  isSyncing = true;
   try {
     const bundleChanged = rebuildBundleIfNeeded();
-    const port = getDevToolsPort();
-    if (!port) {
-      if (activeSockets.size > 0) {
-        for (const session of activeSockets.values()) {
-          if (session.injectTimer) clearTimeout(session.injectTimer);
-          try {
-            session.ws.close();
-          } catch {}
+
+    const activeTargetIds = new Set();
+    const attachPromises = [];
+
+    for (const endpoint of activeConfig.endpoints) {
+      const port = readPort(endpoint.portFile);
+      if (!port) continue;
+
+      const targets = await fetchTargets(port);
+      const pages = targets.filter(
+        (t) =>
+          t.type === 'page' &&
+          t.webSocketDebuggerUrl &&
+          !String(t.url || '').startsWith('devtools://') &&
+          isAllowedOrigin(t.url) &&
+          !String(t.title || '').includes('Launchpad')
+      );
+
+      for (const page of pages) {
+        activeTargetIds.add(page.id);
+        if (!attachedTargets.has(page.id)) {
+          attachPromises.push(attachTarget(page, endpoint));
+        } else {
+          const entry = attachedTargets.get(page.id);
+          if (bundleChanged && entry.send) {
+            await entry.send('Page.addScriptToEvaluateOnNewDocument', { source: cachedInjectScript });
+          }
+          if (entry.checkAndInject) await entry.checkAndInject();
+          if (entry.syncMetricsForSession) await entry.syncMetricsForSession(bundleChanged);
         }
-        activeSockets.clear();
       }
-      return;
     }
 
-    const allTargets = await queryTargets(port);
-    const validTargets = allTargets.filter(isValidAppTarget);
-    const currentIds = new Set(validTargets.map((t) => t.id));
+    if (attachPromises.length > 0) {
+      await Promise.allSettled(attachPromises);
+    }
 
-    for (const [id, session] of activeSockets.entries()) {
-      if (!currentIds.has(id)) {
-        if (session.injectTimer) clearTimeout(session.injectTimer);
+    // 清理已关闭的目标连接
+    for (const [id, entry] of attachedTargets.entries()) {
+      if (!activeTargetIds.has(id)) {
         try {
-          session.ws.close();
+          entry.ws.close();
         } catch {}
-        activeSockets.delete(id);
-      }
-    }
-
-    for (const target of validTargets) {
-      if (!activeSockets.has(target.id)) {
-        await attachTarget(target);
-      } else {
-        const session = activeSockets.get(target.id);
-        await checkAndHeal(session, target.id, bundleChanged);
+        attachedTargets.delete(id);
       }
     }
   } finally {
-    isSyncingTargets = false;
-  }
-}
-
-async function syncAllMetrics() {
-  if (!DatabaseSync || !activeConfig.modules.metrics) return;
-  for (const session of activeSockets.values()) {
-    await syncMetricsForSession(session);
+    isSyncing = false;
   }
 }
 
 console.log(
-  `[Antigravity Daemon] Started (${cachedPatchVersion}) | channel=${activeConfig.channel} | sqlite=${Boolean(DatabaseSync)} | safeMode=${SAFE_MODE}`
+  `[Antigravity Daemon] Started (${cachedPatchVersion}) | channel=${activeConfig.channel} | sqlite=${!!DatabaseSync} | safeMode=${SAFE_MODE}`
 );
 
+await sync();
 if (RUN_ONCE) {
-  await sync();
-  setTimeout(() => process.exit(0), 600);
+  for (const [, entry] of attachedTargets.entries()) {
+    try {
+      entry.ws.close();
+    } catch {}
+  }
+  process.exit(0);
 } else {
   setInterval(sync, 2500);
-  setInterval(syncAllMetrics, 1200);
-  sync();
 }

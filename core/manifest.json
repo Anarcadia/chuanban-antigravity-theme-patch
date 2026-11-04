@@ -1,27 +1,29 @@
 {
   "name": "chuanban-antigravity-theme-patch",
   "version": "5.0.0",
-  "patchTag": "20261104-v5.0.0",
-  "nodePolicy": {
-    "minBase": "22.0.0",
-    "minMetricsSqlite": "22.13.0",
-    "strategy": "dynamic-grading"
-  },
-  "testedAppVersions": [
-    "2.29.0",
-    "Insiders-2026.11"
-  ],
-  "i18nKeyCount": 450,
+  "minNodeVersion": "22.0.0",
+  "fullMetricsNodeVersion": "22.13.0",
   "distribution": {
     "notionGuide": "https://chuanban.notion.site/chuanban-antigravity-theme-patch-db7c5846f37546be9481cd791aed0554",
-    "googleDriveFullPack": "https://drive.google.com/drive/folders/1NX92SgVUqtSjWg6bt6sIJXy-cn7J_boC",
+    "googleDriveFullBundle": "https://drive.google.com/drive/folders/1NX92SgVUqtSjWg6bt6sIJXy-cn7J_boC",
     "githubRepo": "https://github.com/Anarcadia/chuanban-antigravity-theme-patch"
   },
   "files": {
-    "daemon.mjs": "62b12dbd5c4ed063c9ae5a88eac58381788af5ebb4d0c181c842150b2c5f39c6",
-    "runtime.js": "c13206c9960b70287ad719175814b7a5ce01261fb14e2031b5c9fa1a9a55bd86",
-    "theme.css": "c6b462706922e981812d07e4e89446efdf87c1511f67e72d9692f041d0e59208",
-    "i18n.json": "e301a4501e6d2f680a81c355aa8bfb477fb8d42fabf769245f1e48593ad877ea"
-  },
-  "updatedAt": "2026-11-04T01:44:51.262Z"
+    "daemon.mjs": {
+      "sha256": "a885b90b5c25dd0401bbdf01e0dbc98b7031523aa52a2f9969e89f900eeaab54",
+      "bytes": 30618
+    },
+    "runtime.js": {
+      "sha256": "78cb8e654e3071a03ad542998aaf133be95dafbd90c5fbe9e6fd56bf5f537b20",
+      "bytes": 37041
+    },
+    "theme.css": {
+      "sha256": "611213b52532d4975d425d3945f090ec81f1f31cb13e02725421eb068985229f",
+      "bytes": 31719
+    },
+    "i18n.json": {
+      "sha256": "e301a4501e6d2f680a81c355aa8bfb477fb8d42fabf769245f1e48593ad877ea",
+      "bytes": 30134
+    }
+  }
 }

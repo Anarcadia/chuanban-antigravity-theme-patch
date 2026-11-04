@@ -1,36 +1,47 @@
 #!/usr/bin/env node
 /**
- * chuanban-antigravity-theme-patch · One-Click Installer & Doctor CLI (install.mjs)
+ * chuanban-antigravity-theme-patch · 一键安装、自检、安全模式验证与回滚 CLI (install.mjs)
  *
- * 用法：
- *   node install.mjs install [--preset high-contrast|claude-desktop-purewhite|vintage-deep] [--channel stable|insiders] [--target-dir ~/.antigravity-patch]
- *   node install.mjs doctor  [--channel stable|insiders]
- *   node install.mjs verify  [--safe-mode] [--channel stable|insiders]
- *   node install.mjs rollback [--target-dir ~/.antigravity-patch]
- *   node install.mjs uninstall [--target-dir ~/.antigravity-patch]
+ * 支持子命令：
+ *   node install.mjs install [--channel auto|stable|insiders] [--preset high-contrast] [--target-dir <dir>]
+ *   node install.mjs doctor  [--channel auto|stable|insiders] [--target-dir <dir>]
+ *   node install.mjs verify  [--safe-mode] [--channel auto|stable|insiders] [--target-dir <dir>]
+ *   node install.mjs rollback [--target-dir <dir>]
+ *   node install.mjs uninstall [--target-dir <dir>]
  *   node install.mjs build-manifest
  */
-import { execFileSync, spawnSync } from 'node:child_process';
-import crypto from 'node:crypto';
+
 import fs from 'node:fs';
-import http from 'node:http';
-import os from 'node:os';
 import path from 'node:path';
+import os from 'node:os';
+import http from 'node:http';
+import crypto from 'node:crypto';
+import { execSync, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const GDRIVE_FULL_PACK_URL = 'https://drive.google.com/drive/folders/1NX92SgVUqtSjWg6bt6sIJXy-cn7J_boC';
-const GITHUB_REPO_URL = 'https://github.com/Anarcadia/chuanban-antigravity-theme-patch';
+const GOOGLE_DRIVE_URL = 'https://drive.google.com/drive/folders/1NX92SgVUqtSjWg6bt6sIJXy-cn7J_boC';
 const NOTION_GUIDE_URL = 'https://chuanban.notion.site/chuanban-antigravity-theme-patch-db7c5846f37546be9481cd791aed0554';
+const GITHUB_REPO_URL = 'https://github.com/Anarcadia/chuanban-antigravity-theme-patch';
+
+const ALLOWED_ORIGINS = [
+  'http://127.0.0.1',
+  'https://127.0.0.1',
+  'http://localhost',
+  'https://localhost',
+  'vscode-file://'
+];
 
 const args = process.argv.slice(2);
-const subcmd = args[0] && !args[0].startsWith('-') ? args[0] : 'install';
-
+const subcommand = args.find((a) => !a.startsWith('-')) || 'help';
+const hasFlag = (f) => args.some((a) => a === f || a.startsWith(f + '='));
 function getArg(flag, fallback = null) {
-  const idx = args.indexOf(flag);
-  if (idx !== -1 && idx + 1 < args.length) return args[idx + 1];
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === flag && i + 1 < args.length) return args[i + 1];
+    if (args[i].startsWith(flag + '=')) return args[i].slice(flag.length + 1);
+  }
   return fallback;
 }
 
@@ -39,243 +50,331 @@ function sha256File(filePath) {
   return crypto.createHash('sha256').update(buf).digest('hex');
 }
 
-function parseNodeVersion() {
-  const [maj, min, pat] = process.versions.node.split('.').map((n) => parseInt(n, 10));
-  return { maj, min, pat, raw: process.versions.node };
-}
-
-async function checkSqliteSupport() {
-  try {
-    const mod = await import('node:sqlite');
-    return Boolean(mod && mod.DatabaseSync);
-  } catch {
-    return false;
+function resolveDefaultTargetDir() {
+  const installed = path.join(os.homedir(), '.gemini', 'antigravity', 'theme-patch');
+  if (fs.existsSync(path.join(installed, 'core', 'daemon.mjs'))) {
+    return installed;
   }
+  return __dirname;
 }
 
-function resolveAppPaths(channel = 'stable') {
-  const home = os.homedir();
-  const isInsiders = channel === 'insiders';
-  const appDirName = isInsiders ? 'Antigravity - Insiders' : 'Antigravity';
-  const appBundleName = isInsiders ? 'Antigravity - Insiders.app' : 'Antigravity.app';
-
-  let portFile;
-  if (process.platform === 'darwin') {
-    portFile = path.join(home, 'Library', 'Application Support', appDirName, 'DevToolsActivePort');
-  } else if (process.platform === 'win32') {
-    const appData = process.env.APPDATA || path.join(home, 'AppData', 'Roaming');
-    portFile = path.join(appData, appDirName, 'DevToolsActivePort');
-  } else {
-    const xdgConfig = process.env.XDG_CONFIG_HOME || path.join(home, '.config');
-    portFile = path.join(xdgConfig, appDirName, 'DevToolsActivePort');
-  }
-
-  return {
-    channel,
-    appDirName,
-    appBundlePath: process.platform === 'darwin' ? path.join('/Applications', appBundleName) : null,
-    portFile
-  };
-}
-
-function checkInstalledFonts() {
-  const home = os.homedir();
-  const dirs =
-    process.platform === 'darwin'
-      ? [path.join(home, 'Library', 'Fonts'), '/Library/Fonts']
-      : process.platform === 'win32'
-        ? [path.join(process.env.WINDIR || 'C:\\Windows', 'Fonts'), path.join(home, 'AppData', 'Local', 'Microsoft', 'Windows', 'Fonts')]
-        : [path.join(home, '.local', 'share', 'fonts'), '/usr/local/share/fonts', '/usr/share/fonts'];
-
-  let hasAnthropic = false;
-  let hasSarasa = false;
-  for (const d of dirs) {
-    try {
-      if (!fs.existsSync(d)) continue;
-      const files = fs.readdirSync(d);
-      if (files.some((f) => /anthropic/i.test(f))) hasAnthropic = true;
-      if (files.some((f) => /sarasa/i.test(f))) hasSarasa = true;
-    } catch {}
-  }
-  return { hasAnthropic, hasSarasa };
-}
-
+// ============================================================================
+// 1. 生成与校验 core/manifest.json
+// ============================================================================
 function buildManifest(baseDir = __dirname) {
   const coreDir = path.join(baseDir, 'core');
-  const coreFiles = ['daemon.mjs', 'runtime.js', 'theme.css', 'i18n.json'];
-  const hashes = {};
-  for (const f of coreFiles) {
-    const p = path.join(coreDir, f);
-    if (fs.existsSync(p)) {
-      hashes[f] = sha256File(p);
+  const files = ['daemon.mjs', 'runtime.js', 'theme.css', 'i18n.json'];
+  const entries = {};
+  for (const name of files) {
+    const p = path.join(coreDir, name);
+    if (!fs.existsSync(p)) {
+      throw new Error(`Missing core file: ${p}`);
     }
+    const stat = fs.statSync(p);
+    entries[name] = {
+      sha256: sha256File(p),
+      bytes: stat.size
+    };
   }
-  const i18nObj = JSON.parse(fs.readFileSync(path.join(coreDir, 'i18n.json'), 'utf8'));
   const manifest = {
     name: 'chuanban-antigravity-theme-patch',
     version: '5.0.0',
-    patchTag: '20261104-v5.0.0',
-    nodePolicy: {
-      minBase: '22.0.0',
-      minMetricsSqlite: '22.13.0',
-      strategy: 'dynamic-grading'
-    },
-    testedAppVersions: ['2.29.0', 'Insiders-2026.11'],
-    i18nKeyCount: Object.keys(i18nObj).length,
+    minNodeVersion: '22.0.0',
+    fullMetricsNodeVersion: '22.13.0',
     distribution: {
       notionGuide: NOTION_GUIDE_URL,
-      googleDriveFullPack: GDRIVE_FULL_PACK_URL,
+      googleDriveFullBundle: GOOGLE_DRIVE_URL,
       githubRepo: GITHUB_REPO_URL
     },
-    files: hashes,
-    updatedAt: new Date().toISOString()
+    files: entries
   };
-  fs.writeFileSync(path.join(coreDir, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n', 'utf8');
+  const manifestPath = path.join(coreDir, 'manifest.json');
+  fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n', 'utf8');
   return manifest;
 }
 
-function verifyCoreIntegrity(baseDir) {
-  const manifestPath = path.join(baseDir, 'core', 'manifest.json');
-  if (!fs.existsSync(manifestPath)) return { ok: false, modified: ['manifest.json missing'] };
+function verifyCoreIntegrity(baseDir = __dirname) {
+  const coreDir = path.join(baseDir, 'core');
+  const manifestPath = path.join(coreDir, 'manifest.json');
+  if (!fs.existsSync(manifestPath)) {
+    return { ok: false, reason: 'missing manifest.json', modified: [] };
+  }
   const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
   const modified = [];
-  for (const [file, expectedHash] of Object.entries(manifest.files || {})) {
-    const p = path.join(baseDir, 'core', file);
+  for (const [name, meta] of Object.entries(manifest.files || {})) {
+    const p = path.join(coreDir, name);
     if (!fs.existsSync(p)) {
-      modified.push(`${file} (missing)`);
-    } else if (sha256File(p) !== expectedHash) {
-      modified.push(`${file} (modified)`);
+      modified.push({ file: name, status: 'missing' });
+      continue;
+    }
+    const actualHash = sha256File(p);
+    if (actualHash !== meta.sha256) {
+      modified.push({ file: name, status: 'modified', expected: meta.sha256, actual: actualHash });
     }
   }
-  return { ok: modified.length === 0, modified, manifest };
+  return { ok: modified.length === 0, manifest, modified };
 }
 
-function queryCdpTargets(port) {
-  return new Promise((resolve) => {
-    const req = http.get(`http://127.0.0.1:${port}/json`, (res) => {
-      let body = '';
-      res.on('data', (c) => (body += c));
+// ============================================================================
+// 2. 环境、字体、argv.json 与实时 CDP 窗口检查
+// ============================================================================
+async function detectEnvironment(channel = 'auto') {
+  const nodeVer = process.versions.node;
+  const [major, minor] = nodeVer.split('.').map((n) => parseInt(n, 10));
+  const nodeBasicOk = major >= 22;
+
+  let sqliteAvailable = false;
+  try {
+    const mod = await import('node:sqlite').catch(() => null);
+    sqliteAvailable = !!(mod && typeof mod.DatabaseSync === 'function');
+  } catch {
+    sqliteAvailable = false;
+  }
+
+  const home = os.homedir();
+  const fontDirs =
+    process.platform === 'darwin'
+      ? [path.join(home, 'Library/Fonts'), '/Library/Fonts']
+      : process.platform === 'win32'
+      ? [
+          path.join(process.env.LOCALAPPDATA || path.join(home, 'AppData/Local'), 'Microsoft/Windows/Fonts'),
+          'C:\\Windows\\Fonts'
+        ]
+      : [path.join(home, '.local/share/fonts'), '/usr/local/share/fonts', '/usr/share/fonts'];
+
+  let allFontFiles = [];
+  for (const d of fontDirs) {
+    try {
+      if (fs.existsSync(d)) {
+        allFontFiles.push(...fs.readdirSync(d));
+      }
+    } catch {}
+  }
+
+  const hasAnthropicFont = allFontFiles.some((f) => /Anthropic/i.test(f));
+  const hasSarasaFont = allFontFiles.some((f) => /Sarasa|更纱/i.test(f));
+
+  const checkSingleChannel = (ch) => {
+    const isInsiders = ch === 'insiders';
+    const appDirName = isInsiders ? 'Antigravity - Insiders' : 'Antigravity';
+    let portFile;
+    let appPath;
+    if (process.platform === 'darwin') {
+      portFile = path.join(home, 'Library/Application Support', appDirName, 'DevToolsActivePort');
+      appPath = isInsiders ? '/Applications/Antigravity - Insiders.app' : '/Applications/Antigravity.app';
+    } else if (process.platform === 'win32') {
+      const appData = process.env.APPDATA || path.join(home, 'AppData/Roaming');
+      portFile = path.join(appData, appDirName, 'DevToolsActivePort');
+      appPath = '';
+    } else {
+      const xdg = process.env.XDG_CONFIG_HOME || path.join(home, '.config');
+      portFile = path.join(xdg, appDirName, 'DevToolsActivePort');
+      appPath = '';
+    }
+    return {
+      channel: ch,
+      appExists: appPath ? fs.existsSync(appPath) : true,
+      portFile,
+      portFileExists: fs.existsSync(portFile)
+    };
+  };
+
+  const primaryChannel = channel === 'insiders' ? 'insiders' : 'stable';
+  const chInfo = checkSingleChannel(primaryChannel);
+  const insidersInfo = checkSingleChannel('insiders');
+
+  return {
+    nodeVer,
+    major,
+    minor,
+    nodeBasicOk,
+    sqliteAvailable,
+    tier: sqliteAvailable
+      ? 'FULL (>= 22.13, Theme + Fonts + i18n + SQLite Live Metrics)'
+      : nodeBasicOk
+      ? 'STANDARD (22.0~22.12, Theme + Fonts + i18n; SQLite Metrics gracefully disabled)'
+      : 'UNSUPPORTED (< 22.0, requires Node 22+)',
+    hasAnthropicFont,
+    hasSarasaFont,
+    channel,
+    appExists: chInfo.appExists || insidersInfo.appExists,
+    portFile: chInfo.portFileExists ? chInfo.portFile : insidersInfo.portFileExists ? insidersInfo.portFile : chInfo.portFile,
+    portFileExists: chInfo.portFileExists || insidersInfo.portFileExists,
+    channels: {
+      stable: checkSingleChannel('stable'),
+      insiders: insidersInfo
+    }
+  };
+}
+
+function ensureArgvRemoteDebugging(channel = 'auto') {
+  const home = os.homedir();
+  const dirs =
+    channel === 'insiders'
+      ? ['.antigravity-insiders']
+      : channel === 'stable'
+      ? ['.antigravity']
+      : ['.antigravity', '.antigravity-insiders'];
+
+  const results = [];
+  for (const d of dirs) {
+    const argvDir = path.join(home, d);
+    const argvPath = path.join(argvDir, 'argv.json');
+    if (!fs.existsSync(argvDir)) continue;
+    try {
+      if (!fs.existsSync(argvPath)) {
+        fs.writeFileSync(argvPath, JSON.stringify({ 'remote-debugging-port': 9222 }, null, 2) + '\n', 'utf8');
+        results.push({ path: argvPath, action: 'created' });
+        continue;
+      }
+      const raw = fs.readFileSync(argvPath, 'utf8');
+      if (/"remote-debugging-port"\s*:/.test(raw)) {
+        results.push({ path: argvPath, action: 'already-present' });
+        continue;
+      }
+      const lastBrace = raw.lastIndexOf('}');
+      if (lastBrace !== -1) {
+        const before = raw.slice(0, lastBrace).trimEnd();
+        const needsComma = !before.endsWith('{') && !before.endsWith(',');
+        const patched = `${before}${needsComma ? ',' : ''}\n\t"remote-debugging-port": 9222\n}\n`;
+        fs.writeFileSync(argvPath, patched, 'utf8');
+        results.push({ path: argvPath, action: 'patched' });
+      }
+    } catch (e) {
+      results.push({ path: argvPath, action: 'skipped', error: e.message });
+    }
+  }
+  return results;
+}
+
+function isAllowedOrigin(urlStr) {
+  if (!urlStr || typeof urlStr !== 'string') return false;
+  return ALLOWED_ORIGINS.some((prefix) => urlStr.startsWith(prefix));
+}
+
+async function inspectLiveWindow(portFile) {
+  if (!portFile || !fs.existsSync(portFile)) return { reachable: false, reason: 'DevToolsActivePort not found' };
+  const raw = fs.readFileSync(portFile, 'utf8').trim();
+  const port = parseInt(raw.split(/\r?\n/)[0], 10);
+  if (!port) return { reachable: false, reason: 'Invalid port in DevToolsActivePort' };
+
+  const targets = await new Promise((resolve) => {
+    const req = http.get({ host: '127.0.0.1', port, path: '/json/list', timeout: 1500 }, (res) => {
+      let data = '';
+      res.on('data', (c) => (data += c));
       res.on('end', () => {
         try {
-          resolve(JSON.parse(body));
+          resolve(JSON.parse(data));
         } catch {
           resolve([]);
         }
       });
     });
     req.on('error', () => resolve([]));
-    req.setTimeout(1500, () => {
+    req.on('timeout', () => {
       req.destroy();
       resolve([]);
     });
   });
-}
 
-async function inspectLiveWindow(portFile) {
-  if (!fs.existsSync(portFile)) {
-    return { reachable: false, reason: `DevToolsActivePort not found at ${portFile}` };
-  }
-  const port = parseInt(fs.readFileSync(portFile, 'utf8').trim().split('\n')[0], 10);
-  if (!port) return { reachable: false, reason: 'Invalid port in DevToolsActivePort' };
-
-  const targets = await queryCdpTargets(port);
-  const appTarget = targets.find(
-    (t) => t.type === 'page' && t.webSocketDebuggerUrl && (t.url.startsWith('http://127.0.0.1') || t.url.startsWith('https://127.0.0.1'))
+  const pages = targets.filter(
+    (t) =>
+      t.type === 'page' &&
+      t.webSocketDebuggerUrl &&
+      !String(t.url || '').startsWith('devtools://') &&
+      isAllowedOrigin(t.url) &&
+      !String(t.title || '').includes('Launchpad')
   );
-  if (!appTarget) {
-    return { reachable: false, port, reason: 'No active Antigravity page target found on port ' + port };
+
+  if (pages.length === 0) {
+    return { reachable: true, port, pages: 0, reason: 'No active workbench page target' };
   }
 
-  return new Promise((resolve) => {
-    const ws = new globalThis.WebSocket(appTarget.webSocketDebuggerUrl);
+  const page = pages[0];
+  const state = await new Promise((resolve) => {
+    const ws = new WebSocket(page.webSocketDebuggerUrl);
     const timer = setTimeout(() => {
       try {
         ws.close();
       } catch {}
-      resolve({ reachable: false, port, reason: 'WebSocket evaluate timed out' });
-    }, 3500);
-
-    ws.onopen = () => {
+      resolve(null);
+    }, 2000);
+    ws.addEventListener('open', () => {
       ws.send(
         JSON.stringify({
           id: 1,
           method: 'Runtime.evaluate',
           params: {
-            expression: `(() => {
-              const pill = document.getElementById("ag-live-metrics-pill");
-              const d = window.__ag_i18n_dict;
-              return {
-                version: window.__ag_patch_version || null,
-                hasStyle: Boolean(document.getElementById("ag-custom-fonts")),
-                preset: document.documentElement.getAttribute("data-ag-preset"),
-                pageType: document.documentElement.getAttribute("data-ag-page-type"),
-                dictCount: d ? Object.keys(d).length : 0,
-                protoSafe: d ? Object.getPrototypeOf(d) === null : false,
-                pillMounted: Boolean(pill),
-                pillText: pill ? pill.innerText : null
-              };
-            })()`,
+            expression: `({
+              version: window.__ag_patch_version || null,
+              hasStyle: !!document.getElementById('ag-custom-fonts'),
+              hasUserStyle: !!document.getElementById('antigravity-user-custom-style'),
+              preset: document.documentElement.getAttribute('data-ag-preset'),
+              pageType: document.documentElement.getAttribute('data-ag-page-type'),
+              waxSeal: document.documentElement.getAttribute('data-ag-wax-seal'),
+              dictCount: window.__ag_i18n_dict ? Object.keys(window.__ag_i18n_dict).length : 0,
+              protoSafe: window.__ag_i18n_dict ? Object.getPrototypeOf(window.__ag_i18n_dict) === null : false,
+              pillMounted: !!document.getElementById('ag-live-metrics-pill'),
+              pillText: document.getElementById('ag-live-metrics-pill')?.textContent || null
+            })`,
             returnByValue: true
           }
         })
       );
-    };
-
-    ws.onmessage = (e) => {
+    });
+    ws.addEventListener('message', (ev) => {
       try {
-        const msg = JSON.parse(e.data);
+        const msg = JSON.parse(String(ev.data));
         if (msg.id === 1) {
           clearTimeout(timer);
           ws.close();
-          resolve({
-            reachable: true,
-            port,
-            targetId: appTarget.id,
-            title: appTarget.title,
-            state: msg.result?.result?.value || null
-          });
+          resolve(msg.result?.result?.value || null);
         }
       } catch {}
-    };
-
-    ws.onerror = (err) => {
+    });
+    ws.addEventListener('error', () => {
       clearTimeout(timer);
-      resolve({ reachable: false, port, reason: err?.message || 'WebSocket error' });
-    };
+      resolve(null);
+    });
   });
+
+  return {
+    reachable: true,
+    port,
+    targetId: page.id,
+    title: page.title,
+    state
+  };
 }
 
+// ============================================================================
+// 3. 子命令实现：doctor / install / verify / rollback / uninstall
+// ============================================================================
 async function runDoctor() {
-  const channel = getArg('--channel', 'stable');
-  const targetDir = path.resolve(getArg('--target-dir', __dirname));
-  const nv = parseNodeVersion();
-  const hasWebSocket = typeof globalThis.WebSocket === 'function';
-  const hasSqlite = await checkSqliteSupport();
-  const fonts = checkInstalledFonts();
-  const appPaths = resolveAppPaths(channel);
+  const channel = getArg('--channel', 'auto');
+  const targetDir = path.resolve(getArg('--target-dir', resolveDefaultTargetDir()));
+  const env = await detectEnvironment(channel);
   const integrity = verifyCoreIntegrity(targetDir);
-  const live = hasWebSocket ? await inspectLiveWindow(appPaths.portFile) : { reachable: false, reason: 'No WebSocket' };
+  const live = await inspectLiveWindow(env.portFile);
 
   const report = {
+    ok: Boolean(env.nodeBasicOk && integrity.ok),
     node: {
-      version: process.version,
+      version: env.nodeVer,
       execPath: process.execPath,
-      tier: !hasWebSocket
-        ? 'UNSUPPORTED (< 22.0, missing WebSocket)'
-        : hasSqlite
-          ? 'FULL (>= 22.13, Theme + Fonts + i18n + SQLite Live Metrics)'
-          : 'BASE (22.0~22.12, Theme + Fonts + i18n active; SQLite Metrics gracefully disabled)'
+      tier: env.tier
     },
     fonts: {
-      anthropicInstalled: fonts.hasAnthropic,
-      sarasaInstalled: fonts.hasSarasa,
-      downloadUrl: !fonts.hasAnthropic || !fonts.hasSarasa ? GDRIVE_FULL_PACK_URL : null
+      anthropicInstalled: env.hasAnthropicFont,
+      sarasaInstalled: env.hasSarasaFont,
+      downloadUrl: !env.hasAnthropicFont || !env.hasSarasaFont ? GOOGLE_DRIVE_URL : null
     },
     antigravity: {
-      channel,
-      appExists: appPaths.appBundlePath ? fs.existsSync(appPaths.appBundlePath) : true,
-      portFile: appPaths.portFile,
-      portFileExists: fs.existsSync(appPaths.portFile)
+      channel: env.channel,
+      appExists: env.appExists,
+      portFile: env.portFile,
+      portFileExists: env.portFileExists,
+      channels: env.channels
     },
     coreIntegrity: {
       targetDir,
@@ -286,15 +385,19 @@ async function runDoctor() {
   };
 
   console.log(JSON.stringify(report, null, 2));
-  if (!hasWebSocket) process.exit(1);
+  if (!env.nodeBasicOk) {
+    console.error('\n[ERROR] Node.js >= 22.0.0 is required. Current:', env.nodeVer);
+    process.exit(1);
+  }
 }
 
 function copyDirRecursive(src, dest) {
   fs.mkdirSync(dest, { recursive: true });
-  for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
-    const s = path.join(src, entry.name);
-    const d = path.join(dest, entry.name);
-    if (entry.isDirectory()) {
+  for (const item of fs.readdirSync(src)) {
+    const s = path.join(src, item);
+    const d = path.join(dest, item);
+    const st = fs.statSync(s);
+    if (st.isDirectory()) {
       copyDirRecursive(s, d);
     } else {
       fs.copyFileSync(s, d);
@@ -302,184 +405,345 @@ function copyDirRecursive(src, dest) {
   }
 }
 
-async function runInstall() {
-  const nv = parseNodeVersion();
-  if (nv.maj < 22 || typeof globalThis.WebSocket !== 'function') {
-    console.error(
-      `[Install Aborted] Node.js >= 22.0.0 is required (current: ${process.version}). Please upgrade Node.js first.`
-    );
-    process.exit(1);
-  }
-
-  const preset = getArg('--preset', null);
-  const channel = getArg('--channel', null);
-  const defaultTarget = path.join(os.homedir(), '.gemini', 'antigravity', 'theme-patch');
-  const targetDir = path.resolve(getArg('--target-dir', defaultTarget));
-
-  buildManifest(__dirname);
-
-  if (targetDir !== path.resolve(__dirname)) {
-    fs.mkdirSync(targetDir, { recursive: true });
-    const targetCore = path.join(targetDir, 'core');
-    if (fs.existsSync(targetCore)) {
-      const check = verifyCoreIntegrity(targetDir);
-      if (!check.ok) {
-        console.warn(`[Upgrade Notice] Existing core/ had local modifications (${check.modified.join(', ')}). Backing up to core.prev/`);
-      }
-      const prevCore = path.join(targetDir, 'core.prev');
-      fs.rmSync(prevCore, { recursive: true, force: true });
-      fs.cpSync(targetCore, prevCore, { recursive: true });
-    }
-    copyDirRecursive(path.join(__dirname, 'core'), targetCore);
-    fs.copyFileSync(path.join(__dirname, 'install.mjs'), path.join(targetDir, 'install.mjs'));
-
-    // 初始化 user/ 目录：若已存在则绝不覆盖，保护用户与 Agent 的自定义配置
-    const targetUser = path.join(targetDir, 'user');
-    fs.mkdirSync(targetUser, { recursive: true });
-    for (const f of ['config.json', 'custom.css', 'i18n.override.json', 'custom.js']) {
-      const srcU = path.join(__dirname, 'user', f);
-      const dstU = path.join(targetUser, f);
-      if (fs.existsSync(srcU) && !fs.existsSync(dstU)) {
-        fs.copyFileSync(srcU, dstU);
-      }
-    }
-  }
-
-  // 更新 user/config.json 中的 preset 或 channel（若显式传入）
-  const cfgPath = path.join(targetDir, 'user', 'config.json');
-  const cfg = fs.existsSync(cfgPath) ? JSON.parse(fs.readFileSync(cfgPath, 'utf8')) : {};
-  if (preset) cfg.preset = preset;
-  if (channel) cfg.channel = channel;
-  if (!cfg.preset) cfg.preset = 'high-contrast';
-  if (!cfg.channel) cfg.channel = 'stable';
-  fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2) + '\n', 'utf8');
-
-  // 兼容旧版 ~/.gemini/antigravity/scripts/antigravity-font-daemon.mjs 软链/包装入口
-  const legacyScriptsDir = path.join(os.homedir(), '.gemini', 'antigravity', 'scripts');
-  if (fs.existsSync(legacyScriptsDir)) {
-    const wrapperCode = `#!/usr/bin/env node\n// Auto-generated v5 wrapper pointing to modular core/daemon.mjs\nimport ${JSON.stringify(path.join(targetDir, 'core', 'daemon.mjs'))};\n`;
-    fs.writeFileSync(path.join(legacyScriptsDir, 'antigravity-font-daemon.mjs'), wrapperCode, 'utf8');
-  }
-
-  // 在 macOS 上配置或重启 LaunchAgent
-  if (process.platform === 'darwin' && !args.includes('--no-service')) {
-    const launchAgentsDir = path.join(os.homedir(), 'Library', 'LaunchAgents');
+function registerSystemService(targetDir, wrapperDaemon) {
+  const home = os.homedir();
+  if (process.platform === 'darwin') {
+    const launchAgentsDir = path.join(home, 'Library', 'LaunchAgents');
     fs.mkdirSync(launchAgentsDir, { recursive: true });
     const existingCustomFontPlist = path.join(launchAgentsDir, 'com.antigravity.customfont.plist');
-    const uid = typeof process.getuid === 'function' ? process.getuid() : 501;
+    const themePlist = path.join(launchAgentsDir, 'com.antigravity.theme.plist');
+    const activePlist = fs.existsSync(existingCustomFontPlist) ? existingCustomFontPlist : themePlist;
+    const label = path.basename(activePlist, '.plist');
 
-    if (fs.existsSync(existingCustomFontPlist)) {
-      try {
-        execFileSync('launchctl', ['kickstart', '-k', `gui/${uid}/com.antigravity.customfont`], { stdio: 'ignore' });
-      } catch {}
-    } else {
-      const label = 'com.antigravity.customfont';
-      const plistContent = `<?xml version="1.0" encoding="UTF-8"?>
+    const plistContent = `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-  <key>Label</key>
-  <string>${label}</string>
-  <key>ProgramArguments</key>
-  <array>
-    <string>${process.execPath}</string>
-    <string>--disable-warning=ExperimentalWarning</string>
-    <string>${path.join(targetDir, 'core', 'daemon.mjs')}</string>
-  </array>
-  <key>RunAtLoad</key>
-  <true/>
-  <key>KeepAlive</key>
-  <true/>
-  <key>StandardOutPath</key>
-  <string>/tmp/antigravity-font.log</string>
-  <key>StandardErrorPath</key>
-  <string>/tmp/antigravity-font.err</string>
+    <key>Label</key>
+    <string>${label}</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>${process.execPath}</string>
+        <string>--disable-warning=ExperimentalWarning</string>
+        <string>${wrapperDaemon}</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>/tmp/antigravity-font-daemon.log</string>
+    <key>StandardErrorPath</key>
+    <string>/tmp/antigravity-font-daemon.err</string>
 </dict>
 </plist>
 `;
-      fs.writeFileSync(existingCustomFontPlist, plistContent, 'utf8');
-      try {
-        execFileSync('launchctl', ['bootstrap', `gui/${uid}`, existingCustomFontPlist], { stdio: 'ignore' });
-      } catch {}
-      try {
-        execFileSync('launchctl', ['kickstart', '-k', `gui/${uid}/${label}`], { stdio: 'ignore' });
-      } catch {}
+    fs.writeFileSync(activePlist, plistContent, 'utf8');
+    try {
+      const uid = process.getuid ? process.getuid() : 501;
+      execSync(`launchctl bootout gui/${uid}/${label} 2>/dev/null || true`);
+      execSync(`launchctl bootstrap gui/${uid} "${activePlist}" 2>/dev/null || launchctl load -w "${activePlist}" 2>/dev/null || true`);
+      execSync(`launchctl kickstart -k gui/${uid}/${label} 2>/dev/null || true`);
+    } catch {}
+    return { platform: 'darwin', serviceFile: activePlist, label };
+  }
+
+  if (process.platform === 'linux') {
+    const systemdDir = path.join(home, '.config', 'systemd', 'user');
+    fs.mkdirSync(systemdDir, { recursive: true });
+    const serviceFile = path.join(systemdDir, 'antigravity-theme.service');
+    const unitContent = `[Unit]
+Description=Chuanban Antigravity Theme & Live Metrics Daemon
+After=default.target
+
+[Service]
+ExecStart="${process.execPath}" --disable-warning=ExperimentalWarning "${wrapperDaemon}"
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=default.target
+`;
+    fs.writeFileSync(serviceFile, unitContent, 'utf8');
+    try {
+      execSync('systemctl --user daemon-reload && systemctl --user enable --now antigravity-theme.service 2>/dev/null || true');
+    } catch {}
+    return { platform: 'linux', serviceFile };
+  }
+
+  if (process.platform === 'win32') {
+    const appData = process.env.APPDATA || path.join(home, 'AppData', 'Roaming');
+    const startupDir = path.join(appData, 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup');
+    const vbsFile = path.join(startupDir, 'AntigravityThemeDaemon.vbs');
+    try {
+      fs.mkdirSync(startupDir, { recursive: true });
+      const cmd = `""${process.execPath}"" --disable-warning=ExperimentalWarning ""${wrapperDaemon}""`;
+      const vbsContent = `Set WshShell = CreateObject("WScript.Shell")\r\nWshShell.Run "${cmd}", 0, False\r\n`;
+      fs.writeFileSync(vbsFile, vbsContent, 'utf8');
+    } catch {}
+    return { platform: 'win32', serviceFile: vbsFile };
+  }
+
+  return { platform: process.platform, serviceFile: null };
+}
+
+async function runInstall() {
+  const cliChannel = getArg('--channel', null);
+  const channel = cliChannel || 'auto';
+  const preset = getArg('--preset', null);
+  const defaultTarget = path.join(os.homedir(), '.gemini', 'antigravity', 'theme-patch');
+  const targetDir = path.resolve(getArg('--target-dir', defaultTarget));
+
+  const env = await detectEnvironment(channel);
+  if (!env.nodeBasicOk) {
+    console.error(`[ERROR] Node.js >= 22.0.0 is required (current: ${env.nodeVer}).`);
+    process.exit(1);
+  }
+
+  buildManifest(__dirname);
+
+  const srcCore = path.join(__dirname, 'core');
+  const srcUser = path.join(__dirname, 'user');
+  const targetCore = path.join(targetDir, 'core');
+  const targetPrev = path.join(targetDir, 'core.prev');
+  const backupsDir = path.join(targetDir, 'backups');
+  const targetUser = path.join(targetDir, 'user');
+
+  let backupCreated = null;
+  if (fs.resolve ? path.resolve(__dirname) !== targetDir : true) {
+    if (path.resolve(__dirname) !== targetDir) {
+      fs.mkdirSync(targetDir, { recursive: true });
+
+      // 仅当已安装的 core/ 与当前待安装 core/ 的 manifest SHA-256 不同时才备份，防止重复 install 冲掉上一版快照
+      const srcManifestPath = path.join(srcCore, 'manifest.json');
+      const targetManifestPath = path.join(targetCore, 'manifest.json');
+      const shouldBackup =
+        fs.existsSync(targetCore) &&
+        (!fs.existsSync(targetManifestPath) || sha256File(srcManifestPath) !== sha256File(targetManifestPath));
+
+      if (shouldBackup) {
+        const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const stampedBackupDir = path.join(backupsDir, stamp);
+        fs.mkdirSync(backupsDir, { recursive: true });
+        copyDirRecursive(targetCore, stampedBackupDir);
+        fs.rmSync(targetPrev, { recursive: true, force: true });
+        copyDirRecursive(targetCore, targetPrev);
+        backupCreated = stampedBackupDir;
+      } else if (fs.existsSync(targetCore) && !fs.existsSync(targetPrev)) {
+        copyDirRecursive(targetCore, targetPrev);
+        backupCreated = targetPrev;
+      }
+
+      fs.rmSync(targetCore, { recursive: true, force: true });
+      copyDirRecursive(srcCore, targetCore);
+
+      // user/ 层永不覆盖已有文件
+      fs.mkdirSync(targetUser, { recursive: true });
+      for (const item of fs.readdirSync(srcUser)) {
+        const s = path.join(srcUser, item);
+        const d = path.join(targetUser, item);
+        if (!fs.existsSync(d)) {
+          fs.copyFileSync(s, d);
+        }
+      }
+
+      for (const docFile of ['install.mjs', 'SKILL.md', 'README.md']) {
+        const s = path.join(__dirname, docFile);
+        const d = path.join(targetDir, docFile);
+        if (fs.existsSync(s)) fs.copyFileSync(s, d);
+      }
     }
   }
 
-  // 立即执行一次注入并验证
-  spawnSync(process.execPath, ['--disable-warning=ExperimentalWarning', path.join(targetDir, 'core', 'daemon.mjs'), '--once'], {
+  // 更新 user/config.json（仅在显式传入 CLI 参数或首次初始化时更新对应字段，保留用户自定义）
+  const userConfigPath = path.join(targetUser, 'config.json');
+  const currentCfg = fs.existsSync(userConfigPath)
+    ? JSON.parse(fs.readFileSync(userConfigPath, 'utf8'))
+    : {};
+  if (typeof currentCfg.enabled !== 'boolean') currentCfg.enabled = true;
+  if (cliChannel) {
+    currentCfg.channel = cliChannel;
+  } else if (!currentCfg.channel) {
+    currentCfg.channel = 'auto';
+  }
+  if (preset) {
+    currentCfg.preset = preset;
+  } else if (!currentCfg.preset) {
+    currentCfg.preset = 'high-contrast';
+  }
+  fs.writeFileSync(userConfigPath, JSON.stringify(currentCfg, null, 2) + '\n', 'utf8');
+
+  // 自动检查并修补 ~/.antigravity/argv.json (remote-debugging-port)
+  const argvStatus = ensureArgvRemoteDebugging(currentCfg.channel);
+
+  // 创建兼容包装脚本 ~/.gemini/antigravity/scripts/antigravity-font-daemon.mjs
+  const scriptsDir = path.join(os.homedir(), '.gemini', 'antigravity', 'scripts');
+  fs.mkdirSync(scriptsDir, { recursive: true });
+  const wrapperDaemon = path.join(scriptsDir, 'antigravity-font-daemon.mjs');
+  const realDaemon = path.join(targetCore, 'daemon.mjs');
+  fs.writeFileSync(
+    wrapperDaemon,
+    `#!/usr/bin/env node\n// Auto-generated wrapper -> ${realDaemon}\nawait import(${JSON.stringify('file://' + realDaemon)});\n`,
+    { encoding: 'utf8', mode: 0o755 }
+  );
+
+  // 注册/更新跨平台自启服务
+  const serviceInfo = registerSystemService(targetDir, wrapperDaemon);
+
+  // 立即执行一次 --once 同步注入
+  spawnSync(process.execPath, ['--disable-warning=ExperimentalWarning', realDaemon, '--once'], {
     stdio: 'inherit'
   });
 
-  const appPaths = resolveAppPaths(cfg.channel);
-  const live = await inspectLiveWindow(appPaths.portFile);
-  console.log('\n[Install Complete]', JSON.stringify({ targetDir, config: cfg, liveWindow: live }, null, 2));
+  const live = await inspectLiveWindow(env.portFile);
+  console.log(
+    '\n[Install Complete]',
+    JSON.stringify(
+      {
+        ok: true,
+        targetDir,
+        backupCreated,
+        argvStatus,
+        serviceInfo,
+        config: currentCfg,
+        liveWindow: live
+      },
+      null,
+      2
+    )
+  );
 }
 
 async function runVerify() {
-  const safeMode = args.includes('--safe-mode') || args.includes('--no-user');
-  const channel = getArg('--channel', 'stable');
-  const defaultTarget = fs.existsSync(path.join(os.homedir(), '.gemini', 'antigravity', 'theme-patch', 'core', 'daemon.mjs'))
-    ? path.join(os.homedir(), '.gemini', 'antigravity', 'theme-patch')
-    : __dirname;
-  const targetDir = path.resolve(getArg('--target-dir', defaultTarget));
+  const safeMode = hasFlag('--safe-mode');
+  const channel = getArg('--channel', 'auto');
+  const targetDir = path.resolve(getArg('--target-dir', resolveDefaultTargetDir()));
+  const daemonPath = path.join(targetDir, 'core', 'daemon.mjs');
 
-  const daemonArgs = ['--disable-warning=ExperimentalWarning', path.join(targetDir, 'core', 'daemon.mjs'), '--once', '--channel', channel];
+  const daemonArgs = ['--disable-warning=ExperimentalWarning', daemonPath, '--once'];
   if (safeMode) daemonArgs.push('--safe-mode');
+  if (channel && channel !== 'auto') daemonArgs.push('--channel', channel);
 
   spawnSync(process.execPath, daemonArgs, { stdio: 'inherit' });
-  const appPaths = resolveAppPaths(channel);
-  const live = await inspectLiveWindow(appPaths.portFile);
-  console.log(JSON.stringify({ safeMode, channel, live }, null, 2));
+  const env = await detectEnvironment(channel);
+  const live = await inspectLiveWindow(env.portFile);
+  const ok = Boolean(live.reachable && (live.state?.hasStyle || live. pages === 0));
+  console.log(
+    JSON.stringify(
+      {
+        ok,
+        version: live.state?.version || null,
+        themeStyle: Boolean(live.state?.hasStyle),
+        safeMode,
+        channel,
+        live
+      },
+      null,
+      2
+    )
+  );
 }
 
-function runRollback() {
-  const defaultTarget = path.join(os.homedir(), '.gemini', 'antigravity', 'theme-patch');
-  const targetDir = path.resolve(getArg('--target-dir', defaultTarget));
-  const prevCore = path.join(targetDir, 'core.prev');
-  const currCore = path.join(targetDir, 'core');
-  if (!fs.existsSync(prevCore)) {
-    console.error(`[Rollback Failed] No core.prev/ backup found in ${targetDir}`);
-    process.exit(1);
-  }
-  fs.rmSync(currCore, { recursive: true, force: true });
-  fs.cpSync(prevCore, currCore, { recursive: true });
-  console.log(`[Rollback Complete] Restored core.prev/ -> core/ in ${targetDir}`);
-}
+async function runRollback() {
+  const targetDir = path.resolve(getArg('--target-dir', resolveDefaultTargetDir()));
+  const targetCore = path.join(targetDir, 'core');
+  const targetPrev = path.join(targetDir, 'core.prev');
+  const backupsDir = path.join(targetDir, 'backups');
 
-function runUninstall() {
-  const uid = typeof process.getuid === 'function' ? process.getuid() : 501;
-  if (process.platform === 'darwin') {
-    const plist = path.join(os.homedir(), 'Library', 'LaunchAgents', 'com.antigravity.customfont.plist');
-    try {
-      execFileSync('launchctl', ['bootout', `gui/${uid}`, plist], { stdio: 'ignore' });
-    } catch {}
-  }
-  for (const ch of ['stable', 'insiders']) {
-    const pidFile = path.join(os.tmpdir(), `ag-theme-daemon-${ch}.pid`);
-    if (fs.existsSync(pidFile)) {
-      try {
-        const pid = parseInt(fs.readFileSync(pidFile, 'utf8').trim(), 10);
-        if (pid) process.kill(pid, 'SIGTERM');
-        fs.unlinkSync(pidFile);
-      } catch {}
+  let restoreSource = null;
+  if (fs.existsSync(targetPrev)) {
+    restoreSource = targetPrev;
+  } else if (fs.existsSync(backupsDir)) {
+    const stamps = fs.readdirSync(backupsDir).sort().reverse();
+    if (stamps.length > 0) {
+      restoreSource = path.join(backupsDir, stamps[0]);
     }
   }
-  console.log('[Uninstall Complete] Stopped daemon service. Restart Antigravity to return to factory default state.');
+
+  if (!restoreSource) {
+    console.error(`[ERROR] No backup found at ${targetPrev} or ${backupsDir}`);
+    process.exit(1);
+  }
+
+  fs.rmSync(targetCore, { recursive: true, force: true });
+  copyDirRecursive(restoreSource, targetCore);
+
+  // 重启守护进程并立即执行一次 --once 重新注入
+  const realDaemon = path.join(targetCore, 'daemon.mjs');
+  if (process.platform === 'darwin') {
+    const uid = process.getuid ? process.getuid() : 501;
+    try {
+      execSync(`launchctl kickstart -k gui/${uid}/com.antigravity.customfont 2>/dev/null || launchctl kickstart -k gui/${uid}/com.antigravity.theme 2>/dev/null || true`);
+    } catch {}
+  }
+  spawnSync(process.execPath, ['--disable-warning=ExperimentalWarning', realDaemon, '--once'], {
+    stdio: 'inherit'
+  });
+
+  const env = await detectEnvironment('auto');
+  const live = await inspectLiveWindow(env.portFile);
+  console.log(
+    JSON.stringify(
+      {
+        ok: true,
+        restoredFrom: restoreSource,
+        restoredTo: targetCore,
+        live
+      },
+      null,
+      2
+    )
+  );
 }
 
-if (subcmd === 'build-manifest') {
-  const m = buildManifest(__dirname);
-  console.log('Built core/manifest.json:', m.version, 'files:', Object.keys(m.files).length);
-} else if (subcmd === 'doctor') {
-  await runDoctor();
-} else if (subcmd === 'verify') {
-  await runVerify();
-} else if (subcmd === 'rollback') {
-  runRollback();
-} else if (subcmd === 'uninstall') {
-  runUninstall();
-} else {
-  await runInstall();
+async function runUninstall() {
+  const home = os.homedir();
+  if (process.platform === 'darwin') {
+    const uid = process.getuid ? process.getuid() : 501;
+    for (const label of ['com.antigravity.customfont', 'com.antigravity.theme']) {
+      try {
+        execSync(`launchctl bootout gui/${uid}/${label} 2>/dev/null || true`);
+      } catch {}
+    }
+  } else if (process.platform === 'linux') {
+    try {
+      execSync('systemctl --user disable --now antigravity-theme.service 2>/dev/null || true');
+    } catch {}
+  }
+  console.log('[Uninstall] Stopped background daemon services. User config in ~/.gemini/antigravity/theme-patch/user/ is preserved.');
+}
+
+// ============================================================================
+// 4. 路由分发
+// ============================================================================
+switch (subcommand) {
+  case 'build-manifest': {
+    const m = buildManifest(__dirname);
+    console.log('Built core/manifest.json:', m.version, 'files:', Object.keys(m.files).length);
+    break;
+  }
+  case 'doctor':
+    await runDoctor();
+    break;
+  case 'install':
+    await runInstall();
+    break;
+  case 'verify':
+    await runVerify();
+    break;
+  case 'rollback':
+    await runRollback();
+    break;
+  case 'uninstall':
+    await runUninstall();
+    break;
+  default:
+    console.log(`Usage:
+  node install.mjs install   [--channel auto|stable|insiders] [--preset high-contrast]
+  node install.mjs doctor    [--channel auto|stable|insiders]
+  node install.mjs verify    [--safe-mode] [--channel auto|stable|insiders]
+  node install.mjs rollback
+  node install.mjs uninstall
+  node install.mjs build-manifest`);
+    break;
 }

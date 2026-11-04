@@ -1,13 +1,17 @@
 {
+  "enabled": true,
+  "channel": "auto",
   "preset": "high-contrast",
-  "channel": "stable",
   "contextLimit": 256000,
   "modules": {
     "i18n": true,
     "metrics": true,
+    "composerWaxSeal": true,
+    "deadlockHealer": true,
     "customCss": true,
     "customJs": true
   },
+  "themeVars": {},
   "selectors": {
     "inputBoxId": "antigravity.agentSidePanelInputBox",
     "branchPillInBox": "#antigravity\\.agentSidePanelInputBox [data-testid=\"branch-pill-trigger\"], [id=\"antigravity.agentSidePanelInputBox\"] [data-testid=\"branch-pill-trigger\"], #antigravity\\.agentSidePanelInputBox [aria-label^=\"Select project\"], [id=\"antigravity.agentSidePanelInputBox\"] [aria-label^=\"Select project\"], #antigravity\\.agentSidePanelInputBox [aria-label^=\"选择项目\"], [id=\"antigravity.agentSidePanelInputBox\"] [aria-label^=\"选择项目\"]",
