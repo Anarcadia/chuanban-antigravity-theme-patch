@@ -25,6 +25,13 @@ description: 船板的 Antigravity 2.0 主题、字体与深度汉化全栈成�
    - 仓库：<https://github.com/Anarcadia/chuanban-antigravity-theme-patch>
    - 包含：全部 `core/` 黄金内核、`user/` 改装模板、`install.mjs` CLI 与本 `SKILL.md`（字体文件请从上方 Google Drive 链接下载）。
 
+### 实机样式基准参考
+- **三栏对话与工件视图（高对比暖白 + 暗红蜡封 + 同行实时指标胶囊）**：[`assets/preview-workspace-chat-and-artifact.png`](assets/preview-workspace-chat-and-artifact.png)
+- **新建对话首页视图（全界面汉化 + 首页蜡封聚焦态）**：[`assets/preview-home-new-conversation.png`](assets/preview-home-new-conversation.png)
+
+![三栏对话与工件阅读视图](assets/preview-workspace-chat-and-artifact.png)
+![新建对话首页视图](assets/preview-home-new-conversation.png)
+
 ---
 
 ## 二、Node.js 动态分级兼容策略
