@@ -220,16 +220,16 @@ const CSS_CONTENT = `
     background-color: rgba(0, 0, 0, 0.35) !important;
   }
 
-  /* 输入框外层容器（含上方工具栏与延伸至下方的弧形外框轮廓）：底色保持低干扰暖白，外框线隐去（完全透明无阴影） */
+  /* 输入框外层容器（含上方工具栏与延伸至下方的弧形外框轮廓）：古朴暗红蜡封色 (#74221A 加深火漆红) */
   html[data-ag-preset] #antigravity\\.agentSidePanelInputBox,
   html[data-ag-preset] [id="antigravity.agentSidePanelInputBox"],
   #antigravity\\.agentSidePanelInputBox,
   [id="antigravity.agentSidePanelInputBox"],
   .surface-composer.bg-card-border {
     background-color: #F7EFE6 !important;
-    border: 1px solid transparent !important;
-    border-color: transparent !important;
-    box-shadow: none !important;
+    border: 1px solid #74221A !important;
+    border-color: #74221A !important;
+    box-shadow: 0 1px 3px rgba(116, 34, 26, 0.06) !important;
     outline: none !important;
   }
   /* 上方工具栏文字与小按钮（No Project 及其箭头） */
@@ -242,15 +242,21 @@ const CSS_CONTENT = `
     background-color: rgba(217, 119, 87, 0.08) !important;
     color: #1F1E1D !important;
   }
-  /* 内部输入区域卡片：纯净高白 (#FFFFFF)，内框线隐去（完全透明无阴影无描边） */
+  /* 方案2：内部打字卡片无边框，获得焦点 (:focus-within) 时微浮雕拟物平滑抬升 */
   .surface-composer-card.bg-card,
   [id="antigravity.agentSidePanelInputBox"] .surface-composer-card,
   [id="antigravity.agentSidePanelInputBox"] > div.bg-card {
     background-color: #FFFFFF !important;
     border: 1px solid transparent !important;
     border-color: transparent !important;
-    box-shadow: none !important;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02) !important;
     outline: none !important;
+    transition: box-shadow 250ms cubic-bezier(0.16, 1, 0.3, 1) !important;
+  }
+  .surface-composer:focus-within > .surface-composer-card,
+  .surface-composer-card:focus-within,
+  [id="antigravity.agentSidePanelInputBox"]:focus-within .surface-composer-card {
+    box-shadow: 0 6px 20px -2px rgba(60, 20, 15, 0.07), 0 2px 6px -1px rgba(0, 0, 0, 0.04) !important;
   }
 
   /* 搜索栏聚焦优化（消除双层同心圈）：激活时外圈橙色轮廓彻底隐去，原位内圈灰线直接平滑切换为品牌橙色粗线 (方案三) */
@@ -1253,7 +1259,7 @@ const INJECT_SCRIPT = `
     }
 
     syncChuanbanPreset();
-    window.__ag_patch_version = "20261104-insiders-dev-v16";
+    window.__ag_patch_version = "20261104-insiders-dev-v17";
 
     // 3.5 模型名称同行实时指标胶囊 (Scheme C: TPS · TTFT · Ctx/256k · Out + Hover 详情卡)
     // 严格保证「左(模型) - 中(指标胶囊) - 右(模式与发送)」三栏结构；中间过窄(<150px)时物理跳至下方第二行。
@@ -1939,7 +1945,7 @@ async function checkAndHeal(session, targetId) {
   session.isChecking = true;
   try {
     const res = await sendCDP(session, 'Runtime.evaluate', {
-      expression: 'Boolean(document.getElementById("ag-custom-fonts") && window.__ag_patch_version === "20261104-insiders-dev-v16")',
+      expression: 'Boolean(document.getElementById("ag-custom-fonts") && window.__ag_patch_version === "20261104-insiders-dev-v17")',
       returnByValue: true
     });
     const isHealthy = res?.result?.value === true;
