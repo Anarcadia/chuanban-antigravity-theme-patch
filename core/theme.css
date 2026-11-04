@@ -299,7 +299,7 @@ html[data-ag-preset] #antigravity\.agentSidePanelInputBox [data-testid="voice-li
 }
 
 /* 侧边栏任务清单/对话列表标题：微量减轻一个层级至 400，消除墨晕阴影，西文恢复清爽秀气 */
-[data-testid="conversation-row-sidebar"] span.truncate, .bg-sidebar [data-testid="conversation-row-sidebar"] [class*="truncate"], .agy-sidebar-row span.truncate, aside [data-testid="conversation-row-sidebar"] span {
+[data-testid="conversation-row-sidebar"]:not([data-selected="true"]) span.truncate, .bg-sidebar [data-testid="conversation-row-sidebar"]:not([data-selected="true"]) [class*="truncate"], .agy-sidebar-row:not([data-selected="true"]) span.truncate, aside [data-testid="conversation-row-sidebar"]:not([data-selected="true"]) span {
   font-weight: 400 !important;
   letter-spacing: -0.005em !important;
   color: #262422 !important;
@@ -321,10 +321,10 @@ button[data-testid="project-header"] span, button[data-project-card="true"] span
 }
 
 /* 侧栏选中态与激活项：精准限定激活对话，深墨纯黑、轮廓扎实 */
-[data-testid="conversation-row-sidebar"][data-selected="true"], [data-testid="conversation-row-sidebar"][data-selected="true"] span, .bg-sidebar [data-active="true"], .bg-sidebar [data-active="true"] span, .bg-sidebar [aria-selected="true"] {
+[data-testid="conversation-row-sidebar"][data-selected="true"], [data-testid="conversation-row-sidebar"][data-selected="true"] span, .bg-sidebar [data-testid="conversation-row-sidebar"][data-selected="true"] [class*="truncate"], .bg-sidebar [data-active="true"], .bg-sidebar [data-active="true"] span, .bg-sidebar [aria-selected="true"] {
   font-weight: 520 !important;
   color: #0A0A0A !important;
-  text-shadow: var(--ag-ink-shadow-md);
+  text-shadow: var(--ag-ink-shadow-md) !important;
 }
 
 /* 侧栏分类小标题（如置顶对话、项目管理） */
