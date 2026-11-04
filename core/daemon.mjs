@@ -252,6 +252,7 @@ function rebuildBundleIfNeeded() {
   const hash = crypto
     .createHash('sha256')
     .update(String(enabled))
+    .update(runtimeTemplate)
     .update(baseCss)
     .update(customCss)
     .update(JSON.stringify(mergedDict))
@@ -330,76 +331,64 @@ if (!RUN_ONCE) {
 }
 
 // ============================================================================
-// 4. 零依赖 Protobuf 解析器（专用于解析 ~/.gemini/antigravity/conversations/<id>.pb）
+// 4. SQLite + Protobuf 实时会话指标解析器（读取 ~/.gemini/antigravity/conversations/<id>.db）
 // ============================================================================
-const MODEL_ENUM_MAP = {
-  285: 'Gemini 3 Pro (High)',
-  286: 'Gemini 3 Pro (Low)',
-  334: 'Claude Sonnet 4.6',
-  342: 'GPT-OSS 120B (Medium)',
-  378: 'Gemini 3 Flash',
-  382: 'Claude Opus 4.6 (Thinking)',
-  402: 'Claude Opus 4.6 (High)',
-  405: 'Claude Sonnet 4.6 (High)'
-};
+const metricsCache = new Map(); // dbPath -> { sig, payload }
+const MAX_METRICS_CACHE_SIZE = 30;
 
-const pbCache = new Map();
-const PB_CACHE_MAX_SIZE = 50;
-
-function readVarint(buf, offset) {
-  let res = 0n;
-  let shift = 0n;
-  let pos = offset;
-  while (pos < buf.length) {
-    const b = buf[pos++];
-    res |= BigInt(b & 0x7f) << shift;
-    if ((b & 0x80) === 0) return { val: res, pos };
-    shift += 7n;
-    if (shift > 64n) break;
+function setMetricsCache(dbPath, entry) {
+  if (metricsCache.has(dbPath)) metricsCache.delete(dbPath);
+  metricsCache.set(dbPath, entry);
+  if (metricsCache.size > MAX_METRICS_CACHE_SIZE) {
+    const oldestKey = metricsCache.keys().next().value;
+    if (oldestKey) metricsCache.delete(oldestKey);
   }
-  return null;
 }
 
-function parseProto(buf, maxDepth = 2) {
+function parseProto(buf) {
   let i = 0;
-  const out = {};
+  const out = new Map();
   while (i < buf.length) {
-    const tag = readVarint(buf, i);
-    if (!tag) break;
-    i = tag.pos;
-    const wt = Number(tag.val & 7n);
-    const fn = Number(tag.val >> 3n);
+    let tag = 0;
+    let shift = 0;
+    while (i < buf.length) {
+      const b = buf[i++];
+      tag |= (b & 0x7f) << shift;
+      if (!(b & 0x80)) break;
+      shift += 7;
+    }
+    const fn = tag >>> 3;
+    const wt = tag & 7;
     if (fn <= 0 || fn > 10000) break;
-
     if (wt === 0) {
-      const v = readVarint(buf, i);
-      if (!v) break;
-      i = v.pos;
-      if (!out[fn]) out[fn] = [];
-      out[fn].push(Number(v.val));
+      let val = 0;
+      let s = 0;
+      while (i < buf.length) {
+        const b = buf[i++];
+        val += (b & 0x7f) * Math.pow(2, s);
+        if (!(b & 0x80)) break;
+        s += 7;
+      }
+      out.set(fn, val);
     } else if (wt === 2) {
       let len = 0;
       let s = 0;
       while (i < buf.length) {
         const b = buf[i++];
         len |= (b & 0x7f) << s;
-        if ((b & 0x80) === 0) break;
+        if (!(b & 0x80)) break;
         s += 7;
       }
       if (len < 0 || i + len > buf.length) break;
-      const sub = buf.subarray(i, i + len);
+      out.set(fn, buf.subarray(i, i + len));
       i += len;
-      if (!out[fn]) out[fn] = [];
-      if (maxDepth > 0) {
-        out[fn].push({ _buf: sub, _parsed: parseProto(sub, maxDepth - 1) });
-      } else {
-        out[fn].push({ _buf: sub });
-      }
     } else if (wt === 1) {
       if (i + 8 > buf.length) break;
+      out.set(fn, buf.subarray(i, i + 8));
       i += 8;
     } else if (wt === 5) {
       if (i + 4 > buf.length) break;
+      out.set(fn, buf.subarray(i, i + 4));
       i += 4;
     } else {
       break;
@@ -408,220 +397,180 @@ function parseProto(buf, maxDepth = 2) {
   return out;
 }
 
-function tsToMs(tsParsed) {
-  if (!tsParsed) return 0;
-  const sec = tsParsed[1]?.[0] || 0;
-  const nanos = tsParsed[2]?.[0] || 0;
-  return sec * 1000 + nanos / 1e6;
+function fmtTok(n) {
+  if (!n || n <= 0) return '0';
+  if (n >= 1000000) return (n / 1000000).toFixed(2) + 'M';
+  if (n >= 10000) return Math.round(n / 1000) + 'k';
+  if (n >= 1000) return (n / 1000).toFixed(1) + 'k';
+  return String(n);
+}
+
+function fmtNum(n) {
+  return (n || 0).toLocaleString('en-US');
+}
+
+function getDbSignature(cascadeId, conversationsDir) {
+  try {
+    const dbPath = path.join(conversationsDir, `${cascadeId}.db`);
+    if (!fs.existsSync(dbPath)) return null;
+    const st = fs.statSync(dbPath);
+    let walSig = '0:0';
+    const walPath = `${dbPath}-wal`;
+    if (fs.existsSync(walPath)) {
+      const wst = fs.statSync(walPath);
+      walSig = `${wst.mtimeMs}:${wst.size}`;
+    }
+    return `${st.mtimeMs}:${st.size}|${walSig}`;
+  } catch {
+    return null;
+  }
 }
 
 function parseConversationMetrics(cascadeId, conversationsDir) {
   if (!DatabaseSync) return null;
   if (!cascadeId || !/^[0-9a-f-]{36}$/i.test(cascadeId)) return null;
-  const pbPath = path.join(conversationsDir, `${cascadeId}.pb`);
-  let stat;
-  try {
-    stat = fs.statSync(pbPath);
-  } catch {
-    return { cascadeId, hasData: false };
+  const dbPath = path.join(conversationsDir, `${cascadeId}.db`);
+  const sig = getDbSignature(cascadeId, conversationsDir);
+  if (!sig) return { cascadeId, hasData: false };
+
+  const cached = metricsCache.get(dbPath);
+  if (cached && cached.sig === sig) {
+    return cached.payload;
   }
 
-  const cached = pbCache.get(pbPath);
-  if (cached && cached.mtimeMs === stat.mtimeMs && cached.size === stat.size) {
-    return cached.metrics;
-  }
-
+  const contextLimitTokens = activeConfig.contextLimit || 256000;
   let db;
   try {
-    db = new DatabaseSync(pbPath, { readOnly: true });
-    const stepRow = db
-      .prepare("SELECT value FROM [default] WHERE key = 'trajectory.steps'")
-      .get();
-    const metaRow = db
-      .prepare("SELECT value FROM [default] WHERE key = 'trajectory.generator_metadata'")
-      .get();
-
-    const stepList = stepRow?.value
-      ? parseProto(Buffer.from(stepRow.value, 'base64'), 1)[1] || []
-      : [];
-    const metaList = metaRow?.value
-      ? parseProto(Buffer.from(metaRow.value, 'base64'), 1)[1] || []
-      : [];
-
-    let toolCalls = 0;
-    let lastUserStepIdx = -1;
-    const stepTimingByIdx = new Map();
-
-    for (let idx = 0; idx < stepList.length; idx++) {
-      const s = stepList[idx]._parsed;
-      const type = s[1]?.[0];
-      if (type === 14) {
-        lastUserStepIdx = idx;
-      }
-      if (type === 15) {
-        const meta = parseProto(s[4]?.[0]?._buf || Buffer.alloc(0), 2);
-        const createdMs = tsToMs(meta[1]?.[0]?._parsed);
-        const completedMs = tsToMs(meta[7]?.[0]?._parsed);
-        const firstChunkMs = tsToMs(meta[12]?.[0]?._parsed);
-
-        const pr = parseProto(s[20]?.[0]?._buf || Buffer.alloc(0), 1);
-        const tcCount = pr[6] ? pr[6].length : 0;
-        toolCalls += tcCount;
-
-        const thinkDur = pr[8]?.[0]
-          ? parseProto(pr[8][0]._buf, 0)[1]?.[0] || 0
-          : 0;
-        stepTimingByIdx.set(idx, {
-          createdMs,
-          completedMs,
-          firstChunkMs,
-          thinkDurSec: thinkDur
-        });
-      }
+    db = new DatabaseSync(dbPath, { readOnly: true });
+    const rows = db.prepare('SELECT idx, data FROM gen_metadata ORDER BY idx ASC').all();
+    if (!rows || rows.length === 0) {
+      db.close();
+      db = null;
+      const emptyPayload = { cascadeId, hasData: false, sig };
+      setMetricsCache(dbPath, { sig, payload: emptyPayload });
+      return emptyPayload;
     }
+    const userSteps = db.prepare('SELECT idx FROM steps WHERE step_type = 14 ORDER BY idx ASC').all();
+    const plannerSteps = db.prepare('SELECT idx FROM steps WHERE step_type = 15 ORDER BY idx ASC').all();
+    db.close();
+    db = null;
 
-    let totalInput = 0;
-    let totalOutput = 0;
-    let totalThinking = 0;
-    let totalCacheRead = 0;
-    const valid = [];
+    const lastUserStepIdx = userSteps.length > 0 ? userSteps[userSteps.length - 1].idx : -1;
+    let totalIn = 0;
+    let totalCache = 0;
+    let totalOut = 0;
+    let totalThink = 0;
+    let totalResp = 0;
 
-    for (const gm of metaList) {
-      const g = gm._parsed;
-      const stepIndices = g[1] || [];
-      const cmBuf = g[2]?.[0]?._buf;
-      if (!cmBuf) continue;
-      const cm = parseProto(cmBuf, 2);
-      const u = cm[1]?.[0]?._parsed;
-      if (!u) continue;
+    const parsed = rows.map((r) => {
+      const top = parseProto(r.data);
+      const chat = top.has(1) ? parseProto(top.get(1)) : new Map();
+      const usage = chat.has(4) ? parseProto(chat.get(4)) : new Map();
+      const ttftMap = chat.has(11) ? parseProto(chat.get(11)) : new Map();
+      const streamMap = chat.has(12) ? parseProto(chat.get(12)) : new Map();
 
-      const modelEnum = u[1]?.[0] || cm[3]?.[0] || 0;
-      const inputTokens = u[2]?.[0] || 0;
-      const outputTokens = u[3]?.[0] || 0;
-      const cacheReadTokens = u[5]?.[0] || 0;
-      const thinkingTokens = u[8]?.[0] || 0;
+      const inTok = usage.get(2) || 0;
+      const outTok = usage.get(3) || 0;
+      const cacheRead = usage.get(5) || 0;
+      const thinkTok = usage.get(9) || 0;
+      const respTok = usage.get(10) || 0;
+      const ttft = (ttftMap.get(1) || 0) + (ttftMap.get(2) || 0) / 1e9;
+      const stream = (streamMap.get(1) || 0) + (streamMap.get(2) || 0) / 1e9;
 
-      if (inputTokens === 0 && outputTokens === 0 && cacheReadTokens === 0) {
-        continue;
-      }
+      totalIn += inTok;
+      totalCache += cacheRead;
+      totalOut += outTok;
+      totalThink += thinkTok;
+      totalResp += respTok;
 
-      totalInput += inputTokens;
-      totalOutput += outputTokens;
-      totalThinking += thinkingTokens;
-      totalCacheRead += cacheReadTokens;
+      return {
+        idx: r.idx,
+        inTok,
+        outTok,
+        cacheRead,
+        ctx: inTok + cacheRead,
+        thinkTok,
+        respTok,
+        ttft,
+        stream,
+        totDur: ttft + stream
+      };
+    });
 
-      const lastStepIdx = stepIndices.length > 0 ? stepIndices[stepIndices.length - 1] : -1;
-      const timing = stepTimingByIdx.get(lastStepIdx);
-
-      let genMs = 0;
-      let ttftMs = 0;
-      if (timing && timing.completedMs > timing.createdMs) {
-        if (timing.firstChunkMs > timing.createdMs && timing.completedMs > timing.firstChunkMs) {
-          ttftMs = timing.firstChunkMs - timing.createdMs;
-          genMs = timing.completedMs - timing.firstChunkMs;
-        } else {
-          const totalMs = timing.completedMs - timing.createdMs;
-          ttftMs = timing.thinkDurSec > 0 ? timing.thinkDurSec * 1000 : Math.min(totalMs * 0.25, 2500);
-          genMs = Math.max(200, totalMs - ttftMs);
-        }
-      }
-
-      valid.push({
-        stepIndices,
-        lastStepIdx,
-        modelEnum,
-        inputTokens,
-        outputTokens,
-        cacheReadTokens,
-        thinkingTokens,
-        ttftMs,
-        genMs
-      });
-    }
-
+    // 过滤尾部或中间出现的 0 用量异常记录（如无 field 2 的元数据快照），防止 Ctx 显示为 0%
+    const valid = parsed.filter((p) => p.ctx > 0 || p.outTok > 0);
     if (valid.length === 0) {
-      const emptyRes = { cascadeId, hasData: false, stepCount: stepList.length };
-      if (pbCache.size >= PB_CACHE_MAX_SIZE) {
-        const oldestKey = pbCache.keys().next().value;
-        pbCache.delete(oldestKey);
-      }
-      pbCache.set(pbPath, { mtimeMs: stat.mtimeMs, size: stat.size, metrics: emptyRes });
-      return emptyRes;
+      const emptyPayload = { cascadeId, hasData: false, sig };
+      setMetricsCache(dbPath, { sig, payload: emptyPayload });
+      return emptyPayload;
+    }
+
+    // 统计最后一条用户提问之后的模型规划步数，并从有效调用末尾切片汇总，消除按位置对齐的错位风险
+    const rawTurnSteps = plannerSteps.filter((s) => s.idx > lastUserStepIdx).length;
+    const turnSlice = rawTurnSteps > 0 ? valid.slice(-rawTurnSteps) : [];
+    const turnSteps = turnSlice.length;
+    let turnOut = 0;
+    let turnThink = 0;
+    let turnResp = 0;
+    let turnDur = 0;
+    for (let i = 0; i < turnSlice.length; i++) {
+      turnOut += turnSlice[i].outTok;
+      turnThink += turnSlice[i].thinkTok;
+      turnResp += turnSlice[i].respTok;
+      turnDur += turnSlice[i].totDur;
     }
 
     const last = valid[valid.length - 1];
-    let rawTurnSteps = 0;
-    for (let idx = Math.max(0, lastUserStepIdx + 1); idx < stepList.length; idx++) {
-      if (stepList[idx]._parsed[1]?.[0] === 15) {
-        rawTurnSteps++;
-      }
-    }
-    const turnRecords =
-      lastUserStepIdx >= 0 && rawTurnSteps > 0
-        ? valid.slice(-Math.min(rawTurnSteps, valid.length))
-        : [last];
+    const streamTps = last.stream >= 0.25 ? last.outTok / last.stream : 0;
+    const e2eTps = last.totDur > 0 ? last.outTok / last.totDur : 0;
+    const displayTps = streamTps > 0 && streamTps <= 600 ? streamTps : e2eTps;
+    const ctxPct = Math.round((last.ctx / contextLimitTokens) * 100);
+    const ctxClass = ctxPct >= 90 ? 'ag-ctx-crit' : ctxPct >= 75 ? 'ag-ctx-warn' : 'ag-ctx-ok';
+    const lastCacheRate = last.ctx > 0 ? ((last.cacheRead / last.ctx) * 100).toFixed(1) : '0.0';
+    const sessionCacheRate = totalIn + totalCache > 0 ? ((totalCache / (totalIn + totalCache)) * 100).toFixed(1) : '0.0';
+    const remainCtx = Math.max(0, contextLimitTokens - last.ctx);
+    const limitKStr = Math.round(contextLimitTokens / 1000) + 'k';
 
-    let turnOutput = 0;
-    let turnThinking = 0;
-    let turnGenMs = 0;
-    let firstTurnTtftMs = turnRecords[0]?.ttftMs || last.ttftMs || 0;
+    const inlineHtml = [
+      `<span>${Math.round(displayTps)} tok/s</span>`,
+      `<span class="ag-sep">·</span>`,
+      `<span>TTFT ${last.ttft.toFixed(1)}s</span>`,
+      `<span class="ag-sep">·</span>`,
+      `<span>Ctx ${fmtTok(last.ctx)}/${limitKStr} <span class="${ctxClass}">(${ctxPct}%)</span></span>`,
+      `<span class="ag-sep">·</span>`,
+      `<span>Out ${fmtTok(last.outTok)}</span>`
+    ].join('');
 
-    for (const r of turnRecords) {
-      turnOutput += r.outputTokens;
-      turnThinking += r.thinkingTokens;
-      turnGenMs += r.genMs;
-    }
+    const turnRowHtml =
+      turnSteps > 1
+        ? `<div class="ag-tt-row"><span class="ag-tt-lbl">本轮合计 (${turnSteps}步)</span><span class="ag-tt-val">输出 ${fmtNum(turnOut)} (思考 ${fmtNum(turnThink)} + 响应 ${fmtNum(turnResp)}) | 耗时 ${turnDur.toFixed(1)}s</span></div>`
+        : '';
 
-    const effectiveGenMs = turnGenMs > 0 ? turnGenMs : last.genMs;
-    const effectiveOut = turnOutput > 0 ? turnOutput : last.outputTokens;
-    const tps =
-      effectiveGenMs > 100 && effectiveOut > 0
-        ? Math.round((effectiveOut / (effectiveGenMs / 1000)) * 10) / 10
-        : 0;
+    const tooltipHtml = [
+      `<div class="ag-tt-hdr">本轮最新调用 (Gen #${last.idx + 1})</div>`,
+      `<div class="ag-tt-row"><span class="ag-tt-lbl">生成速度</span><span class="ag-tt-val">${streamTps > 0 && streamTps <= 600 ? `流式 ${streamTps.toFixed(1)} tok/s | ` : ''}端到端 ${e2eTps.toFixed(1)} tok/s</span></div>`,
+      `<div class="ag-tt-row"><span class="ag-tt-lbl">响应耗时</span><span class="ag-tt-val">TTFT ${last.ttft.toFixed(2)}s | 流式 ${last.stream.toFixed(2)}s | 总计 ${last.totDur.toFixed(2)}s</span></div>`,
+      `<div class="ag-tt-row"><span class="ag-tt-lbl">当前上下文</span><span class="ag-tt-val">${fmtNum(last.ctx)} (新增 ${fmtNum(last.inTok)} + 缓存 ${fmtNum(last.cacheRead)}, ${lastCacheRate}%)</span></div>`,
+      `<div class="ag-tt-row"><span class="ag-tt-lbl">本步输出量</span><span class="ag-tt-val">${fmtNum(last.outTok)} (思考链 ${fmtNum(last.thinkTok)} + 正文/工具 ${fmtNum(last.respTok)})</span></div>`,
+      turnRowHtml,
+      `<div class="ag-tt-hdr ag-tt-sec">当前会话累计 (${userSteps.length} 轮提问 / ${valid.length} 次有效调用)</div>`,
+      `<div class="ag-tt-row"><span class="ag-tt-lbl">压缩水位线</span><span class="ag-tt-val">${fmtTok(last.ctx)} / ${limitKStr} (${ctxPct}%) · 距压缩余 ${fmtTok(remainCtx)}</span></div>`,
+      `<div class="ag-tt-row"><span class="ag-tt-lbl">累计输入量</span><span class="ag-tt-val">新增 ${fmtTok(totalIn)} + 缓存读取 ${fmtTok(totalCache)} (命中率 ${sessionCacheRate}%)</span></div>`,
+      `<div class="ag-tt-row"><span class="ag-tt-lbl">累计输出量</span><span class="ag-tt-val">总计 ${fmtTok(totalOut)} (思考链 ${fmtTok(totalThink)} + 正文/工具 ${fmtTok(totalResp)})</span></div>`
+    ].join('');
 
-    const contextLimit = activeConfig.contextLimit || 256000;
-    const contextUsed = last.inputTokens + last.cacheReadTokens;
-    const contextPct = Math.min(100, Math.round((contextUsed / contextLimit) * 1000) / 10);
-    const cacheHitRate =
-      totalInput + totalCacheRead > 0
-        ? Math.round((totalCacheRead / (totalInput + totalCacheRead)) * 1000) / 10
-        : 0;
-
-    const metrics = {
+    const payload = {
       cascadeId,
       hasData: true,
-      modelEnum: last.modelEnum,
-      modelName: MODEL_ENUM_MAP[last.modelEnum] || `Model #${last.modelEnum}`,
-      contextUsed,
-      contextLimit,
-      contextPct,
-      lastInput: last.inputTokens,
-      lastCacheRead: last.cacheReadTokens,
-      lastOutput: turnOutput || last.outputTokens,
-      lastThinking: turnThinking || last.thinkingTokens,
-      ttftSec: Math.round((firstTurnTtftMs / 1000) * 10) / 10,
-      thinkingSec: Math.round((firstTurnTtftMs / 1000) * 10) / 10,
-      genSec: Math.round((effectiveGenMs / 1000) * 10) / 10,
-      tps,
-      totalInput,
-      totalOutput,
-      totalThinking,
-      totalCacheRead,
-      cacheHitRate,
-      stepCount: stepList.length,
-      turnSteps: turnRecords.length,
-      toolCalls
+      sig,
+      inlineHtml,
+      tooltipHtml
     };
-
-    if (pbCache.size >= PB_CACHE_MAX_SIZE) {
-      const oldestKey = pbCache.keys().next().value;
-      pbCache.delete(oldestKey);
-    }
-    pbCache.set(pbPath, { mtimeMs: stat.mtimeMs, size: stat.size, metrics });
-    return metrics;
+    setMetricsCache(dbPath, { sig, payload });
+    return payload;
   } catch {
-    if (cached && cached.metrics) {
-      return cached.metrics;
+    if (cached && cached.payload) {
+      return cached.payload;
     }
     return { cascadeId, hasData: false };
   } finally {
@@ -635,7 +584,7 @@ function getLatestCascadeId(conversationsDir) {
   try {
     const files = fs
       .readdirSync(conversationsDir)
-      .filter((f) => f.endsWith('.pb'))
+      .filter((f) => f.endsWith('.db'))
       .map((f) => {
         const full = path.join(conversationsDir, f);
         return { id: f.slice(0, -3), mtime: fs.statSync(full).mtimeMs };
@@ -751,35 +700,34 @@ function attachTarget(target, endpoint) {
 
       const syncMetricsForSession = async (force = false) => {
         if (!DatabaseSync || !activeConfig.modules.metrics || !activeConfig.enabled) return;
-        if (!activeCascadeId) {
-          const evalRes = await send('Runtime.evaluate', {
-            expression: `(function(){
-              const m = window.location.pathname.match(/\\/c\\/([0-9a-f-]{36})/i);
-              if (m) return m[1];
-              const el = document.querySelector('[data-testid=conversation-row-sidebar][data-selected=true]');
-              return el ? (el.getAttribute('data-cascade-id') || '') : '';
-            })()`,
-            returnByValue: true
-          });
-          const detected = evalRes?.result?.result?.value;
-          if (detected && /^[0-9a-f-]{36}$/i.test(detected)) {
-            activeCascadeId = detected;
-          } else {
-            activeCascadeId = getLatestCascadeId(endpoint.conversationsDir);
-          }
+        const evalRes = await send('Runtime.evaluate', {
+          expression: `(function(){
+            if (window.__ag_watched_cascade_id) return window.__ag_watched_cascade_id;
+            const m = window.location.pathname.match(/\\/c\\/([0-9a-f-]{36})/i);
+            if (m) return m[1];
+            const el = document.querySelector('[data-testid=conversation-row-sidebar][data-selected=true]');
+            return el ? (el.getAttribute('data-cascade-id') || '') : '';
+          })()`,
+          returnByValue: true
+        });
+        const detected = evalRes?.result?.result?.value;
+        if (detected && /^[0-9a-f-]{36}$/i.test(detected)) {
+          activeCascadeId = detected;
         }
         if (!activeCascadeId) return;
 
-        const metrics = parseConversationMetrics(activeCascadeId, endpoint.conversationsDir);
-        if (!metrics) return;
-        const hash = `${metrics.cascadeId}:${metrics.stepCount}:${metrics.totalOutput}:${metrics.contextUsed}:${metrics.tps}`;
-        if (!force && hash === lastPushedHash) return;
-        lastPushedHash = hash;
+        const sig = getDbSignature(activeCascadeId, endpoint.conversationsDir) || 'empty';
+        const sessionKey = `${activeCascadeId}@${sig}`;
+        if (!force && sessionKey === lastPushedHash) return;
+
+        const payload = parseConversationMetrics(activeCascadeId, endpoint.conversationsDir);
+        if (!payload) return;
 
         await send('Runtime.evaluate', {
-          expression: `window.__ag_update_live_metrics && window.__ag_update_live_metrics(${JSON.stringify(metrics)})`,
+          expression: `window.__ag_render_metrics && window.__ag_render_metrics(${JSON.stringify(payload)})`,
           returnByValue: false
         });
+        lastPushedHash = sessionKey;
       };
 
       const checkAndInject = async () => {
@@ -807,6 +755,7 @@ function attachTarget(target, endpoint) {
         console.log(`[Daemon] Attached target: ${target.id} (${target.title || 'Untitled'}) [${endpoint.channel}]`);
         await send('Page.enable');
         await send('Runtime.enable');
+        await send('Runtime.addBinding', { name: '__agRequestMetrics' });
         await send('Runtime.addBinding', { name: '__ag_on_session_change' });
         await send('Page.addScriptToEvaluateOnNewDocument', { source: cachedInjectScript });
         const ok = await inject();
@@ -825,9 +774,12 @@ function attachTarget(target, endpoint) {
             cb(msg);
             return;
           }
-          if (msg.method === 'Runtime.bindingCalled' && msg.params?.name === '__ag_on_session_change') {
+          if (
+            msg.method === 'Runtime.bindingCalled' &&
+            (msg.params?.name === '__agRequestMetrics' || msg.params?.name === '__ag_on_session_change')
+          ) {
             const nextId = String(msg.params.payload || '').trim();
-            if (/^[0-9a-f-]{36}$/i.test(nextId) && nextId !== activeCascadeId) {
+            if (/^[0-9a-f-]{36}$/i.test(nextId)) {
               activeCascadeId = nextId;
               lastPushedHash = '';
               syncMetricsForSession(true);

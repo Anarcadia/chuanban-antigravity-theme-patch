@@ -330,6 +330,7 @@
 
   // ============================================================================
   // 3.5 模型名称同行实时指标胶囊 (Scheme C: TPS · TTFT · Ctx/256k · Out + Hover 详情卡)
+  // 严格保证「左(模型) - 中(指标胶囊) - 右(模式与发送)」三栏结构；中间过窄(<150px)时物理跳至下方第二行。
   // ============================================================================
   const MIDDLE_MIN_WIDTH_PX = 150;
 
@@ -394,196 +395,147 @@
     const bottomRow = findFooterRow(box);
     if (!bottomRow || !bottomRow.children[0]) return null;
     const leftGroup = bottomRow.children[0];
-    const rightGroup = bottomRow.children[1];
+    const rightGroup = bottomRow.children[1] || null;
 
     let pill = document.getElementById('ag-live-metrics-pill');
+    if (pill && pill.getAttribute('data-v') !== '3') {
+      pill.remove();
+      pill = null;
+    }
+    let isNewPill = false;
     if (!pill) {
-      pill = document.createElement('span');
+      isNewPill = true;
+      pill = document.createElement('div');
       pill.id = 'ag-live-metrics-pill';
-      pill.textContent = '…';
+      pill.setAttribute('data-v', '3');
+      pill.innerHTML = '<span id="ag-live-metrics-text"></span>';
       pill.addEventListener('mouseenter', () => {
         const tt = ensureMetricsTooltip();
         if (!tt || !tt.innerHTML) return;
-        const rect = pill.getBoundingClientRect();
-        tt.classList.add('ag-tt-visible');
-        const ttWidth = tt.offsetWidth || 270;
-        const ttHeight = tt.offsetHeight || 200;
-        let left = rect.left + rect.width / 2 - ttWidth / 2;
-        left = Math.max(12, Math.min(window.innerWidth - ttWidth - 12, left));
-        let top = rect.top - ttHeight - 10;
-        if (top < 12) top = rect.bottom + 10;
-        tt.style.left = Math.round(left) + 'px';
-        tt.style.top = Math.round(top) + 'px';
+        const r = pill.getBoundingClientRect();
+        const ttWidth = Math.min(440, Math.max(370, tt.offsetWidth || 400));
+        const left = Math.max(12, Math.min(r.left, window.innerWidth - ttWidth - 16));
+        const bottomPx = Math.min(window.innerHeight - r.top + 8, window.innerHeight - (tt.offsetHeight || 220) - 12);
+        tt.style.left = left + 'px';
+        tt.style.bottom = Math.max(8, bottomPx) + 'px';
+        tt.setAttribute('data-visible', '1');
       });
       pill.addEventListener('mouseleave', () => {
         const tt = document.getElementById('ag-live-metrics-tooltip');
-        if (tt) tt.classList.remove('ag-tt-visible');
+        if (tt) tt.removeAttribute('data-visible');
       });
+    }
+
+    if (
+      typeof ResizeObserver !== 'undefined' &&
+      (window.__ag_metrics_ro_target !== bottomRow || window.__ag_metrics_ro_ver !== PATCH_VERSION)
+    ) {
+      if (window.__ag_metrics_ro) {
+        try {
+          window.__ag_metrics_ro.disconnect();
+        } catch (e) {}
+      }
+      window.__ag_metrics_ro_target = bottomRow;
+      window.__ag_metrics_ro_ver = PATCH_VERSION;
+      window.__ag_last_row_width = -1;
+      window.__ag_metrics_ro = new ResizeObserver(() => {
+        const w = bottomRow.clientWidth || 0;
+        if (w > 0 && Math.abs(w - (window.__ag_last_row_width || 0)) >= 1) {
+          window.__ag_last_row_width = w;
+          if (typeof window.__ag_ensure_metrics_pill_fn === 'function') {
+            window.__ag_ensure_metrics_pill_fn(true);
+          }
+        }
+      });
+      window.__ag_metrics_ro.observe(bottomRow);
+    }
+
+    const isMountedHere =
+      pill.parentElement === leftGroup || (bottomRow.parentElement && pill.parentElement === bottomRow.parentElement);
+    if (!forceLayout && !isNewPill && isMountedHere) {
+      return pill;
     }
 
     const rowW = bottomRow.clientWidth || 0;
+    window.__ag_last_row_width = rowW;
     const leftW = measureNaturalLeftWidth(leftGroup);
     const rightW = rightGroup ? rightGroup.offsetWidth || 0 : 0;
-    const middleAvailW = rowW - leftW - rightW - 16;
-    const layoutSig = `${Math.round(rowW / 4)}:${Math.round(leftW / 4)}:${Math.round(rightW / 4)}`;
+    const availMiddleW = rowW - leftW - rightW - 14;
+    const useBottomRow = rowW > 0 && availMiddleW < MIDDLE_MIN_WIDTH_PX;
+    const rowMode = useBottomRow ? 'bottom' : 'middle';
 
-    if (!forceLayout && pill.isConnected && pill.getAttribute('data-ag-layout-sig') === layoutSig) {
-      return pill;
+    if (bottomRow.getAttribute('data-ag-row-mode') !== rowMode) {
+      bottomRow.setAttribute('data-ag-row-mode', rowMode);
     }
-    pill.setAttribute('data-ag-layout-sig', layoutSig);
+    if (pill.getAttribute('data-ag-row-mode') !== rowMode) {
+      pill.setAttribute('data-ag-row-mode', rowMode);
+    }
 
-    bottomRow.classList.add('ag-footer-row-wrap');
-    leftGroup.style.flex = '0 0 auto';
-    if (rightGroup) rightGroup.style.flex = '0 0 auto';
-
-    if (rowW > 0 && middleAvailW < MIDDLE_MIN_WIDTH_PX) {
-      pill.classList.remove('ag-pill-middle');
-      pill.classList.add('ag-pill-wrapped');
-      if (pill.parentElement !== bottomRow || bottomRow.lastElementChild !== pill) {
-        bottomRow.appendChild(pill);
+    if (useBottomRow) {
+      const cardParent = bottomRow.parentElement;
+      if (cardParent && (pill.parentElement !== cardParent || pill.previousElementSibling !== bottomRow)) {
+        bottomRow.after(pill);
       }
     } else {
-      pill.classList.remove('ag-pill-wrapped');
-      pill.classList.add('ag-pill-middle');
-      if (rightGroup && (pill.parentElement !== bottomRow || pill.nextElementSibling !== rightGroup)) {
-        bottomRow.insertBefore(pill, rightGroup);
-      } else if (!rightGroup && pill.parentElement !== bottomRow) {
-        bottomRow.appendChild(pill);
+      if (pill.parentElement !== leftGroup) {
+        leftGroup.appendChild(pill);
       }
-    }
-
-    if (!window.__ag_pill_resize_observer && typeof ResizeObserver !== 'undefined') {
-      window.__ag_pill_resize_observer = new ResizeObserver(() => {
-        if (window.__ag_pill_ro_raf) return;
-        window.__ag_pill_ro_raf = requestAnimationFrame(() => {
-          window.__ag_pill_ro_raf = 0;
-          ensureMetricsPill(true);
-        });
-      });
-    }
-    if (window.__ag_pill_resize_observer && window.__ag_observed_row !== bottomRow) {
-      try {
-        window.__ag_pill_resize_observer.disconnect();
-        window.__ag_pill_resize_observer.observe(bottomRow);
-        window.__ag_observed_row = bottomRow;
-      } catch (e) {}
     }
 
     return pill;
   }
 
-  window.__ag_update_live_metrics = function (data) {
-    if (!data || !MODULES.metrics) return;
-    window.__ag_last_metrics = data;
-    const pill = ensureMetricsPill();
-    if (!pill) return;
+  window.__ag_ensure_metrics_pill_fn = ensureMetricsPill;
 
-    if (!data.hasData) {
-      pill.style.display = 'none';
-      return;
-    }
-    pill.style.display = 'inline-flex';
-
-    const tpsStr = data.tps > 0 ? data.tps + ' tok/s' : '-- tok/s';
-    const ttftNum = Number(data.ttftSec);
-    const ttftStr = ttftNum > 0 ? 'TTFT ' + ttftNum.toFixed(1) + 's' : 'TTFT --';
-    const ctxK = (data.contextUsed / 1000).toFixed(data.contextUsed >= 10000 ? 0 : 1) + 'k';
-    const limitK = Math.round((data.contextLimit || 256000) / 1000) + 'k';
-    const pctNum = Number(data.contextPct) || 0;
-    const ctxStr = 'Ctx ' + ctxK + '/' + limitK + ' (' + Math.round(pctNum) + '%)';
-    const outStr =
-      'Out ' + (data.lastOutput >= 1000 ? (data.lastOutput / 1000).toFixed(1) + 'k' : data.lastOutput || 0);
-
-    pill.innerHTML =
-      '<span class="ag-m-item">' +
-      tpsStr +
-      '</span>' +
-      '<span class="ag-m-sep">·</span>' +
-      '<span class="ag-m-item">' +
-      ttftStr +
-      '</span>' +
-      '<span class="ag-m-sep">·</span>' +
-      '<span class="ag-m-item ag-m-ctx">' +
-      ctxStr +
-      '</span>' +
-      '<span class="ag-m-sep">·</span>' +
-      '<span class="ag-m-item">' +
-      outStr +
-      '</span>';
-
-    if (pctNum >= 80) {
-      pill.setAttribute('data-ctx-warn', 'high');
-    } else {
-      pill.removeAttribute('data-ctx-warn');
-    }
-
-    const tt = ensureMetricsTooltip();
-    if (tt) {
-      const fmtNum = (n) => (Number(n) || 0).toLocaleString();
-      const hitPct = (Number(data.cacheHitRate) || 0).toFixed(1) + '%';
-      const thinkSec = (Number(data.thinkingSec) || 0).toFixed(1) + 's';
-      const genSec = (Number(data.genSec) || 0).toFixed(1) + 's';
-      tt.innerHTML =
-        '<div class="ag-tt-title"><span>会话实时指标 (真实 trajectory.pb)</span><span>#' +
-        (data.stepCount || 0) +
-        ' 步</span></div>' +
-        '<div class="ag-tt-row"><span class="ag-tt-label">当前步骤总输入 (Ctx)</span><span class="ag-tt-val">' +
-        fmtNum(data.contextUsed) +
-        ' / ' +
-        fmtNum(data.contextLimit || 256000) +
-        ' (' +
-        pctNum.toFixed(1) +
-        '%)</span></div>' +
-        '<div class="ag-tt-row"><span class="ag-tt-label">├─ 缓存读取 (Cache Read)</span><span class="ag-tt-val ag-tt-accent">' +
-        fmtNum(data.lastCacheRead) +
-        ' (' +
-        hitPct +
-        ')</span></div>' +
-        '<div class="ag-tt-row"><span class="ag-tt-label">└─ 增量输入 (Fresh Input)</span><span class="ag-tt-val">' +
-        fmtNum(data.lastInput) +
-        '</span></div>' +
-        '<div class="ag-tt-div"></div>' +
-        '<div class="ag-tt-row"><span class="ag-tt-label">本轮回复输出 (Turn Out)</span><span class="ag-tt-val">' +
-        fmtNum(data.lastOutput) +
-        ' tok (含思考 ' +
-        fmtNum(data.lastThinking) +
-        ')</span></div>' +
-        '<div class="ag-tt-row"><span class="ag-tt-label">本轮生成耗时 (TTFT / Gen)</span><span class="ag-tt-val">' +
-        thinkSec +
-        ' / ' +
-        genSec +
-        ' (' +
-        (data.turnSteps || 1) +
-        ' 步)</span></div>' +
-        '<div class="ag-tt-row"><span class="ag-tt-label">输出生成速度 (TPS)</span><span class="ag-tt-val ag-tt-accent">' +
-        (data.tps || 0) +
-        ' tokens / sec</span></div>' +
-        '<div class="ag-tt-div"></div>' +
-        '<div class="ag-tt-row"><span class="ag-tt-label">会话累计 Input / Cache</span><span class="ag-tt-val">' +
-        fmtNum(data.totalInput) +
-        ' / ' +
-        fmtNum(data.totalCacheRead) +
-        '</span></div>' +
-        '<div class="ag-tt-row"><span class="ag-tt-label">会话累计 Output / Tools</span><span class="ag-tt-val">' +
-        fmtNum(data.totalOutput) +
-        ' / ' +
-        (data.toolCalls || 0) +
-        ' 次调用</span></div>' +
-        '<div class="ag-tt-row"><span class="ag-tt-label">底层模型枚举</span><span class="ag-tt-val">' +
-        (data.modelName || 'Default') +
-        '</span></div>';
-    }
+  window.__ag_render_metrics = function (payload) {
+    try {
+      if (!MODULES.metrics) return;
+      window.__ag_last_metrics = payload;
+      const currentId = extractCascadeId();
+      const pill = ensureMetricsPill(false);
+      const ttEl = ensureMetricsTooltip();
+      if (!pill) return;
+      if (!currentId || !payload || !payload.hasData || payload.cascadeId !== currentId) {
+        if (pill.style.display !== 'none') pill.style.display = 'none';
+        if (ttEl) ttEl.removeAttribute('data-visible');
+        return;
+      }
+      const textEl = pill.querySelector('#ag-live-metrics-text');
+      let textChanged = false;
+      if (textEl && textEl.innerHTML !== payload.inlineHtml) {
+        textEl.innerHTML = payload.inlineHtml;
+        textChanged = true;
+      }
+      if (ttEl && ttEl.innerHTML !== payload.tooltipHtml) {
+        ttEl.innerHTML = payload.tooltipHtml;
+      }
+      if (pill.style.display !== 'inline-flex') {
+        pill.style.display = 'inline-flex';
+        textChanged = true;
+      }
+      if (textChanged) {
+        ensureMetricsPill(true);
+      }
+    } catch (e) {}
   };
+
+  window.__ag_update_live_metrics = window.__ag_render_metrics;
 
   function checkRouteAndMountMetrics() {
     try {
-      const cid = extractCascadeId();
       const box = document.getElementById(SELECTORS.inputBoxId);
       const hasBranchPillInBox = !!(box && box.querySelector(SELECTORS.branchPillInBox));
-      const hasHomeGreeting = !!document.querySelector(SELECTORS.homeGreeting);
-      const pageType = hasBranchPillInBox || hasHomeGreeting ? 'home' : 'chat';
+      const isHome =
+        hasBranchPillInBox ||
+        !!document.querySelector(SELECTORS.homeGreeting) ||
+        window.location.pathname === '/' ||
+        !window.location.pathname.startsWith('/c/');
+      const pageType = isHome ? 'home' : 'chat';
       if (document.documentElement.getAttribute('data-ag-page-type') !== pageType) {
         document.documentElement.setAttribute('data-ag-page-type', pageType);
+      }
+      if (document.body && document.body.hasAttribute('data-ag-page-type')) {
+        document.body.removeAttribute('data-ag-page-type');
       }
 
       if (!MODULES.metrics) {
@@ -592,18 +544,67 @@
         return;
       }
 
-      const pill = ensureMetricsPill();
-      if (cid && cid !== window.__ag_active_cascade_id) {
-        window.__ag_active_cascade_id = cid;
+      const cid = extractCascadeId();
+      if (!cid) {
+        window.__ag_watched_cascade_id = '';
+        const pill = document.getElementById('ag-live-metrics-pill');
+        if (pill && pill.style.display !== 'none') {
+          pill.style.display = 'none';
+        }
+        const ttEl = document.getElementById('ag-live-metrics-tooltip');
+        if (ttEl) ttEl.removeAttribute('data-visible');
+        return;
+      }
+
+      if (cid !== window.__ag_watched_cascade_id) {
+        window.__ag_watched_cascade_id = cid;
+        const pill = document.getElementById('ag-live-metrics-pill');
+        if (pill && (!window.__ag_last_metrics || window.__ag_last_metrics.cascadeId !== cid)) {
+          pill.style.display = 'none';
+        }
+        if (typeof window.__agRequestMetrics === 'function') {
+          try {
+            window.__agRequestMetrics(cid);
+          } catch (e) {}
+        }
         if (typeof window.__ag_on_session_change === 'function') {
           try {
             window.__ag_on_session_change(cid);
           } catch (e) {}
         }
-      } else if (pill && window.__ag_last_metrics && pill.textContent === '…') {
-        window.__ag_update_live_metrics(window.__ag_last_metrics);
+      } else if (window.__ag_last_metrics && window.__ag_last_metrics.cascadeId === cid) {
+        const pill = ensureMetricsPill(false);
+        if (pill && window.__ag_last_metrics.hasData && pill.style.display === 'none') {
+          window.__ag_render_metrics(window.__ag_last_metrics);
+        }
       }
     } catch (e) {}
+  }
+
+  if (!window.__ag_history_hook_installed) {
+    window.__ag_history_hook_installed = true;
+    const triggerRouteCheck = () => {
+      requestAnimationFrame(() => {
+        setTimeout(() => {
+          if (typeof window.__ag_check_route_fn === 'function') window.__ag_check_route_fn();
+        }, 0);
+      });
+      setTimeout(() => {
+        if (typeof window.__ag_check_route_fn === 'function') window.__ag_check_route_fn();
+      }, 120);
+    };
+    const wrapHistory = (type) => {
+      const orig = history[type];
+      if (typeof orig !== 'function') return;
+      history[type] = function (...args) {
+        const ret = orig.apply(this, args);
+        triggerRouteCheck();
+        return ret;
+      };
+    };
+    wrapHistory('pushState');
+    wrapHistory('replaceState');
+    window.addEventListener('popstate', triggerRouteCheck);
   }
 
   window.__ag_check_route_fn = checkRouteAndMountMetrics;
