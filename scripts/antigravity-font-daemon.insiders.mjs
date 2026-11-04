@@ -14,11 +14,11 @@ const INPUT_FONT = "'Sarasa Mono Slab SC', '等距更纱黑体 Slab SC', 'Anthro
 
 const PORT_FILE = path.join(
   os.homedir(),
-  'Library/Application Support/Antigravity - Insiders/DevToolsActivePort'
+  'Library/Application Support/Antigravity/DevToolsActivePort'
 );
 const CONVERSATIONS_DIR = path.join(
   os.homedir(),
-  '.gemini/antigravity-insiders/conversations'
+  '.gemini/antigravity/conversations'
 );
 const CONTEXT_LIMIT_TOKENS = 256000;
 
@@ -233,69 +233,59 @@ const CSS_CONTENT = `
 
   /* ----------------------------------------------------------------------
    * 【场景 2：首页 / 空白新建对话场景】
-   * 判定依据：
-   * 1. 包含分支选择器 [data-testid="branch-pill-trigger"]（新建会话专属头部标志）
-   * 2. 或标记为 data-ag-page-type="home"
-   * 3. 或包含 [data-testid="home-greeting"]
+   * 判定依据（纯 CSS 0ms 瞬时响应，彻底解耦 JS 轮询延迟）：
+   * 1. 输入框组件自身含分支选择器 [data-testid="branch-pill-trigger"] 或项目选择器头部
+   * 2. 或 html 根节点包含 [data-testid="home-greeting"]
    * ---------------------------------------------------------------------- */
   /* 2.1 新建对话日常常态：设计 C (外框完全透明，无阴影，融于背景) */
-  #antigravity\\.agentSidePanelInputBox:has([data-testid="branch-pill-trigger"]),
-  [id="antigravity.agentSidePanelInputBox"]:has([data-testid="branch-pill-trigger"]),
-  .surface-composer.bg-card-border:has([data-testid="branch-pill-trigger"]),
-  :is(html, body):has([data-testid="home-greeting"]) #antigravity\\.agentSidePanelInputBox,
-  :is(html, body):has([data-testid="home-greeting"]) [id="antigravity.agentSidePanelInputBox"],
-  :is(html, body):has([data-testid="home-greeting"]) .surface-composer.bg-card-border,
-  :is(html, body)[data-ag-page-type="home"] #antigravity\\.agentSidePanelInputBox,
-  :is(html, body)[data-ag-page-type="home"] [id="antigravity.agentSidePanelInputBox"],
-  :is(html, body)[data-ag-page-type="home"] .surface-composer.bg-card-border {
+  #antigravity\\.agentSidePanelInputBox:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"]),
+  [id="antigravity.agentSidePanelInputBox"]:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"]),
+  .surface-composer.bg-card-border:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"]),
+  html:has([data-testid="home-greeting"]) #antigravity\\.agentSidePanelInputBox,
+  html:has([data-testid="home-greeting"]) [id="antigravity.agentSidePanelInputBox"],
+  html:has([data-testid="home-greeting"]) .surface-composer.bg-card-border {
     border: 1.5px solid transparent !important;
     border-color: transparent !important;
     box-shadow: none !important;
   }
 
   /* 2.2 新建对话鼠标移上 / 聚焦：变成为设计 A (略粗一点颜色偏淡蜡封暗红，微阴影) */
-  #antigravity\\.agentSidePanelInputBox:has([data-testid="branch-pill-trigger"]):hover,
-  [id="antigravity.agentSidePanelInputBox"]:has([data-testid="branch-pill-trigger"]):hover,
-  .surface-composer.bg-card-border:has([data-testid="branch-pill-trigger"]):hover,
-  #antigravity\\.agentSidePanelInputBox:has([data-testid="branch-pill-trigger"]):focus-within,
-  [id="antigravity.agentSidePanelInputBox"]:has([data-testid="branch-pill-trigger"]):focus-within,
-  .surface-composer.bg-card-border:has([data-testid="branch-pill-trigger"]):focus-within,
-  :is(html, body):has([data-testid="home-greeting"]) #antigravity\\.agentSidePanelInputBox:hover,
-  :is(html, body):has([data-testid="home-greeting"]) [id="antigravity.agentSidePanelInputBox"]:hover,
-  :is(html, body):has([data-testid="home-greeting"]) .surface-composer.bg-card-border:hover,
-  :is(html, body):has([data-testid="home-greeting"]) #antigravity\\.agentSidePanelInputBox:focus-within,
-  :is(html, body):has([data-testid="home-greeting"]) [id="antigravity.agentSidePanelInputBox"]:focus-within,
-  :is(html, body):has([data-testid="home-greeting"]) .surface-composer.bg-card-border:focus-within,
-  :is(html, body)[data-ag-page-type="home"] #antigravity\\.agentSidePanelInputBox:hover,
-  :is(html, body)[data-ag-page-type="home"] [id="antigravity.agentSidePanelInputBox"]:hover,
-  :is(html, body)[data-ag-page-type="home"] .surface-composer.bg-card-border:hover,
-  :is(html, body)[data-ag-page-type="home"] #antigravity\\.agentSidePanelInputBox:focus-within,
-  :is(html, body)[data-ag-page-type="home"] [id="antigravity.agentSidePanelInputBox"]:focus-within,
-  :is(html, body)[data-ag-page-type="home"] .surface-composer.bg-card-border:focus-within {
+  #antigravity\\.agentSidePanelInputBox:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"]):hover,
+  [id="antigravity.agentSidePanelInputBox"]:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"]):hover,
+  .surface-composer.bg-card-border:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"]):hover,
+  #antigravity\\.agentSidePanelInputBox:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"]):focus-within,
+  [id="antigravity.agentSidePanelInputBox"]:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"]):focus-within,
+  .surface-composer.bg-card-border:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"]):focus-within,
+  html:has([data-testid="home-greeting"]) #antigravity\\.agentSidePanelInputBox:hover,
+  html:has([data-testid="home-greeting"]) [id="antigravity.agentSidePanelInputBox"]:hover,
+  html:has([data-testid="home-greeting"]) .surface-composer.bg-card-border:hover,
+  html:has([data-testid="home-greeting"]) #antigravity\\.agentSidePanelInputBox:focus-within,
+  html:has([data-testid="home-greeting"]) [id="antigravity.agentSidePanelInputBox"]:focus-within,
+  html:has([data-testid="home-greeting"]) .surface-composer.bg-card-border:focus-within {
     border: 1.5px solid rgba(116, 34, 26, 0.36) !important;
     border-color: rgba(116, 34, 26, 0.36) !important;
     box-shadow: 0 1px 3px rgba(116, 34, 26, 0.04) !important;
   }
 
   /* ----------------------------------------------------------------------
-   * 【场景 1：日常推进具体聊天会话页面】（严格限定非新建态：排斥 branch-pill-trigger 与 home 标记）
+   * 【场景 1：日常推进具体聊天会话页面】（严格限定非新建态：排斥 branch-pill-trigger、项目头部与 home-greeting）
    * ---------------------------------------------------------------------- */
   /* 1.1 具体会话日常常态：设计 A (略粗一点颜色偏淡蜡封暗红) */
-  :is(html, body):not(:has([data-testid="home-greeting"])):not([data-ag-page-type="home"]) #antigravity\\.agentSidePanelInputBox:not(:has([data-testid="branch-pill-trigger"])),
-  :is(html, body):not(:has([data-testid="home-greeting"])):not([data-ag-page-type="home"]) [id="antigravity.agentSidePanelInputBox"]:not(:has([data-testid="branch-pill-trigger"])),
-  :is(html, body):not(:has([data-testid="home-greeting"])):not([data-ag-page-type="home"]) .surface-composer.bg-card-border:not(:has([data-testid="branch-pill-trigger"])) {
+  html:not(:has([data-testid="home-greeting"])) #antigravity\\.agentSidePanelInputBox:not(:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"])),
+  html:not(:has([data-testid="home-greeting"])) [id="antigravity.agentSidePanelInputBox"]:not(:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"])),
+  html:not(:has([data-testid="home-greeting"])) .surface-composer.bg-card-border:not(:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"])) {
     border: 1.5px solid rgba(116, 34, 26, 0.36) !important;
     border-color: rgba(116, 34, 26, 0.36) !important;
     box-shadow: 0 1px 3px rgba(116, 34, 26, 0.03) !important;
   }
 
   /* 1.2 具体会话移上 / 聚焦：变成为设计 B (加深变浓实色蜡封暗红 #74221A) */
-  :is(html, body):not(:has([data-testid="home-greeting"])):not([data-ag-page-type="home"]) #antigravity\\.agentSidePanelInputBox:not(:has([data-testid="branch-pill-trigger"])):hover,
-  :is(html, body):not(:has([data-testid="home-greeting"])):not([data-ag-page-type="home"]) [id="antigravity.agentSidePanelInputBox"]:not(:has([data-testid="branch-pill-trigger"])):hover,
-  :is(html, body):not(:has([data-testid="home-greeting"])):not([data-ag-page-type="home"]) .surface-composer.bg-card-border:not(:has([data-testid="branch-pill-trigger"])):hover,
-  :is(html, body):not(:has([data-testid="home-greeting"])):not([data-ag-page-type="home"]) #antigravity\\.agentSidePanelInputBox:not(:has([data-testid="branch-pill-trigger"])):focus-within,
-  :is(html, body):not(:has([data-testid="home-greeting"])):not([data-ag-page-type="home"]) [id="antigravity.agentSidePanelInputBox"]:not(:has([data-testid="branch-pill-trigger"])):focus-within,
-  :is(html, body):not(:has([data-testid="home-greeting"])):not([data-ag-page-type="home"]) .surface-composer.bg-card-border:not(:has([data-testid="branch-pill-trigger"])):focus-within {
+  html:not(:has([data-testid="home-greeting"])) #antigravity\\.agentSidePanelInputBox:not(:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"])):hover,
+  html:not(:has([data-testid="home-greeting"])) [id="antigravity.agentSidePanelInputBox"]:not(:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"])):hover,
+  html:not(:has([data-testid="home-greeting"])) .surface-composer.bg-card-border:not(:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"])):hover,
+  html:not(:has([data-testid="home-greeting"])) #antigravity\\.agentSidePanelInputBox:not(:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"])):focus-within,
+  html:not(:has([data-testid="home-greeting"])) [id="antigravity.agentSidePanelInputBox"]:not(:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"])):focus-within,
+  html:not(:has([data-testid="home-greeting"])) .surface-composer.bg-card-border:not(:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"])):focus-within {
     border: 1.5px solid #74221A !important;
     border-color: #74221A !important;
     box-shadow: 0 1px 4px rgba(116, 34, 26, 0.12) !important;
@@ -1239,10 +1229,13 @@ const I18N_DICT = {
 // ==============================================================================
 // 4. 浏览器端自执行脚本（含样式注入 + 实时防误伤汉化）
 // ==============================================================================
-const PATCH_VERSION = '20261104-insiders-dev-v21';
+const PATCH_VERSION = '20261104-insiders-dev-v22';
 
 const INJECT_SCRIPT = `
   (() => {
+    // 0. 顶层窗口隔离：绝不注入 Artifact / HTML 预览等子 iframe
+    if (window.top !== window) return;
+
     // 1. 注入更纱黑体与主题样式（单次常量引用，消除 27KB 重复序列化开销）
     const CSS_TEXT = ${JSON.stringify(CSS_CONTENT)};
     let style = document.getElementById("ag-custom-fonts");
@@ -1344,6 +1337,8 @@ const INJECT_SCRIPT = `
       } catch (e) {}
     }
 
+    window.__ag_sync_preset_fn = syncChuanbanPreset;
+
     if (!window.__ag_preset_hook_installed) {
       window.__ag_preset_hook_installed = true;
       try {
@@ -1363,7 +1358,9 @@ const INJECT_SCRIPT = `
           }
           origSetItem(key, val);
           if (key === "theme-preset-light" || key === "theme-mode" || key === "theme-color-flavor") {
-            setTimeout(syncChuanbanPreset, 50);
+            setTimeout(() => {
+              if (typeof window.__ag_sync_preset_fn === "function") window.__ag_sync_preset_fn();
+            }, 50);
           }
         };
       } catch (e) {}
@@ -1463,20 +1460,23 @@ const INJECT_SCRIPT = `
         });
       }
 
-      // 绑定 ResizeObserver：仅在容器水平宽度发生变化时触发重排，避免高度变化引发回流重入
-      if (typeof ResizeObserver !== "undefined" && window.__ag_metrics_ro_target !== bottomRow) {
+      // 绑定 ResizeObserver（支持热重载更新回调）：统一以 clientWidth 度量水平宽度变化，避免高度变化触发回流重入
+      if (
+        typeof ResizeObserver !== "undefined" &&
+        (window.__ag_metrics_ro_target !== bottomRow || window.__ag_metrics_ro_ver !== "${PATCH_VERSION}")
+      ) {
         if (window.__ag_metrics_ro) {
           try { window.__ag_metrics_ro.disconnect(); } catch (e) {}
         }
         window.__ag_metrics_ro_target = bottomRow;
+        window.__ag_metrics_ro_ver = "${PATCH_VERSION}";
         window.__ag_last_row_width = -1;
-        window.__ag_metrics_ro = new ResizeObserver((entries) => {
-          for (let i = 0; i < entries.length; i++) {
-            const w = Math.round(entries[i].contentRect.width);
-            if (w > 0 && Math.abs(w - (window.__ag_last_row_width || 0)) >= 1) {
-              window.__ag_last_row_width = w;
-              ensureMetricsPill(true);
-              break;
+        window.__ag_metrics_ro = new ResizeObserver(() => {
+          const w = bottomRow.clientWidth || 0;
+          if (w > 0 && Math.abs(w - (window.__ag_last_row_width || 0)) >= 1) {
+            window.__ag_last_row_width = w;
+            if (typeof window.__ag_ensure_metrics_pill_fn === "function") {
+              window.__ag_ensure_metrics_pill_fn(true);
             }
           }
         });
@@ -1519,12 +1519,7 @@ const INJECT_SCRIPT = `
       return pill;
     }
 
-    if (!window.__ag_metrics_win_resize) {
-      window.__ag_metrics_win_resize = true;
-      window.addEventListener("resize", () => {
-        ensureMetricsPill(true);
-      }, { passive: true });
-    }
+    window.__ag_ensure_metrics_pill_fn = ensureMetricsPill;
 
     window.__ag_render_metrics = function(payload) {
       try {
@@ -1533,7 +1528,7 @@ const INJECT_SCRIPT = `
         const pill = ensureMetricsPill(false);
         const ttEl = ensureMetricsTooltip();
         if (!pill) return;
-        if (!payload || !payload.hasData || (currentId && payload.cascadeId !== currentId)) {
+        if (!currentId || !payload || !payload.hasData || payload.cascadeId !== currentId) {
           if (pill.style.display !== "none") pill.style.display = "none";
           if (ttEl) ttEl.removeAttribute("data-visible");
           return;
@@ -1559,19 +1554,31 @@ const INJECT_SCRIPT = `
 
     function checkRouteAndMountMetrics() {
       try {
-        // 动态识别当前处于首页/空白新建对话还是日常具体会话推进页面
+        // 动态识别当前处于首页/空白新建对话还是日常具体会话推进页面（统一标记在 html 根节点）
         const hasBranchPill = !!document.querySelector('#antigravity\\\\.agentSidePanelInputBox [data-testid="branch-pill-trigger"], [id="antigravity.agentSidePanelInputBox"] [data-testid="branch-pill-trigger"]');
         const isHome = hasBranchPill || !!document.querySelector('[data-testid="home-greeting"]') || window.location.pathname === '/' || !window.location.pathname.startsWith('/c/');
         const pageType = isHome ? 'home' : 'chat';
         if (document.documentElement.getAttribute('data-ag-page-type') !== pageType) {
           document.documentElement.setAttribute('data-ag-page-type', pageType);
         }
-        if (document.body && document.body.getAttribute('data-ag-page-type') !== pageType) {
-          document.body.setAttribute('data-ag-page-type', pageType);
+        if (document.body && document.body.hasAttribute('data-ag-page-type')) {
+          document.body.removeAttribute('data-ag-page-type');
         }
 
         const cid = extractCascadeId();
-        if (cid && cid !== window.__ag_watched_cascade_id) {
+        if (!cid) {
+          // 处于空白新建对话页：清空监听 ID 并隐藏指标胶囊，绝不拉取后台子 Agent 会话或空转轮询
+          window.__ag_watched_cascade_id = "";
+          const pill = document.getElementById("ag-live-metrics-pill");
+          if (pill && pill.style.display !== "none") {
+            pill.style.display = "none";
+          }
+          const ttEl = document.getElementById("ag-live-metrics-tooltip");
+          if (ttEl) ttEl.removeAttribute("data-visible");
+          return;
+        }
+
+        if (cid !== window.__ag_watched_cascade_id) {
           window.__ag_watched_cascade_id = cid;
           const pill = document.getElementById("ag-live-metrics-pill");
           if (pill && (!window.__ag_last_metrics || window.__ag_last_metrics.cascadeId !== cid)) {
@@ -1580,33 +1587,37 @@ const INJECT_SCRIPT = `
           if (typeof window.__agRequestMetrics === "function") {
             window.__agRequestMetrics(cid);
           }
-        } else if (cid && window.__ag_last_metrics && window.__ag_last_metrics.cascadeId === cid) {
+        } else if (window.__ag_last_metrics && window.__ag_last_metrics.cascadeId === cid) {
           ensureMetricsPill(false);
-        } else if (!cid && typeof window.__agRequestMetrics === "function" && (!window.__ag_last_metrics || !window.__ag_last_metrics.hasData)) {
-          window.__agRequestMetrics("");
         }
       } catch (e) {}
     }
 
-    // 挂载 History API 事件驱动钩子：路由切换时 0ms 瞬时响应，并将后台兜底巡检降频至 800ms
+    // 挂载 History API 事件驱动钩子：在 React 提交新 DOM 后（rAF + 120ms 双重确认）响应路由切换
     if (!window.__ag_history_hook_installed) {
       window.__ag_history_hook_installed = true;
+      const triggerRouteCheck = () => {
+        requestAnimationFrame(() => {
+          setTimeout(() => {
+            if (typeof window.__ag_check_route_fn === "function") window.__ag_check_route_fn();
+          }, 0);
+        });
+        setTimeout(() => {
+          if (typeof window.__ag_check_route_fn === "function") window.__ag_check_route_fn();
+        }, 120);
+      };
       const wrapHistory = (type) => {
         const orig = history[type];
         if (typeof orig !== "function") return;
         history[type] = function(...args) {
           const ret = orig.apply(this, args);
-          queueMicrotask(() => {
-            if (typeof window.__ag_check_route_fn === "function") window.__ag_check_route_fn();
-          });
+          triggerRouteCheck();
           return ret;
         };
       };
       wrapHistory("pushState");
       wrapHistory("replaceState");
-      window.addEventListener("popstate", () => {
-        if (typeof window.__ag_check_route_fn === "function") window.__ag_check_route_fn();
-      });
+      window.addEventListener("popstate", triggerRouteCheck);
     }
     window.__ag_check_route_fn = checkRouteAndMountMetrics;
 
@@ -1617,12 +1628,12 @@ const INJECT_SCRIPT = `
     window.__ag_metrics_route_watcher = setInterval(checkRouteAndMountMetrics, 800);
     checkRouteAndMountMetrics();
 
-    // 4. 注入高性能界面汉化引擎（TreeWalker 子树剪枝 + Mutation 增量脏集合）
-    const DICT = ${JSON.stringify(I18N_DICT)};
+    // 4. 注入高性能界面汉化引擎（无原型词典 + TreeWalker 子树剪枝 + 双触发防堆积增量脏集合）
+    const DICT = Object.assign(Object.create(null), ${JSON.stringify(I18N_DICT)});
     window.__ag_i18n_dict = DICT;
 
-    // 严密保护区：绝不汉化正文内容、代码、输入框、样式脚本及指标胶囊
-    const EXCLUDE_SELECTOR = 'code, pre, kbd, samp, textarea, input, style, script, noscript, [contenteditable="true"], .prose, .markdown, [class*="chat-message"], [class*="group/file-title"], #ag-live-metrics-pill, #ag-live-metrics-tooltip';
+    // 严密保护区：绝不汉化正文内容、代码、输入框、样式脚本、指标胶囊及侧栏用户会话标题
+    const EXCLUDE_SELECTOR = 'code, pre, kbd, samp, textarea, input, style, script, noscript, [contenteditable="true"], .prose, .markdown, [class*="chat-message"], [class*="group/file-title"], [data-testid="conversation-row-sidebar"] a[href^="/c/"], [data-testid="conversation-row-sidebar"] span.truncate, #ag-live-metrics-pill, #ag-live-metrics-tooltip';
 
     function isExcludedElement(el) {
       if (!el || el.nodeType !== 1) return true;
@@ -1641,9 +1652,9 @@ const INJECT_SCRIPT = `
       const trimmed = raw.trim();
       if (!trimmed) return;
 
-      // 1. 静态词典 O(1) 精确匹配
+      // 1. 无原型静态词典 O(1) 精确匹配（彻底免疫 toString / valueOf / constructor 原型键污染）
       const replacement = DICT[trimmed];
-      if (replacement) {
+      if (typeof replacement === 'string') {
         if (/[\\u4e00-\\u9fa5]/.test(replacement) && /^\\s*[a-zA-Z]+\\s*$/.test(raw)) {
           setNodeVal(node, replacement);
         } else {
@@ -1731,20 +1742,27 @@ const INJECT_SCRIPT = `
       const t = el.getAttribute('title');
       if (t) {
         const ttrim = t.trim();
-        if (DICT[ttrim] && t !== DICT[ttrim]) el.setAttribute('title', DICT[ttrim]);
+        const rep = DICT[ttrim];
+        if (typeof rep === 'string' && t !== rep) el.setAttribute('title', rep);
+      }
+      const p = el.getAttribute('placeholder');
+      if (p) {
+        const ptrim = p.trim();
+        const rep = DICT[ptrim];
+        if (typeof rep === 'string' && p !== rep) el.setAttribute('placeholder', rep);
       }
       const a = el.getAttribute('aria-label');
       if (a) {
         const atrim = a.trim();
         let nextAria = null;
-        if (DICT[atrim]) {
+        if (typeof DICT[atrim] === 'string') {
           nextAria = DICT[atrim];
         } else if (/^Branch, current:\\s*(.*)$/i.test(atrim)) {
           const bName = atrim.match(/^Branch, current:\\s*(.*)$/i)[1].trim();
-          nextAria = '分支，当前：' + (DICT[bName] || bName);
+          nextAria = '分支，当前：' + (bName === 'Select branch' ? '选择分支' : bName);
         } else if (/^Select project, current:\\s*(.*)$/i.test(atrim)) {
           const pName = atrim.match(/^Select project, current:\\s*(.*)$/i)[1].trim();
-          nextAria = '选择项目，当前：' + (DICT[pName] || pName);
+          nextAria = '选择项目，当前：' + (pName === 'No project' ? '未关联项目' : pName);
         }
         if (nextAria && a !== nextAria) el.setAttribute('aria-label', nextAria);
       }
@@ -1783,12 +1801,15 @@ const INJECT_SCRIPT = `
       }
 
       try {
-        if (root.hasAttribute && (root.hasAttribute('title') || root.hasAttribute('aria-label'))) {
+        if (root.hasAttribute && (root.hasAttribute('title') || root.hasAttribute('aria-label') || root.hasAttribute('placeholder'))) {
           translateElementAttrs(root);
         }
-        const labeledEls = root.querySelectorAll ? root.querySelectorAll('[title], [aria-label]') : [];
+        const labeledEls = root.querySelectorAll ? root.querySelectorAll('[title], [aria-label], [placeholder]') : [];
         for (let i = 0; i < labeledEls.length; i++) {
-          translateElementAttrs(labeledEls[i]);
+          const el = labeledEls[i];
+          if (!isExcludedElement(el)) {
+            translateElementAttrs(el);
+          }
         }
       } catch (e) {}
     }
@@ -1803,24 +1824,50 @@ const INJECT_SCRIPT = `
 
     const dirtyRoots = new Set();
     let pending = false;
+    let fallbackTimer = null;
 
     function flushTranslations() {
       pending = false;
+      if (fallbackTimer) {
+        clearTimeout(fallbackTimer);
+        fallbackTimer = null;
+      }
       if (dirtyRoots.size === 0) return;
+
+      // 若后台积压节点超过阈值（200），直接清空并执行单次全量扫描，防止大数据量堆积
+      if (dirtyRoots.size > 200) {
+        dirtyRoots.clear();
+        try { scanAndTranslate(document.body); } catch (e) {}
+        return;
+      }
+
       const roots = Array.from(dirtyRoots);
+      const rootSet = new Set(roots);
       dirtyRoots.clear();
+
       for (let i = 0; i < roots.length; i++) {
         const r = roots[i];
         if (!r || !r.isConnected) continue;
+        // O(深度) 祖先链查找替代 O(N^2) contains，彻底消除大批量节点下的二次方复杂度
         let covered = false;
-        for (let j = 0; j < roots.length; j++) {
-          if (i !== j && roots[j].nodeType === 1 && roots[j].contains && roots[j].contains(r)) {
+        for (let p = r.parentNode; p; p = p.parentNode) {
+          if (rootSet.has(p)) {
             covered = true;
             break;
           }
         }
-        if (!covered) scanAndTranslate(r);
+        if (!covered) {
+          try { scanAndTranslate(r); } catch (e) {}
+        }
       }
+    }
+
+    function scheduleFlush() {
+      if (pending) return;
+      pending = true;
+      requestAnimationFrame(flushTranslations);
+      // 80ms 定时兜底：当窗口最小化或处于后台导致 rAF 暂停时，按时清空脏节点集合防止内存泄漏与切回卡顿
+      fallbackTimer = setTimeout(flushTranslations, 80);
     }
 
     window.__ag_i18n_observer = new MutationObserver((mutations) => {
@@ -1831,8 +1878,13 @@ const INJECT_SCRIPT = `
           if (t && t.parentElement && !isExcludedElement(t.parentElement)) {
             dirtyRoots.add(t);
           }
+        } else if (m.type === 'attributes') {
+          const el = m.target;
+          if (el && el.nodeType === 1 && !isExcludedElement(el)) {
+            try { translateElementAttrs(el); } catch (e) {}
+          }
         } else if (m.type === 'childList' && m.addedNodes.length > 0) {
-          // 若变更发生在保护区内部（如 AI 流式生成正文、代码块、指标胶囊），0 开销直接跳过
+          // 若变更发生在保护区内部（如 AI 流式生成正文、代码块、指标胶囊），直接跳过
           if (m.target && m.target.nodeType === 1 && isExcludedElement(m.target)) {
             continue;
           }
@@ -1844,9 +1896,8 @@ const INJECT_SCRIPT = `
           }
         }
       }
-      if (dirtyRoots.size > 0 && !pending) {
-        pending = true;
-        requestAnimationFrame(flushTranslations);
+      if (dirtyRoots.size > 0) {
+        scheduleFlush();
       }
     });
 
@@ -1855,7 +1906,9 @@ const INJECT_SCRIPT = `
       window.__ag_i18n_observer.observe(targetNode, {
         childList: true,
         subtree: true,
-        characterData: true
+        characterData: true,
+        attributes: true,
+        attributeFilter: ['title', 'aria-label', 'placeholder']
       });
     }
   })()
@@ -1978,9 +2031,8 @@ function readConversationMetrics(cascadeId) {
 
     const lastUserStepIdx = userSteps.length > 0 ? userSteps[userSteps.length - 1].idx : -1;
     let totalIn = 0, totalCache = 0, totalOut = 0, totalThink = 0, totalResp = 0;
-    let turnSteps = 0, turnOut = 0, turnThink = 0, turnResp = 0, turnDur = 0;
 
-    const parsed = rows.map((r, i) => {
+    const parsed = rows.map((r) => {
       const top = parseProto(r.data);
       const chat = top.has(1) ? parseProto(top.get(1)) : new Map();
       const usage = chat.has(4) ? parseProto(chat.get(4)) : new Map();
@@ -1994,21 +2046,12 @@ function readConversationMetrics(cascadeId) {
       const respTok = usage.get(10) || 0;
       const ttft = (ttftMap.get(1) || 0) + (ttftMap.get(2) || 0) / 1e9;
       const stream = (streamMap.get(1) || 0) + (streamMap.get(2) || 0) / 1e9;
-      const stepIdx = plannerSteps[i] ? plannerSteps[i].idx : i;
 
       totalIn += inTok;
       totalCache += cacheRead;
       totalOut += outTok;
       totalThink += thinkTok;
       totalResp += respTok;
-
-      if (stepIdx > lastUserStepIdx) {
-        turnSteps += 1;
-        turnOut += outTok;
-        turnThink += thinkTok;
-        turnResp += respTok;
-        turnDur += (ttft + stream);
-      }
 
       return {
         idx: r.idx,
@@ -2024,7 +2067,27 @@ function readConversationMetrics(cascadeId) {
       };
     });
 
-    const last = parsed[parsed.length - 1];
+    // 过滤尾部或中间出现的 0 用量异常记录（如无 field 2 的元数据快照），防止 Ctx 显示为 0%
+    const valid = parsed.filter((p) => p.ctx > 0 || p.outTok > 0);
+    if (valid.length === 0) {
+      const emptyPayload = { cascadeId, hasData: false, sig };
+      setMetricsCache(cascadeId, { sig, payload: emptyPayload });
+      return emptyPayload;
+    }
+
+    // 统计最后一条用户提问之后的模型规划步数，并从有效调用末尾切片汇总，消除按位置对齐的错位风险
+    const rawTurnSteps = plannerSteps.filter((s) => s.idx > lastUserStepIdx).length;
+    const turnSlice = rawTurnSteps > 0 ? valid.slice(-rawTurnSteps) : [];
+    const turnSteps = turnSlice.length;
+    let turnOut = 0, turnThink = 0, turnResp = 0, turnDur = 0;
+    for (let i = 0; i < turnSlice.length; i++) {
+      turnOut += turnSlice[i].outTok;
+      turnThink += turnSlice[i].thinkTok;
+      turnResp += turnSlice[i].respTok;
+      turnDur += turnSlice[i].totDur;
+    }
+
+    const last = valid[valid.length - 1];
     const streamTps = last.stream >= 0.25 ? (last.outTok / last.stream) : 0;
     const e2eTps = last.totDur > 0 ? (last.outTok / last.totDur) : 0;
     const displayTps = (streamTps > 0 && streamTps <= 600) ? streamTps : e2eTps;
@@ -2055,7 +2118,7 @@ function readConversationMetrics(cascadeId) {
       `<div class="ag-tt-row"><span class="ag-tt-lbl">当前上下文</span><span class="ag-tt-val">${fmtNum(last.ctx)} (新增 ${fmtNum(last.inTok)} + 缓存 ${fmtNum(last.cacheRead)}, ${lastCacheRate}%)</span></div>`,
       `<div class="ag-tt-row"><span class="ag-tt-lbl">本步输出量</span><span class="ag-tt-val">${fmtNum(last.outTok)} (思考链 ${fmtNum(last.thinkTok)} + 正文/工具 ${fmtNum(last.respTok)})</span></div>`,
       turnRowHtml,
-      `<div class="ag-tt-hdr ag-tt-sec">当前会话累计 (${userSteps.length} 轮提问 / ${parsed.length} 次模型调用)</div>`,
+      `<div class="ag-tt-hdr ag-tt-sec">当前会话累计 (${userSteps.length} 轮提问 / ${valid.length} 次有效调用)</div>`,
       `<div class="ag-tt-row"><span class="ag-tt-lbl">压缩水位线</span><span class="ag-tt-val">${fmtTok(last.ctx)} / 256k (${ctxPct}%) · 距压缩余 ${fmtTok(remainCtx)}</span></div>`,
       `<div class="ag-tt-row"><span class="ag-tt-lbl">累计输入量</span><span class="ag-tt-val">新增 ${fmtTok(totalIn)} + 缓存读取 ${fmtTok(totalCache)} (命中率 ${sessionCacheRate}%)</span></div>`,
       `<div class="ag-tt-row"><span class="ag-tt-lbl">累计输出量</span><span class="ag-tt-val">总计 ${fmtTok(totalOut)} (思考链 ${fmtTok(totalThink)} + 正文/工具 ${fmtTok(totalResp)})</span></div>`
@@ -2081,8 +2144,9 @@ function readConversationMetrics(cascadeId) {
 // ==============================================================================
 // 6. 守护进程调度与健壮 RPC 逻辑
 // ==============================================================================
-const activeSockets = new Map(); // targetId -> { ws, pendingRequests, isInjecting, isChecking, lastPushedSig, injectTimer }
+const activeSockets = new Map(); // targetId -> { ws, pendingRequests, isInjecting, isChecking, isSyncingMetrics, lastPushedSig, injectTimer }
 let rpcCounter = 1;
+let isSyncingTargets = false;
 
 function isValidAppTarget(target) {
   if (!target || target.type !== 'page' || !target.webSocketDebuggerUrl) return false;
@@ -2148,58 +2212,31 @@ async function pushMetricsToSession(session, cascadeId, force = false) {
     if (!force && session.lastPushedSig === sessionKey) return;
     const payload = readConversationMetrics(cascadeId);
     if (!payload) return;
-    session.lastPushedSig = sessionKey;
     await sendCDP(session, 'Runtime.evaluate', {
       expression: `window.__ag_render_metrics && window.__ag_render_metrics(${JSON.stringify(payload)})`,
       returnByValue: false
     });
+    // 仅在 CDP 推送成功后记录签名，确保失败后下一轮自动重推
+    session.lastPushedSig = sessionKey;
   } catch {}
 }
 
-let latestConvCache = { id: '', dirMtime: 0, expiresAt: 0 };
-
-function getLatestConversationId() {
-  try {
-    const now = Date.now();
-    if (now < latestConvCache.expiresAt && latestConvCache.id) {
-      return latestConvCache.id;
-    }
-    if (!fs.existsSync(CONVERSATIONS_DIR)) return '';
-    const dirStat = fs.statSync(CONVERSATIONS_DIR);
-    if (dirStat.mtimeMs === latestConvCache.dirMtime && latestConvCache.id && now < latestConvCache.expiresAt + 10000) {
-      latestConvCache.expiresAt = now + 2500;
-      return latestConvCache.id;
-    }
-    const files = fs.readdirSync(CONVERSATIONS_DIR)
-      .filter((f) => f.endsWith('.db') && /^[0-9a-f-]{36}\.db$/i.test(f))
-      .map((f) => {
-        const p = path.join(CONVERSATIONS_DIR, f);
-        return { id: f.slice(0, -3), mtime: fs.statSync(p).mtimeMs };
-      })
-      .sort((a, b) => b.mtime - a.mtime);
-    const id = files.length > 0 ? files[0].id : '';
-    latestConvCache = { id, dirMtime: dirStat.mtimeMs, expiresAt: now + 2500 };
-    return id;
-  } catch {
-    return '';
-  }
-}
-
 async function syncMetricsForSession(session) {
-  if (!session || session.isInjecting || session.ws?.readyState !== 1) return;
+  if (!session || session.isInjecting || session.isSyncingMetrics || session.ws?.readyState !== 1) return;
+  session.isSyncingMetrics = true;
   try {
     const res = await sendCDP(session, 'Runtime.evaluate', {
       expression: 'window.__ag_watched_cascade_id || ""',
       returnByValue: true
     });
-    let cid = res?.result?.value;
-    if (!cid) {
-      cid = getLatestConversationId();
-    }
+    const cid = res?.result?.value;
     if (cid) {
       await pushMetricsToSession(session, cid, false);
     }
-  } catch {}
+  } catch {
+  } finally {
+    session.isSyncingMetrics = false;
+  }
 }
 
 async function inject(session, targetId) {
@@ -2266,6 +2303,7 @@ async function attachTarget(target) {
       pendingRequests: new Map(),
       isInjecting: false,
       isChecking: false,
+      isSyncingMetrics: false,
       lastPushedSig: '',
       injectTimer: null
     };
@@ -2279,7 +2317,10 @@ async function attachTarget(target) {
         await sendCDP(session, 'Runtime.addBinding', { name: '__agRequestMetrics' });
         await inject(session, target.id);
       } catch (err) {
-        console.error(`[Daemon] Initialization failed on ${target.id}:`, err.message || err);
+        console.error(`[Daemon] Initialization failed on ${target.id}, closing for clean retry:`, err.message || err);
+        if (session.injectTimer) clearTimeout(session.injectTimer);
+        try { ws.close(); } catch {}
+        activeSockets.delete(target.id);
       }
     };
 
@@ -2303,8 +2344,7 @@ async function attachTarget(target) {
 
         // 前端切换会话时立即响应推送指标 (< 5ms)
         if (msg.method === 'Runtime.bindingCalled' && msg.params?.name === '__agRequestMetrics') {
-          let cid = msg.params.payload;
-          if (!cid) cid = getLatestConversationId();
+          const cid = msg.params.payload;
           if (cid) {
             pushMetricsToSession(session, cid, true);
           }
@@ -2345,40 +2385,46 @@ async function attachTarget(target) {
 }
 
 async function sync() {
-  const port = getDevToolsPort();
-  if (!port) {
-    if (activeSockets.size > 0) {
-      console.log('[Daemon] Antigravity port file unavailable or closed. Clearing active targets.');
-      for (const session of activeSockets.values()) {
+  if (isSyncingTargets) return;
+  isSyncingTargets = true;
+  try {
+    const port = getDevToolsPort();
+    if (!port) {
+      if (activeSockets.size > 0) {
+        console.log('[Daemon] Antigravity port file unavailable or closed. Clearing active targets.');
+        for (const session of activeSockets.values()) {
+          if (session.injectTimer) clearTimeout(session.injectTimer);
+          try { session.ws.close(); } catch {}
+        }
+        activeSockets.clear();
+      }
+      return;
+    }
+
+    const allTargets = await queryTargets(port);
+    const validTargets = allTargets.filter(isValidAppTarget);
+    const currentIds = new Set(validTargets.map((t) => t.id));
+
+    // 清理已经关闭或不再有效的 target
+    for (const [id, session] of activeSockets.entries()) {
+      if (!currentIds.has(id)) {
         if (session.injectTimer) clearTimeout(session.injectTimer);
         try { session.ws.close(); } catch {}
+        activeSockets.delete(id);
       }
-      activeSockets.clear();
     }
-    return;
-  }
 
-  const allTargets = await queryTargets(port);
-  const validTargets = allTargets.filter(isValidAppTarget);
-  const currentIds = new Set(validTargets.map((t) => t.id));
-
-  // 清理已经关闭或不再有效的 target
-  for (const [id, session] of activeSockets.entries()) {
-    if (!currentIds.has(id)) {
-      if (session.injectTimer) clearTimeout(session.injectTimer);
-      try { session.ws.close(); } catch {}
-      activeSockets.delete(id);
+    // 挂载新业务 target，或对已连接 target 进行自愈巡检
+    for (const target of validTargets) {
+      if (!activeSockets.has(target.id)) {
+        await attachTarget(target);
+      } else {
+        const session = activeSockets.get(target.id);
+        await checkAndHeal(session, target.id);
+      }
     }
-  }
-
-  // 挂载新业务 target，或对已连接 target 进行自愈巡检
-  for (const target of validTargets) {
-    if (!activeSockets.has(target.id)) {
-      await attachTarget(target);
-    } else {
-      const session = activeSockets.get(target.id);
-      await checkAndHeal(session, target.id);
-    }
+  } finally {
+    isSyncingTargets = false;
   }
 }
 

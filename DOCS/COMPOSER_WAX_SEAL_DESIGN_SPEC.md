@@ -116,42 +116,34 @@ html[data-ag-preset] [id="antigravity.agentSidePanelInputBox"],
 
 /* ======================================================================
  * 【场景 2：新建对话 / 首页空白态】
- * 判定依据：输入框自身包含分支触发器，或页面带有 home 标记
+ * 判定依据（纯 CSS 0ms 瞬时响应，彻底解耦 JS 轮询延迟）：
+ * 输入框自身包含分支触发器或项目头部，或 html 带有 home-greeting
  * ====================================================================== */
 /* 2.1 新建对话日常常态：设计 C (完全透明，无阴影) */
-#antigravity\.agentSidePanelInputBox:has([data-testid="branch-pill-trigger"]),
-[id="antigravity.agentSidePanelInputBox"]:has([data-testid="branch-pill-trigger"]),
-.surface-composer.bg-card-border:has([data-testid="branch-pill-trigger"]),
-:is(html, body):has([data-testid="home-greeting"]) #antigravity\.agentSidePanelInputBox,
-:is(html, body):has([data-testid="home-greeting"]) [id="antigravity.agentSidePanelInputBox"],
-:is(html, body):has([data-testid="home-greeting"]) .surface-composer.bg-card-border,
-:is(html, body)[data-ag-page-type="home"] #antigravity\.agentSidePanelInputBox,
-:is(html, body)[data-ag-page-type="home"] [id="antigravity.agentSidePanelInputBox"],
-:is(html, body)[data-ag-page-type="home"] .surface-composer.bg-card-border {
+#antigravity\.agentSidePanelInputBox:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"]),
+[id="antigravity.agentSidePanelInputBox"]:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"]),
+.surface-composer.bg-card-border:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"]),
+html:has([data-testid="home-greeting"]) #antigravity\.agentSidePanelInputBox,
+html:has([data-testid="home-greeting"]) [id="antigravity.agentSidePanelInputBox"],
+html:has([data-testid="home-greeting"]) .surface-composer.bg-card-border {
   border: 1.5px solid transparent !important;
   border-color: transparent !important;
   box-shadow: none !important;
 }
 
 /* 2.2 新建对话移上 / 获焦：变成为设计 A (略粗偏淡蜡封暗红，微弱底阴影) */
-#antigravity\.agentSidePanelInputBox:has([data-testid="branch-pill-trigger"]):hover,
-[id="antigravity.agentSidePanelInputBox"]:has([data-testid="branch-pill-trigger"]):hover,
-.surface-composer.bg-card-border:has([data-testid="branch-pill-trigger"]):hover,
-#antigravity\.agentSidePanelInputBox:has([data-testid="branch-pill-trigger"]):focus-within,
-[id="antigravity.agentSidePanelInputBox"]:has([data-testid="branch-pill-trigger"]):focus-within,
-.surface-composer.bg-card-border:has([data-testid="branch-pill-trigger"]):focus-within,
-:is(html, body):has([data-testid="home-greeting"]) #antigravity\.agentSidePanelInputBox:hover,
-:is(html, body):has([data-testid="home-greeting"]) [id="antigravity.agentSidePanelInputBox"]:hover,
-:is(html, body):has([data-testid="home-greeting"]) .surface-composer.bg-card-border:hover,
-:is(html, body):has([data-testid="home-greeting"]) #antigravity\.agentSidePanelInputBox:focus-within,
-:is(html, body):has([data-testid="home-greeting"]) [id="antigravity.agentSidePanelInputBox"]:focus-within,
-:is(html, body):has([data-testid="home-greeting"]) .surface-composer.bg-card-border:focus-within,
-:is(html, body)[data-ag-page-type="home"] #antigravity\.agentSidePanelInputBox:hover,
-:is(html, body)[data-ag-page-type="home"] [id="antigravity.agentSidePanelInputBox"]:hover,
-:is(html, body)[data-ag-page-type="home"] .surface-composer.bg-card-border:hover,
-:is(html, body)[data-ag-page-type="home"] #antigravity\.agentSidePanelInputBox:focus-within,
-:is(html, body)[data-ag-page-type="home"] [id="antigravity.agentSidePanelInputBox"]:focus-within,
-:is(html, body)[data-ag-page-type="home"] .surface-composer.bg-card-border:focus-within {
+#antigravity\.agentSidePanelInputBox:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"]):hover,
+[id="antigravity.agentSidePanelInputBox"]:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"]):hover,
+.surface-composer.bg-card-border:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"]):hover,
+#antigravity\.agentSidePanelInputBox:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"]):focus-within,
+[id="antigravity.agentSidePanelInputBox"]:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"]):focus-within,
+.surface-composer.bg-card-border:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"]):focus-within,
+html:has([data-testid="home-greeting"]) #antigravity\.agentSidePanelInputBox:hover,
+html:has([data-testid="home-greeting"]) [id="antigravity.agentSidePanelInputBox"]:hover,
+html:has([data-testid="home-greeting"]) .surface-composer.bg-card-border:hover,
+html:has([data-testid="home-greeting"]) #antigravity\.agentSidePanelInputBox:focus-within,
+html:has([data-testid="home-greeting"]) [id="antigravity.agentSidePanelInputBox"]:focus-within,
+html:has([data-testid="home-greeting"]) .surface-composer.bg-card-border:focus-within {
   border: 1.5px solid rgba(116, 34, 26, 0.36) !important;
   border-color: rgba(116, 34, 26, 0.36) !important;
   box-shadow: 0 1px 3px rgba(116, 34, 26, 0.04) !important;
@@ -159,24 +151,24 @@ html[data-ag-preset] [id="antigravity.agentSidePanelInputBox"],
 
 /* ======================================================================
  * 【场景 1：日常推进具体聊天会话页面】
- * 判定依据：严格排斥分支触发器，排斥 home 标记与问候元素
+ * 判定依据：严格排斥分支触发器、项目头部与 home-greeting
  * ====================================================================== */
 /* 1.1 具体会话日常常态：设计 A (略粗偏淡蜡封暗红) */
-:is(html, body):not(:has([data-testid="home-greeting"])):not([data-ag-page-type="home"]) #antigravity\.agentSidePanelInputBox:not(:has([data-testid="branch-pill-trigger"])),
-:is(html, body):not(:has([data-testid="home-greeting"])):not([data-ag-page-type="home"]) [id="antigravity.agentSidePanelInputBox"]:not(:has([data-testid="branch-pill-trigger"])),
-:is(html, body):not(:has([data-testid="home-greeting"])):not([data-ag-page-type="home"]) .surface-composer.bg-card-border:not(:has([data-testid="branch-pill-trigger"])) {
+html:not(:has([data-testid="home-greeting"])) #antigravity\.agentSidePanelInputBox:not(:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"])),
+html:not(:has([data-testid="home-greeting"])) [id="antigravity.agentSidePanelInputBox"]:not(:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"])),
+html:not(:has([data-testid="home-greeting"])) .surface-composer.bg-card-border:not(:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"])) {
   border: 1.5px solid rgba(116, 34, 26, 0.36) !important;
   border-color: rgba(116, 34, 26, 0.36) !important;
   box-shadow: 0 1px 3px rgba(116, 34, 26, 0.03) !important;
 }
 
 /* 1.2 具体会话移上 / 聚焦：变成为设计 B (加深变浓实色蜡封暗红 #74221A) */
-:is(html, body):not(:has([data-testid="home-greeting"])):not([data-ag-page-type="home"]) #antigravity\.agentSidePanelInputBox:not(:has([data-testid="branch-pill-trigger"])):hover,
-:is(html, body):not(:has([data-testid="home-greeting"])):not([data-ag-page-type="home"]) [id="antigravity.agentSidePanelInputBox"]:not(:has([data-testid="branch-pill-trigger"])):hover,
-:is(html, body):not(:has([data-testid="home-greeting"])):not([data-ag-page-type="home"]) .surface-composer.bg-card-border:not(:has([data-testid="branch-pill-trigger"])):hover,
-:is(html, body):not(:has([data-testid="home-greeting"])):not([data-ag-page-type="home"]) #antigravity\.agentSidePanelInputBox:not(:has([data-testid="branch-pill-trigger"])):focus-within,
-:is(html, body):not(:has([data-testid="home-greeting"])):not([data-ag-page-type="home"]) [id="antigravity.agentSidePanelInputBox"]:not(:has([data-testid="branch-pill-trigger"])):focus-within,
-:is(html, body):not(:has([data-testid="home-greeting"])):not([data-ag-page-type="home"]) .surface-composer.bg-card-border:not(:has([data-testid="branch-pill-trigger"])):focus-within {
+html:not(:has([data-testid="home-greeting"])) #antigravity\.agentSidePanelInputBox:not(:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"])):hover,
+html:not(:has([data-testid="home-greeting"])) [id="antigravity.agentSidePanelInputBox"]:not(:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"])):hover,
+html:not(:has([data-testid="home-greeting"])) .surface-composer.bg-card-border:not(:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"])):hover,
+html:not(:has([data-testid="home-greeting"])) #antigravity\.agentSidePanelInputBox:not(:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"])):focus-within,
+html:not(:has([data-testid="home-greeting"])) [id="antigravity.agentSidePanelInputBox"]:not(:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"])):focus-within,
+html:not(:has([data-testid="home-greeting"])) .surface-composer.bg-card-border:not(:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"])):focus-within {
   border: 1.5px solid #74221A !important;
   border-color: #74221A !important;
   box-shadow: 0 1px 4px rgba(116, 34, 26, 0.12) !important;

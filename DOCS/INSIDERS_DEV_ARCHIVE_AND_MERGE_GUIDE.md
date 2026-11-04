@@ -3,8 +3,8 @@
 > **归档日期**：2026-11-04  
 > **归档分支**：`Factory/chuanban-antigravity-theme-patch` 的 `main` 与 `insiders-dev`（已完全同步）  
 > **起始提交**：`b94445c`（建立 Insiders 独立分支与调试套件）  
-> **最新提交**：`v21`（CDP 注入与汉化引擎深度性能重构 + 古朴蜡封双场景解耦）  
-> **探针版本**：`20261104-stable-v21` / `20261104-insiders-dev-v21`  
+> **最新提交**：`v22`（Opus 独立对抗核验闭环：修复 0 用量指标、无原型词典防污染、双触发防后台堆积与纯 CSS 0ms 场景切换）  
+> **探针版本**：`20261104-stable-v22` / `20261104-insiders-dev-v22`  
 > **目标宿主**：`/Applications/Antigravity.app` (2.29.0 正式稳定版已全量加载生效) 与 `/Applications/Antigravity - Insiders.app`
 
 ---
