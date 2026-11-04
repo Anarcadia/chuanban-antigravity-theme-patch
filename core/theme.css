@@ -390,27 +390,20 @@ button, [role="button"], select {
   text-shadow: 0 0 0.15px rgba(31, 30, 29, 0.25) !important;
 }
 
-/* 9. 模型名称同行实时指标胶囊 (TPS / TTFT / Ctx 256k / Out) 布局铁律： - 常态 (data-ag-row-mode="middle" / .ag-pill-middle)：严格处于「左：+ 与模型选择」和「右：模式选择与发送按钮」正中间，随宽度自动 ellipsis 缩略； - 极窄 (data-ag-row-mode="bottom" / .ag-pill-wrapped)：当中间可用宽度 < 150px (损失过多信息) 时，物理挂载至 bottomRow 正下方作为独立第二行，绝不改变第一行左右布局。 */
-#antigravity\.agentSidePanelInputBox div.ag-footer-row-wrap {
-  flex-wrap: wrap !important;
-}
-
+/* 9. 模型名称同行实时指标胶囊 (TPS / TTFT / Ctx 256k / Out) 布局铁律： - 常态 (data-ag-row-mode="middle")：严格处于「左：+ 与模型选择」和「右：模式选择与发送按钮」正中间，随宽度自动 ellipsis 缩略； - 极窄 (data-ag-row-mode="bottom")：当中间可用宽度 < 150px (损失过多信息) 时，物理挂载至 bottomRow 正下方作为独立第二行，绝不改变第一行左右布局。 */
 #antigravity\.agentSidePanelInputBox div[data-ag-row-mode="middle"] > div:first-child,
-#antigravity\.agentSidePanelInputBox div[data-ag-row-mode="bottom"] > div:first-child,
-#antigravity\.agentSidePanelInputBox div.ag-footer-row-wrap > div:first-child {
+#antigravity\.agentSidePanelInputBox div[data-ag-row-mode="bottom"] > div:first-child {
   overflow: hidden !important;
   min-width: 0 !important;
 }
 
 #antigravity\.agentSidePanelInputBox div[data-ag-row-mode="middle"] > div:first-child > *:not(#ag-live-metrics-pill),
-#antigravity\.agentSidePanelInputBox div[data-ag-row-mode="bottom"] > div:first-child > *:not(#ag-live-metrics-pill),
-#antigravity\.agentSidePanelInputBox div.ag-footer-row-wrap > div:first-child > *:not(#ag-live-metrics-pill) {
+#antigravity\.agentSidePanelInputBox div[data-ag-row-mode="bottom"] > div:first-child > *:not(#ag-live-metrics-pill) {
   flex-shrink: 0 !important;
 }
 
 #antigravity\.agentSidePanelInputBox div[data-ag-row-mode="middle"] > div:last-child,
-#antigravity\.agentSidePanelInputBox div[data-ag-row-mode="bottom"] > div:last-child,
-#antigravity\.agentSidePanelInputBox div.ag-footer-row-wrap > div:nth-of-type(2) {
+#antigravity\.agentSidePanelInputBox div[data-ag-row-mode="bottom"] > div:last-child {
   flex-shrink: 0 !important;
   margin-left: auto !important;
 }

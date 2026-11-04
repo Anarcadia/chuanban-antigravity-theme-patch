@@ -385,6 +385,13 @@
   }
 
   function ensureMetricsPill(forceLayout = false) {
+    // 清理旧版残留的 ResizeObserver，防止新旧 Observer 互相抢夺 DOM 节点引发高度震荡
+    if (window.__ag_pill_resize_observer) {
+      try {
+        window.__ag_pill_resize_observer.disconnect();
+      } catch (e) {}
+      window.__ag_pill_resize_observer = null;
+    }
     if (!MODULES.metrics) {
       const existing = document.getElementById('ag-live-metrics-pill');
       if (existing) existing.style.display = 'none';
@@ -397,10 +404,16 @@
     const leftGroup = bottomRow.children[0];
     const rightGroup = bottomRow.children[1] || null;
 
+    // 清理旧版残留类名与内联 flex 样式
+    if (bottomRow.classList.contains('ag-footer-row-wrap')) {
+      bottomRow.classList.remove('ag-footer-row-wrap');
+    }
+    if (leftGroup.style.flex) leftGroup.style.removeProperty('flex');
+    if (rightGroup && rightGroup.style.flex) rightGroup.style.removeProperty('flex');
+
     let pill = document.getElementById('ag-live-metrics-pill');
-    if (pill && pill.getAttribute('data-v') !== '3') {
-      pill.remove();
-      pill = null;
+    if (pill && (pill.getAttribute('data-v') !== '3' || pill.classList.contains('ag-pill-middle') || pill.classList.contains('ag-pill-wrapped'))) {
+      pill.classList.remove('ag-pill-middle', 'ag-pill-wrapped');
     }
     let isNewPill = false;
     if (!pill) {
