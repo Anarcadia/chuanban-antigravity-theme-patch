@@ -14,11 +14,11 @@ const INPUT_FONT = "'Sarasa Mono Slab SC', '等距更纱黑体 Slab SC', 'Anthro
 
 const PORT_FILE = path.join(
   os.homedir(),
-  'Library/Application Support/Antigravity/DevToolsActivePort'
+  'Library/Application Support/Antigravity - Insiders/DevToolsActivePort'
 );
 const CONVERSATIONS_DIR = path.join(
   os.homedir(),
-  '.gemini/antigravity/conversations'
+  '.gemini/antigravity-insiders/conversations'
 );
 const CONTEXT_LIMIT_TOKENS = 256000;
 
