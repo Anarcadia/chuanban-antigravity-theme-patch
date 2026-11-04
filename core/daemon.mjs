@@ -94,10 +94,19 @@ function resolveChannelPaths(singleChannel = 'stable', userCfg = {}) {
   }
 
   const defaultConvDir = path.join(home, geminiSubDir, 'conversations');
+  const argvPath = path.join(home, isInsiders ? '.antigravity-insiders' : '.antigravity', 'argv.json');
+  let fallbackPort = isInsiders ? 9223 : 9222;
+  try {
+    if (fs.existsSync(argvPath)) {
+      const m = fs.readFileSync(argvPath, 'utf8').match(/"remote-debugging-port"\s*:\s*(\d+)/);
+      if (m && parseInt(m[1], 10) > 0) fallbackPort = parseInt(m[1], 10);
+    }
+  } catch {}
 
   return {
     channel: singleChannel,
     portFile: getArg('--port-file', userCfg.portFile || defaultPortFile),
+    fallbackPort: Number(userCfg.fallbackPort) > 0 ? Number(userCfg.fallbackPort) : fallbackPort,
     conversationsDir: getArg('--conversations-dir', userCfg.conversationsDir || defaultConvDir)
   };
 }
@@ -256,6 +265,7 @@ function rebuildBundleIfNeeded() {
 
   const bootPayload = {
     version: cachedPatchVersion,
+    platform: process.platform,
     enabled,
     preset,
     cssText: baseCss,
@@ -610,6 +620,9 @@ function parseConversationMetrics(cascadeId, conversationsDir) {
     pbCache.set(pbPath, { mtimeMs: stat.mtimeMs, size: stat.size, metrics });
     return metrics;
   } catch {
+    if (cached && cached.metrics) {
+      return cached.metrics;
+    }
     return { cascadeId, hasData: false };
   } finally {
     try {
@@ -877,11 +890,20 @@ async function sync() {
     const activeTargetIds = new Set();
     const attachPromises = [];
 
+    const probedPorts = new Set();
     for (const endpoint of activeConfig.endpoints) {
-      const port = readPort(endpoint.portFile);
-      if (!port) continue;
+      let port = readPort(endpoint.portFile);
+      let targets = [];
+      if (port && !probedPorts.has(port)) {
+        probedPorts.add(port);
+        targets = await fetchTargets(port);
+      }
+      if (targets.length === 0 && endpoint.fallbackPort && !probedPorts.has(endpoint.fallbackPort)) {
+        probedPorts.add(endpoint.fallbackPort);
+        targets = await fetchTargets(endpoint.fallbackPort);
+      }
+      if (targets.length === 0) continue;
 
-      const targets = await fetchTargets(port);
       const pages = targets.filter(
         (t) =>
           t.type === 'page' &&

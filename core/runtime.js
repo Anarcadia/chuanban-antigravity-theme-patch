@@ -170,6 +170,9 @@
 
   applyThemeVars(THEME_VARS);
   document.documentElement.setAttribute('data-ag-wax-seal', MODULES.composerWaxSeal === false ? 'off' : 'on');
+  const detectedOs =
+    boot.platform || (/Win/i.test(navigator.platform || '') ? 'win32' : /Mac/i.test(navigator.platform || '') ? 'darwin' : 'linux');
+  document.documentElement.setAttribute('data-ag-os', detectedOs);
 
   // ============================================================================
   // 2. 防死锁守护：Antigravity 原生 TanStack Router 缺陷修复（支持热重载更新回调）
@@ -204,11 +207,13 @@
   }
 
   // ============================================================================
-  // 2.1 缩放快捷键原生缺陷修复（恢复 Cmd + - / Cmd + = / Cmd + 0）
+  // 2.1 缩放快捷键原生缺陷修复（macOS: Cmd + -/=/0，Windows/Linux: Ctrl + -/=/0）
   // ============================================================================
   window.__ag_zoom_keydown_fn = (e) => {
     if (MODULES.deadlockHealer === false) return;
-    if (e.metaKey && !e.ctrlKey && !e.altKey) {
+    const isMac = detectedOs === 'darwin';
+    const modKey = isMac ? e.metaKey && !e.ctrlKey : e.ctrlKey && !e.metaKey;
+    if (modKey && !e.altKey) {
       if (!e.shiftKey && (e.key === '-' || e.code === 'Minus' || e.code === 'NumpadSubtract' || e.keyCode === 189)) {
         e.preventDefault();
         e.stopPropagation();

@@ -152,7 +152,29 @@ node install.mjs rollback
 
 ---
 
-## 六、设计亮点速览（v5.0.0 内核特性）
+## 六、Windows (`win32`) 平台 Agent 适配与排障专章（最后一公里）
+
+本项目的 `core/` 黄金内核与 `install.mjs` 已原生支持 Windows 平台（含 `pathToFileURL` 反斜杠转换、`127.0.0.1:9222` 端口自动兜底、UTF-16LE 中文用户名 VBS 兼容、后台 `windowsHide` 立即拉起、SQLite 文件锁缓存防闪烁、ClearType 去重影与 `Ctrl + -/=/0` 缩放）。**Windows 端的 AI Agent 严禁从头手写重写 `core/` 代码**，只需在遇到宿主环境差异时协助处理以下「最后一公里」事项：
+
+1. **Windows 字体安装与 DirectWrite 注册表写入（必检）**：
+   - 在 Windows 10/11 下，单纯用 `copy` 将 `.ttf/.otf` 复制到 `%LOCALAPPDATA%\Microsoft\Windows\Fonts` 不会写入注册表，导致 Chromium `local()` 找不到字体。
+   - **标准操作**：下载并解压字体目录后，请直接运行内置的一键字体安装与注册表写入命令：
+     ```bash
+     node install.mjs install-fonts --from "C:\path\to\extracted-fonts"
+     ```
+2. **首次开启 CDP 端口 (`9222`) 后的客户端重启**：
+   - `node install.mjs install` 会自动在 `%USERPROFILE%\.antigravity\argv.json` 中注入 `"remote-debugging-port": 9222`。
+   - 若安装前 Antigravity 已经处于打开状态，首次修补 `argv.json` 后需引导用户**完全退出并重新打开一次 Antigravity**（或帮用户在 Antigravity 桌面快捷方式 `.lnk` 的目标末尾追加 `--remote-debugging-port=9222`），之后 `node install.mjs verify` 即可自动连通 `DevToolsActivePort` 或 `127.0.0.1:9222`。
+3. **第三方安全软件拦截 `.vbs` 自启时的备选方案**：
+   - `install.mjs` 默认同时通过 `Startup\AntigravityThemeDaemon.vbs`、`HKCU\...\Run` 注册表以及 detached `node.exe` 子进程启动守护。
+   - 若用户安装了拦截 `wscript.exe` 的第三方杀毒软件，Agent 可直接用 Windows 任务计划程序注册原生 `node.exe` 登录自启：
+     ```powershell
+     schtasks /create /tn "AntigravityThemeDaemon" /sc onlogon /tr "\"$env:ProgramFiles\nodejs\node.exe\" --disable-warning=ExperimentalWarning \"$HOME\.gemini\antigravity\scripts\antigravity-font-daemon.mjs\"" /f
+     ```
+
+---
+
+## 七、设计亮点速览（v5.0.0 内核特性）
 
 1. **输入框「蜡封三态」零延迟纯 CSS 解耦（设计 C / A / B）**：
    - **场景二（首页新建对话 / Home Splash & New Conversation）**：日常状态为 **设计 C**（外框完全透明 `rgba(122, 31, 26, 0)`，保持首页极简呼吸感）；鼠标移上或打字聚焦时平滑浮现为 **设计 A**（`1.5px` 淡雅暗红蜡封线 `rgba(122, 31, 26, 0.34)` + 微暖晕染）。

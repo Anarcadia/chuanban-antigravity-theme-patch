@@ -16,8 +16,8 @@ import path from 'node:path';
 import os from 'node:os';
 import http from 'node:http';
 import crypto from 'node:crypto';
-import { execSync, spawnSync } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
+import { execSync, spawn, spawnSync } from 'node:child_process';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -252,13 +252,8 @@ function isAllowedOrigin(urlStr) {
   return ALLOWED_ORIGINS.some((prefix) => urlStr.startsWith(prefix));
 }
 
-async function inspectLiveWindow(portFile) {
-  if (!portFile || !fs.existsSync(portFile)) return { reachable: false, reason: 'DevToolsActivePort not found' };
-  const raw = fs.readFileSync(portFile, 'utf8').trim();
-  const port = parseInt(raw.split(/\r?\n/)[0], 10);
-  if (!port) return { reachable: false, reason: 'Invalid port in DevToolsActivePort' };
-
-  const targets = await new Promise((resolve) => {
+function fetchTargetsFromPort(port) {
+  return new Promise((resolve) => {
     const req = http.get({ host: '127.0.0.1', port, path: '/json/list', timeout: 1500 }, (res) => {
       let data = '';
       res.on('data', (c) => (data += c));
@@ -276,6 +271,29 @@ async function inspectLiveWindow(portFile) {
       resolve([]);
     });
   });
+}
+
+async function inspectLiveWindow(portFile, fallbackPort = 9222) {
+  let port = null;
+  let targets = [];
+  if (portFile && fs.existsSync(portFile)) {
+    const raw = fs.readFileSync(portFile, 'utf8').trim();
+    const parsed = parseInt(raw.split(/\r?\n/)[0], 10);
+    if (parsed > 0) {
+      port = parsed;
+      targets = await fetchTargetsFromPort(port);
+    }
+  }
+  if (targets.length === 0 && fallbackPort > 0 && fallbackPort !== port) {
+    const fbTargets = await fetchTargetsFromPort(fallbackPort);
+    if (fbTargets.length > 0) {
+      port = fallbackPort;
+      targets = fbTargets;
+    }
+  }
+  if (!port || targets.length === 0) {
+    return { reachable: false, reason: 'No active CDP port responded (checked DevToolsActivePort & fallback port 9222)' };
+  }
 
   const pages = targets.filter(
     (t) =>
@@ -405,6 +423,29 @@ function copyDirRecursive(src, dest) {
   }
 }
 
+function stopRunningDaemonProcesses() {
+  const tmpDir = os.tmpdir();
+  const stopped = [];
+  try {
+    for (const f of fs.readdirSync(tmpDir)) {
+      if (f.startsWith('ag-theme-daemon-') && f.endsWith('.pid')) {
+        const pidPath = path.join(tmpDir, f);
+        const pid = parseInt(fs.readFileSync(pidPath, 'utf8').trim(), 10);
+        if (pid > 0 && pid !== process.pid) {
+          try {
+            process.kill(pid, 'SIGTERM');
+            stopped.push(pid);
+          } catch {}
+        }
+        try {
+          fs.unlinkSync(pidPath);
+        } catch {}
+      }
+    }
+  } catch {}
+  return stopped;
+}
+
 function registerSystemService(targetDir, wrapperDaemon) {
   const home = os.homedir();
   if (process.platform === 'darwin') {
@@ -445,7 +486,7 @@ function registerSystemService(targetDir, wrapperDaemon) {
       execSync(`launchctl bootstrap gui/${uid} "${activePlist}" 2>/dev/null || launchctl load -w "${activePlist}" 2>/dev/null || true`);
       execSync(`launchctl kickstart -k gui/${uid}/${label} 2>/dev/null || true`);
     } catch {}
-    return { platform: 'darwin', serviceFile: activePlist, label };
+    return { platform: 'darwin', serviceFile: activePlist, label, runningNow: true };
   }
 
   if (process.platform === 'linux') {
@@ -468,20 +509,52 @@ WantedBy=default.target
     try {
       execSync('systemctl --user daemon-reload && systemctl --user enable --now antigravity-theme.service 2>/dev/null || true');
     } catch {}
-    return { platform: 'linux', serviceFile };
+    return { platform: 'linux', serviceFile, runningNow: true };
   }
 
   if (process.platform === 'win32') {
+    stopRunningDaemonProcesses();
     const appData = process.env.APPDATA || path.join(home, 'AppData', 'Roaming');
     const startupDir = path.join(appData, 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup');
     const vbsFile = path.join(startupDir, 'AntigravityThemeDaemon.vbs');
+    const localVbsFile = path.join(targetDir, 'AntigravityThemeDaemon.vbs');
+    const cmd = `""${process.execPath}"" --disable-warning=ExperimentalWarning ""${wrapperDaemon}""`;
+    const vbsContent = `\uFEFFSet WshShell = CreateObject("WScript.Shell")\r\nWshShell.Run "${cmd}", 0, False\r\n`;
     try {
+      // 使用 UTF-16LE (带 BOM) 写入 VBS，彻底兼容 Windows 中文用户名路径 (wscript.exe 原生支持 UTF-16LE)
+      fs.writeFileSync(localVbsFile, vbsContent, 'utf16le');
       fs.mkdirSync(startupDir, { recursive: true });
-      const cmd = `""${process.execPath}"" --disable-warning=ExperimentalWarning ""${wrapperDaemon}""`;
-      const vbsContent = `Set WshShell = CreateObject("WScript.Shell")\r\nWshShell.Run "${cmd}", 0, False\r\n`;
-      fs.writeFileSync(vbsFile, vbsContent, 'utf8');
+      fs.writeFileSync(vbsFile, vbsContent, 'utf16le');
     } catch {}
-    return { platform: 'win32', serviceFile: vbsFile };
+    try {
+      spawnSync(
+        'reg',
+        [
+          'add',
+          'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run',
+          '/v',
+          'AntigravityThemeDaemon',
+          '/t',
+          'REG_SZ',
+          '/d',
+          `wscript.exe //B //NoLogo "${localVbsFile}"`,
+          '/f'
+        ],
+        { stdio: 'ignore', windowsHide: true }
+      );
+    } catch {}
+    // 立即在后台无黑框拉起常驻守护进程（无需等待下次重启电脑）
+    let spawnedPid = null;
+    try {
+      const child = spawn(process.execPath, ['--disable-warning=ExperimentalWarning', wrapperDaemon], {
+        detached: true,
+        stdio: 'ignore',
+        windowsHide: true
+      });
+      child.unref();
+      spawnedPid = child.pid || null;
+    } catch {}
+    return { platform: 'win32', serviceFile: vbsFile, localVbsFile, spawnedPid, runningNow: Boolean(spawnedPid) };
   }
 
   return { platform: process.platform, serviceFile: null };
@@ -576,14 +649,15 @@ async function runInstall() {
   // 自动检查并修补 ~/.antigravity/argv.json (remote-debugging-port)
   const argvStatus = ensureArgvRemoteDebugging(currentCfg.channel);
 
-  // 创建兼容包装脚本 ~/.gemini/antigravity/scripts/antigravity-font-daemon.mjs
+  // 创建兼容包装脚本 ~/.gemini/antigravity/scripts/antigravity-font-daemon.mjs（使用 pathToFileURL 兼容 Windows C:\ 路径）
   const scriptsDir = path.join(os.homedir(), '.gemini', 'antigravity', 'scripts');
   fs.mkdirSync(scriptsDir, { recursive: true });
   const wrapperDaemon = path.join(scriptsDir, 'antigravity-font-daemon.mjs');
   const realDaemon = path.join(targetCore, 'daemon.mjs');
+  const realDaemonUrl = pathToFileURL(realDaemon).href;
   fs.writeFileSync(
     wrapperDaemon,
-    `#!/usr/bin/env node\n// Auto-generated wrapper -> ${realDaemon}\nawait import(${JSON.stringify('file://' + realDaemon)});\n`,
+    `#!/usr/bin/env node\n// Auto-generated wrapper -> ${realDaemon}\nawait import(${JSON.stringify(realDaemonUrl)});\n`,
     { encoding: 'utf8', mode: 0o755 }
   );
 
@@ -670,10 +744,25 @@ async function runRollback() {
 
   // 重启守护进程并立即执行一次 --once 重新注入
   const realDaemon = path.join(targetCore, 'daemon.mjs');
+  const wrapperDaemon = path.join(os.homedir(), '.gemini', 'antigravity', 'scripts', 'antigravity-font-daemon.mjs');
   if (process.platform === 'darwin') {
     const uid = process.getuid ? process.getuid() : 501;
     try {
       execSync(`launchctl kickstart -k gui/${uid}/com.antigravity.customfont 2>/dev/null || launchctl kickstart -k gui/${uid}/com.antigravity.theme 2>/dev/null || true`);
+    } catch {}
+  } else if (process.platform === 'linux') {
+    try {
+      execSync('systemctl --user restart antigravity-theme.service 2>/dev/null || true');
+    } catch {}
+  } else if (process.platform === 'win32') {
+    stopRunningDaemonProcesses();
+    try {
+      const child = spawn(process.execPath, ['--disable-warning=ExperimentalWarning', fs.existsSync(wrapperDaemon) ? wrapperDaemon : realDaemon], {
+        detached: true,
+        stdio: 'ignore',
+        windowsHide: true
+      });
+      child.unref();
     } catch {}
   }
   spawnSync(process.execPath, ['--disable-warning=ExperimentalWarning', realDaemon, '--once'], {
@@ -696,8 +785,69 @@ async function runRollback() {
   );
 }
 
+function runInstallFonts() {
+  const fromDir = getArg('--from', null);
+  if (!fromDir || !fs.existsSync(fromDir)) {
+    console.error('Usage: node install.mjs install-fonts --from <font-folder-path>');
+    process.exit(1);
+  }
+  const home = os.homedir();
+  const destDir =
+    process.platform === 'darwin'
+      ? path.join(home, 'Library', 'Fonts')
+      : process.platform === 'win32'
+      ? path.join(process.env.LOCALAPPDATA || path.join(home, 'AppData', 'Local'), 'Microsoft', 'Windows', 'Fonts')
+      : path.join(home, '.local', 'share', 'fonts');
+
+  fs.mkdirSync(destDir, { recursive: true });
+  const installed = [];
+
+  const walkFonts = (dir) => {
+    for (const entry of fs.readdirSync(dir)) {
+      const full = path.join(dir, entry);
+      const st = fs.statSync(full);
+      if (st.isDirectory()) {
+        walkFonts(full);
+      } else if (/\.(ttf|otf|ttc)$/i.test(entry)) {
+        const destPath = path.join(destDir, entry);
+        fs.copyFileSync(full, destPath);
+        if (process.platform === 'win32') {
+          const fontTitle = entry.replace(/\.(ttf|otf|ttc)$/i, '') + ' (TrueType)';
+          try {
+            spawnSync(
+              'reg',
+              [
+                'add',
+                'HKCU\\Software\\Microsoft\\Windows NT\\CurrentVersion\\Fonts',
+                '/v',
+                fontTitle,
+                '/t',
+                'REG_SZ',
+                '/d',
+                destPath,
+                '/f'
+              ],
+              { stdio: 'ignore', windowsHide: true }
+            );
+          } catch {}
+        }
+        installed.push(destPath);
+      }
+    }
+  };
+
+  walkFonts(path.resolve(fromDir));
+  if (process.platform === 'linux') {
+    try {
+      execSync('fc-cache -f 2>/dev/null || true');
+    } catch {}
+  }
+  console.log(JSON.stringify({ ok: true, platform: process.platform, destDir, installedCount: installed.length, installed }, null, 2));
+}
+
 async function runUninstall() {
   const home = os.homedir();
+  stopRunningDaemonProcesses();
   if (process.platform === 'darwin') {
     const uid = process.getuid ? process.getuid() : 501;
     for (const label of ['com.antigravity.customfont', 'com.antigravity.theme']) {
@@ -708,6 +858,18 @@ async function runUninstall() {
   } else if (process.platform === 'linux') {
     try {
       execSync('systemctl --user disable --now antigravity-theme.service 2>/dev/null || true');
+    } catch {}
+  } else if (process.platform === 'win32') {
+    const appData = process.env.APPDATA || path.join(home, 'AppData', 'Roaming');
+    const vbsFile = path.join(appData, 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup', 'AntigravityThemeDaemon.vbs');
+    try {
+      if (fs.existsSync(vbsFile)) fs.unlinkSync(vbsFile);
+    } catch {}
+    try {
+      spawnSync('reg', ['delete', 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run', '/v', 'AntigravityThemeDaemon', '/f'], {
+        stdio: 'ignore',
+        windowsHide: true
+      });
     } catch {}
   }
   console.log('[Uninstall] Stopped background daemon services. User config in ~/.gemini/antigravity/theme-patch/user/ is preserved.');
@@ -728,6 +890,9 @@ switch (subcommand) {
   case 'install':
     await runInstall();
     break;
+  case 'install-fonts':
+    runInstallFonts();
+    break;
   case 'verify':
     await runVerify();
     break;
@@ -739,9 +904,10 @@ switch (subcommand) {
     break;
   default:
     console.log(`Usage:
-  node install.mjs install   [--channel auto|stable|insiders] [--preset high-contrast]
-  node install.mjs doctor    [--channel auto|stable|insiders]
-  node install.mjs verify    [--safe-mode] [--channel auto|stable|insiders]
+  node install.mjs install       [--channel auto|stable|insiders] [--preset high-contrast]
+  node install.mjs install-fonts --from <font-folder-path>
+  node install.mjs doctor        [--channel auto|stable|insiders]
+  node install.mjs verify        [--safe-mode] [--channel auto|stable|insiders]
   node install.mjs rollback
   node install.mjs uninstall
   node install.mjs build-manifest`);
