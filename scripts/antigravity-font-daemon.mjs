@@ -220,18 +220,98 @@ const CSS_CONTENT = `
     background-color: rgba(0, 0, 0, 0.35) !important;
   }
 
-  /* 输入框外层容器（含上方工具栏与延伸至下方的弧形外框轮廓）：古朴暗红蜡封色 (#74221A 加深火漆红) */
+  /* 输入框外层容器：分场景动态三形态（设计 A / B / C，宽度严格锁定 1.5px 杜绝抖动） */
   html[data-ag-preset] #antigravity\\.agentSidePanelInputBox,
   html[data-ag-preset] [id="antigravity.agentSidePanelInputBox"],
   #antigravity\\.agentSidePanelInputBox,
   [id="antigravity.agentSidePanelInputBox"],
   .surface-composer.bg-card-border {
     background-color: #F7EFE6 !important;
-    border: 1px solid #74221A !important;
-    border-color: #74221A !important;
-    box-shadow: 0 1px 3px rgba(116, 34, 26, 0.06) !important;
     outline: none !important;
+    transition: border-color 220ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 220ms cubic-bezier(0.16, 1, 0.3, 1) !important;
   }
+
+  /* ----------------------------------------------------------------------
+   * 场景 1：日常推进具体聊天会话页面 (非首页 / html[data-ag-page-type="chat"])
+   * ---------------------------------------------------------------------- */
+  /* 1.1 日常常态：设计 A (略粗一点颜色偏淡古朴暗红) */
+  html[data-ag-preset]:not([data-ag-page-type="home"]) #antigravity\\.agentSidePanelInputBox,
+  html[data-ag-preset]:not([data-ag-page-type="home"]) [id="antigravity.agentSidePanelInputBox"],
+  html:not([data-ag-page-type="home"]) #antigravity\\.agentSidePanelInputBox,
+  html:not([data-ag-page-type="home"]) [id="antigravity.agentSidePanelInputBox"],
+  html:not([data-ag-page-type="home"]) .surface-composer.bg-card-border,
+  html[data-ag-page-type="chat"] #antigravity\\.agentSidePanelInputBox,
+  html[data-ag-page-type="chat"] [id="antigravity.agentSidePanelInputBox"],
+  html[data-ag-page-type="chat"] .surface-composer.bg-card-border {
+    border: 1.5px solid rgba(116, 34, 26, 0.36) !important;
+    border-color: rgba(116, 34, 26, 0.36) !important;
+    box-shadow: 0 1px 3px rgba(116, 34, 26, 0.03) !important;
+  }
+
+  /* 1.2 鼠标移上 / 聚焦：变成为设计 B (加深变浓实色蜡封暗红 #74221A) */
+  html[data-ag-preset]:not([data-ag-page-type="home"]) #antigravity\\.agentSidePanelInputBox:hover,
+  html[data-ag-preset]:not([data-ag-page-type="home"]) [id="antigravity.agentSidePanelInputBox"]:hover,
+  html:not([data-ag-page-type="home"]) #antigravity\\.agentSidePanelInputBox:hover,
+  html:not([data-ag-page-type="home"]) [id="antigravity.agentSidePanelInputBox"]:hover,
+  html:not([data-ag-page-type="home"]) .surface-composer.bg-card-border:hover,
+  html[data-ag-preset]:not([data-ag-page-type="home"]) #antigravity\\.agentSidePanelInputBox:focus-within,
+  html[data-ag-preset]:not([data-ag-page-type="home"]) [id="antigravity.agentSidePanelInputBox"]:focus-within,
+  html:not([data-ag-page-type="home"]) #antigravity\\.agentSidePanelInputBox:focus-within,
+  html:not([data-ag-page-type="home"]) [id="antigravity.agentSidePanelInputBox"]:focus-within,
+  html:not([data-ag-page-type="home"]) .surface-composer.bg-card-border:focus-within,
+  html[data-ag-page-type="chat"] #antigravity\\.agentSidePanelInputBox:hover,
+  html[data-ag-page-type="chat"] [id="antigravity.agentSidePanelInputBox"]:hover,
+  html[data-ag-page-type="chat"] #antigravity\\.agentSidePanelInputBox:focus-within,
+  html[data-ag-page-type="chat"] [id="antigravity.agentSidePanelInputBox"]:focus-within,
+  html[data-ag-page-type="chat"] .surface-composer.bg-card-border:hover,
+  html[data-ag-page-type="chat"] .surface-composer.bg-card-border:focus-within {
+    border: 1.5px solid #74221A !important;
+    border-color: #74221A !important;
+    box-shadow: 0 1px 4px rgba(116, 34, 26, 0.12) !important;
+  }
+
+  /* ----------------------------------------------------------------------
+   * 场景 2：首页新建对话页面 (存在 home-greeting 或 html[data-ag-page-type="home"])
+   * ---------------------------------------------------------------------- */
+  /* 2.1 日常常态：设计 C (外框完全透明，无阴影) */
+  html[data-ag-page-type="home"] #antigravity\\.agentSidePanelInputBox,
+  html[data-ag-page-type="home"] [id="antigravity.agentSidePanelInputBox"],
+  html[data-ag-page-type="home"] .surface-composer.bg-card-border,
+  body:has([data-testid="home-greeting"]) #antigravity\\.agentSidePanelInputBox,
+  body:has([data-testid="home-greeting"]) [id="antigravity.agentSidePanelInputBox"],
+  body:has([data-testid="home-greeting"]) .surface-composer.bg-card-border,
+  html:has([data-testid="home-greeting"]) #antigravity\\.agentSidePanelInputBox,
+  html:has([data-testid="home-greeting"]) [id="antigravity.agentSidePanelInputBox"],
+  html:has([data-testid="home-greeting"]) .surface-composer.bg-card-border {
+    border: 1.5px solid transparent !important;
+    border-color: transparent !important;
+    box-shadow: none !important;
+  }
+
+  /* 2.2 鼠标移上 / 聚焦：变成为设计 A (略粗一点颜色偏淡蜡封暗红) */
+  html[data-ag-page-type="home"] #antigravity\\.agentSidePanelInputBox:hover,
+  html[data-ag-page-type="home"] [id="antigravity.agentSidePanelInputBox"]:hover,
+  html[data-ag-page-type="home"] .surface-composer.bg-card-border:hover,
+  html[data-ag-page-type="home"] #antigravity\\.agentSidePanelInputBox:focus-within,
+  html[data-ag-page-type="home"] [id="antigravity.agentSidePanelInputBox"]:focus-within,
+  html[data-ag-page-type="home"] .surface-composer.bg-card-border:focus-within,
+  body:has([data-testid="home-greeting"]) #antigravity\\.agentSidePanelInputBox:hover,
+  body:has([data-testid="home-greeting"]) [id="antigravity.agentSidePanelInputBox"]:hover,
+  body:has([data-testid="home-greeting"]) .surface-composer.bg-card-border:hover,
+  body:has([data-testid="home-greeting"]) #antigravity\\.agentSidePanelInputBox:focus-within,
+  body:has([data-testid="home-greeting"]) [id="antigravity.agentSidePanelInputBox"]:focus-within,
+  body:has([data-testid="home-greeting"]) .surface-composer.bg-card-border:focus-within,
+  html:has([data-testid="home-greeting"]) #antigravity\\.agentSidePanelInputBox:hover,
+  html:has([data-testid="home-greeting"]) [id="antigravity.agentSidePanelInputBox"]:hover,
+  html:has([data-testid="home-greeting"]) .surface-composer.bg-card-border:hover,
+  html:has([data-testid="home-greeting"]) #antigravity\\.agentSidePanelInputBox:focus-within,
+  html:has([data-testid="home-greeting"]) [id="antigravity.agentSidePanelInputBox"]:focus-within,
+  html:has([data-testid="home-greeting"]) .surface-composer.bg-card-border:focus-within {
+    border: 1.5px solid rgba(116, 34, 26, 0.36) !important;
+    border-color: rgba(116, 34, 26, 0.36) !important;
+    box-shadow: 0 1px 3px rgba(116, 34, 26, 0.04) !important;
+  }
+
   /* 上方工具栏文字与小按钮（No Project 及其箭头） */
   [id="antigravity.agentSidePanelInputBox"] > div:first-child button,
   [id="antigravity.agentSidePanelInputBox"] > div:first-child span,
@@ -1119,7 +1199,81 @@ const I18N_DICT = {
   'Agent always asks for review.': '智能体始终请求人工审查。',
   'See Activity': '查看消费明细',
   'Get More AI Credits': '获取更多 AI 点数',
-  'Back': '返回'
+  'Back': '返回',
+
+  // --- 补充汉化：内置浏览器与语音设置 (Built-in Browser & Voice Mode) ---
+  'Configure link opening and built-in browser preferences.': '配置链接打开方式与内置浏览器偏好设置。',
+  'Configure link opening and built-in browser preferences': '配置链接打开方式与内置浏览器偏好设置',
+  'Download Location': '下载位置',
+  'Folder where files downloaded in the built-in browser are saved.': '内置浏览器中下载文件的保存目录。',
+  'Folder where files downloaded in the built-in browser are saved': '内置浏览器中下载文件的保存目录',
+  'Change...': '更改...',
+  'Change…': '更改…',
+  'Change': '更改',
+  'Browsing History': '浏览记录',
+  'Clear visited URLs and autocomplete suggestions from the built-in browser.': '清除内置浏览器中访问过的网址及自动补全建议。',
+  'Clear visited URLs and autocomplete suggestions from the built-in browser': '清除内置浏览器中访问过的网址及自动补全建议',
+  'Clear': '清除',
+  'Browser Subagent': '浏览器子代理',
+  'Voice mode': '语音模式',
+  'Voice Mode': '语音模式',
+  'Voice': '音色',
+  'The voice used in Voice mode. Powered by Gemini Live.': '语音模式下使用的声音。由 Gemini Live 驱动。',
+  'The voice used in Voice mode. Powered by Gemini Live': '语音模式下使用的声音。由 Gemini Live 驱动',
+  'Microphone': '麦克风',
+  'Input device for voice mode and dictation.': '语音模式与语音听写所使用的输入设备。',
+  'Input device for voice mode and dictation': '语音模式与语音听写所使用的输入设备',
+  'System default': '系统默认',
+  'How loud Antigravity\'s voice is.': 'Antigravity 语音播放的音量大小。',
+  'How loud Antigravity\'s voice is': 'Antigravity 语音播放的音量大小',
+
+  // --- 补充汉化：标签页与会话右键菜单 (Tab / Context Menu) ---
+  'Rename': '重命名',
+  'Pin': '固定',
+  'Archive': '归档',
+  'Split': '分屏',
+  'Split Right': '向右分屏',
+  'Split Down': '向下分屏',
+  'Replace with New': '替换为新对话',
+
+  // --- 补充汉化：应用配置 (Application Settings) ---
+  'Manage Antigravity Insiders app settings.': '管理 Antigravity Insiders 应用程序设置。',
+  'Manage Antigravity Insiders app settings': '管理 Antigravity Insiders 应用程序设置',
+  'Manage Antigravity app settings.': '管理 Antigravity 应用程序设置。',
+  'Manage Antigravity app settings': '管理 Antigravity 应用程序设置',
+
+  // --- 补充汉化：Chat 设置项 (Chat Settings) ---
+  'Chat': '对话',
+  'Conversation Steps': '对话执行步骤',
+  'Choose how much detail is shown during a conversation.': '选择对话过程中展示的执行细节丰富程度。',
+  'Choose how much detail is shown during a conversation': '选择对话过程中展示的执行细节丰富程度',
+  'Verbose': '详细 (Verbose)',
+
+  // --- 补充汉化：模式选择器下拉菜单选项描述 (Permission Mode Descriptions) ---
+  'Every command requires approval.': '每项命令均需经过用户批准。',
+  'Every command requires approval': '每项命令均需经过用户批准',
+  'Ask before sensitive operations.': '执行敏感操作前进行确认。',
+  'Ask before sensitive operations': '执行敏感操作前进行确认',
+  'Run all commands without restrictions.': '不受限制地直接执行所有命令。',
+  'Run all commands without restrictions': '不受限制地直接执行所有命令',
+
+  // --- 补充汉化：全局权限与远程智能体 (Permissions & Remote) ---
+  'Permissions': '全局权限',
+  'Configure what the agent can do in local and remote conversations.': '配置智能体在本地与远程对话中的操作权限。',
+  'Configure what the agent can do in local and remote conversations': '配置智能体在本地与远程对话中的操作权限',
+  'This Computer': '本机权限',
+  'Remote': '远程权限',
+  'Controls permissions for remote conversations.': '控制智能体在远程对话中的操作权限。',
+  'Controls permissions for remote conversations': '控制智能体在远程对话中的操作权限',
+  'Remote Agents Data': '远程智能体数据',
+  'Delete All Data': '删除所有数据',
+  'Toggle Side Panel': '切换侧边面板',
+  'Toggle Maximize Side Panel': '最大化/还原侧边面板',
+  'Zoom In': '放大',
+  'Zoom Out': '缩小',
+  'Reset Zoom': '重置缩放',
+  'You can upgrade to a higher Google AI Ultra plan to receive the highest rate limits.': '您可以升级到更高的 Google AI Ultra 方案以获取最高速率配额。',
+  'Developer-only tools. These settings are stored locally in this browser and do not affect other users.': '仅限开发者使用的调试工具。这些设置仅保存在本地浏览器中，不会影响其他用户。'
 };
 
 // ==============================================================================
@@ -1259,7 +1413,7 @@ const INJECT_SCRIPT = `
     }
 
     syncChuanbanPreset();
-    window.__ag_patch_version = "20261104-stable-v17";
+    window.__ag_patch_version = "20261104-stable-v18";
 
     // 3.5 模型名称同行实时指标胶囊 (Scheme C: TPS · TTFT · Ctx/256k · Out + Hover 详情卡)
     // 严格保证「左(模型) - 中(指标胶囊) - 右(模式与发送)」三栏结构；中间过窄(<150px)时物理跳至下方第二行。
@@ -1428,6 +1582,13 @@ const INJECT_SCRIPT = `
 
     function checkRouteAndMountMetrics() {
       try {
+        // 动态识别当前处于首页新建对话还是日常具体会话推进页面
+        const isHome = !!document.querySelector('[data-testid="home-greeting"]') || !window.location.pathname.startsWith('/c/');
+        const pageType = isHome ? 'home' : 'chat';
+        if (document.documentElement.getAttribute('data-ag-page-type') !== pageType) {
+          document.documentElement.setAttribute('data-ag-page-type', pageType);
+        }
+
         const cid = extractCascadeId();
         if (cid && cid !== window.__ag_watched_cascade_id) {
           window.__ag_watched_cascade_id = cid;
@@ -1945,7 +2106,7 @@ async function checkAndHeal(session, targetId) {
   session.isChecking = true;
   try {
     const res = await sendCDP(session, 'Runtime.evaluate', {
-      expression: 'Boolean(document.getElementById("ag-custom-fonts") && window.__ag_patch_version === "20261104-stable-v17")',
+      expression: 'Boolean(document.getElementById("ag-custom-fonts") && window.__ag_patch_version === "20261104-stable-v18")',
       returnByValue: true
     });
     const isHealthy = res?.result?.value === true;
