@@ -1,20 +1,20 @@
-# 船板的 Antigravity 主题、字体与深度汉化全栈补丁 (v5.0.0)
+# 船板的 Antigravity 书卷配色、高对比、类Claude风格、白天主题 & 字体优化与汉化全栈补丁 (v5.0.0)
 
 [![Version](https://img.shields.io/badge/version-5.0.0-7A1F1A.svg)](https://github.com/Anarcadia/chuanban-antigravity-theme-patch)
 [![Node](https://img.shields.io/badge/node-%3E%3D22.0.0%20(22.13%2B%20Full)-339933.svg)](https://nodejs.org/)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows-lightgrey.svg)](https://github.com/Anarcadia/chuanban-antigravity-theme-patch)
 
-> **本页面为补丁主介绍、版本演进历程与极简部署指南（作为 [`SKILL.md`](SKILL.md) 的前置概括）。**  
+> **本页面为补丁主介绍、版本演进历程与极简部署指南。**  
 > 供 AI Agent 执行部署与二次改装读取的完整技术契约独立存放于仓库根目录的 **[`SKILL.md`](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/blob/main/SKILL.md)**，不再直接堆叠于主页正文中。
 
 ---
 
-## 🔗 核心资源链接与三端官方入口
+## 🔗 核心资源链接与三端入口（任选其中一个都可以，内容都是一样的）
 
 | 端点名称 | 链接地址 | 定位与包含内容 |
 | :--- | :--- | :--- |
-| **1. Notion 官方主页** | [**chuanban-antigravity-theme-patch**](https://chuanban.notion.site/chuanban-antigravity-theme-patch-db7c5846f37546be9481cd791aed0554) | **说明与部署引导主页**。提供补丁设计概览、版本更新历程与面向 AI Agent 的标准提示词引导。 |
-| **2. Google Drive 完全资源包** | [**Google Drive 官方共享文件夹**](https://drive.google.com/drive/folders/1NX92SgVUqtSjWg6bt6sIJXy-cn7J_boC) | **全项目成品包 + 全套字体库**。内置 **Anthropic 官方原版字体族**（`Anthropic Sans` / `Anthropic Serif` / `Anthropic Mono`）与 **更纱黑体超集**（`Sarasa-SuperTTC.ttc`），以及完整补丁打包资源。 |
+| **1. Notion 引导安装页（目前宕机404中尚未恢复）** | [**chuanban-antigravity-theme-patch**](https://chuanban.notion.site/chuanban-antigravity-theme-patch-db7c5846f37546be9481cd791aed0554) | **说明与部署引导主页**。提供补丁设计概览、版本更新历程与面向 AI Agent 的标准提示词引导。 |
+| **2. Google Drive 完全安装资源包** | [**Google Drive 官方共享文件夹**](https://drive.google.com/drive/folders/1NX92SgVUqtSjWg6bt6sIJXy-cn7J_boC) | **全项目成品包 + 全套字体库**。内置 **Anthropic 官方原版字体族**（`Anthropic Sans` / `Anthropic Serif` / `Anthropic Mono`）与 **更纱黑体超集**（`Sarasa-SuperTTC.ttc`），以及完整补丁打包资源。 |
 | **3. GitHub 权威代码库** | [**Anarcadia/chuanban-antigravity-theme-patch**](https://github.com/Anarcadia/chuanban-antigravity-theme-patch) | **成品补丁代码完全体**。包含预封装黄金内核 `core/`、个人改装层 `user/`、一键安装器 `install.mjs` 及 Agent 专用的 [`SKILL.md`](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/blob/main/SKILL.md)（字体文件请从上方 Google Drive 链接下载）。 |
 
 ---
@@ -48,7 +48,7 @@
 ## ✨ 补丁简介：设计目的与当前版本亮点
 
 ### 1. 凝练设计目的
-Google Antigravity 原生界面采用冷灰底色、机械混黑侧栏与单一无衬线字体，长时间高强度编码与阅读极易视觉疲劳。本补丁旨在以**完全非侵入**的方式，将 Antigravity 重塑为兼具 **Anthropic 暖纸学术质感、四层中西文精密排版、全界面母语级汉化与实时模型遥测** 的主力工作台：
+Google Antigravity 原生界面采用冷灰底色、机械混黑侧栏与单一无衬线字体，长时间高强度编码与阅读易视觉疲劳且乏味无聊。本补丁旨在以**完全非侵入**的方式，将 Antigravity 重塑为兼具 **Anthropic 暖纸学术质感、四层中西文精密排版、全界面母语级汉化与实时模型遥测** 的主力工作台：
 
 - **🎨 三套暖纸护眼配色预设**：默认部署 **高对比版**（暖燕麦侧栏 `#F7F5F0` + 微暖亮白主区 `#FCFCFB` + 近纯黑深墨文字 `#0A0A0A`），同时内置 **ClaudeDesktop 净白** 与 **复古深色羊皮纸**，一键秒级热切换；
 - **🔤 四层字体排版（Solid Ink 润墨调校）**：UI 控件采用 `Anthropic Sans` + `Sarasa UI SC`，阅读正文采用 `Anthropic Serif` 古典衬线 + `Sarasa Mono Slab SC`，代码与终端采用严格 1:2 等宽，主输入框独立配置 Codex 同款打字机板状粗衬线；
@@ -73,15 +73,15 @@ Google Antigravity 原生界面采用冷灰底色、机械混黑侧栏与单一�
 
 ### 一、新用户初次安装：拿到补丁后对 Agent 说什么？
 
-1. **前置准备**：请先从 [**Google Drive 完全资源包**](https://drive.google.com/drive/folders/1NX92SgVUqtSjWg6bt6sIJXy-cn7J_boC) 下载字体文件（macOS 可直接双击安装到「字体册」，Windows 解压后可直接让 Agent 用内置命令一键注册安装），并确保本机已安装 **Node.js `>= 22.0.0`**（推荐 `>= 22.13.0` 以解锁实时指标胶囊）。
-2. **发送给 Agent 的安装指令**：打开你的 AI Agent（Antigravity 自身、Claude Code、Codex、Cursor 等），直接复制发送以下话术：
+1. **前置准备**：请用户亲自（亦或者是派遣Agent也可以）从 [**Google Drive 完全资源包**](https://drive.google.com/drive/folders/1NX92SgVUqtSjWg6bt6sIJXy-cn7J_boC) 下载字体文件（macOS 可直接双击安装到「字体册」，Windows 解压后可直接让 Agent 用内置命令一键注册安装），并确保本机已安装 **Node.js `>= 22.0.0`**（推荐 `>= 22.13.0` 以解锁实时指标胶囊）。
+2. **继续发送给 Agent 安装指令**：打开你的 AI Agent（Antigravity 自身、Claude Code、Codex、Cursor 等），直接复制发送以下话术：
 
 > **💬 复制发给 Agent（新用户一键安装）**：  
-> 请帮我克隆 `https://github.com/Anarcadia/chuanban-antigravity-theme-patch.git`（或读取我已经下载解压的补丁目录），严格按照仓库内的 `SKILL.md` 依次执行 `node install.mjs doctor`（若在 Windows 下未装字体请先用 `node install.mjs install-fonts` 注册字体）、`node install.mjs install` 和 `node install.mjs verify`，帮我一键部署好船板的 Antigravity 主题补丁并验证实机生效。
+> 请帮我克隆 `https://github.com/Anarcadia/chuanban-antigravity-theme-patch.git`（或读取我已经下载解压的补丁目录），严格按照仓库内的 `SKILL.md` 依次执行 `node install.mjs doctor`（若在 Windows 下未装字体请先用 `node install.mjs install-fonts` 注册字体）、`node install.mjs install` 和 `node install.mjs verify`，帮我一键部署好船板的 Antigravity 主题补丁并验证实机生效。若用户尚未下载字体包则从仓库提供的Google网盘下载字体包。
 
 ---
 
-### 二、老用户升级指南：为什么强烈建议重新安装？如何指引 Agent？
+### 二、老版本皮肤用户升级指南：为什么强烈建议重新安装？如何指引 Agent？
 
 #### 为什么建议所有 v1 ~ v4 老用户重新安装升级至 v5.0.0？
 1. **彻底消除性能拖累与界面抖动**：旧版由 Agent 现场生成的单文件脚本容易因全量 DOM 扫描、双重正则转义或残留 `ResizeObserver` 导致流式输出掉帧或输入框高度跳动；v5.0.0 采用预封装 `O(N·深度)` 增量引擎与跨版本观察器清理，流式响应丝滑零抖动。
