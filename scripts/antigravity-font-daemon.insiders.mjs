@@ -232,84 +232,73 @@ const CSS_CONTENT = `
   }
 
   /* ----------------------------------------------------------------------
-   * 场景 1：日常推进具体聊天会话页面 (非首页 / html[data-ag-page-type="chat"])
+   * 【场景 2：首页 / 空白新建对话场景】
+   * 判定依据：
+   * 1. 包含分支选择器 [data-testid="branch-pill-trigger"]（新建会话专属头部标志）
+   * 2. 或标记为 data-ag-page-type="home"
+   * 3. 或包含 [data-testid="home-greeting"]
    * ---------------------------------------------------------------------- */
-  /* 1.1 日常常态：设计 A (略粗一点颜色偏淡古朴暗红) */
-  html[data-ag-preset]:not([data-ag-page-type="home"]) #antigravity\\.agentSidePanelInputBox,
-  html[data-ag-preset]:not([data-ag-page-type="home"]) [id="antigravity.agentSidePanelInputBox"],
-  html:not([data-ag-page-type="home"]) #antigravity\\.agentSidePanelInputBox,
-  html:not([data-ag-page-type="home"]) [id="antigravity.agentSidePanelInputBox"],
-  html:not([data-ag-page-type="home"]) .surface-composer.bg-card-border,
-  html[data-ag-page-type="chat"] #antigravity\\.agentSidePanelInputBox,
-  html[data-ag-page-type="chat"] [id="antigravity.agentSidePanelInputBox"],
-  html[data-ag-page-type="chat"] .surface-composer.bg-card-border {
-    border: 1.5px solid rgba(116, 34, 26, 0.36) !important;
-    border-color: rgba(116, 34, 26, 0.36) !important;
-    box-shadow: 0 1px 3px rgba(116, 34, 26, 0.03) !important;
-  }
-
-  /* 1.2 鼠标移上 / 聚焦：变成为设计 B (加深变浓实色蜡封暗红 #74221A) */
-  html[data-ag-preset]:not([data-ag-page-type="home"]) #antigravity\\.agentSidePanelInputBox:hover,
-  html[data-ag-preset]:not([data-ag-page-type="home"]) [id="antigravity.agentSidePanelInputBox"]:hover,
-  html:not([data-ag-page-type="home"]) #antigravity\\.agentSidePanelInputBox:hover,
-  html:not([data-ag-page-type="home"]) [id="antigravity.agentSidePanelInputBox"]:hover,
-  html:not([data-ag-page-type="home"]) .surface-composer.bg-card-border:hover,
-  html[data-ag-preset]:not([data-ag-page-type="home"]) #antigravity\\.agentSidePanelInputBox:focus-within,
-  html[data-ag-preset]:not([data-ag-page-type="home"]) [id="antigravity.agentSidePanelInputBox"]:focus-within,
-  html:not([data-ag-page-type="home"]) #antigravity\\.agentSidePanelInputBox:focus-within,
-  html:not([data-ag-page-type="home"]) [id="antigravity.agentSidePanelInputBox"]:focus-within,
-  html:not([data-ag-page-type="home"]) .surface-composer.bg-card-border:focus-within,
-  html[data-ag-page-type="chat"] #antigravity\\.agentSidePanelInputBox:hover,
-  html[data-ag-page-type="chat"] [id="antigravity.agentSidePanelInputBox"]:hover,
-  html[data-ag-page-type="chat"] #antigravity\\.agentSidePanelInputBox:focus-within,
-  html[data-ag-page-type="chat"] [id="antigravity.agentSidePanelInputBox"]:focus-within,
-  html[data-ag-page-type="chat"] .surface-composer.bg-card-border:hover,
-  html[data-ag-page-type="chat"] .surface-composer.bg-card-border:focus-within {
-    border: 1.5px solid #74221A !important;
-    border-color: #74221A !important;
-    box-shadow: 0 1px 4px rgba(116, 34, 26, 0.12) !important;
-  }
-
-  /* ----------------------------------------------------------------------
-   * 场景 2：首页新建对话页面 (存在 home-greeting 或 html[data-ag-page-type="home"])
-   * ---------------------------------------------------------------------- */
-  /* 2.1 日常常态：设计 C (外框完全透明，无阴影) */
-  html[data-ag-page-type="home"] #antigravity\\.agentSidePanelInputBox,
-  html[data-ag-page-type="home"] [id="antigravity.agentSidePanelInputBox"],
-  html[data-ag-page-type="home"] .surface-composer.bg-card-border,
-  body:has([data-testid="home-greeting"]) #antigravity\\.agentSidePanelInputBox,
-  body:has([data-testid="home-greeting"]) [id="antigravity.agentSidePanelInputBox"],
-  body:has([data-testid="home-greeting"]) .surface-composer.bg-card-border,
-  html:has([data-testid="home-greeting"]) #antigravity\\.agentSidePanelInputBox,
-  html:has([data-testid="home-greeting"]) [id="antigravity.agentSidePanelInputBox"],
-  html:has([data-testid="home-greeting"]) .surface-composer.bg-card-border {
+  /* 2.1 新建对话日常常态：设计 C (外框完全透明，无阴影，融于背景) */
+  #antigravity\\.agentSidePanelInputBox:has([data-testid="branch-pill-trigger"]),
+  [id="antigravity.agentSidePanelInputBox"]:has([data-testid="branch-pill-trigger"]),
+  .surface-composer.bg-card-border:has([data-testid="branch-pill-trigger"]),
+  :is(html, body):has([data-testid="home-greeting"]) #antigravity\\.agentSidePanelInputBox,
+  :is(html, body):has([data-testid="home-greeting"]) [id="antigravity.agentSidePanelInputBox"],
+  :is(html, body):has([data-testid="home-greeting"]) .surface-composer.bg-card-border,
+  :is(html, body)[data-ag-page-type="home"] #antigravity\\.agentSidePanelInputBox,
+  :is(html, body)[data-ag-page-type="home"] [id="antigravity.agentSidePanelInputBox"],
+  :is(html, body)[data-ag-page-type="home"] .surface-composer.bg-card-border {
     border: 1.5px solid transparent !important;
     border-color: transparent !important;
     box-shadow: none !important;
   }
 
-  /* 2.2 鼠标移上 / 聚焦：变成为设计 A (略粗一点颜色偏淡蜡封暗红) */
-  html[data-ag-page-type="home"] #antigravity\\.agentSidePanelInputBox:hover,
-  html[data-ag-page-type="home"] [id="antigravity.agentSidePanelInputBox"]:hover,
-  html[data-ag-page-type="home"] .surface-composer.bg-card-border:hover,
-  html[data-ag-page-type="home"] #antigravity\\.agentSidePanelInputBox:focus-within,
-  html[data-ag-page-type="home"] [id="antigravity.agentSidePanelInputBox"]:focus-within,
-  html[data-ag-page-type="home"] .surface-composer.bg-card-border:focus-within,
-  body:has([data-testid="home-greeting"]) #antigravity\\.agentSidePanelInputBox:hover,
-  body:has([data-testid="home-greeting"]) [id="antigravity.agentSidePanelInputBox"]:hover,
-  body:has([data-testid="home-greeting"]) .surface-composer.bg-card-border:hover,
-  body:has([data-testid="home-greeting"]) #antigravity\\.agentSidePanelInputBox:focus-within,
-  body:has([data-testid="home-greeting"]) [id="antigravity.agentSidePanelInputBox"]:focus-within,
-  body:has([data-testid="home-greeting"]) .surface-composer.bg-card-border:focus-within,
-  html:has([data-testid="home-greeting"]) #antigravity\\.agentSidePanelInputBox:hover,
-  html:has([data-testid="home-greeting"]) [id="antigravity.agentSidePanelInputBox"]:hover,
-  html:has([data-testid="home-greeting"]) .surface-composer.bg-card-border:hover,
-  html:has([data-testid="home-greeting"]) #antigravity\\.agentSidePanelInputBox:focus-within,
-  html:has([data-testid="home-greeting"]) [id="antigravity.agentSidePanelInputBox"]:focus-within,
-  html:has([data-testid="home-greeting"]) .surface-composer.bg-card-border:focus-within {
+  /* 2.2 新建对话鼠标移上 / 聚焦：变成为设计 A (略粗一点颜色偏淡蜡封暗红，微阴影) */
+  #antigravity\\.agentSidePanelInputBox:has([data-testid="branch-pill-trigger"]):hover,
+  [id="antigravity.agentSidePanelInputBox"]:has([data-testid="branch-pill-trigger"]):hover,
+  .surface-composer.bg-card-border:has([data-testid="branch-pill-trigger"]):hover,
+  #antigravity\\.agentSidePanelInputBox:has([data-testid="branch-pill-trigger"]):focus-within,
+  [id="antigravity.agentSidePanelInputBox"]:has([data-testid="branch-pill-trigger"]):focus-within,
+  .surface-composer.bg-card-border:has([data-testid="branch-pill-trigger"]):focus-within,
+  :is(html, body):has([data-testid="home-greeting"]) #antigravity\\.agentSidePanelInputBox:hover,
+  :is(html, body):has([data-testid="home-greeting"]) [id="antigravity.agentSidePanelInputBox"]:hover,
+  :is(html, body):has([data-testid="home-greeting"]) .surface-composer.bg-card-border:hover,
+  :is(html, body):has([data-testid="home-greeting"]) #antigravity\\.agentSidePanelInputBox:focus-within,
+  :is(html, body):has([data-testid="home-greeting"]) [id="antigravity.agentSidePanelInputBox"]:focus-within,
+  :is(html, body):has([data-testid="home-greeting"]) .surface-composer.bg-card-border:focus-within,
+  :is(html, body)[data-ag-page-type="home"] #antigravity\\.agentSidePanelInputBox:hover,
+  :is(html, body)[data-ag-page-type="home"] [id="antigravity.agentSidePanelInputBox"]:hover,
+  :is(html, body)[data-ag-page-type="home"] .surface-composer.bg-card-border:hover,
+  :is(html, body)[data-ag-page-type="home"] #antigravity\\.agentSidePanelInputBox:focus-within,
+  :is(html, body)[data-ag-page-type="home"] [id="antigravity.agentSidePanelInputBox"]:focus-within,
+  :is(html, body)[data-ag-page-type="home"] .surface-composer.bg-card-border:focus-within {
     border: 1.5px solid rgba(116, 34, 26, 0.36) !important;
     border-color: rgba(116, 34, 26, 0.36) !important;
     box-shadow: 0 1px 3px rgba(116, 34, 26, 0.04) !important;
+  }
+
+  /* ----------------------------------------------------------------------
+   * 【场景 1：日常推进具体聊天会话页面】（严格限定非新建态：排斥 branch-pill-trigger 与 home 标记）
+   * ---------------------------------------------------------------------- */
+  /* 1.1 具体会话日常常态：设计 A (略粗一点颜色偏淡蜡封暗红) */
+  :is(html, body):not(:has([data-testid="home-greeting"])):not([data-ag-page-type="home"]) #antigravity\\.agentSidePanelInputBox:not(:has([data-testid="branch-pill-trigger"])),
+  :is(html, body):not(:has([data-testid="home-greeting"])):not([data-ag-page-type="home"]) [id="antigravity.agentSidePanelInputBox"]:not(:has([data-testid="branch-pill-trigger"])),
+  :is(html, body):not(:has([data-testid="home-greeting"])):not([data-ag-page-type="home"]) .surface-composer.bg-card-border:not(:has([data-testid="branch-pill-trigger"])) {
+    border: 1.5px solid rgba(116, 34, 26, 0.36) !important;
+    border-color: rgba(116, 34, 26, 0.36) !important;
+    box-shadow: 0 1px 3px rgba(116, 34, 26, 0.03) !important;
+  }
+
+  /* 1.2 具体会话移上 / 聚焦：变成为设计 B (加深变浓实色蜡封暗红 #74221A) */
+  :is(html, body):not(:has([data-testid="home-greeting"])):not([data-ag-page-type="home"]) #antigravity\\.agentSidePanelInputBox:not(:has([data-testid="branch-pill-trigger"])):hover,
+  :is(html, body):not(:has([data-testid="home-greeting"])):not([data-ag-page-type="home"]) [id="antigravity.agentSidePanelInputBox"]:not(:has([data-testid="branch-pill-trigger"])):hover,
+  :is(html, body):not(:has([data-testid="home-greeting"])):not([data-ag-page-type="home"]) .surface-composer.bg-card-border:not(:has([data-testid="branch-pill-trigger"])):hover,
+  :is(html, body):not(:has([data-testid="home-greeting"])):not([data-ag-page-type="home"]) #antigravity\\.agentSidePanelInputBox:not(:has([data-testid="branch-pill-trigger"])):focus-within,
+  :is(html, body):not(:has([data-testid="home-greeting"])):not([data-ag-page-type="home"]) [id="antigravity.agentSidePanelInputBox"]:not(:has([data-testid="branch-pill-trigger"])):focus-within,
+  :is(html, body):not(:has([data-testid="home-greeting"])):not([data-ag-page-type="home"]) .surface-composer.bg-card-border:not(:has([data-testid="branch-pill-trigger"])):focus-within {
+    border: 1.5px solid #74221A !important;
+    border-color: #74221A !important;
+    box-shadow: 0 1px 4px rgba(116, 34, 26, 0.12) !important;
   }
 
   /* 上方工具栏文字与小按钮（No Project 及其箭头） */
@@ -1258,11 +1247,12 @@ const I18N_DICT = {
   'Run all commands without restrictions': '不受限制地直接执行所有命令',
 
   // --- 补充汉化：全局权限与远程智能体 (Permissions & Remote) ---
-  'Permissions': '全局权限',
+  'Permissions': '权限',
+  'Global Permissions': '全局权限',
   'Configure what the agent can do in local and remote conversations.': '配置智能体在本地与远程对话中的操作权限。',
   'Configure what the agent can do in local and remote conversations': '配置智能体在本地与远程对话中的操作权限',
-  'This Computer': '本机权限',
-  'Remote': '远程权限',
+  'This Computer': '本机',
+  'Remote': '远程',
   'Controls permissions for remote conversations.': '控制智能体在远程对话中的操作权限。',
   'Controls permissions for remote conversations': '控制智能体在远程对话中的操作权限',
   'Remote Agents Data': '远程智能体数据',
@@ -1273,7 +1263,27 @@ const I18N_DICT = {
   'Zoom Out': '缩小',
   'Reset Zoom': '重置缩放',
   'You can upgrade to a higher Google AI Ultra plan to receive the highest rate limits.': '您可以升级到更高的 Google AI Ultra 方案以获取最高速率配额。',
-  'Developer-only tools. These settings are stored locally in this browser and do not affect other users.': '仅限开发者使用的调试工具。这些设置仅保存在本地浏览器中，不会影响其他用户。'
+  'Developer-only tools. These settings are stored locally in this browser and do not affect other users.': '仅限开发者使用的调试工具。这些设置仅保存在本地浏览器中，不会影响其他用户。',
+
+  // --- 补充汉化：分支与工作区选择器 (Branch & Project Selector) ---
+  'Select branch': '选择分支',
+  'Select branch...': '选择分支...',
+  'Select a branch': '选择分支',
+  'Select a branch...': '选择分支...',
+  'Select Branch': '选择分支',
+  'Select Branch...': '选择分支...',
+  'Branch, current: Select branch': '分支，当前：选择分支',
+  'Current branch': '当前分支',
+  'Main branch': '主分支',
+  'Switch branch': '切换分支',
+  'Create branch': '创建分支',
+  'No branch': '无分支',
+  'Branch': '分支',
+  'Branches': '分支列表',
+  'Select project': '选择项目',
+  'Select workspace': '选择工作区',
+  'No project': '未关联项目',
+  'No workspace': '未关联工作区'
 };
 
 // ==============================================================================
@@ -1413,7 +1423,7 @@ const INJECT_SCRIPT = `
     }
 
     syncChuanbanPreset();
-    window.__ag_patch_version = "20261104-insiders-dev-v18";
+    window.__ag_patch_version = "20261104-insiders-dev-v20";
 
     // 3.5 模型名称同行实时指标胶囊 (Scheme C: TPS · TTFT · Ctx/256k · Out + Hover 详情卡)
     // 严格保证「左(模型) - 中(指标胶囊) - 右(模式与发送)」三栏结构；中间过窄(<150px)时物理跳至下方第二行。
@@ -1582,11 +1592,19 @@ const INJECT_SCRIPT = `
 
     function checkRouteAndMountMetrics() {
       try {
-        // 动态识别当前处于首页新建对话还是日常具体会话推进页面
-        const isHome = !!document.querySelector('[data-testid="home-greeting"]') || !window.location.pathname.startsWith('/c/');
+        // 动态识别当前处于首页/空白新建对话还是日常具体会话推进页面
+        // 1. 包含分支选择器（新建对话专属头部标志）
+        // 2. 或含有 home-greeting 问候区
+        // 3. 或 pathname 为 '/'
+        // 4. 或非 /c/ 会话路由
+        const hasBranchPill = !!document.querySelector('#antigravity\\\\.agentSidePanelInputBox [data-testid="branch-pill-trigger"], [id="antigravity.agentSidePanelInputBox"] [data-testid="branch-pill-trigger"]');
+        const isHome = hasBranchPill || !!document.querySelector('[data-testid="home-greeting"]') || window.location.pathname === '/' || !window.location.pathname.startsWith('/c/');
         const pageType = isHome ? 'home' : 'chat';
         if (document.documentElement.getAttribute('data-ag-page-type') !== pageType) {
           document.documentElement.setAttribute('data-ag-page-type', pageType);
+        }
+        if (document.body && document.body.getAttribute('data-ag-page-type') !== pageType) {
+          document.body.setAttribute('data-ag-page-type', pageType);
         }
 
         const cid = extractCascadeId();
@@ -1607,9 +1625,12 @@ const INJECT_SCRIPT = `
       } catch (e) {}
     }
 
-    if (!window.__ag_metrics_route_watcher) {
-      window.__ag_metrics_route_watcher = setInterval(checkRouteAndMountMetrics, 400);
+    // 热重载时销毁旧 watcher 定时器，确保新闭包彻底接管
+    if (window.__ag_metrics_route_watcher) {
+      try { clearInterval(window.__ag_metrics_route_watcher); } catch (e) {}
+      window.__ag_metrics_route_watcher = null;
     }
+    window.__ag_metrics_route_watcher = setInterval(checkRouteAndMountMetrics, 200);
     checkRouteAndMountMetrics();
 
     // 4. 注入界面汉化逻辑
@@ -1729,7 +1750,18 @@ const INJECT_SCRIPT = `
           const t = el.getAttribute('title');
           if (t && DICT[t.trim()]) el.setAttribute('title', DICT[t.trim()]);
           const a = el.getAttribute('aria-label');
-          if (a && DICT[a.trim()]) el.setAttribute('aria-label', DICT[a.trim()]);
+          if (a) {
+            const atrim = a.trim();
+            if (DICT[atrim]) {
+              el.setAttribute('aria-label', DICT[atrim]);
+            } else if (/^Branch, current:\s*(.*)$/i.test(atrim)) {
+              const bName = atrim.match(/^Branch, current:\s*(.*)$/i)[1].trim();
+              el.setAttribute('aria-label', '分支，当前：' + (DICT[bName] || bName));
+            } else if (/^Select project, current:\s*(.*)$/i.test(atrim)) {
+              const pName = atrim.match(/^Select project, current:\s*(.*)$/i)[1].trim();
+              el.setAttribute('aria-label', '选择项目，当前：' + (DICT[pName] || pName));
+            }
+          }
         }
       } catch (e) {}
     }
@@ -2106,7 +2138,7 @@ async function checkAndHeal(session, targetId) {
   session.isChecking = true;
   try {
     const res = await sendCDP(session, 'Runtime.evaluate', {
-      expression: 'Boolean(document.getElementById("ag-custom-fonts") && window.__ag_patch_version === "20261104-insiders-dev-v18")',
+      expression: 'Boolean(document.getElementById("ag-custom-fonts") && window.__ag_patch_version === "20261104-insiders-dev-v20")',
       returnByValue: true
     });
     const isHealthy = res?.result?.value === true;
