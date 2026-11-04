@@ -1,10 +1,10 @@
 # Antigravity Insiders 分支阶段性归档与稳定版合并指引
 
 > **归档日期**：2026-11-04  
-> **归档分支**：`Factory/chuanban-antigravity-theme-patch` 的 `main`（已合流）与 `insiders-dev`  
+> **归档分支**：`Factory/chuanban-antigravity-theme-patch` 的 `main` 与 `insiders-dev`（已完全同步）  
 > **起始提交**：`b94445c`（建立 Insiders 独立分支与调试套件）  
-> **最新提交**：`ad96c2b`（v16 终态）  
-> **探针版本**：`20261104-stable-v16` / `20261104-insiders-dev-v16`  
+> **最新提交**：`da46011`（v20 终态：古朴蜡封双场景解耦与全量汉化沉淀）  
+> **探针版本**：`20261104-stable-v20` / `20261104-insiders-dev-v20`  
 > **目标宿主**：`/Applications/Antigravity.app` (2.29.0 正式稳定版已全量加载生效) 与 `/Applications/Antigravity - Insiders.app`
 
 ---
@@ -94,11 +94,25 @@
 | `9bce787` | `v15` | `style(sidebar)`: 侧边栏任务清单与对话列表微降一个字重层级至 400（消除墨晕，西文清爽锐利） |
 | `ad96c2b` | `v16` | `feat(i18n)`: 补全 Permissions 全局权限、本机权限与远程权限说明词条（探针升级至 v16） |
 | `609c8a4` | `v17` | `style(composer)`: 聊天框外圆弧线采用加深古朴蜡封暗红 (#74221A)，打字卡片采用方案2温润微浮雕聚焦抬升（v17） |
-| `11da971` | `v18` | `feat(i18n, composer)`: 补齐内置浏览器、语音、右键菜单、Chat、权限等50+词条汉化；落地聊天框分场景三形态（场景1推进页：日常设计A，交互设计B；场景2首页：日常设计C透明，交互设计A）及方案2微浮雕（v18） |
+| `11da971` | `v18` | `feat(i18n, composer)`: 补齐内置浏览器、语音、右键菜单、Chat、权限等50+词条汉化；落地聊天框分场景三形态及方案2微浮雕（v18） |
+| `8814330` | `v19` | `feat(composer)`: 彻底解耦首页新建对话与日常推进页，消除单例闭包死锁，解决特异性倒挂（v19） |
+| `da46011` | `v20` | `feat(i18n-composer)`: 补齐权限与分支汉化，基于 branch-pill-trigger 原生结构彻底解耦新建对话(设计C)与推进页(设计A)（v20） |
 
 ---
 
-## 四、 将来合并到“稳定版”的推送操作指南
+## 四、 核心资产专著引用
+
+本版本确立并沉淀的输入框全新设计方案已升华为独立官方设计规范：
+- **设计规范专著**：[COMPOSER_WAX_SEAL_DESIGN_SPEC.md](COMPOSER_WAX_SEAL_DESIGN_SPEC.md)
+  - **核心体系**：古朴蜡封·双场景解耦与分级演进系统（Ancient Wax Seal & Decoupled Dual-Scene Composer System）；
+  - **错位矩阵**：新建对话框（透明 C ➔ 淡红 A）与日常推进页（淡红 A ➔ 深红 B）严格错开一个层级；
+  - **工程锚点**：基于 `[data-testid="branch-pill-trigger"]` 原生结构与 CSS 原生 `:has(...)` 0 延迟解耦；
+  - **触感拟物**：方案 2 白玉打字卡片 250ms 贝塞尔微浮雕拟物平滑浮起；
+  - **汉化闭环**：分支选择器、权限气泡说明与全局权限设置页 100% 汉化覆盖。
+
+---
+
+## 五、 将来合并到“稳定版”的推送操作指南
 
 当 Google 官方将当前的 Insiders 特性正式合入并推送到稳定版（`/Applications/Antigravity.app`）时，遵循以下标准合并流程：
 
