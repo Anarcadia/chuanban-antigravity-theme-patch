@@ -768,9 +768,9 @@ const I18N_DICT = {
   'Execution': '执行策略',
   'Queued Messages': '排队消息',
   'Global Permissions': '全局权限',
-  'Permissions': '全局权限',
-  'This Computer': '本机权限',
-  'Remote': '远程权限',
+  'Permissions': '权限',
+  'This Computer': '本机',
+  'Remote': '远程',
   'Configure what the agent can do in local and remote conversations.': '配置智能体在本地与远程对话中的操作权限。',
   'Configure what the agent can do in local and remote conversations': '配置智能体在本地与远程对话中的操作权限',
   'Controls permissions for remote conversations.': '控制智能体在远程对话中的操作权限。',
@@ -800,7 +800,7 @@ const I18N_DICT = {
   // --- 主设置：选项卡卡片与说明 ---
   'Permission Preset': '权限预设',
   'Turbo': '极速模式 (Turbo)',
-  'Auto': '自动模式 (Auto)',
+  'Auto': '自动判断 (Auto)',
   'Auto (Preview)': '自动模式 (Auto Preview)',
   'Strict': '严格模式 (Strict)',
   'Always Proceed': '直接执行 (Always Proceed)',
@@ -813,22 +813,22 @@ const I18N_DICT = {
   'Default': '默认',
 
   // --- 权限预设与执行策略说明 (Permission Preset Descriptions) ---
-  'Every command requires approval.': '每条命令均需人工批准。',
-  'Every command requires approval': '每条命令均需人工批准',
-  'Ask before sensitive operations.': '执行敏感操作前进行询问。',
-  'Ask before sensitive operations': '执行敏感操作前进行询问',
-  'Run all commands without restrictions.': '无限制执行所有命令。',
-  'Run all commands without restrictions': '无限制执行所有命令',
+  'Every command requires approval.': '每项命令均需经过用户批准。',
+  'Every command requires approval': '每项命令均需经过用户批准',
+  'Ask before sensitive operations.': '执行敏感操作前进行确认。',
+  'Ask before sensitive operations': '执行敏感操作前进行确认',
+  'Run all commands without restrictions.': '不受限制地直接执行所有命令。',
+  'Run all commands without restrictions': '不受限制地直接执行所有命令',
   'Automatically decide if commands run.': '自动判断是否直接执行命令。',
   'Automatically decide if commands run': '自动判断是否直接执行命令',
   'Delete All Remote Agents Data': '删除所有远程智能体数据',
   'Permanently delete your remote conversations, projects, scheduled tasks, connected plugins and settings. Data in the desktop app and your Google account are not affected.': '永久删除您的远程对话、项目、定时自动化任务、已连接插件及设置。桌面客户端及 Google 账户中的数据不受影响。',
-  'Work with local agents from another device.': '在其他设备上远程协同本地智能体。',
+  'Work with local agents from another device.': '允许从其他设备连接并协同本地智能体。',
   'Only stored on your machine.': '仅保存在您的本地设备上。',
   'Configure GitHub access policies.': '配置 GitHub 访问授权策略。',
   'Outside of folders file access policy': '工作目录外文件访问策略',
   'Configures how the agent tries to access files outside of its working folders.': '配置智能体尝试访问其工作目录以外文件时的行为策略。',
-  'Terminal Command Auto Execution': '终端命令自动执行',
+  'Terminal Command Auto Execution': '终端命令自动执行策略',
   'Controls whether terminal commands require your approval before running.': '控制终端命令在运行前是否需要您的批准。',
   'New Conversation Button': '新建对话按钮默认工作区',
   'Which workspace the New Conversation button and keyboard shortcut start you in.': '“新建对话”按钮及快捷键默认开启的工作区。',
@@ -905,14 +905,14 @@ const I18N_DICT = {
   // --- 代理行为与内置浏览器 (Agent Behavior & Browser) ---
   'Configure link opening and built-in browser preferences.': '配置链接打开方式与内置浏览器偏好设置。',
   'Download Location': '下载位置',
-  'Folder where files downloaded in the built-in browser are saved.': '内置浏览器下载文件的保存目录。',
-  'Browsing History': '浏览历史记录',
-  'Clear visited URLs and autocomplete suggestions from the built-in browser.': '清除内置浏览器的已访问网址及自动补全建议。',
+  'Folder where files downloaded in the built-in browser are saved.': '内置浏览器中下载文件的保存目录。',
+  'Browsing History': '浏览记录',
+  'Clear visited URLs and autocomplete suggestions from the built-in browser.': '清除内置浏览器中访问过的网址及自动补全建议。',
   'Clear': '清除',
   'Change...': '更改...',
   'Change…': '更改…',
   'Change': '更改',
-  'Browser Subagent': '内置浏览器子代理',
+  'Browser Subagent': '浏览器子代理',
   'Whether the agent asks you to review its documents.': '控制智能体在生成文档时是否请求您进行审查。',
   'Type': '键入',
   'and select': '并选择',
@@ -927,20 +927,20 @@ const I18N_DICT = {
   // --- 语音模式 (Voice Mode) ---
   'Voice mode': '语音模式',
   'Voice': '音色',
-  'The voice used in Voice mode. Powered by Gemini Live.': '语音模式使用的音色。由 Gemini Live 提供支持。',
+  'The voice used in Voice mode. Powered by Gemini Live.': '语音模式下使用的声音。由 Gemini Live 驱动。',
   'Microphone': '麦克风',
-  'Input device for voice mode and dictation.': '用于语音模式与语音输入的输入设备。',
+  'Input device for voice mode and dictation.': '语音模式与语音听写所使用的输入设备。',
   'System default': '系统默认',
-  'How loud Antigravity\'s voice is.': 'Antigravity 的语音播放音量。',
+  'How loud Antigravity\'s voice is.': 'Antigravity 语音播放的音量大小。',
 
   // --- 应用配置 (Application Settings) ---
-  'Manage Antigravity Insiders app settings.': '管理 Antigravity Insiders 客户端应用设置。',
-  'Manage Antigravity app settings.': '管理 Antigravity 客户端应用设置。',
+  'Manage Antigravity Insiders app settings.': '管理 Antigravity Insiders 应用程序设置。',
+  'Manage Antigravity app settings.': '管理 Antigravity 应用程序设置。',
 
   // --- 对话与步骤详情 (Chat & Conversation Steps) ---
   'Chat': '对话',
-  'Conversation Steps': '会话步骤详情',
-  'Choose how much detail is shown during a conversation.': '选择对话过程中显示的详细程度。',
+  'Conversation Steps': '对话执行步骤',
+  'Choose how much detail is shown during a conversation.': '选择对话过程中展示的执行细节丰富程度。',
   'Verbose': '详细 (Verbose)',
 
   // --- 标签页与编辑器右键菜单 (Context Menus & Tabs) ---
@@ -954,13 +954,12 @@ const I18N_DICT = {
   'Split Left': '向左分屏',
   'Split Up': '向上分屏',
   'Split Down': '向下分屏',
-  'Replace with New': '新建替换',
+  'Replace with New': '替换为新对话',
   'Close Tab': '关闭标签页',
   'Close Other Tabs': '关闭其他标签页',
   'Close Tabs to the Right': '关闭右侧标签页',
   'Prevent the computer from sleeping while the app is running.': '在应用运行期间阻止系统进入休眠状态。',
   'Keep the app accessible from the menu bar and running in the background when all windows are closed.': '在所有窗口关闭后保持应用在后台运行，并可通过菜单栏快捷访问。',
-  'Work with local agents from another device.': '允许从其他设备连接并协同本地智能体。',
   'Notification Settings': '通知设置',
   'To modify notification settings, open your operating system\'s system preferences.': '如需修改通知设置，请前往 macOS 的系统设置进行配置。',
   'Version': '版本信息',
@@ -968,12 +967,10 @@ const I18N_DICT = {
 
   // --- MCP 工具与项目管理 (MCP & Projects) ---
   'MCP Tools': 'MCP 工具',
-  'Mcp Tools': 'MCP 工具',
   'Configure external tools via Model Context Protocol.': '通过模型上下文协议 (Model Context Protocol) 配置外部工具。',
   'Not in Project': '未关联项目',
   'Rules': '项目规则',
   'Other Customizations': '其他自定义项',
-  'Delete Project': '删除项目',
   'Delete': '删除',
   'Project': '项目',
   'including': '及',
@@ -1165,14 +1162,11 @@ const I18N_DICT = {
     '在输入框下方的模式菜单中增加“全自主模式”开关。开启后发送的轮次将以非交互方式运行：智能体不会向您提问或请求新的权限。',
   'Allow List Terminal Commands': '终端命令白名单 (Allow List)',
   'Deny List Terminal Commands': '终端命令黑名单 (Deny List)',
-  'Terminal Command Auto Execution': '终端命令自动执行策略',
   'Proceed in Sandbox': '沙盒内自动执行',
-  'Auto': '自动判断 (Auto)',
   'Enable Terminal Sandbox': '启用终端沙盒隔离',
   'Run terminal commands with sandbox restrictions.': '在沙盒安全限制下运行终端命令。',
   'Sandbox Allow Network': '允许沙盒访问网络',
   'Allow sandboxed commands to make network requests.': '允许在沙盒内运行的终端命令发起网络请求。',
-  'Command Setup Script': '命令前置初始化脚本',
   'A shell setup script run before every command the agent executes.': '智能体在执行每条终端命令前自动运行的 Shell 环境初始化脚本。',
   'Agent Non-Workspace File Access': '允许访问工作区外文件',
   'Allow the agent to automatically view and edit files outside the current workspace. Use with caution: this gives the agent access to additional potentially-relevant information, but also allows the agent to access credential files, secrets, and other files outside of the workspace that could be targeted in prompt injection attacks or other exploits by malicious actors.':
@@ -1191,70 +1185,26 @@ const I18N_DICT = {
   'Back': '返回',
 
   // --- 补充汉化：内置浏览器与语音设置 (Built-in Browser & Voice Mode) ---
-  'Configure link opening and built-in browser preferences.': '配置链接打开方式与内置浏览器偏好设置。',
   'Configure link opening and built-in browser preferences': '配置链接打开方式与内置浏览器偏好设置',
-  'Download Location': '下载位置',
-  'Folder where files downloaded in the built-in browser are saved.': '内置浏览器中下载文件的保存目录。',
   'Folder where files downloaded in the built-in browser are saved': '内置浏览器中下载文件的保存目录',
-  'Change...': '更改...',
-  'Change…': '更改…',
-  'Change': '更改',
-  'Browsing History': '浏览记录',
-  'Clear visited URLs and autocomplete suggestions from the built-in browser.': '清除内置浏览器中访问过的网址及自动补全建议。',
   'Clear visited URLs and autocomplete suggestions from the built-in browser': '清除内置浏览器中访问过的网址及自动补全建议',
-  'Clear': '清除',
-  'Browser Subagent': '浏览器子代理',
-  'Voice mode': '语音模式',
   'Voice Mode': '语音模式',
-  'Voice': '音色',
-  'The voice used in Voice mode. Powered by Gemini Live.': '语音模式下使用的声音。由 Gemini Live 驱动。',
   'The voice used in Voice mode. Powered by Gemini Live': '语音模式下使用的声音。由 Gemini Live 驱动',
-  'Microphone': '麦克风',
-  'Input device for voice mode and dictation.': '语音模式与语音听写所使用的输入设备。',
   'Input device for voice mode and dictation': '语音模式与语音听写所使用的输入设备',
-  'System default': '系统默认',
-  'How loud Antigravity\'s voice is.': 'Antigravity 语音播放的音量大小。',
   'How loud Antigravity\'s voice is': 'Antigravity 语音播放的音量大小',
 
   // --- 补充汉化：标签页与会话右键菜单 (Tab / Context Menu) ---
-  'Rename': '重命名',
-  'Pin': '固定',
-  'Archive': '归档',
-  'Split': '分屏',
-  'Split Right': '向右分屏',
-  'Split Down': '向下分屏',
-  'Replace with New': '替换为新对话',
 
   // --- 补充汉化：应用配置 (Application Settings) ---
-  'Manage Antigravity Insiders app settings.': '管理 Antigravity Insiders 应用程序设置。',
   'Manage Antigravity Insiders app settings': '管理 Antigravity Insiders 应用程序设置',
-  'Manage Antigravity app settings.': '管理 Antigravity 应用程序设置。',
   'Manage Antigravity app settings': '管理 Antigravity 应用程序设置',
 
   // --- 补充汉化：Chat 设置项 (Chat Settings) ---
-  'Chat': '对话',
-  'Conversation Steps': '对话执行步骤',
-  'Choose how much detail is shown during a conversation.': '选择对话过程中展示的执行细节丰富程度。',
   'Choose how much detail is shown during a conversation': '选择对话过程中展示的执行细节丰富程度',
-  'Verbose': '详细 (Verbose)',
 
   // --- 补充汉化：模式选择器下拉菜单选项描述 (Permission Mode Descriptions) ---
-  'Every command requires approval.': '每项命令均需经过用户批准。',
-  'Every command requires approval': '每项命令均需经过用户批准',
-  'Ask before sensitive operations.': '执行敏感操作前进行确认。',
-  'Ask before sensitive operations': '执行敏感操作前进行确认',
-  'Run all commands without restrictions.': '不受限制地直接执行所有命令。',
-  'Run all commands without restrictions': '不受限制地直接执行所有命令',
 
   // --- 补充汉化：全局权限与远程智能体 (Permissions & Remote) ---
-  'Permissions': '权限',
-  'Global Permissions': '全局权限',
-  'Configure what the agent can do in local and remote conversations.': '配置智能体在本地与远程对话中的操作权限。',
-  'Configure what the agent can do in local and remote conversations': '配置智能体在本地与远程对话中的操作权限',
-  'This Computer': '本机',
-  'Remote': '远程',
-  'Controls permissions for remote conversations.': '控制智能体在远程对话中的操作权限。',
-  'Controls permissions for remote conversations': '控制智能体在远程对话中的操作权限',
   'Remote Agents Data': '远程智能体数据',
   'Delete All Data': '删除所有数据',
   'Toggle Side Panel': '切换侧边面板',
@@ -1289,9 +1239,12 @@ const I18N_DICT = {
 // ==============================================================================
 // 4. 浏览器端自执行脚本（含样式注入 + 实时防误伤汉化）
 // ==============================================================================
+const PATCH_VERSION = '20261104-insiders-dev-v21';
+
 const INJECT_SCRIPT = `
   (() => {
-    // 1. 注入更纱黑体样式
+    // 1. 注入更纱黑体与主题样式（单次常量引用，消除 27KB 重复序列化开销）
+    const CSS_TEXT = ${JSON.stringify(CSS_CONTENT)};
     let style = document.getElementById("ag-custom-fonts");
     if (!style) {
       style = document.createElement("style");
@@ -1301,8 +1254,8 @@ const INJECT_SCRIPT = `
         target.appendChild(style);
       }
     }
-    if (style && style.textContent !== ${JSON.stringify(CSS_CONTENT)}) {
-      style.textContent = ${JSON.stringify(CSS_CONTENT)};
+    if (style && style.textContent !== CSS_TEXT) {
+      style.textContent = CSS_TEXT;
     }
 
     // 2. 防死锁守护：Antigravity 原生 TanStack Router 缺陷修复
@@ -1328,26 +1281,19 @@ const INJECT_SCRIPT = `
     }
 
     // 2.1 缩放快捷键原生缺陷修复（恢复 Cmd + - / Cmd + = / Cmd + 0）
-    // 原因：Antigravity 官方在桌面端 variant 显式将 zoomIn/zoomOut 的按键绑定设成了空数组 []，
-    // 且 macOS 系统菜单的 role 事件被 <webview> 隔离无法穿透。此处在捕获阶段直接桥接 window.electronNative。
     if (!window.__ag_zoom_guard_installed) {
       window.__ag_zoom_guard_installed = true;
       window.addEventListener("keydown", (e) => {
         if (e.metaKey && !e.ctrlKey && !e.altKey) {
-          // Cmd + - (缩小)
           if (!e.shiftKey && (e.key === "-" || e.code === "Minus" || e.code === "NumpadSubtract" || e.keyCode === 189)) {
             e.preventDefault();
             e.stopPropagation();
             window.electronNative?.zoomOut?.();
-          }
-          // Cmd + = 或 Cmd + + (放大)
-          else if ((e.key === "=" || e.key === "+" || e.code === "Equal" || e.code === "NumpadAdd" || e.keyCode === 187)) {
+          } else if ((e.key === "=" || e.key === "+" || e.code === "Equal" || e.code === "NumpadAdd" || e.keyCode === 187)) {
             e.preventDefault();
             e.stopPropagation();
             window.electronNative?.zoomIn?.();
-          }
-          // Cmd + 0 (重置 100%)
-          else if (!e.shiftKey && (e.key === "0" || e.code === "Digit0" || e.code === "Numpad0" || e.keyCode === 48)) {
+          } else if (!e.shiftKey && (e.key === "0" || e.code === "Digit0" || e.code === "Numpad0" || e.keyCode === 48)) {
             e.preventDefault();
             e.stopPropagation();
             window.electronNative?.zoomReset?.();
@@ -1357,15 +1303,10 @@ const INJECT_SCRIPT = `
     }
 
     // 3. 专属预设状态联动与防崩溃保护
-    // 船板三大预设官方定义：
-    // 1、高对比版（当前首选默认）："high-contrast" / "chuanban-warm-white"
-    // 2、ClaudeDesktop 净白："claude-desktop-purewhite" / "claude-desktop-official"
-    // 3、复古深色："vintage-deep" / "absoulutely-chuanban"
     const PRESETS = {
       HIGH_CONTRAST: "high-contrast",
       CLAUDE_PUREWHITE: "claude-desktop-purewhite",
       VINTAGE_DEEP: "vintage-deep",
-      // 向下兼容别名
       LEGACY_WARM_WHITE: "chuanban-warm-white",
       LEGACY_OFFICIAL: "claude-desktop-official",
       LEGACY_CHUANBAN: "absoulutely-chuanban"
@@ -1380,17 +1321,23 @@ const INJECT_SCRIPT = `
           try { Storage.prototype.setItem.call(localStorage, "theme-preset-light", "Default Light"); } catch (e) {}
         }
 
-        // 读取配色版本偏好（默认激活船板 1、高对比版）
         const flavor = Storage.prototype.getItem.call(localStorage, "theme-color-flavor") || PRESETS.HIGH_CONTRAST;
         const currentBg = (window.getComputedStyle(document.documentElement).getPropertyValue("--background") || "").trim().toUpperCase();
         const isWarmBg = (currentBg === "#FBF9F5" || currentBg === "#FCFCFB");
 
+        let targetPreset = null;
         if (flavor === PRESETS.HIGH_CONTRAST || flavor === PRESETS.LEGACY_WARM_WHITE || flavor === "高对比版") {
-          document.documentElement.setAttribute("data-ag-preset", PRESETS.HIGH_CONTRAST);
+          targetPreset = PRESETS.HIGH_CONTRAST;
         } else if (flavor === PRESETS.CLAUDE_PUREWHITE || flavor === PRESETS.LEGACY_OFFICIAL || flavor === "ClaudeDesktop 净白") {
-          document.documentElement.setAttribute("data-ag-preset", PRESETS.CLAUDE_PUREWHITE);
+          targetPreset = PRESETS.CLAUDE_PUREWHITE;
         } else if (flavor === PRESETS.VINTAGE_DEEP || flavor === PRESETS.LEGACY_CHUANBAN || flavor === "复古深色" || isWarmBg) {
-          document.documentElement.setAttribute("data-ag-preset", PRESETS.VINTAGE_DEEP);
+          targetPreset = PRESETS.VINTAGE_DEEP;
+        }
+
+        if (targetPreset) {
+          if (document.documentElement.getAttribute("data-ag-preset") !== targetPreset) {
+            document.documentElement.setAttribute("data-ag-preset", targetPreset);
+          }
         } else {
           document.documentElement.removeAttribute("data-ag-preset");
         }
@@ -1423,7 +1370,7 @@ const INJECT_SCRIPT = `
     }
 
     syncChuanbanPreset();
-    window.__ag_patch_version = "20261104-insiders-dev-v20";
+    window.__ag_patch_version = "${PATCH_VERSION}";
 
     // 3.5 模型名称同行实时指标胶囊 (Scheme C: TPS · TTFT · Ctx/256k · Out + Hover 详情卡)
     // 严格保证「左(模型) - 中(指标胶囊) - 右(模式与发送)」三栏结构；中间过窄(<150px)时物理跳至下方第二行。
@@ -1473,14 +1420,13 @@ const INJECT_SCRIPT = `
       for (let i = 0; i < leftGroup.children.length; i++) {
         const ch = leftGroup.children[i];
         if (ch.id === "ag-live-metrics-pill") continue;
-        // 取 scrollWidth 与 offsetWidth 的较大值，防止在 bottom 模式下因左侧曾收缩而低估真实宽度
         const cw = Math.max(ch.offsetWidth || 0, ch.scrollWidth || 0);
         if (cw > 0) w += cw;
       }
       return w;
     }
 
-    function ensureMetricsPill() {
+    function ensureMetricsPill(forceLayout = false) {
       const box = document.getElementById("antigravity.agentSidePanelInputBox");
       if (!box) return null;
       const bottomRow = findFooterRow(box);
@@ -1493,7 +1439,9 @@ const INJECT_SCRIPT = `
         pill.remove();
         pill = null;
       }
+      let isNewPill = false;
       if (!pill) {
+        isNewPill = true;
         pill = document.createElement("div");
         pill.id = "ag-live-metrics-pill";
         pill.setAttribute("data-v", "3");
@@ -1515,41 +1463,57 @@ const INJECT_SCRIPT = `
         });
       }
 
-      // 计算第一行中间可用宽度：总宽 - 左侧(+与模型名) - 右侧(模式与发送按钮) - 间距余量
+      // 绑定 ResizeObserver：仅在容器水平宽度发生变化时触发重排，避免高度变化引发回流重入
+      if (typeof ResizeObserver !== "undefined" && window.__ag_metrics_ro_target !== bottomRow) {
+        if (window.__ag_metrics_ro) {
+          try { window.__ag_metrics_ro.disconnect(); } catch (e) {}
+        }
+        window.__ag_metrics_ro_target = bottomRow;
+        window.__ag_last_row_width = -1;
+        window.__ag_metrics_ro = new ResizeObserver((entries) => {
+          for (let i = 0; i < entries.length; i++) {
+            const w = Math.round(entries[i].contentRect.width);
+            if (w > 0 && Math.abs(w - (window.__ag_last_row_width || 0)) >= 1) {
+              window.__ag_last_row_width = w;
+              ensureMetricsPill(true);
+              break;
+            }
+          }
+        });
+        window.__ag_metrics_ro.observe(bottomRow);
+      }
+
+      // 零回流短路：若 pill 已挂载在当前底栏且无需强制重算布局，直接返回避免触发同步 Reflow
+      const isMountedHere = pill.parentElement === leftGroup || (bottomRow.parentElement && pill.parentElement === bottomRow.parentElement);
+      if (!forceLayout && !isNewPill && isMountedHere) {
+        return pill;
+      }
+
+      // 仅在首次挂载、文本更新或宽度缩放时测量真实几何尺寸
       const rowW = bottomRow.clientWidth || 0;
+      window.__ag_last_row_width = rowW;
       const leftW = measureNaturalLeftWidth(leftGroup);
       const rightW = rightGroup ? (rightGroup.offsetWidth || 0) : 0;
       const availMiddleW = rowW - leftW - rightW - 14;
       const useBottomRow = rowW > 0 && availMiddleW < MIDDLE_MIN_WIDTH_PX;
       const rowMode = useBottomRow ? "bottom" : "middle";
 
-      bottomRow.setAttribute("data-ag-row-mode", rowMode);
-      pill.setAttribute("data-ag-row-mode", rowMode);
+      if (bottomRow.getAttribute("data-ag-row-mode") !== rowMode) {
+        bottomRow.setAttribute("data-ag-row-mode", rowMode);
+      }
+      if (pill.getAttribute("data-ag-row-mode") !== rowMode) {
+        pill.setAttribute("data-ag-row-mode", rowMode);
+      }
 
       if (useBottomRow) {
-        // 挂载到 bottomRow 所在的垂直父容器 (surface-composer-card)，严格位于 bottomRow 正下方第二行
         const cardParent = bottomRow.parentElement;
         if (cardParent && (pill.parentElement !== cardParent || pill.previousElementSibling !== bottomRow)) {
           bottomRow.after(pill);
         }
       } else {
-        // 挂载到 leftGroup 末尾，严格处于「左侧模型选择」与「右侧模式/发送按钮」正中间
         if (pill.parentElement !== leftGroup) {
           leftGroup.appendChild(pill);
         }
-      }
-
-      // 绑定 ResizeObserver 实现窗口缩放 0ms 实时重排
-      if (typeof ResizeObserver !== "undefined" && window.__ag_metrics_ro_target !== bottomRow) {
-        if (window.__ag_metrics_ro) {
-          try { window.__ag_metrics_ro.disconnect(); } catch (e) {}
-        }
-        window.__ag_metrics_ro_target = bottomRow;
-        window.__ag_metrics_ro = new ResizeObserver(() => {
-          ensureMetricsPill();
-        });
-        window.__ag_metrics_ro.observe(bottomRow);
-        if (box !== bottomRow) window.__ag_metrics_ro.observe(box);
       }
 
       return pill;
@@ -1558,45 +1522,44 @@ const INJECT_SCRIPT = `
     if (!window.__ag_metrics_win_resize) {
       window.__ag_metrics_win_resize = true;
       window.addEventListener("resize", () => {
-        ensureMetricsPill();
-      });
+        ensureMetricsPill(true);
+      }, { passive: true });
     }
 
     window.__ag_render_metrics = function(payload) {
       try {
         window.__ag_last_metrics = payload;
         const currentId = extractCascadeId();
-        const pill = ensureMetricsPill();
+        const pill = ensureMetricsPill(false);
         const ttEl = ensureMetricsTooltip();
         if (!pill) return;
-        if (!payload || !payload.hasData) {
-          pill.style.display = "none";
-          if (ttEl) ttEl.removeAttribute("data-visible");
-          return;
-        }
-        if (currentId && payload.cascadeId !== currentId) {
-          pill.style.display = "none";
+        if (!payload || !payload.hasData || (currentId && payload.cascadeId !== currentId)) {
+          if (pill.style.display !== "none") pill.style.display = "none";
           if (ttEl) ttEl.removeAttribute("data-visible");
           return;
         }
         const textEl = pill.querySelector("#ag-live-metrics-text");
+        let textChanged = false;
         if (textEl && textEl.innerHTML !== payload.inlineHtml) {
           textEl.innerHTML = payload.inlineHtml;
+          textChanged = true;
         }
         if (ttEl && ttEl.innerHTML !== payload.tooltipHtml) {
           ttEl.innerHTML = payload.tooltipHtml;
         }
-        pill.style.display = "inline-flex";
+        if (pill.style.display !== "inline-flex") {
+          pill.style.display = "inline-flex";
+          textChanged = true;
+        }
+        if (textChanged) {
+          ensureMetricsPill(true);
+        }
       } catch (e) {}
     };
 
     function checkRouteAndMountMetrics() {
       try {
         // 动态识别当前处于首页/空白新建对话还是日常具体会话推进页面
-        // 1. 包含分支选择器（新建对话专属头部标志）
-        // 2. 或含有 home-greeting 问候区
-        // 3. 或 pathname 为 '/'
-        // 4. 或非 /c/ 会话路由
         const hasBranchPill = !!document.querySelector('#antigravity\\\\.agentSidePanelInputBox [data-testid="branch-pill-trigger"], [id="antigravity.agentSidePanelInputBox"] [data-testid="branch-pill-trigger"]');
         const isHome = hasBranchPill || !!document.querySelector('[data-testid="home-greeting"]') || window.location.pathname === '/' || !window.location.pathname.startsWith('/c/');
         const pageType = isHome ? 'home' : 'chat';
@@ -1618,100 +1581,126 @@ const INJECT_SCRIPT = `
             window.__agRequestMetrics(cid);
           }
         } else if (cid && window.__ag_last_metrics && window.__ag_last_metrics.cascadeId === cid) {
-          ensureMetricsPill();
+          ensureMetricsPill(false);
         } else if (!cid && typeof window.__agRequestMetrics === "function" && (!window.__ag_last_metrics || !window.__ag_last_metrics.hasData)) {
           window.__agRequestMetrics("");
         }
       } catch (e) {}
     }
 
-    // 热重载时销毁旧 watcher 定时器，确保新闭包彻底接管
+    // 挂载 History API 事件驱动钩子：路由切换时 0ms 瞬时响应，并将后台兜底巡检降频至 800ms
+    if (!window.__ag_history_hook_installed) {
+      window.__ag_history_hook_installed = true;
+      const wrapHistory = (type) => {
+        const orig = history[type];
+        if (typeof orig !== "function") return;
+        history[type] = function(...args) {
+          const ret = orig.apply(this, args);
+          queueMicrotask(() => {
+            if (typeof window.__ag_check_route_fn === "function") window.__ag_check_route_fn();
+          });
+          return ret;
+        };
+      };
+      wrapHistory("pushState");
+      wrapHistory("replaceState");
+      window.addEventListener("popstate", () => {
+        if (typeof window.__ag_check_route_fn === "function") window.__ag_check_route_fn();
+      });
+    }
+    window.__ag_check_route_fn = checkRouteAndMountMetrics;
+
     if (window.__ag_metrics_route_watcher) {
       try { clearInterval(window.__ag_metrics_route_watcher); } catch (e) {}
       window.__ag_metrics_route_watcher = null;
     }
-    window.__ag_metrics_route_watcher = setInterval(checkRouteAndMountMetrics, 200);
+    window.__ag_metrics_route_watcher = setInterval(checkRouteAndMountMetrics, 800);
     checkRouteAndMountMetrics();
 
-    // 4. 注入界面汉化逻辑
+    // 4. 注入高性能界面汉化引擎（TreeWalker 子树剪枝 + Mutation 增量脏集合）
     const DICT = ${JSON.stringify(I18N_DICT)};
     window.__ag_i18n_dict = DICT;
 
-    // 严密保护区：绝不汉化正文内容、代码、输入框及文件名
-    function isExcluded(node) {
-      if (!node || !node.parentElement) return true;
-      const el = node.parentElement;
-      return !!el.closest(
-        'code, pre, kbd, samp, textarea, input, [contenteditable="true"], .prose, .markdown, [class*="chat-message"], [class*="group/file-title"], #ag-live-metrics-pill, #ag-live-metrics-tooltip'
-      );
+    // 严密保护区：绝不汉化正文内容、代码、输入框、样式脚本及指标胶囊
+    const EXCLUDE_SELECTOR = 'code, pre, kbd, samp, textarea, input, style, script, noscript, [contenteditable="true"], .prose, .markdown, [class*="chat-message"], [class*="group/file-title"], #ag-live-metrics-pill, #ag-live-metrics-tooltip';
+
+    function isExcludedElement(el) {
+      if (!el || el.nodeType !== 1) return true;
+      return !!el.closest(EXCLUDE_SELECTOR);
+    }
+
+    function setNodeVal(node, nextVal) {
+      if (node.nodeValue !== nextVal) {
+        node.nodeValue = nextVal;
+      }
     }
 
     function translateTextNode(node) {
-      if (isExcluded(node)) return;
       const raw = node.nodeValue;
       if (!raw) return;
       const trimmed = raw.trim();
       if (!trimmed) return;
 
-      // 静态词典精确匹配
-      if (DICT[trimmed]) {
-        const replacement = DICT[trimmed];
-        // 如果原内容是孤立英文单词带空格（如 "Delete "），且替换目标为中文，则收缩空格为干净中文
+      // 1. 静态词典 O(1) 精确匹配
+      const replacement = DICT[trimmed];
+      if (replacement) {
         if (/[\\u4e00-\\u9fa5]/.test(replacement) && /^\\s*[a-zA-Z]+\\s*$/.test(raw)) {
-          node.nodeValue = replacement;
+          setNodeVal(node, replacement);
         } else {
-          node.nodeValue = raw.replace(trimmed, replacement);
+          setNodeVal(node, raw.replace(trimmed, replacement));
         }
         return;
       }
 
-      // 动态正则匹配
+      // 2. 快速短路：若不含任何英文字母（如已汉化中文、纯数字、标点），0 开销直接跳过后续 14 个正则匹配
+      if (!/[a-zA-Z]/.test(trimmed)) return;
+
+      // 3. 动态正则匹配
       if (/^(\\d+)\\s+files?\\s+changed$/i.test(trimmed)) {
-        node.nodeValue = raw.replace(/^(\\d+)\\s+files?\\s+changed$/i, '$1 个文件变更');
+        setNodeVal(node, raw.replace(/^(\\d+)\\s+files?\\s+changed$/i, '$1 个文件变更'));
         return;
       }
       if (/^See all\\s*\\((\\d+)\\)$/i.test(trimmed)) {
-        node.nodeValue = raw.replace(/^See all\\s*\\((\\d+)\\)$/i, '查看全部 ($1)');
+        setNodeVal(node, raw.replace(/^See all\\s*\\((\\d+)\\)$/i, '查看全部 ($1)'));
         return;
       }
       if (/^Show\\s+(\\d+)\\s+breakdowns?$/i.test(trimmed)) {
-        node.nodeValue = raw.replace(/^Show\\s+(\\d+)\\s+breakdowns?$/i, '展开明细 ($1 项)');
+        setNodeVal(node, raw.replace(/^Show\\s+(\\d+)\\s+breakdowns?$/i, '展开明细 ($1 项)'));
         return;
       }
       if (/^(\\d+)\\s+tools?$/i.test(trimmed)) {
-        node.nodeValue = raw.replace(/^(\\d+)\\s+tools?$/i, '$1 个工具');
+        setNodeVal(node, raw.replace(/^(\\d+)\\s+tools?$/i, '$1 个工具'));
         return;
       }
       if (/^(\\d+)\\s+demoted$/i.test(trimmed)) {
-        node.nodeValue = raw.replace(/^(\\d+)\\s+demoted$/i, '$1 项已降级');
+        setNodeVal(node, raw.replace(/^(\\d+)\\s+demoted$/i, '$1 项已降级'));
         return;
       }
       if (/^(\\d+)\\s+excluded$/i.test(trimmed)) {
-        node.nodeValue = raw.replace(/^(\\d+)\\s+excluded$/i, '$1 项已排除');
+        setNodeVal(node, raw.replace(/^(\\d+)\\s+excluded$/i, '$1 项已排除'));
         return;
       }
       if (/^(\\d+)\\s+tools?\\s+excluded$/i.test(trimmed)) {
-        node.nodeValue = raw.replace(/^(\\d+)\\s+tools?\\s+excluded$/i, '$1 个工具已排除');
+        setNodeVal(node, raw.replace(/^(\\d+)\\s+tools?\\s+excluded$/i, '$1 个工具已排除'));
         return;
       }
       if (/^(\\d+)\\s+active\\s+conversations$/i.test(trimmed)) {
-        node.nodeValue = raw.replace(/^(\\d+)\\s+active\\s+conversations$/i, '$1 个进行中的会话');
+        setNodeVal(node, raw.replace(/^(\\d+)\\s+active\\s+conversations$/i, '$1 个进行中的会话'));
         return;
       }
       if (/^Permanently delete\\s+(.*)\\s+including\\s+(\\d+)\\s+active\\s+conversations\\.?$/i.test(trimmed)) {
-        node.nodeValue = raw.replace(/^Permanently delete\\s+(.*)\\s+including\\s+(\\d+)\\s+active\\s+conversations\\.?$/i, '永久删除 $1 及 $2 个进行中的会话。');
+        setNodeVal(node, raw.replace(/^Permanently delete\\s+(.*)\\s+including\\s+(\\d+)\\s+active\\s+conversations\\.?$/i, '永久删除 $1 及 $2 个进行中的会话。'));
         return;
       }
       if (/^Worked for\\s+(\\d+[smhd])$/i.test(trimmed)) {
-        node.nodeValue = raw.replace(/^Worked for\\s+(\\d+[smhd])$/i, '已工作 $1');
+        setNodeVal(node, raw.replace(/^Worked for\\s+(\\d+[smhd])$/i, '已工作 $1'));
         return;
       }
       if (/^Thought for\\s+(\\d+[smhd])$/i.test(trimmed)) {
-        node.nodeValue = raw.replace(/^Thought for\\s+(\\d+[smhd])$/i, '已思考 $1');
+        setNodeVal(node, raw.replace(/^Thought for\\s+(\\d+[smhd])$/i, '已思考 $1'));
         return;
       }
 
-      // 模型配额重置时间动态汉化 (如 "You have used some of your weekly limit, it will fully refresh in 6 days, 12 hours.")
       if (/^You have used (some|all|most) of your (weekly|5-hour|five-hour|daily) limit,?\\s*it will fully refresh in (.*)\\.?$/i.test(trimmed)) {
         var match = trimmed.match(/^You have used (some|all|most) of your (weekly|5-hour|five-hour|daily) limit,?\\s*it will fully refresh in (.*)\\.?$/i);
         var degreeMap = { some: '部分', all: '全部', most: '大部分' };
@@ -1725,63 +1714,140 @@ const INJECT_SCRIPT = `
           .replace(/(\\d+)\\s*seconds?/gi, '$1 秒')
           .replace(/,\\s*/g, ' ')
           .trim();
-        node.nodeValue = '您已消耗' + degree + type + '额度，将在 ' + timeStr + ' 后完全重置。';
+        setNodeVal(node, '您已消耗' + degree + type + '额度，将在 ' + timeStr + ' 后完全重置。');
         return;
       }
       if (/^You have not used any of your (weekly|5-hour|five-hour|daily) limit\\.?$/i.test(trimmed)) {
         var match = trimmed.match(/^You have not used any of your (weekly|5-hour|five-hour|daily) limit\\.?$/i);
         var typeMap = { weekly: '每周', '5-hour': '5 小时', 'five-hour': '5 小时', daily: '每日' };
         var type = typeMap[match[1].toLowerCase()] || match[1];
-        node.nodeValue = '您尚未消耗任何' + type + '额度。';
+        setNodeVal(node, '您尚未消耗任何' + type + '额度。');
         return;
       }
     }
 
+    function translateElementAttrs(el) {
+      if (!el || el.nodeType !== 1) return;
+      const t = el.getAttribute('title');
+      if (t) {
+        const ttrim = t.trim();
+        if (DICT[ttrim] && t !== DICT[ttrim]) el.setAttribute('title', DICT[ttrim]);
+      }
+      const a = el.getAttribute('aria-label');
+      if (a) {
+        const atrim = a.trim();
+        let nextAria = null;
+        if (DICT[atrim]) {
+          nextAria = DICT[atrim];
+        } else if (/^Branch, current:\\s*(.*)$/i.test(atrim)) {
+          const bName = atrim.match(/^Branch, current:\\s*(.*)$/i)[1].trim();
+          nextAria = '分支，当前：' + (DICT[bName] || bName);
+        } else if (/^Select project, current:\\s*(.*)$/i.test(atrim)) {
+          const pName = atrim.match(/^Select project, current:\\s*(.*)$/i)[1].trim();
+          nextAria = '选择项目，当前：' + (DICT[pName] || pName);
+        }
+        if (nextAria && a !== nextAria) el.setAttribute('aria-label', nextAria);
+      }
+    }
+
+    // TreeWalker 原生子树剪枝过滤器：遇到保护区元素直接 FILTER_REJECT 整棵剪枝，免除内部节点逐一调 closest()
+    const walkerFilter = {
+      acceptNode(node) {
+        if (node.nodeType === 1) {
+          if (node.matches && node.matches(EXCLUDE_SELECTOR)) {
+            return NodeFilter.FILTER_REJECT;
+          }
+          return NodeFilter.FILTER_SKIP;
+        }
+        return NodeFilter.FILTER_ACCEPT;
+      }
+    };
+
     function scanAndTranslate(root = document.body) {
       if (!root) return;
-      const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+      if (root.nodeType === 3) {
+        if (root.parentElement && !isExcludedElement(root.parentElement)) {
+          translateTextNode(root);
+        }
+        return;
+      }
+      if (root.nodeType !== 1 || isExcludedElement(root)) return;
+
+      const walker = document.createTreeWalker(
+        root,
+        NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT,
+        walkerFilter
+      );
       while (walker.nextNode()) {
         translateTextNode(walker.currentNode);
       }
+
       try {
+        if (root.hasAttribute && (root.hasAttribute('title') || root.hasAttribute('aria-label'))) {
+          translateElementAttrs(root);
+        }
         const labeledEls = root.querySelectorAll ? root.querySelectorAll('[title], [aria-label]') : [];
         for (let i = 0; i < labeledEls.length; i++) {
-          const el = labeledEls[i];
-          const t = el.getAttribute('title');
-          if (t && DICT[t.trim()]) el.setAttribute('title', DICT[t.trim()]);
-          const a = el.getAttribute('aria-label');
-          if (a) {
-            const atrim = a.trim();
-            if (DICT[atrim]) {
-              el.setAttribute('aria-label', DICT[atrim]);
-            } else if (/^Branch, current:\s*(.*)$/i.test(atrim)) {
-              const bName = atrim.match(/^Branch, current:\s*(.*)$/i)[1].trim();
-              el.setAttribute('aria-label', '分支，当前：' + (DICT[bName] || bName));
-            } else if (/^Select project, current:\s*(.*)$/i.test(atrim)) {
-              const pName = atrim.match(/^Select project, current:\s*(.*)$/i)[1].trim();
-              el.setAttribute('aria-label', '选择项目，当前：' + (DICT[pName] || pName));
-            }
-          }
+          translateElementAttrs(labeledEls[i]);
         }
       } catch (e) {}
     }
 
-    // 初次立即全量扫描
-    scanAndTranslate();
+    // 初次全量扫描
+    scanAndTranslate(document.body);
 
-    // 断开旧的监听器（如果存在），确保热重载生效
+    // 断开旧监听器，挂载增量脏节点收集观察器
     if (window.__ag_i18n_observer) {
       try { window.__ag_i18n_observer.disconnect(); } catch (e) {}
     }
 
+    const dirtyRoots = new Set();
     let pending = false;
-    window.__ag_i18n_observer = new MutationObserver(() => {
-      if (pending) return;
-      pending = true;
-      requestAnimationFrame(() => {
-        pending = false;
-        scanAndTranslate(document.body);
-      });
+
+    function flushTranslations() {
+      pending = false;
+      if (dirtyRoots.size === 0) return;
+      const roots = Array.from(dirtyRoots);
+      dirtyRoots.clear();
+      for (let i = 0; i < roots.length; i++) {
+        const r = roots[i];
+        if (!r || !r.isConnected) continue;
+        let covered = false;
+        for (let j = 0; j < roots.length; j++) {
+          if (i !== j && roots[j].nodeType === 1 && roots[j].contains && roots[j].contains(r)) {
+            covered = true;
+            break;
+          }
+        }
+        if (!covered) scanAndTranslate(r);
+      }
+    }
+
+    window.__ag_i18n_observer = new MutationObserver((mutations) => {
+      for (let i = 0; i < mutations.length; i++) {
+        const m = mutations[i];
+        if (m.type === 'characterData') {
+          const t = m.target;
+          if (t && t.parentElement && !isExcludedElement(t.parentElement)) {
+            dirtyRoots.add(t);
+          }
+        } else if (m.type === 'childList' && m.addedNodes.length > 0) {
+          // 若变更发生在保护区内部（如 AI 流式生成正文、代码块、指标胶囊），0 开销直接跳过
+          if (m.target && m.target.nodeType === 1 && isExcludedElement(m.target)) {
+            continue;
+          }
+          for (let j = 0; j < m.addedNodes.length; j++) {
+            const n = m.addedNodes[j];
+            if (n.nodeType === 1 || n.nodeType === 3) {
+              dirtyRoots.add(n);
+            }
+          }
+        }
+      }
+      if (dirtyRoots.size > 0 && !pending) {
+        pending = true;
+        requestAnimationFrame(flushTranslations);
+      }
     });
 
     const targetNode = document.body || document.documentElement;
@@ -1796,9 +1862,19 @@ const INJECT_SCRIPT = `
 `;
 
 // ==============================================================================
-// 5. SQLite + Protobuf 实时会话指标解析器 (node:sqlite 只读零依赖)
+// 5. SQLite + Protobuf 实时会话指标解析器 (node:sqlite 只读零依赖 + LRU 缓存)
 // ==============================================================================
 const metricsCache = new Map(); // cascadeId -> { sig, payload }
+const MAX_METRICS_CACHE_SIZE = 30;
+
+function setMetricsCache(cascadeId, entry) {
+  if (metricsCache.has(cascadeId)) metricsCache.delete(cascadeId);
+  metricsCache.set(cascadeId, entry);
+  if (metricsCache.size > MAX_METRICS_CACHE_SIZE) {
+    const oldestKey = metricsCache.keys().next().value;
+    if (oldestKey) metricsCache.delete(oldestKey);
+  }
+}
 
 function parseProto(buf) {
   let i = 0;
@@ -1892,7 +1968,7 @@ function readConversationMetrics(cascadeId) {
       db.close();
       db = null;
       const emptyPayload = { cascadeId, hasData: false, sig };
-      metricsCache.set(cascadeId, { sig, payload: emptyPayload });
+      setMetricsCache(cascadeId, { sig, payload: emptyPayload });
       return emptyPayload;
     }
     const userSteps = db.prepare('SELECT idx FROM steps WHERE step_type = 14 ORDER BY idx ASC').all();
@@ -1958,7 +2034,6 @@ function readConversationMetrics(cascadeId) {
     const sessionCacheRate = (totalIn + totalCache) > 0 ? ((totalCache / (totalIn + totalCache)) * 100).toFixed(1) : '0.0';
     const remainCtx = Math.max(0, CONTEXT_LIMIT_TOKENS - last.ctx);
 
-    // 方案 C 行内格式: 154 tok/s · TTFT 4.2s · Ctx 182k/256k (71%) · Out 1.8k
     const inlineHtml = [
       `<span>${Math.round(displayTps)} tok/s</span>`,
       `<span class="ag-sep">·</span>`,
@@ -1993,7 +2068,7 @@ function readConversationMetrics(cascadeId) {
       inlineHtml,
       tooltipHtml
     };
-    metricsCache.set(cascadeId, { sig, payload });
+    setMetricsCache(cascadeId, { sig, payload });
     return payload;
   } catch (err) {
     if (db) {
@@ -2006,8 +2081,15 @@ function readConversationMetrics(cascadeId) {
 // ==============================================================================
 // 6. 守护进程调度与健壮 RPC 逻辑
 // ==============================================================================
-const activeSockets = new Map(); // targetId -> { ws, pendingRequests, isInjecting, isChecking, lastPushedSig }
+const activeSockets = new Map(); // targetId -> { ws, pendingRequests, isInjecting, isChecking, lastPushedSig, injectTimer }
 let rpcCounter = 1;
+
+function isValidAppTarget(target) {
+  if (!target || target.type !== 'page' || !target.webSocketDebuggerUrl) return false;
+  const url = target.url || '';
+  // 严格过滤启动闪屏页 (data:text/html)、空白页及 DevTools 自身，避免无效连接与轮询
+  return url.startsWith('http://') || url.startsWith('https://');
+}
 
 function getDevToolsPort() {
   try {
@@ -2074,19 +2156,32 @@ async function pushMetricsToSession(session, cascadeId, force = false) {
   } catch {}
 }
 
+let latestConvCache = { id: '', dirMtime: 0, expiresAt: 0 };
+
 function getLatestConversationId() {
   try {
-    if (!fs.existsSync(CONVERSATIONS_DIR)) return "";
+    const now = Date.now();
+    if (now < latestConvCache.expiresAt && latestConvCache.id) {
+      return latestConvCache.id;
+    }
+    if (!fs.existsSync(CONVERSATIONS_DIR)) return '';
+    const dirStat = fs.statSync(CONVERSATIONS_DIR);
+    if (dirStat.mtimeMs === latestConvCache.dirMtime && latestConvCache.id && now < latestConvCache.expiresAt + 10000) {
+      latestConvCache.expiresAt = now + 2500;
+      return latestConvCache.id;
+    }
     const files = fs.readdirSync(CONVERSATIONS_DIR)
-      .filter(f => f.endsWith(".db") && /^[0-9a-f-]{36}\.db$/i.test(f))
-      .map(f => {
+      .filter((f) => f.endsWith('.db') && /^[0-9a-f-]{36}\.db$/i.test(f))
+      .map((f) => {
         const p = path.join(CONVERSATIONS_DIR, f);
-        return { id: f.replace(/\.db$/, ""), mtime: fs.statSync(p).mtimeMs };
+        return { id: f.slice(0, -3), mtime: fs.statSync(p).mtimeMs };
       })
       .sort((a, b) => b.mtime - a.mtime);
-    return files.length > 0 ? files[0].id : "";
+    const id = files.length > 0 ? files[0].id : '';
+    latestConvCache = { id, dirMtime: dirStat.mtimeMs, expiresAt: now + 2500 };
+    return id;
   } catch {
-    return "";
+    return '';
   }
 }
 
@@ -2111,7 +2206,6 @@ async function inject(session, targetId) {
   if (session.isInjecting) return;
   session.isInjecting = true;
   try {
-    // Register once per CDP session; lifecycle reinjection must not accumulate scripts.
     if (!session.newDocumentScriptId) {
       const registered = await sendCDP(session, 'Page.addScriptToEvaluateOnNewDocument', { source: INJECT_SCRIPT });
       session.newDocumentScriptId = registered.identifier;
@@ -2133,12 +2227,20 @@ async function inject(session, targetId) {
   await syncMetricsForSession(session);
 }
 
+function scheduleInject(session, targetId) {
+  if (session.injectTimer) clearTimeout(session.injectTimer);
+  session.injectTimer = setTimeout(() => {
+    session.injectTimer = null;
+    inject(session, targetId);
+  }, 120);
+}
+
 async function checkAndHeal(session, targetId) {
   if (session.isChecking || session.isInjecting) return;
   session.isChecking = true;
   try {
     const res = await sendCDP(session, 'Runtime.evaluate', {
-      expression: 'Boolean(document.getElementById("ag-custom-fonts") && window.__ag_patch_version === "20261104-insiders-dev-v20")',
+      expression: `Boolean(document.getElementById("ag-custom-fonts") && window.__ag_patch_version === "${PATCH_VERSION}")`,
       returnByValue: true
     });
     const isHealthy = res?.result?.value === true;
@@ -2154,7 +2256,7 @@ async function checkAndHeal(session, targetId) {
 }
 
 async function attachTarget(target) {
-  if (!target || target.type !== 'page' || !target.webSocketDebuggerUrl) return;
+  if (!isValidAppTarget(target)) return;
   if (activeSockets.has(target.id)) return;
 
   try {
@@ -2164,7 +2266,8 @@ async function attachTarget(target) {
       pendingRequests: new Map(),
       isInjecting: false,
       isChecking: false,
-      lastPushedSig: ''
+      lastPushedSig: '',
+      injectTimer: null
     };
     activeSockets.set(target.id, session);
 
@@ -2208,20 +2311,20 @@ async function attachTarget(target) {
           return;
         }
 
-        // 页面导航或加载事件：触发重注入
+        // 仅在顶层主 Frame 导航或 DOMContentLoaded 时防抖触发重注入，避免单次刷新连跑 4 次
         if (
-          msg.method === 'Page.loadEventFired' ||
           msg.method === 'Page.domContentEventFired' ||
-          msg.method === 'Page.frameNavigated'
+          (msg.method === 'Page.frameNavigated' && !msg.params?.frame?.parentId)
         ) {
           console.log(`[Daemon] Page lifecycle ${msg.method} on ${target.id}`);
-          inject(session, target.id);
+          scheduleInject(session, target.id);
         }
       } catch {}
     };
 
     ws.onclose = () => {
       console.log(`[Daemon] Disconnected from target: ${target.id}`);
+      if (session.injectTimer) clearTimeout(session.injectTimer);
       for (const req of session.pendingRequests.values()) {
         clearTimeout(req.timer);
         req.reject(new Error('WS closed'));
@@ -2231,6 +2334,7 @@ async function attachTarget(target) {
 
     ws.onerror = (e) => {
       console.error(`[Daemon] WS error on target: ${target.id}`, e?.message || '');
+      if (session.injectTimer) clearTimeout(session.injectTimer);
       try { ws.close(); } catch {}
       activeSockets.delete(target.id);
     };
@@ -2246,6 +2350,7 @@ async function sync() {
     if (activeSockets.size > 0) {
       console.log('[Daemon] Antigravity port file unavailable or closed. Clearing active targets.');
       for (const session of activeSockets.values()) {
+        if (session.injectTimer) clearTimeout(session.injectTimer);
         try { session.ws.close(); } catch {}
       }
       activeSockets.clear();
@@ -2253,26 +2358,26 @@ async function sync() {
     return;
   }
 
-  const targets = await queryTargets(port);
-  const currentIds = new Set(targets.map((t) => t.id));
+  const allTargets = await queryTargets(port);
+  const validTargets = allTargets.filter(isValidAppTarget);
+  const currentIds = new Set(validTargets.map((t) => t.id));
 
-  // 清理已经关闭的 target
+  // 清理已经关闭或不再有效的 target
   for (const [id, session] of activeSockets.entries()) {
     if (!currentIds.has(id)) {
+      if (session.injectTimer) clearTimeout(session.injectTimer);
       try { session.ws.close(); } catch {}
       activeSockets.delete(id);
     }
   }
 
-  // 挂载新 target，或对已连接 target 进行自愈巡检
-  for (const target of targets) {
-    if (target.type === 'page') {
-      if (!activeSockets.has(target.id)) {
-        await attachTarget(target);
-      } else {
-        const session = activeSockets.get(target.id);
-        await checkAndHeal(session, target.id);
-      }
+  // 挂载新业务 target，或对已连接 target 进行自愈巡检
+  for (const target of validTargets) {
+    if (!activeSockets.has(target.id)) {
+      await attachTarget(target);
+    } else {
+      const session = activeSockets.get(target.id);
+      await checkAndHeal(session, target.id);
     }
   }
 }
@@ -2283,7 +2388,7 @@ async function syncAllMetrics() {
   }
 }
 
-console.log('[Antigravity Insiders Dev Daemon] Started with active self-healing targeting Insiders.');
+console.log(`[Antigravity Insiders Dev Daemon] Started (${PATCH_VERSION}) with active self-healing targeting Insiders.`);
 setInterval(sync, 2500);
 setInterval(syncAllMetrics, 1200);
 sync();
