@@ -1,59 +1,85 @@
-# chuanban-antigravity-theme-patch
+# 船板的 Antigravity 2.0 主题、字体与深度汉化全栈补丁 (v5.0.0)
 
-> **Google Antigravity 客户端界面补丁 Skill (v4 现行版)**  
-> *Warm-paper theme, layered typography, full bundle static i18n & real-time metrics pill for Google Antigravity — via non-invasive CDP runtime injection.*
+[![Version](https://img.shields.io/badge/version-5.0.0-7A1F1A.svg)](https://github.com/Anarcadia/chuanban-antigravity-theme-patch)
+[![Node](https://img.shields.io/badge/node-%3E%3D22.0.0%20(22.13%2B%20Full)-339933.svg)](https://nodejs.org/)
+[![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey.svg)](https://github.com/Anarcadia/chuanban-antigravity-theme-patch)
 
-> 🔗 **双端权威同步声明**：  
-> - **Notion 发布页（权威源）**：[chuanban-antigravity-theme-patch](https://chuanban.notion.site/chuanban-antigravity-theme-patch-db7c5846f37546be9481cd791aed0554)  
-> - **GitHub 仓库**：[Anarcadia/chuanban-antigravity-theme-patch](https://github.com/Anarcadia/chuanban-antigravity-theme-patch)  
-> *本项目遵守强一致性维护纪律：Notion 发布页与 GitHub 仓库版本必须始终保持同步更新。*
+专为 **Google Antigravity 2.0** 打造的 Anthropic 暖纸学术浅色护眼主题、中英混排字体精调、输入框「古朴暗红蜡封」三态解耦交互、450 条深度界面汉化与实时上下文/缓存命中率指标胶囊。
 
-**极简介绍**：船板自用 Antigravity 界面补丁 Skill。引导执行端 Agent（Claude Code / Codex / Antigravity 等）在用户电脑上制作并常驻安装一套属于自己的 Antigravity 界面补丁——Claude 式暖象牙纸配色预设（三套可切换）、牛皮纸侧栏、更纱黑体 + Anthropic 官方字体三层排版、前端 Bundle 静态扫描汉化（280+ 全界面词条）、模型名称同行实时指标栏（TPS / TTFT / 水位 / Token 消耗）、设置弹窗白屏死锁修复。基于 Chrome DevTools Protocol 运行时动态注入，**不修改 App 原包、不重新打包 .asar、不破坏系统签名**，随时可一键撤销回出厂状态。
+自 **v5.0.0** 起，项目重构为 **「`core/` 只读黄金内核 + `user/` 永不覆盖改装层 + `install.mjs` 一键生命周期 CLI」** 的模块化成品包架构。无论是人类用户手动安装，还是把本仓库交给你的 AI Agent 部署与二次改装，均可 **3 秒一键落地、2.5 秒保存热重载生效**。
 
 ---
 
-## 这是什么
+## 🌐 三端官方获取与引导拓扑
 
-`chuanban-antigravity-theme-patch` 是一份写给执行端 Agent 的一次性安装说明书（Skill）。把它交给 Claude Code、Codex 或 Antigravity 自己，它会按蓝图在你的机器上搭好一套常驻补丁：
+本项目通过以下三个官方端点协同分发：
 
-- **🎨 三套配色预设**：高对比版（默认首选，暖燕麦边栏 + 净白主区 + 近纯黑文字 #0A0A0A）、ClaudeDesktop 净白、复古深色（黄棕牛皮纸双栏），`localStorage` 一个键秒级热切换；
-- **🔤 三层字体排版（Solid Ink 润墨加固）**：UI 几何无衬线（Anthropic Sans + 更纱 UI）→ 正文书卷衬线（Anthropic Serif + 更纱 Slab）→ 代码严格 1:2 等宽（Anthropic Mono + 更纱 Mono Slab），输入框独立配 Codex 同款打字机粗衬线；
-- **🇨🇳 前端 Bundle 静态扫描汉化（v4 升级）**：直接通过 CDP 拉取渲染包（`./assets/index-*.js`）提取全部 Radix 弹出菜单及 15 个设置子页面未挂载词条，内置 280+ 条基准词典与 13 条动态正则，100% 零遗漏，智能排除代码块、终端与正文；
-- **⚡ 输入框实时性能指标栏（v4 新增）**：模型名称同行显示实时性能指标胶囊（`113 tok/s · TTFT 5.3s · Ctx 103k/256k (40%) · Out 1.8k`），自适应居中或极窄自动跳行；悬浮展示双层上浮渐变阴影仪表盘；基于 Node.js 22.5+ 原生 `node:sqlite` 零依赖只读解析本地 db；
-- **🔧 官方 Bug 免疫自愈**：设置弹窗白屏死锁（自定义预设名污染 localStorage）与 TanStack Router `settingsOpen=true` 残留死锁，均在注入层彻底拦截与修复。
-
-三条底线：不改 App 包与 `.asar`；注入幂等（固定 id、全局标记，重复执行不叠加）；随时可一键撤销。
-
-## 使用方式
-
-这个仓库的正文就是 [SKILL.md](SKILL.md)。两种用法：
-
-1. **直接投喂**：把 SKILL.md 全文复制给你的执行端 Agent（Claude Code / Codex / Antigravity），说「按这个装」；
-2. **作为 Skill 安装**：把本仓库克隆（或下载 SKILL.md）到你的 skills 目录，触发词：安装/定制 Antigravity 主题、字体、配色、汉化补丁，或 Antigravity 设置按钮点不开。
-
-Agent 会先确认环境（macOS / Windows、推荐 **Node.js `>= 22.5.0`**、Antigravity 已安装），询问你的配色偏好（不指定则默认部署高对比版），然后完成安装、常驻配置与验收。
-
-## 字体资源
-
-Anthropic 官方字体族（`AnthropicSans` / `AnthropicSerif` / `AnthropicMono`）与更纱黑体超集（`Sarasa-SuperTTC.ttc`）打包在 Google Drive 公开共享库：
-
-<https://drive.google.com/drive/folders/1NX92SgVUqtSjWg6bt6sIJXy-cn7J_boC>
-
-更纱黑体也可以通过 `brew install --cask font-sarasa-gothic`（macOS）或 GitHub Release（Windows）安装。
-
-## 安全说明
-
-- 补丁通过 CDP 只连接 `127.0.0.1` 本地回环，不把调试端口暴露到外网；
-- 不修改 `/Applications/Antigravity.app` 原生二进制，不破坏系统签名与自动更新；
-- 卸载即净：停掉并删除 LaunchAgent → 结束守护进程 → 设置里切回 Default Light → 重启 Antigravity → 删除补丁目录，100% 回退出厂状态。
-
-## 适合谁
-
-- 用 Antigravity 干活、受够了冷灰工程界面的人；
-- 想要 Claude Desktop 那种暖纸阅读质感的人；
-- 想要了解会话 Token 水位、TPS 生成速度与响应延时的人；
-- 喜欢美观字体的颜控。
+| 端点 | 链接 | 角色与内容说明 |
+| :--- | :--- | :--- |
+| **1. Notion 引导页** | [**船板 Notion 主题补丁主页**](https://chuanban.notion.site/chuanban-antigravity-theme-patch-db7c5846f37546be9481cd791aed0554) | **Skill + 说明引导页**。提供设计理念展示、AI Agent 引导提示词，并引导前往 Google Drive 与 GitHub。 |
+| **2. Google Drive 完全包** | [**Google Drive 完全资源包文件夹**](https://drive.google.com/drive/folders/1NX92SgVUqtSjWg6bt6sIJXy-cn7J_boC) | **全项目 + 全套字体完全资源包**。包含完整项目源码包，以及商业版权 **Anthropic 官方字体族**（Sans / Serif / Mono）与 **更纱黑体超集**（Sarasa Gothic SC / Mono SC / Term SC）。 |
+| **3. GitHub 权威代码库** | [**Anarcadia/chuanban-antigravity-theme-patch**](https://github.com/Anarcadia/chuanban-antigravity-theme-patch) | **权威代码完全体**。包含全部 `core/` 黄金内核、`user/` 改装层模板与 `install.mjs` CLI（注：因字体版权规范，GitHub 仓库不直接内置 Anthropic 字体二进制文件，字体请点击上方 Google Drive 链接下载）。 |
 
 ---
 
-*Made by [船板](https://github.com/Anarcadia) · 原方案数值与选择器均经 macOS 实测 · 与 Notion 发布页双向保持强一致性同步*
+## ✨ 核心特性（v5.0.0）
+
+- **📦 模块化成品包与零转义内核**：彻底告别将 CSS/JS 塞进单文件多重反斜杠转义字符串的历史。`core/theme.css`、`core/i18n.json`、`core/runtime.js`、`core/daemon.mjs` 四大模块全部以原生格式独立存在，附带 SHA-256 签名清单 `core/manifest.json`。
+- **🔧 `user/` 无损热改装层（2.5 秒热重载）**：所有个性化定制（`user/config.json`、`user/custom.css`、`user/i18n.override.json`、`user/custom.js`）均与 `core/` 黄金内核物理隔离。未来升级补丁永不覆盖你的个人配置，且修改保存后 **2.5 秒内自动热更新至 Antigravity 窗口**，无需重启守护进程。
+- **🕯️ 输入框「古朴暗红蜡封」三态解耦（设计 C / A / B）**：
+  - **首页新建对话**：日常保持 **设计 C（透明外框）**，鼠标悬停或打字聚焦时浮现 **设计 A（`1.5px` 淡雅蜡封线）**；
+  - **日常推进聊天会话**：日常常驻 **设计 A（`1.5px` 淡雅蜡封线）**，鼠标悬停或打字聚焦时加深变粗为 **设计 B（`2px` 浓郁古朴暗红蜡封 `#7A1F1A` + 微暖内发光）**；
+  - 纯组件级 CSS `:has()` 驱动，页面切换 **0ms 瞬时响应**。
+- **⚡ Node.js 动态分级兼容**：
+  - **Node `>= 22.0`**：完整启用暖纸主题、字体排版、450 条深度汉化、死锁自愈与原生设置面板；
+  - **Node `>= 22.13`**：通过动态 `await import('node:sqlite')` 自动解锁底部 **实时会话指标胶囊**（精准展示模型名、每轮平均耗时、上下文窗口占用与真实缓存命中率）。
+
+---
+
+## 🚀 快速开始
+
+### 方式 A：交给你的 AI Agent 一键部署（推荐）
+直接对你的 AI Agent（Antigravity / Claude Code / Codex / Cursor 等）发送：
+> 请读取 `/path/to/chuanban-antigravity-theme-patch/SKILL.md`，帮我执行 `node install.mjs doctor` 和 `node install.mjs install` 完成主题补丁部署与实机验证。
+
+### 方式 B：终端手动一键安装
+
+1. **安装前置字体**：从 [Google Drive 完全资源包](https://drive.google.com/drive/folders/1NX92SgVUqtSjWg6bt6sIJXy-cn7J_boC) 下载字体并安装到系统字体目录。
+2. **执行一键安装与自检**：
+   ```bash
+   git clone https://github.com/Anarcadia/chuanban-antigravity-theme-patch.git
+   cd chuanban-antigravity-theme-patch
+
+   # 1. 环境与字体体检
+   node install.mjs doctor
+
+   # 2. 一键安装并启动后台守护服务（支持 --channel stable 或 --channel insiders）
+   node install.mjs install
+
+   # 3. 验证实时 CDP 注入状态
+   node install.mjs verify
+   ```
+
+---
+
+## 🛠️ 常用 CLI 命令 (`install.mjs`)
+
+| 命令 | 说明 |
+| :--- | :--- |
+| `node install.mjs doctor` | 全面诊断 Node 版本、`node:sqlite` 可用性、字体文件、核心文件 SHA-256、守护进程与 CDP 端口状态 |
+| `node install.mjs install [--channel stable\|insiders]` | 备份旧版、部署 `core/` 内核、保留 `user/` 改装层、配置 `argv.json` 并启动系统后台守护服务 |
+| `node install.mjs verify [--safe-mode]` | 立即通过 CDP 向当前 Antigravity 窗口推送注入并校验（加 `--safe-mode` 可临时屏蔽 `user/` 层排查冲突） |
+| `node install.mjs rollback` | 一键回滚至 `~/.gemini/antigravity/theme-patch/backups/` 下最近一次自动备份的版本 |
+| `node install.mjs uninstall` | 停止后台守护服务并移除包装脚本（保留 `theme-patch/user` 配置以备后用） |
+
+---
+
+## 📁 目录结构与二次定制指南
+
+详见 [SKILL.md](SKILL.md) 第五节。所有个人微调请直接编辑安装目录 `~/.gemini/antigravity/theme-patch/user/` 下的文件：
+- `user/config.json`：切换功能模块开关、覆盖全局 CSS 变量（如 `--ag-chat-font-size`）；
+- `user/custom.css`：追加自定义 CSS 样式；
+- `user/i18n.override.json`：覆盖或新增汉化词条；
+- `user/custom.js`：编写在独立沙箱内执行的自定义前端脚本。
+
+> 历史 v4 单文件架构技术蓝图已归档至 [`DOCS/BLUEPRINT_V4_LEGACY.md`](DOCS/BLUEPRINT_V4_LEGACY.md)。
