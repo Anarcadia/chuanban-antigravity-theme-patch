@@ -273,22 +273,52 @@ function fetchTargetsFromPort(port) {
   });
 }
 
-async function inspectLiveWindow(portFile, fallbackPort = 9222) {
+async function inspectLiveWindow(portFileOrEnv, fallbackPort = 9222) {
+  const candidateFiles = [];
+  const candidatePorts = [];
+
+  if (portFileOrEnv && typeof portFileOrEnv === 'object' && portFileOrEnv.channels) {
+    if (portFileOrEnv.portFile) candidateFiles.push(portFileOrEnv.portFile);
+    if (portFileOrEnv.channels.stable?.portFile) candidateFiles.push(portFileOrEnv.channels.stable.portFile);
+    if (portFileOrEnv.channels.insiders?.portFile) candidateFiles.push(portFileOrEnv.channels.insiders.portFile);
+    candidatePorts.push(9222, 9223);
+  } else if (typeof portFileOrEnv === 'string' && portFileOrEnv) {
+    candidateFiles.push(portFileOrEnv);
+    if (fallbackPort > 0) candidatePorts.push(fallbackPort);
+  } else if (fallbackPort > 0) {
+    candidatePorts.push(fallbackPort);
+  }
+
   let port = null;
   let targets = [];
-  if (portFile && fs.existsSync(portFile)) {
-    const raw = fs.readFileSync(portFile, 'utf8').trim();
-    const parsed = parseInt(raw.split(/\r?\n/)[0], 10);
-    if (parsed > 0) {
-      port = parsed;
-      targets = await fetchTargetsFromPort(port);
+  const triedPorts = new Set();
+
+  for (const pf of candidateFiles) {
+    if (pf && fs.existsSync(pf)) {
+      const raw = fs.readFileSync(pf, 'utf8').trim();
+      const parsed = parseInt(raw.split(/\r?\n/)[0], 10);
+      if (parsed > 0 && !triedPorts.has(parsed)) {
+        triedPorts.add(parsed);
+        const res = await fetchTargetsFromPort(parsed);
+        if (res.length > 0) {
+          port = parsed;
+          targets = res;
+          break;
+        }
+      }
     }
   }
-  if (targets.length === 0 && fallbackPort > 0 && fallbackPort !== port) {
-    const fbTargets = await fetchTargetsFromPort(fallbackPort);
-    if (fbTargets.length > 0) {
-      port = fallbackPort;
-      targets = fbTargets;
+  if (targets.length === 0) {
+    for (const fb of candidatePorts) {
+      if (fb > 0 && !triedPorts.has(fb)) {
+        triedPorts.add(fb);
+        const fbTargets = await fetchTargetsFromPort(fb);
+        if (fbTargets.length > 0) {
+          port = fb;
+          targets = fbTargets;
+          break;
+        }
+      }
     }
   }
   if (!port || targets.length === 0) {
@@ -373,7 +403,7 @@ async function runDoctor() {
   const targetDir = path.resolve(getArg('--target-dir', resolveDefaultTargetDir()));
   const env = await detectEnvironment(channel);
   const integrity = verifyCoreIntegrity(targetDir);
-  const live = await inspectLiveWindow(env.portFile);
+  const live = await inspectLiveWindow(env);
 
   const report = {
     ok: Boolean(env.nodeBasicOk && integrity.ok),
@@ -583,48 +613,46 @@ async function runInstall() {
   const targetUser = path.join(targetDir, 'user');
 
   let backupCreated = null;
-  if (fs.resolve ? path.resolve(__dirname) !== targetDir : true) {
-    if (path.resolve(__dirname) !== targetDir) {
-      fs.mkdirSync(targetDir, { recursive: true });
+  if (path.resolve(__dirname) !== targetDir) {
+    fs.mkdirSync(targetDir, { recursive: true });
 
-      // 仅当已安装的 core/ 与当前待安装 core/ 的 manifest SHA-256 不同时才备份，防止重复 install 冲掉上一版快照
-      const srcManifestPath = path.join(srcCore, 'manifest.json');
-      const targetManifestPath = path.join(targetCore, 'manifest.json');
-      const shouldBackup =
-        fs.existsSync(targetCore) &&
-        (!fs.existsSync(targetManifestPath) || sha256File(srcManifestPath) !== sha256File(targetManifestPath));
+    // 仅当已安装的 core/ 与当前待安装 core/ 的 manifest SHA-256 不同时才备份，防止重复 install 冲掉上一版快照
+    const srcManifestPath = path.join(srcCore, 'manifest.json');
+    const targetManifestPath = path.join(targetCore, 'manifest.json');
+    const shouldBackup =
+      fs.existsSync(targetCore) &&
+      (!fs.existsSync(targetManifestPath) || sha256File(srcManifestPath) !== sha256File(targetManifestPath));
 
-      if (shouldBackup) {
-        const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-        const stampedBackupDir = path.join(backupsDir, stamp);
-        fs.mkdirSync(backupsDir, { recursive: true });
-        copyDirRecursive(targetCore, stampedBackupDir);
-        fs.rmSync(targetPrev, { recursive: true, force: true });
-        copyDirRecursive(targetCore, targetPrev);
-        backupCreated = stampedBackupDir;
-      } else if (fs.existsSync(targetCore) && !fs.existsSync(targetPrev)) {
-        copyDirRecursive(targetCore, targetPrev);
-        backupCreated = targetPrev;
+    if (shouldBackup) {
+      const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const stampedBackupDir = path.join(backupsDir, stamp);
+      fs.mkdirSync(backupsDir, { recursive: true });
+      copyDirRecursive(targetCore, stampedBackupDir);
+      fs.rmSync(targetPrev, { recursive: true, force: true });
+      copyDirRecursive(targetCore, targetPrev);
+      backupCreated = stampedBackupDir;
+    } else if (fs.existsSync(targetCore) && !fs.existsSync(targetPrev)) {
+      copyDirRecursive(targetCore, targetPrev);
+      backupCreated = targetPrev;
+    }
+
+    fs.rmSync(targetCore, { recursive: true, force: true });
+    copyDirRecursive(srcCore, targetCore);
+
+    // user/ 层永不覆盖已有文件
+    fs.mkdirSync(targetUser, { recursive: true });
+    for (const item of fs.readdirSync(srcUser)) {
+      const s = path.join(srcUser, item);
+      const d = path.join(targetUser, item);
+      if (!fs.existsSync(d)) {
+        fs.copyFileSync(s, d);
       }
+    }
 
-      fs.rmSync(targetCore, { recursive: true, force: true });
-      copyDirRecursive(srcCore, targetCore);
-
-      // user/ 层永不覆盖已有文件
-      fs.mkdirSync(targetUser, { recursive: true });
-      for (const item of fs.readdirSync(srcUser)) {
-        const s = path.join(srcUser, item);
-        const d = path.join(targetUser, item);
-        if (!fs.existsSync(d)) {
-          fs.copyFileSync(s, d);
-        }
-      }
-
-      for (const docFile of ['install.mjs', 'SKILL.md', 'README.md']) {
-        const s = path.join(__dirname, docFile);
-        const d = path.join(targetDir, docFile);
-        if (fs.existsSync(s)) fs.copyFileSync(s, d);
-      }
+    for (const docFile of ['install.mjs', 'SKILL.md', 'README.md']) {
+      const s = path.join(__dirname, docFile);
+      const d = path.join(targetDir, docFile);
+      if (fs.existsSync(s)) fs.copyFileSync(s, d);
     }
   }
 
@@ -669,7 +697,7 @@ async function runInstall() {
     stdio: 'inherit'
   });
 
-  const live = await inspectLiveWindow(env.portFile);
+  const live = await inspectLiveWindow(env);
   console.log(
     '\n[Install Complete]',
     JSON.stringify(
@@ -700,8 +728,8 @@ async function runVerify() {
 
   spawnSync(process.execPath, daemonArgs, { stdio: 'inherit' });
   const env = await detectEnvironment(channel);
-  const live = await inspectLiveWindow(env.portFile);
-  const ok = Boolean(live.reachable && (live.state?.hasStyle || live. pages === 0));
+  const live = await inspectLiveWindow(env);
+  const ok = Boolean(live.reachable && (live.state?.hasStyle || live.pages === 0));
   console.log(
     JSON.stringify(
       {
@@ -770,7 +798,7 @@ async function runRollback() {
   });
 
   const env = await detectEnvironment('auto');
-  const live = await inspectLiveWindow(env.portFile);
+  const live = await inspectLiveWindow(env);
   console.log(
     JSON.stringify(
       {
@@ -862,8 +890,10 @@ async function runUninstall() {
   } else if (process.platform === 'win32') {
     const appData = process.env.APPDATA || path.join(home, 'AppData', 'Roaming');
     const vbsFile = path.join(appData, 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup', 'AntigravityThemeDaemon.vbs');
+    const localVbs = path.join(resolveDefaultTargetDir(), 'AntigravityThemeDaemon.vbs');
     try {
       if (fs.existsSync(vbsFile)) fs.unlinkSync(vbsFile);
+      if (fs.existsSync(localVbs)) fs.unlinkSync(localVbs);
     } catch {}
     try {
       spawnSync('reg', ['delete', 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run', '/v', 'AntigravityThemeDaemon', '/f'], {

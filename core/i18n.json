@@ -226,7 +226,7 @@
   "Prevent the computer from sleeping while the app is running.": "在应用运行期间阻止系统进入休眠状态。",
   "Keep the app accessible from the menu bar and running in the background when all windows are closed.": "在所有窗口关闭后保持应用在后台运行，并可通过菜单栏快捷访问。",
   "Notification Settings": "通知设置",
-  "To modify notification settings, open your operating system's system preferences.": "如需修改通知设置，请前往 macOS 的系统设置进行配置。",
+  "To modify notification settings, open your operating system's system preferences.": "如需修改通知设置，请前往操作系统的系统设置进行配置。",
   "Version": "版本信息",
   "App version": "客户端版本",
   "MCP Tools": "MCP 工具",

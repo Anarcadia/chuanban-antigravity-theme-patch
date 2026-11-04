@@ -94,7 +94,8 @@ function resolveChannelPaths(singleChannel = 'stable', userCfg = {}) {
   }
 
   const defaultConvDir = path.join(home, geminiSubDir, 'conversations');
-  const argvPath = path.join(home, isInsiders ? '.antigravity-insiders' : '.antigravity', 'argv.json');
+  const dotDir = path.join(home, isInsiders ? '.antigravity-insiders' : '.antigravity');
+  const argvPath = path.join(dotDir, 'argv.json');
   let fallbackPort = isInsiders ? 9223 : 9222;
   try {
     if (fs.existsSync(argvPath)) {
@@ -103,10 +104,15 @@ function resolveChannelPaths(singleChannel = 'stable', userCfg = {}) {
     }
   } catch {}
 
+  const portFile = getArg('--port-file', userCfg.portFile || defaultPortFile);
+  const channelInstalled =
+    fs.existsSync(portFile) || fs.existsSync(path.dirname(defaultPortFile)) || fs.existsSync(dotDir);
+
   return {
     channel: singleChannel,
-    portFile: getArg('--port-file', userCfg.portFile || defaultPortFile),
+    portFile,
     fallbackPort: Number(userCfg.fallbackPort) > 0 ? Number(userCfg.fallbackPort) : fallbackPort,
+    channelInstalled,
     conversationsDir: getArg('--conversations-dir', userCfg.conversationsDir || defaultConvDir)
   };
 }
@@ -450,12 +456,19 @@ function parseConversationMetrics(cascadeId, conversationsDir) {
       setMetricsCache(dbPath, { sig, payload: emptyPayload });
       return emptyPayload;
     }
-    const userSteps = db.prepare('SELECT idx FROM steps WHERE step_type = 14 ORDER BY idx ASC').all();
-    const plannerSteps = db.prepare('SELECT idx FROM steps WHERE step_type = 15 ORDER BY idx ASC').all();
+    // 利用 idx_steps_step_type 覆盖索引直接在 SQLite C 引擎内完成聚合计数，0 数组分配
+    const userStat = db
+      .prepare('SELECT COUNT(*) AS cnt, COALESCE(MAX(idx), -1) AS lastIdx FROM steps WHERE step_type = 14')
+      .get();
+    const lastUserStepIdx = userStat?.lastIdx ?? -1;
+    const userStepsCount = userStat?.cnt ?? 0;
+    const turnStat = db
+      .prepare('SELECT COUNT(*) AS cnt FROM steps WHERE step_type = 15 AND idx > ?')
+      .get(lastUserStepIdx);
+    const rawTurnSteps = turnStat?.cnt ?? 0;
     db.close();
     db = null;
 
-    const lastUserStepIdx = userSteps.length > 0 ? userSteps[userSteps.length - 1].idx : -1;
     let totalIn = 0;
     let totalCache = 0;
     let totalOut = 0;
@@ -506,7 +519,6 @@ function parseConversationMetrics(cascadeId, conversationsDir) {
     }
 
     // 统计最后一条用户提问之后的模型规划步数，并从有效调用末尾切片汇总，消除按位置对齐的错位风险
-    const rawTurnSteps = plannerSteps.filter((s) => s.idx > lastUserStepIdx).length;
     const turnSlice = rawTurnSteps > 0 ? valid.slice(-rawTurnSteps) : [];
     const turnSteps = turnSlice.length;
     let turnOut = 0;
@@ -553,7 +565,7 @@ function parseConversationMetrics(cascadeId, conversationsDir) {
       `<div class="ag-tt-row"><span class="ag-tt-lbl">当前上下文</span><span class="ag-tt-val">${fmtNum(last.ctx)} (新增 ${fmtNum(last.inTok)} + 缓存 ${fmtNum(last.cacheRead)}, ${lastCacheRate}%)</span></div>`,
       `<div class="ag-tt-row"><span class="ag-tt-lbl">本步输出量</span><span class="ag-tt-val">${fmtNum(last.outTok)} (思考链 ${fmtNum(last.thinkTok)} + 正文/工具 ${fmtNum(last.respTok)})</span></div>`,
       turnRowHtml,
-      `<div class="ag-tt-hdr ag-tt-sec">当前会话累计 (${userSteps.length} 轮提问 / ${valid.length} 次有效调用)</div>`,
+      `<div class="ag-tt-hdr ag-tt-sec">当前会话累计 (${userStepsCount} 轮提问 / ${valid.length} 次有效调用)</div>`,
       `<div class="ag-tt-row"><span class="ag-tt-lbl">压缩水位线</span><span class="ag-tt-val">${fmtTok(last.ctx)} / ${limitKStr} (${ctxPct}%) · 距压缩余 ${fmtTok(remainCtx)}</span></div>`,
       `<div class="ag-tt-row"><span class="ag-tt-lbl">累计输入量</span><span class="ag-tt-val">新增 ${fmtTok(totalIn)} + 缓存读取 ${fmtTok(totalCache)} (命中率 ${sessionCacheRate}%)</span></div>`,
       `<div class="ag-tt-row"><span class="ag-tt-lbl">累计输出量</span><span class="ag-tt-val">总计 ${fmtTok(totalOut)} (思考链 ${fmtTok(totalThink)} + 正文/工具 ${fmtTok(totalResp)})</span></div>`
@@ -577,22 +589,6 @@ function parseConversationMetrics(cascadeId, conversationsDir) {
     try {
       db?.close();
     } catch {}
-  }
-}
-
-function getLatestCascadeId(conversationsDir) {
-  try {
-    const files = fs
-      .readdirSync(conversationsDir)
-      .filter((f) => f.endsWith('.db'))
-      .map((f) => {
-        const full = path.join(conversationsDir, f);
-        return { id: f.slice(0, -3), mtime: fs.statSync(full).mtimeMs };
-      })
-      .sort((a, b) => b.mtime - a.mtime);
-    return files[0]?.id || '';
-  } catch {
-    return '';
   }
 }
 
@@ -700,22 +696,27 @@ function attachTarget(target, endpoint) {
 
       const syncMetricsForSession = async (force = false) => {
         if (!DatabaseSync || !activeConfig.modules.metrics || !activeConfig.enabled) return;
-        const evalRes = await send('Runtime.evaluate', {
-          expression: `(function(){
-            if (window.__ag_watched_cascade_id) return window.__ag_watched_cascade_id;
-            const m = window.location.pathname.match(/\\/c\\/([0-9a-f-]{36})/i);
-            if (m) return m[1];
-            const el = document.querySelector('[data-testid=conversation-row-sidebar][data-selected=true]');
-            return el ? (el.getAttribute('data-cascade-id') || '') : '';
-          })()`,
-          returnByValue: true
-        });
-        const detected = evalRes?.result?.result?.value;
-        if (detected && /^[0-9a-f-]{36}$/i.test(detected)) {
-          activeCascadeId = detected;
+
+        // 仅在尚未获知 activeCascadeId 或强制重同步时向前端发起 Runtime.evaluate，日常靠 __agRequestMetrics 绑定事件实时驱动
+        if (!activeCascadeId || force) {
+          const evalRes = await send('Runtime.evaluate', {
+            expression: `(function(){
+              if (window.__ag_watched_cascade_id) return window.__ag_watched_cascade_id;
+              const m = window.location.pathname.match(/\\/c\\/([0-9a-f-]{36})/i);
+              if (m) return m[1];
+              const el = document.querySelector('[data-testid=conversation-row-sidebar][data-selected=true]');
+              return el ? (el.getAttribute('data-cascade-id') || '') : '';
+            })()`,
+            returnByValue: true
+          });
+          const detected = evalRes?.result?.result?.value;
+          if (detected && /^[0-9a-f-]{36}$/i.test(detected)) {
+            activeCascadeId = detected;
+          }
         }
         if (!activeCascadeId) return;
 
+        // 先在 Node 本地通过 statSync 检查 .db/.db-wal 签名，未变化则 0 WebSocket 通信直接返回
         const sig = getDbSignature(activeCascadeId, endpoint.conversationsDir) || 'empty';
         const sessionKey = `${activeCascadeId}@${sig}`;
         if (!force && sessionKey === lastPushedHash) return;
@@ -833,11 +834,14 @@ function attachTarget(target, endpoint) {
 }
 
 let isSyncing = false;
+let syncTickCount = 0;
 async function sync() {
   if (isSyncing) return;
   isSyncing = true;
+  syncTickCount = (syncTickCount + 1) % 6000;
   try {
     const bundleChanged = rebuildBundleIfNeeded();
+    const shouldHeartbeatCheck = bundleChanged || syncTickCount % 6 === 1;
 
     const activeTargetIds = new Set();
     const attachPromises = [];
@@ -850,7 +854,12 @@ async function sync() {
         probedPorts.add(port);
         targets = await fetchTargets(port);
       }
-      if (targets.length === 0 && endpoint.fallbackPort && !probedPorts.has(endpoint.fallbackPort)) {
+      if (
+        targets.length === 0 &&
+        endpoint.channelInstalled !== false &&
+        endpoint.fallbackPort &&
+        !probedPorts.has(endpoint.fallbackPort)
+      ) {
         probedPorts.add(endpoint.fallbackPort);
         targets = await fetchTargets(endpoint.fallbackPort);
       }
@@ -874,7 +883,7 @@ async function sync() {
           if (bundleChanged && entry.send) {
             await entry.send('Page.addScriptToEvaluateOnNewDocument', { source: cachedInjectScript });
           }
-          if (entry.checkAndInject) await entry.checkAndInject();
+          if (shouldHeartbeatCheck && entry.checkAndInject) await entry.checkAndInject();
           if (entry.syncMetricsForSession) await entry.syncMetricsForSession(bundleChanged);
         }
       }

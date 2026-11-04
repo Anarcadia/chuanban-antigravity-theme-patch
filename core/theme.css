@@ -175,33 +175,33 @@ html[data-ag-preset] #antigravity\.agentSidePanelInputBox, html[data-ag-preset] 
   transition: border-color 220ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 220ms cubic-bezier(0.16, 1, 0.3, 1) !important;
 }
 
-/* ---------------------------------------------------------------------- * 【场景 2：首页 / 空白新建对话场景】 * 判定依据（纯 CSS 0ms 瞬时响应，彻底解耦 JS 轮询延迟）： * 1. 输入框组件自身含分支选择器 [data-testid="branch-pill-trigger"] 或项目选择器头部 * 2. 或 html 根节点包含 [data-testid="home-greeting"] * ---------------------------------------------------------------------- */
+/* ---------------------------------------------------------------------- * 【场景 2：首页 / 空白新建对话场景】 * 判定依据（组件级纯 CSS :has() 0ms 瞬时响应 + html[data-ag-page-type="home"] 零重算兜底）： * 1. 输入框组件自身含分支选择器 [data-testid="branch-pill-trigger"] 或项目选择器头部 * 2. 或 html 根节点标记 [data-ag-page-type="home"] * ---------------------------------------------------------------------- */
 /* 2.1 新建对话日常常态：设计 C (外框完全透明，无阴影，融于背景) */
-#antigravity\.agentSidePanelInputBox:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"]), [id="antigravity.agentSidePanelInputBox"]:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"]), .surface-composer.bg-card-border:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"]), html:has([data-testid="home-greeting"]) #antigravity\.agentSidePanelInputBox, html:has([data-testid="home-greeting"]) [id="antigravity.agentSidePanelInputBox"], html:has([data-testid="home-greeting"]) .surface-composer.bg-card-border {
+#antigravity\.agentSidePanelInputBox:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"]), [id="antigravity.agentSidePanelInputBox"]:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"]), .surface-composer.bg-card-border:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"]), html[data-ag-page-type="home"] #antigravity\.agentSidePanelInputBox, html[data-ag-page-type="home"] [id="antigravity.agentSidePanelInputBox"], html[data-ag-page-type="home"] .surface-composer.bg-card-border {
   border: 1.5px solid transparent !important;
   border-color: transparent !important;
   box-shadow: none !important;
 }
 
 /* 2.2 新建对话鼠标移上 / 聚焦：变成为设计 A (略粗一点颜色偏淡蜡封暗红，微阴影) */
-#antigravity\.agentSidePanelInputBox:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"]):hover, [id="antigravity.agentSidePanelInputBox"]:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"]):hover, .surface-composer.bg-card-border:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"]):hover, #antigravity\.agentSidePanelInputBox:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"]):focus-within, [id="antigravity.agentSidePanelInputBox"]:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"]):focus-within, .surface-composer.bg-card-border:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"]):focus-within, html:has([data-testid="home-greeting"]) #antigravity\.agentSidePanelInputBox:hover, html:has([data-testid="home-greeting"]) [id="antigravity.agentSidePanelInputBox"]:hover, html:has([data-testid="home-greeting"]) .surface-composer.bg-card-border:hover, html:has([data-testid="home-greeting"]) #antigravity\.agentSidePanelInputBox:focus-within, html:has([data-testid="home-greeting"]) [id="antigravity.agentSidePanelInputBox"]:focus-within, html:has([data-testid="home-greeting"]) .surface-composer.bg-card-border:focus-within {
+#antigravity\.agentSidePanelInputBox:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"]):hover, [id="antigravity.agentSidePanelInputBox"]:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"]):hover, .surface-composer.bg-card-border:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"]):hover, #antigravity\.agentSidePanelInputBox:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"]):focus-within, [id="antigravity.agentSidePanelInputBox"]:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"]):focus-within, .surface-composer.bg-card-border:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"]):focus-within, html[data-ag-page-type="home"] #antigravity\.agentSidePanelInputBox:hover, html[data-ag-page-type="home"] [id="antigravity.agentSidePanelInputBox"]:hover, html[data-ag-page-type="home"] .surface-composer.bg-card-border:hover, html[data-ag-page-type="home"] #antigravity\.agentSidePanelInputBox:focus-within, html[data-ag-page-type="home"] [id="antigravity.agentSidePanelInputBox"]:focus-within, html[data-ag-page-type="home"] .surface-composer.bg-card-border:focus-within {
   border: 1.5px solid rgba(116, 34, 26, 0.36) !important;
   border-color: rgba(116, 34, 26, 0.36) !important;
   box-shadow: 0 1px 3px rgba(116, 34, 26, 0.04) !important;
 }
 
-/* ---------------------------------------------------------------------- * 【场景 1：日常推进具体聊天会话页面】（严格限定非新建态：排斥 branch-pill-trigger、项目头部与 home-greeting） * ---------------------------------------------------------------------- */
+/* ---------------------------------------------------------------------- * 【场景 1：日常推进具体聊天会话页面】（严格限定非新建态：排斥 branch-pill-trigger、项目头部与 home） * ---------------------------------------------------------------------- */
 /* 1.1 具体会话日常常态：设计 A (略粗一点颜色偏淡蜡封暗红) */
-html:not(:has([data-testid="home-greeting"])) #antigravity\.agentSidePanelInputBox:not(:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"])), html:not(:has([data-testid="home-greeting"])) [id="antigravity.agentSidePanelInputBox"]:not(:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"])), html:not(:has([data-testid="home-greeting"])) .surface-composer.bg-card-border:not(:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"])) {
+html:not([data-ag-page-type="home"]) #antigravity\.agentSidePanelInputBox:not(:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"])), html:not([data-ag-page-type="home"]) [id="antigravity.agentSidePanelInputBox"]:not(:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"])), html:not([data-ag-page-type="home"]) .surface-composer.bg-card-border:not(:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"])) {
   border: 1.5px solid rgba(116, 34, 26, 0.36) !important;
   border-color: rgba(116, 34, 26, 0.36) !important;
   box-shadow: 0 1px 3px rgba(116, 34, 26, 0.03) !important;
 }
 
-/* 1.2 具体会话移上 / 聚焦：变成为设计 B (加深变浓实色蜡封暗红 #74221A) */
-html:not(:has([data-testid="home-greeting"])) #antigravity\.agentSidePanelInputBox:not(:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"])):hover, html:not(:has([data-testid="home-greeting"])) [id="antigravity.agentSidePanelInputBox"]:not(:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"])):hover, html:not(:has([data-testid="home-greeting"])) .surface-composer.bg-card-border:not(:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"])):hover, html:not(:has([data-testid="home-greeting"])) #antigravity\.agentSidePanelInputBox:not(:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"])):focus-within, html:not(:has([data-testid="home-greeting"])) [id="antigravity.agentSidePanelInputBox"]:not(:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"])):focus-within, html:not(:has([data-testid="home-greeting"])) .surface-composer.bg-card-border:not(:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"])):focus-within {
-  border: 1.5px solid #74221A !important;
-  border-color: #74221A !important;
+/* 1.2 具体会话移上 / 聚焦：变成为设计 B (加深变浓实色蜡封暗红，支持 --ag-wax-seal-hover 覆盖) */
+html:not([data-ag-page-type="home"]) #antigravity\.agentSidePanelInputBox:not(:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"])):hover, html:not([data-ag-page-type="home"]) [id="antigravity.agentSidePanelInputBox"]:not(:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"])):hover, html:not([data-ag-page-type="home"]) .surface-composer.bg-card-border:not(:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"])):hover, html:not([data-ag-page-type="home"]) #antigravity\.agentSidePanelInputBox:not(:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"])):focus-within, html:not([data-ag-page-type="home"]) [id="antigravity.agentSidePanelInputBox"]:not(:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"])):focus-within, html:not([data-ag-page-type="home"]) .surface-composer.bg-card-border:not(:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"])):focus-within {
+  border: 1.5px solid var(--ag-wax-seal-hover, #74221A) !important;
+  border-color: var(--ag-wax-seal-hover, #74221A) !important;
   box-shadow: 0 1px 4px rgba(116, 34, 26, 0.12) !important;
 }
 
@@ -288,14 +288,14 @@ html[data-ag-preset] #antigravity\.agentSidePanelInputBox [data-testid="voice-li
   display: flex !important;
 }
 
-/* 8. 界面排版扎实度与温润墨感增强（保留更纱黑体不变） */
+/* 8. 界面排版扎实度与温润墨感增强（保留更纱黑体不变，通过 --ag-ink-shadow-* 变量 O(1) 兼容 Windows ClearType） */
 /* 侧边栏常规列表：字重450微收敛、微负字距凝聚、深暖炭墨色、0.2px微润墨柔化硬切角 */
 .bg-sidebar a, .bg-sidebar button, .bg-sidebar [class*="truncate"], .bg-sidebar [class*="text-sm"], .bg-sidebar [class*="text-xs"], aside a, aside button {
   font-weight: 450 !important;
   letter-spacing: -0.012em !important;
   color: #262422 !important;
   text-rendering: optimizeLegibility;
-  text-shadow: 0 0 0.2px rgba(38, 36, 34, 0.35);
+  text-shadow: var(--ag-ink-shadow-sm);
 }
 
 /* 侧边栏任务清单/对话列表标题：微量减轻一个层级至 400，消除墨晕阴影，西文恢复清爽秀气 */
@@ -310,13 +310,13 @@ html[data-ag-preset] #antigravity\.agentSidePanelInputBox [data-testid="voice-li
 button[data-testid="project-header"], button[data-project-card="true"], [data-project-label], [data-subtext] span[class*="text-muted"], span:has(> svg) + span {
   font-weight: 450 !important;
   color: #383533 !important;
-  text-shadow: 0 0 0.15px rgba(38, 36, 34, 0.25) !important;
+  text-shadow: var(--ag-ink-shadow-xs) !important;
 }
 
 button[data-testid="project-header"] span, button[data-project-card="true"] span {
   font-weight: 450 !important;
   color: #2C2B29 !important;
-  text-shadow: 0 0 0.15px rgba(38, 36, 34, 0.25) !important;
+  text-shadow: var(--ag-ink-shadow-xs) !important;
   letter-spacing: -0.01em !important;
 }
 
@@ -324,7 +324,7 @@ button[data-testid="project-header"] span, button[data-project-card="true"] span
 [data-testid="conversation-row-sidebar"][data-selected="true"], [data-testid="conversation-row-sidebar"][data-selected="true"] span, .bg-sidebar [data-active="true"], .bg-sidebar [data-active="true"] span, .bg-sidebar [aria-selected="true"] {
   font-weight: 520 !important;
   color: #0A0A0A !important;
-  text-shadow: 0 0 0.25px rgba(10, 10, 10, 0.4);
+  text-shadow: var(--ag-ink-shadow-md);
 }
 
 /* 侧栏分类小标题（如置顶对话、项目管理） */
@@ -343,7 +343,7 @@ button, [role="button"], select {
 #antigravity\.agentSidePanelInputBox [class*="text-secondary-foreground"], #antigravity\.agentSidePanelInputBox button, #antigravity\.agentSidePanelInputBox span {
   font-weight: 500 !important;
   letter-spacing: -0.012em !important;
-  text-shadow: 0 0 0.25px rgba(10, 10, 10, 0.4);
+  text-shadow: var(--ag-ink-shadow-md);
 }
 
 /* 8.5 菜单、弹出层与设置项目字重全面对齐稳定版 (Solid Ink Optimization) */
@@ -387,7 +387,7 @@ button, [role="button"], select {
   font-weight: 450 !important;
   letter-spacing: -0.01em !important;
   color: #1F1E1D !important;
-  text-shadow: 0 0 0.15px rgba(31, 30, 29, 0.25) !important;
+  text-shadow: var(--ag-ink-shadow-xs) !important;
 }
 
 /* 9. 模型名称同行实时指标胶囊 (TPS / TTFT / Ctx 256k / Out) 布局铁律： - 常态 (data-ag-row-mode="middle")：严格处于「左：+ 与模型选择」和「右：模式选择与发送按钮」正中间，随宽度自动 ellipsis 缩略； - 极窄 (data-ag-row-mode="bottom")：当中间可用宽度 < 150px (损失过多信息) 时，物理挂载至 bottomRow 正下方作为独立第二行，绝不改变第一行左右布局。 */
@@ -566,12 +566,17 @@ button, [role="button"], select {
 /* === v5.0.0 User Theme Variables, Windows ClearType & Feature Switches === */
 :root {
   --ag-chat-font-size: 16px;
-  --ag-wax-seal-hover: rgba(122, 31, 26, 0.88);
+  --ag-wax-seal-hover: #74221A;
+  --ag-ink-shadow-xs: 0 0 0.15px rgba(38, 36, 34, 0.25);
+  --ag-ink-shadow-sm: 0 0 0.2px rgba(38, 36, 34, 0.35);
+  --ag-ink-shadow-md: 0 0 0.25px rgba(10, 10, 10, 0.4);
 }
 
-/* Windows ClearType 亚像素抗锯齿适配：移除 macOS Retina 专用微墨晕 text-shadow 防止低分屏发毛 */
-html[data-ag-os="win32"] * {
-  text-shadow: none !important;
+/* Windows ClearType 亚像素抗锯齿适配：O(1) 根变量级移除微墨晕 text-shadow 防止低分屏发毛，杜绝通配符 * 遍历 */
+html[data-ag-os="win32"] {
+  --ag-ink-shadow-xs: none;
+  --ag-ink-shadow-sm: none;
+  --ag-ink-shadow-md: none;
 }
 
 html[data-ag-custom-font-size="true"] .prose,
