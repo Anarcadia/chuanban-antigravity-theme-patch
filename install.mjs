@@ -639,12 +639,13 @@ async function runInstall() {
     fs.rmSync(targetCore, { recursive: true, force: true });
     copyDirRecursive(srcCore, targetCore);
 
-    // user/ 层永不覆盖已有文件
+    // user/ 层（默认永不覆盖已有文件，传入 --sync-user 时允许同步更新）
+    const syncUser = hasFlag('--sync-user');
     fs.mkdirSync(targetUser, { recursive: true });
     for (const item of fs.readdirSync(srcUser)) {
       const s = path.join(srcUser, item);
       const d = path.join(targetUser, item);
-      if (!fs.existsSync(d)) {
+      if (!fs.existsSync(d) || syncUser) {
         fs.copyFileSync(s, d);
       }
     }

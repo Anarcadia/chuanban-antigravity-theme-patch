@@ -16,7 +16,12 @@
 
 @font-face {
   font-family: 'Anthropic Sans';
-  src: local('Anthropic Sans Web'), local('Anthropic Sans Web Text'), local('Anthropic Sans');
+  src: local('Anthropic Sans Text'),
+       local('Anthropic Sans Text Regular'),
+       local('AnthropicSansText-Regular'),
+       local('Anthropic Sans Web'),
+       local('Anthropic Sans Web Text'),
+       local('Anthropic Sans');
   font-weight: 300 500;
   font-style: normal;
   font-display: swap;
@@ -24,7 +29,30 @@
 
 @font-face {
   font-family: 'Anthropic Sans';
-  src: local('Anthropic Sans Bold'), local('Anthropic Sans Web Bold');
+  src: local('Anthropic Sans Text Bold'),
+       local('AnthropicSansText-Bold'),
+       local('Anthropic Sans Display Bold'),
+       local('Anthropic Sans Bold'),
+       local('Anthropic Sans Web Bold');
+  font-weight: 600 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Anthropic Sans Display';
+  src: local('Anthropic Sans Display'),
+       local('Anthropic Sans Display Regular'),
+       local('AnthropicSansDisplay-Regular');
+  font-weight: 300 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Anthropic Sans Display';
+  src: local('Anthropic Sans Display Bold'),
+       local('AnthropicSansDisplay-Bold');
   font-weight: 600 900;
   font-style: normal;
   font-display: swap;
@@ -39,9 +67,9 @@
 }
 
 :root, body, body[data-agy-font], body[data-agy-font="google-sans"], body[data-agy-font="inter"] {
-  --vscode-font-family: 'Anthropic Sans', 'Anthropic Sans Web', 'Anthropic Sans Web Text', 'anthropic-sans', 'Styrene B', 'Styrene', system-ui, -apple-system, BlinkMacSystemFont, 'Sarasa UI SC', '更纱黑体 UI SC', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif !important;
+  --vscode-font-family: 'Anthropic Sans Text', 'Anthropic Sans Display', 'Anthropic Sans', 'Anthropic Sans Web', 'Anthropic Sans Web Text', 'anthropic-sans', 'Styrene B', 'Styrene', 'Sarasa UI SC', '更纱黑体 UI SC', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', system-ui, -apple-system, BlinkMacSystemFont, sans-serif !important;
   --editor-font-family: 'Anthropic Mono', 'Anthropic Mono Web', 'anthropic-mono', 'Sarasa Mono Slab SC', '等距更纱黑体 Slab SC', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Monaco, Consolas, monospace !important;
-  --font-sans: 'Anthropic Sans', 'Anthropic Sans Web', 'Anthropic Sans Web Text', 'anthropic-sans', 'Styrene B', 'Styrene', system-ui, -apple-system, BlinkMacSystemFont, 'Sarasa UI SC', '更纱黑体 UI SC', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif !important;
+  --font-sans: 'Anthropic Sans Text', 'Anthropic Sans Display', 'Anthropic Sans', 'Anthropic Sans Web', 'Anthropic Sans Web Text', 'anthropic-sans', 'Styrene B', 'Styrene', 'Sarasa UI SC', '更纱黑体 UI SC', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', system-ui, -apple-system, BlinkMacSystemFont, sans-serif !important;
   --font-mono: 'Anthropic Mono', 'Anthropic Mono Web', 'anthropic-mono', 'Sarasa Mono Slab SC', '等距更纱黑体 Slab SC', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Monaco, Consolas, monospace !important;
   --default-font-family: var(--font-sans) !important;
   --default-mono-font-family: var(--font-mono) !important;
@@ -66,6 +94,12 @@ html, body, body[data-agy-font], button, select, nav, header, aside {
   -webkit-font-smoothing: antialiased;
 }
 
+/* 1.5 大标题与首页欢迎语：Claude 官方 Anthropic Sans Display 光学字号 */
+h1, h2, [data-testid="home-greeting"] {
+  font-family: 'Anthropic Sans Display', var(--font-sans) !important;
+  letter-spacing: -0.015em;
+}
+
 /* 2. 对话正文与 Markdown 内容：Claude 标志性 Anthropic Serif 衬线 + 更纱粗衬线/黑体 */
 .select-text, .prose, .markdown, article, .select-text :is(p, li, blockquote, h1, h2, h3, h4, h5, h6, strong, em, span, div) {
   font-family: 'Anthropic Serif', 'Anthropic Serif Web', 'Anthropic Serif Web Text Light', 'anthropic-serif', 'Tiempos Text', 'Tiempos', Georgia, Cambria, 'Times New Roman', 'Sarasa Mono Slab SC', '等距更纱黑体 Slab SC', 'Sarasa Gothic SC', '更纱黑体 SC', 'PingFang SC', serif;
@@ -81,9 +115,23 @@ code, pre, kbd, samp, .font-mono, [class*="language-"], .monaco-editor, .xterm, 
   font-family: var(--font-mono) !important;
 }
 
-/* 4. 输入框编辑区：Codex 同款等距更纱黑体 SLAB (Sarasa Mono Slab SC) */
+/* 3.5 思考块、步骤标题与状态指示条：避免被 Tailwind 的 .font-mono 强制设为等宽 */
+.font-mono:not(code):not(pre):not(kbd):not(samp):not(.monaco-editor):not(.xterm):not(pre *):not(code *):not([class*="language-"]) {
+  font-family: var(--font-sans) !important;
+}
+
+[class*="thought"],
+[class*="thinking"],
+[data-testid*="thought"],
+[class*="step-title"],
+[class*="step-header"],
+[class*="tool-call-header"] {
+  font-family: var(--font-sans) !important;
+}
+
+/* 4. 输入框编辑区：Codex 同款等距更纱黑体 SLAB (未装更纱时优雅回退至 Anthropic Sans / 苹方) */
 div[contenteditable="true"], textarea, div[contenteditable="true"] :is(p, span, div), [data-composer], .ProseMirror, .ProseMirror :is(p, span) {
-  font-family: 'Sarasa Mono Slab SC', '等距更纱黑体 Slab SC', 'Anthropic Mono', ui-monospace, monospace !important;
+  font-family: 'Sarasa Mono Slab SC', '等距更纱黑体 Slab SC', 'Anthropic Sans Text', 'Anthropic Sans', 'PingFang SC', ui-monospace, monospace !important;
 }
 
 /* 5. 配色版本 3: 复古深色 (absoulutely-chuanban) */
