@@ -18,12 +18,12 @@
       "bytes": 38843
     },
     "theme.css": {
-      "sha256": "33c910c11d71367b0779a7b6bfb97324c30f73c57edf6e7314637d48ae55d0b6",
-      "bytes": 33044
+      "sha256": "86f6ea04aae15eeb39b756aa263c57a8fa4b51b7019d421fba66e7eced78ecea",
+      "bytes": 34669
     },
     "i18n.json": {
-      "sha256": "2ea5ec07b562cddcfe94a98d4c011ec8706903e4624599b3067f4892187b09e9",
-      "bytes": 30139
+      "sha256": "8f54171811c0b189142b17ddc764861c8d309a829debc31d5c04d65c6ae97214",
+      "bytes": 32441
     }
   }
 }
