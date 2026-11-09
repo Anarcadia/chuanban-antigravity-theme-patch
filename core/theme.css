@@ -38,26 +38,40 @@
   font-display: swap;
 }
 
-:root, body, body[data-agy-font], body[data-agy-font="google-sans"], body[data-agy-font="inter"] {
+:root, html, body, body[data-agy-theme], body[data-agy-theme] :where(.font-sans), body[data-agy-font], body[data-agy-font="google-sans"], body[data-agy-font="inter"], body[data-agy-font] :where(.font-sans) {
   --vscode-font-family: 'Anthropic Sans', 'Anthropic Sans Web', 'Anthropic Sans Web Text', 'anthropic-sans', 'Styrene B', 'Styrene', system-ui, -apple-system, BlinkMacSystemFont, 'Sarasa UI SC', '更纱黑体 UI SC', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif !important;
   --editor-font-family: 'Anthropic Mono', 'Anthropic Mono Web', 'anthropic-mono', 'Sarasa Mono Slab SC', '等距更纱黑体 Slab SC', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Monaco, Consolas, monospace !important;
   --font-sans: 'Anthropic Sans', 'Anthropic Sans Web', 'Anthropic Sans Web Text', 'anthropic-sans', 'Styrene B', 'Styrene', system-ui, -apple-system, BlinkMacSystemFont, 'Sarasa UI SC', '更纱黑体 UI SC', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif !important;
   --font-mono: 'Anthropic Mono', 'Anthropic Mono Web', 'anthropic-mono', 'Sarasa Mono Slab SC', '等距更纱黑体 Slab SC', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Monaco, Consolas, monospace !important;
   --default-font-family: var(--font-sans) !important;
   --default-mono-font-family: var(--font-mono) !important;
-  /* 恢复标准字重级阶，对齐稳定版（彻底消除 Insiders 强制引入的 250/350/450 细字重缺陷） */
+  /* 恢复标准字重级阶与斜体变量，对齐稳定版（彻底消除 Insiders / 2.30.0 强制引入的 250/350/450 细字重与伪斜体失效缺陷） */
   --font-weight-light: 300 !important;
   --font-weight-normal: 400 !important;
   --font-weight-medium: 500 !important;
   --font-weight-semibold: 600 !important;
   --font-weight-bold: 700 !important;
   --font-weight-black: 900 !important;
+  --agy-gsf-h1-wght: 600 !important;
+  --agy-gsf-h3-wght: 600 !important;
   --agy-gsf-bold-wght: 600 !important;
+  --agy-gsf-italic: italic !important;
+  --agy-gsf-slnt: 0 !important;
 }
 
-/* 基础全局字重与平滑度：保证无衬线体基底扎实、对齐稳定版 400 */
+/* 基础全局字重与平滑度：保证无衬线体基底扎实、对齐稳定版 400，消除 2.30.0 data-agy-font="google-sans" 92% 可变字宽压缩并恢复真斜体 */
 body, body[data-agy-font], body[data-agy-font="google-sans"] {
   font-weight: 400 !important;
+  font-variation-settings: normal !important;
+}
+
+body[data-agy-font] :where(.font-sans, h1, h2, h3, h4, h5, h6, b, strong, i, em, .italic) {
+  --agy-gsf-bold-wght: 600 !important;
+  font-variation-settings: normal !important;
+}
+
+body[data-agy-font] :where(i, em, .italic):not(.codicon, .google-symbols) {
+  font-style: italic !important;
 }
 
 /* 1. UI 控件与全局界面：Claude Anthropic Sans / 更纱 UI */
@@ -86,14 +100,35 @@ div[contenteditable="true"], textarea, div[contenteditable="true"] :is(p, span, 
   font-family: 'Sarasa Mono Slab SC', '等距更纱黑体 Slab SC', 'Anthropic Mono', ui-monospace, monospace !important;
 }
 
-/* 5. 配色版本 3: 复古深色 (absoulutely-chuanban) */
-html[data-ag-preset="absoulutely-chuanban"], html[data-ag-preset="vintage-deep"], html[data-ag-preset="absoulutely-chuanban"] body.theme-light, html[data-ag-preset="vintage-deep"] body.theme-light {
+/* 5. 配色版本 3: 复古深色 (absoulutely-chuanban / vintage-deep) */
+html[data-ag-preset="absoulutely-chuanban"], html[data-ag-preset="vintage-deep"], html[data-ag-preset="absoulutely-chuanban"] body.theme-light, html[data-ag-preset="vintage-deep"] body.theme-light, html[data-ag-preset="absoulutely-chuanban"] body[data-agy-theme], html[data-ag-preset="vintage-deep"] body[data-agy-theme] {
+  --primary: #D97757 !important;
+  --editor-selection-background: rgba(217, 119, 87, 0.34) !important;
   --background: #FBF9F5 !important;
+  --content: #FBF9F5 !important;
+  --foreground: #26231E !important;
+  --secondary-foreground: #4A443C !important;
+  --muted-foreground: #6E665C !important;
   --sidebar: #F1E8DC !important;
+  --shell: #F1E8DC !important;
   --sidebar-secondary: #E6DCCE !important;
   --sidebar-muted: #E8DFD1 !important;
   --sidebar-border: #E0D4C3 !important;
+  --border: rgba(60, 45, 25, 0.18) !important;
   --vscode-sideBar-background: #F1E8DC !important;
+  --card: #F8F3EC !important;
+  --card-border: rgba(60, 45, 25, 0.22) !important;
+  --card-edge: rgba(60, 45, 25, 0.22) !important;
+  --sash-line: rgba(60, 45, 25, 0.22) !important;
+  --onyx-frame: #E6DCCE !important;
+  --onyx-well: #F1E8DC !important;
+  --onyx-raised: #F8F3EC !important;
+  --onyx-selected: #E6DCCE !important;
+  --onyx-key: #F8F3EC !important;
+  --glass: #F8F3EC !important;
+  --glass-border: #E0D4C3 !important;
+  --glass-highlight: transparent !important;
+  --home-glow: transparent !important;
 }
 
 html[data-ag-preset="absoulutely-chuanban"] .bg-sidebar, html[data-ag-preset="vintage-deep"] .bg-sidebar {
@@ -102,19 +137,35 @@ html[data-ag-preset="absoulutely-chuanban"] .bg-sidebar, html[data-ag-preset="vi
 
 html[data-ag-preset="absoulutely-chuanban"] body, html[data-ag-preset="vintage-deep"] body {
   background-color: var(--background) !important;
+  color: var(--foreground) !important;
 }
 
 /* 6. 配色版本 2: ClaudeDesktop 净白 (claude-desktop-official / claude-desktop-purewhite) */
-html[data-ag-preset="claude-desktop-official"], html[data-ag-preset="claude-desktop-purewhite"], html[data-ag-preset="claude-desktop-official"] body.theme-light, html[data-ag-preset="claude-desktop-purewhite"] body.theme-light {
+html[data-ag-preset="claude-desktop-official"], html[data-ag-preset="claude-desktop-purewhite"], html[data-ag-preset="claude-desktop-official"] body.theme-light, html[data-ag-preset="claude-desktop-purewhite"] body.theme-light, html[data-ag-preset="claude-desktop-official"] body[data-agy-theme], html[data-ag-preset="claude-desktop-purewhite"] body[data-agy-theme] {
+  --primary: #D97757 !important;
+  --editor-selection-background: rgba(217, 119, 87, 0.34) !important;
   --background: #FCFCFB !important;
+  --content: #FCFCFB !important;
   --foreground: #1F1E1D !important;
   --sidebar: #FBFBF9 !important;
+  --shell: #FBFBF9 !important;
   --sidebar-secondary: #EDECE9 !important;
   --sidebar-muted: #F3F2EF !important;
   --sidebar-border: #F0F0EE !important;
   --vscode-sideBar-background: #FBFBF9 !important;
   --card: color-mix(in srgb, #FBF9F5 70%, #ffffff) !important;
   --card-border: color-mix(in srgb, #2C2B29 12%, color-mix(in srgb, #FBF9F5 70%, #ffffff)) !important;
+  --card-edge: rgba(44, 43, 41, 0.14) !important;
+  --sash-line: rgba(44, 43, 41, 0.14) !important;
+  --onyx-frame: #EDECE9 !important;
+  --onyx-well: #FBFBF9 !important;
+  --onyx-raised: #FFFFFF !important;
+  --onyx-selected: #EDECE9 !important;
+  --onyx-key: #FFFFFF !important;
+  --glass: #FFFFFF !important;
+  --glass-border: #F0F0EE !important;
+  --glass-highlight: transparent !important;
+  --home-glow: transparent !important;
 }
 
 html[data-ag-preset="claude-desktop-official"] .bg-sidebar, html[data-ag-preset="claude-desktop-purewhite"] .bg-sidebar {
@@ -127,10 +178,14 @@ html[data-ag-preset="claude-desktop-official"] body, html[data-ag-preset="claude
 }
 
 /* 7. 配色版本 1 (默认首选): 高对比版 (chuanban-warm-white / high-contrast) - 正文页面: 保持微暖亮白 #FCFCFB - 左边栏: 介于白色和原正文底色之间的暖白燕麦色 #F7F5F0 - 输入框: 保持白色但比正文略深一点点、带有一点接近暖棕的颜色 #F9F7F2 - 高对比强化: * 按钮主轮廓线 (新建对话、历史对话): 边框从浅淡灰提升为高清晰度对比线 * 竖线中缝 (正文与左栏右栏间): 从淡灰透明提升为清晰实线 * 输入框下方的模型名称、Turbo模式、图标等: 从浅灰提升为近乎纯黑深墨色 (#0A0A0A) */
-html[data-ag-preset="chuanban-warm-white"], html[data-ag-preset="high-contrast"], html[data-ag-preset="chuanban-warm-white"] body.theme-light, html[data-ag-preset="high-contrast"] body.theme-light {
+html[data-ag-preset="chuanban-warm-white"], html[data-ag-preset="high-contrast"], html[data-ag-preset="chuanban-warm-white"] body.theme-light, html[data-ag-preset="high-contrast"] body.theme-light, html[data-ag-preset="chuanban-warm-white"] body[data-agy-theme], html[data-ag-preset="high-contrast"] body[data-agy-theme] {
+  --primary: #D97757 !important;
+  --editor-selection-background: rgba(217, 119, 87, 0.34) !important;
   --background: #FCFCFB !important;
+  --content: #FCFCFB !important;
   --foreground: #1F1E1D !important;
   --sidebar: #F7F5F0 !important;
+  --shell: #F7F5F0 !important;
   --sidebar-secondary: #ECE9E1 !important;
   --sidebar-muted: #F2EFE7 !important;
   --sidebar-border: rgba(0, 0, 0, 0.35) !important;
@@ -142,6 +197,15 @@ html[data-ag-preset="chuanban-warm-white"], html[data-ag-preset="high-contrast"]
   --sash-line: rgba(0, 0, 0, 0.35) !important;
   --secondary-foreground: #0A0A0A !important;
   --muted-foreground: #1A1A1A !important;
+  --onyx-frame: #ECE9E1 !important;
+  --onyx-well: #F7F5F0 !important;
+  --onyx-raised: #FFFFFF !important;
+  --onyx-selected: #ECE9E1 !important;
+  --onyx-key: #FFFFFF !important;
+  --glass: #F9F7F2 !important;
+  --glass-border: rgba(0, 0, 0, 0.35) !important;
+  --glass-highlight: transparent !important;
+  --home-glow: transparent !important;
 }
 
 html[data-ag-preset="chuanban-warm-white"] .bg-sidebar, html[data-ag-preset="high-contrast"] .bg-sidebar {
@@ -153,53 +217,88 @@ html[data-ag-preset="chuanban-warm-white"] body, html[data-ag-preset="high-contr
   color: var(--foreground) !important;
 }
 
-/* 7.5 右侧交互页面外框线：对齐稳定版高清晰度黑度 (rgba(0, 0, 0, 0.35)) */
+/* 7.2 2.30.0 onyx 侧边栏选中项与性能优化（移除实色卡片表面冗余 GPU backdrop-filter 离屏合成） */
+body[data-agy-theme][data-newux-theme="onyx"] .agy-sidebar-row[data-selected="true"] {
+  background-color: var(--sidebar-secondary) !important;
+  --row-bg: var(--sidebar-secondary) !important;
+  box-shadow: none !important;
+}
+
+.surface-glass,
+.agy-fastpick.surface-glass,
+.quick-input-widget.surface-glass,
+.agy-user-bubble {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* 7.5 右侧交互页面外框线：跟随预设 --card-edge / --sash-line（兼容分屏 :not(:has([data-split-panes]))） */
 .agy-inset-shell {
-  --card-edge: rgba(0, 0, 0, 0.35) !important;
-  --sash-line: rgba(0, 0, 0, 0.35) !important;
+  --card-edge: var(--card-border, rgba(0, 0, 0, 0.35)) !important;
+  --sash-line: var(--card-border, rgba(0, 0, 0, 0.35)) !important;
 }
 
-.agy-sheet[data-sheet-inset] [data-main-content-body]::after, .agy-inset-shell [data-side-panel-body]::after, [data-main-content-body]::after {
-  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.35) !important;
+.agy-sheet[data-sheet-inset] [data-main-content-body]:not(:has([data-split-panes]))::after,
+.agy-inset-shell [data-side-panel-body]::after,
+[data-main-content-body]:not(:has([data-split-panes]))::after {
+  box-shadow: inset 0 0 0 1px var(--card-edge, rgba(0, 0, 0, 0.35)) !important;
 }
 
-/* 侧栏与主交互页面中缝分割线对齐稳定版 */
+/* 侧栏与主交互页面中缝分割线对齐预设边框色 */
 .relative.flex.w-full.h-full.outline-none > div.flex-shrink-0.relative.z-30.w-[1px] {
-  background-color: rgba(0, 0, 0, 0.35) !important;
+  background-color: var(--sash-line, rgba(0, 0, 0, 0.35)) !important;
 }
 
-/* 输入框外层容器：分场景动态三形态（设计 A / B / C，宽度严格锁定 1.5px 杜绝抖动） */
+/* 输入框外层容器：分预设匹配外托盘底色，分场景动态三形态（设计 A / B / C，宽度严格锁定 1.5px 杜绝抖动） */
 html[data-ag-preset] #antigravity\.agentSidePanelInputBox, html[data-ag-preset] [id="antigravity.agentSidePanelInputBox"], #antigravity\.agentSidePanelInputBox, [id="antigravity.agentSidePanelInputBox"], .surface-composer.bg-card-border {
   background-color: #F7EFE6 !important;
   outline: none !important;
   transition: border-color 220ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 220ms cubic-bezier(0.16, 1, 0.3, 1) !important;
 }
 
-/* ---------------------------------------------------------------------- * 【场景 2：首页 / 空白新建对话场景】 * 判定依据（组件级纯 CSS :has() 0ms 瞬时响应 + html[data-ag-page-type="home"] 零重算兜底）： * 1. 输入框组件自身含分支选择器 [data-testid="branch-pill-trigger"] 或项目选择器头部 * 2. 或 html 根节点标记 [data-ag-page-type="home"] * ---------------------------------------------------------------------- */
+html[data-ag-preset="claude-desktop-official"] #antigravity\.agentSidePanelInputBox,
+html[data-ag-preset="claude-desktop-purewhite"] #antigravity\.agentSidePanelInputBox,
+html[data-ag-preset="claude-desktop-official"] [id="antigravity.agentSidePanelInputBox"],
+html[data-ag-preset="claude-desktop-purewhite"] [id="antigravity.agentSidePanelInputBox"],
+html[data-ag-preset="claude-desktop-official"] .surface-composer.bg-card-border,
+html[data-ag-preset="claude-desktop-purewhite"] .surface-composer.bg-card-border {
+  background-color: #F5F4F0 !important;
+}
+
+html[data-ag-preset="absoulutely-chuanban"] #antigravity\.agentSidePanelInputBox,
+html[data-ag-preset="vintage-deep"] #antigravity\.agentSidePanelInputBox,
+html[data-ag-preset="absoulutely-chuanban"] [id="antigravity.agentSidePanelInputBox"],
+html[data-ag-preset="vintage-deep"] [id="antigravity.agentSidePanelInputBox"],
+html[data-ag-preset="absoulutely-chuanban"] .surface-composer.bg-card-border,
+html[data-ag-preset="vintage-deep"] .surface-composer.bg-card-border {
+  background-color: #EAE0CE !important;
+}
+
+/* ---------------------------------------------------------------------- * 【场景 2：首页 / 空白新建对话场景（兼容默认模式与 Knowledge Work 知识工作模式）】 * 判定依据（组件级纯 CSS :has() 0ms 瞬时响应 + html[data-ag-page-type="home"] 零重算兜底）： * 1. 输入框组件自身含分支选择器 [data-testid="branch-pill-trigger"]、项目选择器 [data-testid="project-selector-trigger"] 或运行位置选择器 [data-testid="location-selector-trigger"] * 2. 或 html 根节点标记 [data-ag-page-type="home"] * ---------------------------------------------------------------------- */
 /* 2.1 新建对话日常常态：设计 C (外框完全透明，无阴影，融于背景) */
-#antigravity\.agentSidePanelInputBox:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"]), [id="antigravity.agentSidePanelInputBox"]:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"]), .surface-composer.bg-card-border:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"]), html[data-ag-page-type="home"] #antigravity\.agentSidePanelInputBox, html[data-ag-page-type="home"] [id="antigravity.agentSidePanelInputBox"], html[data-ag-page-type="home"] .surface-composer.bg-card-border {
+html:not([data-ag-wax-seal="off"]) #antigravity\.agentSidePanelInputBox:has([data-testid="branch-pill-trigger"], [data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"]), html:not([data-ag-wax-seal="off"]) [id="antigravity.agentSidePanelInputBox"]:has([data-testid="branch-pill-trigger"], [data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"]), html:not([data-ag-wax-seal="off"]) .surface-composer.bg-card-border:has([data-testid="branch-pill-trigger"], [data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"]), html:not([data-ag-wax-seal="off"])[data-ag-page-type="home"] #antigravity\.agentSidePanelInputBox, html:not([data-ag-wax-seal="off"])[data-ag-page-type="home"] [id="antigravity.agentSidePanelInputBox"], html:not([data-ag-wax-seal="off"])[data-ag-page-type="home"] .surface-composer.bg-card-border {
   border: 1.5px solid transparent !important;
   border-color: transparent !important;
   box-shadow: none !important;
 }
 
 /* 2.2 新建对话鼠标移上 / 聚焦：变成为设计 A (略粗一点颜色偏淡蜡封暗红，微阴影) */
-#antigravity\.agentSidePanelInputBox:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"]):hover, [id="antigravity.agentSidePanelInputBox"]:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"]):hover, .surface-composer.bg-card-border:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"]):hover, #antigravity\.agentSidePanelInputBox:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"]):focus-within, [id="antigravity.agentSidePanelInputBox"]:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"]):focus-within, .surface-composer.bg-card-border:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"]):focus-within, html[data-ag-page-type="home"] #antigravity\.agentSidePanelInputBox:hover, html[data-ag-page-type="home"] [id="antigravity.agentSidePanelInputBox"]:hover, html[data-ag-page-type="home"] .surface-composer.bg-card-border:hover, html[data-ag-page-type="home"] #antigravity\.agentSidePanelInputBox:focus-within, html[data-ag-page-type="home"] [id="antigravity.agentSidePanelInputBox"]:focus-within, html[data-ag-page-type="home"] .surface-composer.bg-card-border:focus-within {
+html:not([data-ag-wax-seal="off"]) #antigravity\.agentSidePanelInputBox:has([data-testid="branch-pill-trigger"], [data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"]):hover, html:not([data-ag-wax-seal="off"]) [id="antigravity.agentSidePanelInputBox"]:has([data-testid="branch-pill-trigger"], [data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"]):hover, html:not([data-ag-wax-seal="off"]) .surface-composer.bg-card-border:has([data-testid="branch-pill-trigger"], [data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"]):hover, html:not([data-ag-wax-seal="off"]) #antigravity\.agentSidePanelInputBox:has([data-testid="branch-pill-trigger"], [data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"]):focus-within, html:not([data-ag-wax-seal="off"]) [id="antigravity.agentSidePanelInputBox"]:has([data-testid="branch-pill-trigger"], [data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"]):focus-within, html:not([data-ag-wax-seal="off"]) .surface-composer.bg-card-border:has([data-testid="branch-pill-trigger"], [data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"]):focus-within, html:not([data-ag-wax-seal="off"])[data-ag-page-type="home"] #antigravity\.agentSidePanelInputBox:hover, html:not([data-ag-wax-seal="off"])[data-ag-page-type="home"] [id="antigravity.agentSidePanelInputBox"]:hover, html:not([data-ag-wax-seal="off"])[data-ag-page-type="home"] .surface-composer.bg-card-border:hover, html:not([data-ag-wax-seal="off"])[data-ag-page-type="home"] #antigravity\.agentSidePanelInputBox:focus-within, html:not([data-ag-wax-seal="off"])[data-ag-page-type="home"] [id="antigravity.agentSidePanelInputBox"]:focus-within, html:not([data-ag-wax-seal="off"])[data-ag-page-type="home"] .surface-composer.bg-card-border:focus-within {
   border: 1.5px solid rgba(116, 34, 26, 0.36) !important;
   border-color: rgba(116, 34, 26, 0.36) !important;
   box-shadow: 0 1px 3px rgba(116, 34, 26, 0.04) !important;
 }
 
-/* ---------------------------------------------------------------------- * 【场景 1：日常推进具体聊天会话页面】（严格限定非新建态：排斥 branch-pill-trigger、项目头部与 home） * ---------------------------------------------------------------------- */
+/* ---------------------------------------------------------------------- * 【场景 1：日常推进具体聊天会话页面】（严格限定非新建态：排斥 branch-pill-trigger、project-selector-trigger、location-selector-trigger、项目头部与 home） * ---------------------------------------------------------------------- */
 /* 1.1 具体会话日常常态：设计 A (略粗一点颜色偏淡蜡封暗红) */
-html:not([data-ag-page-type="home"]) #antigravity\.agentSidePanelInputBox:not(:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"])), html:not([data-ag-page-type="home"]) [id="antigravity.agentSidePanelInputBox"]:not(:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"])), html:not([data-ag-page-type="home"]) .surface-composer.bg-card-border:not(:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"])) {
+html:not([data-ag-wax-seal="off"]):not([data-ag-page-type="home"]) #antigravity\.agentSidePanelInputBox:not(:has([data-testid="branch-pill-trigger"], [data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"])), html:not([data-ag-wax-seal="off"]):not([data-ag-page-type="home"]) [id="antigravity.agentSidePanelInputBox"]:not(:has([data-testid="branch-pill-trigger"], [data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"])), html:not([data-ag-wax-seal="off"]):not([data-ag-page-type="home"]) .surface-composer.bg-card-border:not(:has([data-testid="branch-pill-trigger"], [data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"])) {
   border: 1.5px solid rgba(116, 34, 26, 0.36) !important;
   border-color: rgba(116, 34, 26, 0.36) !important;
   box-shadow: 0 1px 3px rgba(116, 34, 26, 0.03) !important;
 }
 
 /* 1.2 具体会话移上 / 聚焦：变成为设计 B (加深变浓实色蜡封暗红，支持 --ag-wax-seal-hover 覆盖) */
-html:not([data-ag-page-type="home"]) #antigravity\.agentSidePanelInputBox:not(:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"])):hover, html:not([data-ag-page-type="home"]) [id="antigravity.agentSidePanelInputBox"]:not(:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"])):hover, html:not([data-ag-page-type="home"]) .surface-composer.bg-card-border:not(:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"])):hover, html:not([data-ag-page-type="home"]) #antigravity\.agentSidePanelInputBox:not(:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"])):focus-within, html:not([data-ag-page-type="home"]) [id="antigravity.agentSidePanelInputBox"]:not(:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"])):focus-within, html:not([data-ag-page-type="home"]) .surface-composer.bg-card-border:not(:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"])):focus-within {
+html:not([data-ag-wax-seal="off"]):not([data-ag-page-type="home"]) #antigravity\.agentSidePanelInputBox:not(:has([data-testid="branch-pill-trigger"], [data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"])):hover, html:not([data-ag-wax-seal="off"]):not([data-ag-page-type="home"]) [id="antigravity.agentSidePanelInputBox"]:not(:has([data-testid="branch-pill-trigger"], [data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"])):hover, html:not([data-ag-wax-seal="off"]):not([data-ag-page-type="home"]) .surface-composer.bg-card-border:not(:has([data-testid="branch-pill-trigger"], [data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"])):hover, html:not([data-ag-wax-seal="off"]):not([data-ag-page-type="home"]) #antigravity\.agentSidePanelInputBox:not(:has([data-testid="branch-pill-trigger"], [data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"])):focus-within, html:not([data-ag-wax-seal="off"]):not([data-ag-page-type="home"]) [id="antigravity.agentSidePanelInputBox"]:not(:has([data-testid="branch-pill-trigger"], [data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"])):focus-within, html:not([data-ag-wax-seal="off"]):not([data-ag-page-type="home"]) .surface-composer.bg-card-border:not(:has([data-testid="branch-pill-trigger"], [data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"])):focus-within {
   border: 1.5px solid var(--ag-wax-seal-hover, #74221A) !important;
   border-color: var(--ag-wax-seal-hover, #74221A) !important;
   box-shadow: 0 1px 4px rgba(116, 34, 26, 0.12) !important;
@@ -215,17 +314,25 @@ html:not([data-ag-page-type="home"]) #antigravity\.agentSidePanelInputBox:not(:h
   color: #1F1E1D !important;
 }
 
-/* 方案2：内部打字卡片无边框，获得焦点 (:focus-within) 时微浮雕拟物平滑抬升 */
-.surface-composer-card.bg-card, [id="antigravity.agentSidePanelInputBox"] .surface-composer-card, [id="antigravity.agentSidePanelInputBox"] > div.bg-card {
+/* 方案2：内部打字卡片无边框，消除 2.30.0 onyx 内层灰框重影，获得焦点 (:focus-within) 时微浮雕拟物平滑抬升 */
+body[data-agy-theme][data-newux-theme="onyx"] .surface-composer > .surface-composer-card, .surface-composer-card.bg-card, [id="antigravity.agentSidePanelInputBox"] .surface-composer-card, [id="antigravity.agentSidePanelInputBox"] > div.bg-card {
   background-color: #FFFFFF !important;
   border: 1px solid transparent !important;
-  border-color: transparent !important;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02) !important;
   outline: none !important;
   transition: box-shadow 250ms cubic-bezier(0.16, 1, 0.3, 1) !important;
 }
 
-.surface-composer:focus-within > .surface-composer-card, .surface-composer-card:focus-within, [id="antigravity.agentSidePanelInputBox"]:focus-within .surface-composer-card {
+html[data-ag-preset="absoulutely-chuanban"] body[data-agy-theme][data-newux-theme="onyx"] .surface-composer > .surface-composer-card,
+html[data-ag-preset="vintage-deep"] body[data-agy-theme][data-newux-theme="onyx"] .surface-composer > .surface-composer-card,
+html[data-ag-preset="absoulutely-chuanban"] .surface-composer-card.bg-card,
+html[data-ag-preset="vintage-deep"] .surface-composer-card.bg-card,
+html[data-ag-preset="absoulutely-chuanban"] [id="antigravity.agentSidePanelInputBox"] .surface-composer-card,
+html[data-ag-preset="vintage-deep"] [id="antigravity.agentSidePanelInputBox"] .surface-composer-card {
+  background-color: var(--card, #F8F3EC) !important;
+}
+
+body[data-agy-theme][data-newux-theme="onyx"] .surface-composer:focus-within > .surface-composer-card, .surface-composer:focus-within > .surface-composer-card, .surface-composer-card:focus-within, [id="antigravity.agentSidePanelInputBox"]:focus-within .surface-composer-card {
   box-shadow: 0 6px 20px -2px rgba(60, 20, 15, 0.07), 0 2px 6px -1px rgba(0, 0, 0, 0.04) !important;
 }
 
@@ -251,8 +358,8 @@ html[data-ag-preset="chuanban-warm-white"] .bg-border, html[data-ag-preset="high
   background-color: rgba(0, 0, 0, 0.28) !important;
 }
 
-/* 高对比输入框底部：模型名称、Turbo模式、图标字体深色近乎纯黑 */
-html[data-ag-preset="chuanban-warm-white"] #antigravity\.agentSidePanelInputBox [class*="text-secondary-foreground"], html[data-ag-preset="high-contrast"] #antigravity\.agentSidePanelInputBox [class*="text-secondary-foreground"], html[data-ag-preset="chuanban-warm-white"] #antigravity\.agentSidePanelInputBox button:not([data-testid="send-button"]):not([data-testid="voice-start-button"]), html[data-ag-preset="high-contrast"] #antigravity\.agentSidePanelInputBox button:not([data-testid="send-button"]):not([data-testid="voice-start-button"]), html[data-ag-preset="chuanban-warm-white"] #antigravity\.agentSidePanelInputBox span:not([data-testid="voice-live-pill"]):not([data-testid="voice-live-pill"] *), html[data-ag-preset="high-contrast"] #antigravity\.agentSidePanelInputBox span:not([data-testid="voice-live-pill"]):not([data-testid="voice-live-pill"] *), html[data-ag-preset="chuanban-warm-white"] #antigravity\.agentSidePanelInputBox svg:not([data-testid="voice-live-pill"] *):not([data-testid="send-button"] *), html[data-ag-preset="high-contrast"] #antigravity\.agentSidePanelInputBox svg:not([data-testid="voice-live-pill"] *):not([data-testid="send-button"] *) {
+/* 高对比输入框底部：模型名称、Turbo模式、图标字体深色近乎纯黑（排除 #ag-live-metrics-pill 告警色与分隔符透明度） */
+html[data-ag-preset="chuanban-warm-white"] #antigravity\.agentSidePanelInputBox [class*="text-secondary-foreground"]:not(#ag-live-metrics-pill *), html[data-ag-preset="high-contrast"] #antigravity\.agentSidePanelInputBox [class*="text-secondary-foreground"]:not(#ag-live-metrics-pill *), html[data-ag-preset="chuanban-warm-white"] #antigravity\.agentSidePanelInputBox button:not([data-testid="send-button"]):not([data-testid="voice-start-button"]), html[data-ag-preset="high-contrast"] #antigravity\.agentSidePanelInputBox button:not([data-testid="send-button"]):not([data-testid="voice-start-button"]), html[data-ag-preset="chuanban-warm-white"] #antigravity\.agentSidePanelInputBox span:not([data-testid="voice-live-pill"]):not([data-testid="voice-live-pill"] *):not(#ag-live-metrics-pill):not(#ag-live-metrics-pill *), html[data-ag-preset="high-contrast"] #antigravity\.agentSidePanelInputBox span:not([data-testid="voice-live-pill"]):not([data-testid="voice-live-pill"] *):not(#ag-live-metrics-pill):not(#ag-live-metrics-pill *), html[data-ag-preset="chuanban-warm-white"] #antigravity\.agentSidePanelInputBox svg:not([data-testid="voice-live-pill"] *):not([data-testid="send-button"] *), html[data-ag-preset="high-contrast"] #antigravity\.agentSidePanelInputBox svg:not([data-testid="voice-live-pill"] *):not([data-testid="send-button"] *) {
   color: #0A0A0A !important;
   opacity: 1 !important;
 }
@@ -466,18 +573,21 @@ button, [role="button"], select {
   color: #0A0A0A !important;
 }
 
+#antigravity\.agentSidePanelInputBox #ag-live-metrics-pill .ag-sep,
 #ag-live-metrics-pill .ag-sep,
 #ag-live-metrics-pill .ag-m-sep {
   margin: 0 3.5px;
   opacity: 0.45 !important;
 }
 
+#antigravity\.agentSidePanelInputBox #ag-live-metrics-pill .ag-ctx-warn,
 #ag-live-metrics-pill .ag-ctx-warn,
 #ag-live-metrics-pill[data-ctx-warn="high"] .ag-m-ctx {
   color: #B45309 !important;
   font-weight: 600 !important;
 }
 
+#antigravity\.agentSidePanelInputBox #ag-live-metrics-pill .ag-ctx-crit,
 #ag-live-metrics-pill .ag-ctx-crit,
 #ag-live-metrics-pill[data-ctx-warn="crit"] .ag-m-ctx {
   color: #DC2626 !important;
@@ -586,7 +696,14 @@ html[data-ag-custom-font-size="true"] [class*="chat-message"] {
 }
 
 html[data-ag-wax-seal="off"] #antigravity\.agentSidePanelInputBox,
-html[data-ag-wax-seal="off"] [id="antigravity.agentSidePanelInputBox"] {
+html[data-ag-wax-seal="off"] #antigravity\.agentSidePanelInputBox:hover,
+html[data-ag-wax-seal="off"] #antigravity\.agentSidePanelInputBox:focus-within,
+html[data-ag-wax-seal="off"] [id="antigravity.agentSidePanelInputBox"],
+html[data-ag-wax-seal="off"] [id="antigravity.agentSidePanelInputBox"]:hover,
+html[data-ag-wax-seal="off"] [id="antigravity.agentSidePanelInputBox"]:focus-within,
+html[data-ag-wax-seal="off"] .surface-composer.bg-card-border,
+html[data-ag-wax-seal="off"] .surface-composer.bg-card-border:hover,
+html[data-ag-wax-seal="off"] .surface-composer.bg-card-border:focus-within {
   border-width: 1px !important;
   border-color: rgba(31, 30, 29, 0.15) !important;
   box-shadow: none !important;

@@ -14,8 +14,8 @@
   "themeVars": {},
   "selectors": {
     "inputBoxId": "antigravity.agentSidePanelInputBox",
-    "branchPillInBox": "#antigravity\\.agentSidePanelInputBox [data-testid=\"branch-pill-trigger\"], [id=\"antigravity.agentSidePanelInputBox\"] [data-testid=\"branch-pill-trigger\"], #antigravity\\.agentSidePanelInputBox [aria-label^=\"Select project\"], [id=\"antigravity.agentSidePanelInputBox\"] [aria-label^=\"Select project\"], #antigravity\\.agentSidePanelInputBox [aria-label^=\"选择项目\"], [id=\"antigravity.agentSidePanelInputBox\"] [aria-label^=\"选择项目\"]",
-    "homeGreeting": "[data-testid=\"home-greeting\"]",
+    "branchPillInBox": "[data-testid=\"branch-pill-trigger\"], [data-testid=\"project-branch-picker\"], [data-testid=\"project-selector-trigger\"], [data-testid=\"location-selector-trigger\"], [aria-label^=\"Select project\"], [aria-label^=\"选择项目\"]",
+    "homeGreeting": "[data-testid=\"home-greeting\"], [data-testid=\"home-splash-content\"]",
     "excludeI18n": "code, pre, kbd, samp, textarea, input, style, script, noscript, [contenteditable=\"true\"], .prose, .markdown, [class*=\"chat-message\"], [class*=\"group/file-title\"], [data-testid=\"conversation-row-sidebar\"] a[href^=\"/c/\"], [data-testid=\"conversation-row-sidebar\"] span.truncate, #ag-live-metrics-pill, #ag-live-metrics-tooltip"
   }
 }

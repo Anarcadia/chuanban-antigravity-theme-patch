@@ -1,13 +1,13 @@
 ---
 name: chuanban-antigravity-theme-patch
-description: 船板的 Antigravity 2.0 主题、字体与深度汉化全栈成品补丁包（v5.0.0 模块化架构）。采用「core/ 只读黄金内核 + user/ 永不覆盖改装层 + install.mjs 一键生命周期 CLI」，支持对方 Agent 零代码生成一键部署、2.5 秒热重载二次定制与 --safe-mode 沙箱排障。当用户提到“安装船板 Antigravity 主题”、“升级/修复 Antigravity 汉化与字体”、“定制 Antigravity 界面样式或汉化词条”时触发。
+description: 船板的 Antigravity 2.0 主题、字体与深度汉化全栈成品补丁包（v5.0.1 模块化架构 · 完整对齐 Antigravity 2.30.0 及 Knowledge Work 知识工作模式）。采用「core/ 只读黄金内核 + user/ 永不覆盖改装层 + install.mjs 一键生命周期 CLI」，支持对方 Agent 零代码生成一键部署、2.5 秒热重载二次定制与 --safe-mode 沙箱排障。当用户提到“安装船板 Antigravity 主题”、“升级/修复 Antigravity 汉化与字体”、“定制 Antigravity 界面样式或汉化词条”时触发。
 ---
 
-# 船板的 Antigravity 主题、字体与深度汉化全栈成品补丁（v5.0.0）
+# 船板的 Antigravity 主题、字体与深度汉化全栈成品补丁（v5.0.1 · 完整对齐 Antigravity 2.30.0）
 
 > **前置概括（致用户与执行端 AI Agent）**：
-> - **设计目的**：以纯运行时 CDP 非侵入式注入，为 Google Antigravity 提供三套 Anthropic 暖纸护眼配色预设（默认高对比暖白）、四层中西文精密排版（`Anthropic` 官方字体族 + `Sarasa` 更纱黑体超集 Solid Ink 润墨）、输入框「古朴暗红蜡封」三态解耦交互、450 条全界面无死角汉化及同行实时会话指标胶囊（`tok/s · TTFT · Ctx 256k 水位 · Out`）。
-> - **v5.0.0 核心特性**：
+> - **设计目的**：以纯运行时 CDP 非侵入式注入，为 Google Antigravity 提供三套 Anthropic 暖纸护眼配色预设（默认高对比暖白）、四层中西文精密排版（`Anthropic` 官方字体族 + `Sarasa` 更纱黑体超集 Solid Ink 润墨）、输入框「古朴暗红蜡封」三态解耦交互、634 条全界面无死角汉化（含 `2.30.0` `Knowledge Work` 知识工作模式全对齐）及同行实时会话指标胶囊（`tok/s · TTFT · Ctx 256k 水位 · Out`）。
+> - **v5.0.1 核心特性**：
 >   1. **Agent 一键部署，内核封装完毕无需构建**：全部样式、词典、DOM 引擎与守护进程已预封装在 `core/` 只读黄金内核中，**严禁 Agent 从头手写或重生成守护代码**，直接调用 `node install.mjs` 即可 3 秒完成部署；
 >   2. **开放 `user/` 独立改装层（2.5 秒可逆热重载）**：用户后续可随时与 Agent 对话，在永不随升级覆盖的 `user/` 目录内自定义风格、字号、词条或通过 `--safe-mode` / `rollback` 自我 Debug；
 >   3. **不改变程序本体且小版本更新不失效**：绝不修改 Antigravity 客户端二进制与 `.asar`，依靠系统常驻守护服务自动重连注入，客户端日常小幅更新后依然自动生效（同进程兼容 Stable 与 Insiders）。
@@ -38,7 +38,7 @@ description: 船板的 Antigravity 2.0 主题、字体与深度汉化全栈成�
 
 守护进程（`core/daemon.mjs`）内置**运行时环境动态分级**，绝不因 Node 小版本差异崩溃或无限重启：
 
-| 运行时版本 | 主题 / 蜡封设计 / 字体排版 | 450 条深度汉化 + 原型安全词典 | 死锁自愈 + 缩放快捷键修复 | SQLite 实时会话指标胶囊 (`node:sqlite`) |
+| 运行时版本 | 主题 / 蜡封设计 / 字体排版 | 600+ 条深度汉化 + 原型安全词典 | 死锁自愈 + 缩放快捷键修复 | SQLite 实时会话指标胶囊 (`node:sqlite`) |
 | :--- | :---: | :---: | :---: | :---: |
 | **Node.js `>= 22.13.0`**（推荐完全体） | ✅ 全量启用 | ✅ 全量启用 | ✅ 全量启用 | ✅ **自动动态解锁**（精确显示模型名、耗时、上下文窗口与真实缓存命中率） |
 | **Node.js `22.0.0 ~ 22.12.x`** | ✅ 全量启用 | ✅ 全量启用 | ✅ 全量启用 | ⚠️ 自动优雅降级关闭（无需 `--experimental-sqlite` 标志，后台零报错） |
@@ -60,7 +60,7 @@ chuanban-antigravity-theme-patch/
 │   ├── daemon.mjs              # Node CDP 守护进程（动态 SQLite 分级、2.5s 热重载感知、PID 锁、Stable+Insiders 同进程双通道守护）
 │   ├── runtime.js              # 纯正浏览器端注入引擎（零模板转义，含 WeakMap 热重载还原、O(N·深度) 脏根节流、死锁自愈）
 │   ├── theme.css               # 纯正多行 CSS 样式表（挂载于 #ag-custom-fonts，含暖纸浅色、输入框 C/A/B 蜡封三态解耦）
-│   └── i18n.json               # 450 条标准 JSON 汉化基准词典（运行时挂载至 Object.create(null) 免疫原型键冲突）
+│   └── i18n.json               # 600+ 条标准 JSON 汉化基准词典（运行时挂载至 Object.create(null) 免疫原型键冲突）
 └── user/                       # 【用户改装层】升级时 100% 永不覆盖，守护进程每 2.5s 自动检测 mtimeMs 热重载注入！
     ├── config.json             # 开关配置（enabled / channel / preset / modules(或 features) / themeVars 变量覆盖）
     ├── custom.css              # 用户/对方 Agent 自定义追加 CSS（独立挂载于 #antigravity-user-custom-style）
@@ -186,7 +186,7 @@ node install.mjs rollback
 1. **输入框「蜡封三态」零延迟纯 CSS 解耦（设计 C / A / B）**：
    - **场景二（首页新建对话 / Home Splash & New Conversation）**：日常状态为 **设计 C**（外框完全透明 `rgba(122, 31, 26, 0)`，保持首页极简呼吸感）；鼠标移上或打字聚焦时平滑浮现为 **设计 A**（`1.5px` 淡雅暗红蜡封线 `rgba(122, 31, 26, 0.34)` + 微暖晕染）。
    - **场景一（日常推进具体聊天会话）**：日常常驻 **设计 A**（`1.5px` 略粗偏淡古朴蜡封线）；鼠标移上或聚焦时进阶为 **设计 B**（`2px` 浓郁古朴暗红蜡封 `--ag-wax-seal-hover` + 双层内嵌微光）。
-   - **0ms 切换**：完全依靠组件级现代 CSS `:has([data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"])` 与 `html:has([data-testid="home-greeting"])` 解耦，彻底消除 JS 轮询延迟。
+   - **0ms 切换**：完全依靠组件级现代 CSS `:has([data-testid="branch-pill-trigger"], [data-testid="project-branch-picker"], [aria-label^="Select project"], [aria-label^="选择项目"])` 与 `html:has([data-testid="home-greeting"], [data-testid="home-splash-content"])` 解耦（完美兼容 `2.30.0` `Knowledge Work` 模式），彻底消除 JS 轮询延迟。
 2. **原型安全、WeakMap 可逆热重载与 O(N·深度) 高性能 DOM 汉化引擎**：
    - 词典采用 `Object.create(null)` 空原型哈希表，彻底免疫 `toString` / `valueOf` / `constructor` 等原型链属性冲突。
    - 采用 `WeakMap` 记录被汉化节点的原始英文文本，支持热重载增删改词条及无损卸载还原。

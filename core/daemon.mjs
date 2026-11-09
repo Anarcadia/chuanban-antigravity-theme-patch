@@ -136,7 +136,13 @@ function resolveActiveChannelEndpoints(channelMode = 'auto', userCfg = {}) {
 // ============================================================================
 // 2. 动态构建注入载荷（支持 core/ + user/ 实时合并与热更新签名）
 // ============================================================================
-const BASE_VERSION = '20261104-v5.0.0';
+const BASE_VERSION = '20261110-v5.0.1';
+const DEFAULT_BRANCH_PILL_SELECTOR =
+  '[data-testid="branch-pill-trigger"], [data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"]';
+const LEGACY_BRANCH_PILL_SELECTORS = new Set([
+  '[data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"]',
+  '#antigravity\\.agentSidePanelInputBox [data-testid="branch-pill-trigger"], [id="antigravity.agentSidePanelInputBox"] [data-testid="branch-pill-trigger"], #antigravity\\.agentSidePanelInputBox [aria-label^="Select project"], [id="antigravity.agentSidePanelInputBox"] [aria-label^="Select project"], #antigravity\\.agentSidePanelInputBox [aria-label^="选择项目"], [id="antigravity.agentSidePanelInputBox"] [aria-label^="选择项目"]'
+]);
 let cachedBundleSig = '';
 let cachedInjectScript = '';
 let cachedPatchVersion = '';
@@ -230,6 +236,11 @@ function rebuildBundleIfNeeded() {
   const themeVars = !SAFE_MODE && userCfg.themeVars && typeof userCfg.themeVars === 'object' ? userCfg.themeVars : {};
   const endpoints = resolveActiveChannelEndpoints(channel, userCfg);
 
+  const normalizedSelectors = Object.assign({}, userCfg.selectors || {});
+  if (LEGACY_BRANCH_PILL_SELECTORS.has(normalizedSelectors.branchPillInBox)) {
+    normalizedSelectors.branchPillInBox = DEFAULT_BRANCH_PILL_SELECTOR;
+  }
+
   activeConfig = {
     enabled,
     channel,
@@ -237,7 +248,7 @@ function rebuildBundleIfNeeded() {
     contextLimit,
     modules,
     themeVars,
-    selectors: userCfg.selectors || {},
+    selectors: normalizedSelectors,
     allowedOrigins: Array.isArray(userCfg.allowedOrigins)
       ? userCfg.allowedOrigins
       : ['http://127.0.0.1', 'https://127.0.0.1', 'http://localhost', 'https://localhost', 'vscode-file://'],

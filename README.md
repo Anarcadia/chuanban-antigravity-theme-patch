@@ -1,6 +1,7 @@
-# 船板的 Antigravity 书卷配色、高对比、类Claude风格、白天主题 & 字体优化与汉化全栈补丁 (v5.0.0)
+# 船板的 Antigravity 书卷配色、高对比、类Claude风格、白天主题 & 字体优化与汉化全栈补丁 (v5.0.1 · 完整适配 Antigravity 2.30.0)
 
-[![Version](https://img.shields.io/badge/version-5.0.0-7A1F1A.svg)](https://github.com/Anarcadia/chuanban-antigravity-theme-patch)
+[![Version](https://img.shields.io/badge/version-5.0.1-7A1F1A.svg)](https://github.com/Anarcadia/chuanban-antigravity-theme-patch)
+[![Antigravity](https://img.shields.io/badge/Antigravity-2.30.0%2B%20(Knowledge%20Work%20%26%20SE)-D97757.svg)](https://github.com/Anarcadia/chuanban-antigravity-theme-patch)
 [![Node](https://img.shields.io/badge/node-%3E%3D22.0.0%20(22.13%2B%20Full)-339933.svg)](https://nodejs.org/)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows-lightgrey.svg)](https://github.com/Anarcadia/chuanban-antigravity-theme-patch)
 
@@ -31,7 +32,15 @@
 
 ## 🕒 版本更新历程
 
-- **2026-11-04（v5.0.0 现行版 · 模块化成品包与双平台全栈内核）**：
+- **2026-11-10（v5.0.1 现行版 · 完整对齐 Antigravity `2.30.0` 与全新 `Knowledge Work` 知识工作模式）**：
+  1. **修复 `2.30.0` 全新 `onyx` 主题引擎与内联 CSS 变量漂移**：针对 `2.30.0` 动态注入 `<html style>` 的 `--content`、`--shell`、`--onyx-frame`、`--onyx-well`、`--onyx-selected`、`--glass-*` 与默认冷蓝 `--primary` 等变量，在三套配色预设中完成全量强覆盖，彻底消除侧栏选中态泛白、内嵌卡片色差、输入框双层灰框重影及分屏拖拽条遮挡；
+  2. **修复 `2.30.0` `data-agy-font="google-sans"` 可变字体 `wdth 92` 字宽压缩与斜体失效**：全局解除 `92%` 窄体字宽压缩，同时显式覆写 `--agy-gsf-italic: italic !important` 与 `--agy-gsf-bold-wght: 600 !important`，确保 Markdown 与界面中的 `<em>` / `<i>` 斜体及标题字重 100% 正常渲染；
+  3. **1:1 全量对齐 `2.30.0` 全新 `Knowledge Work`（知识工作模式）**：
+     - 首页新建对话三态蜡封（设计 C / A / B）同步适配 `Knowledge Work` 专属选择器（`[data-testid="project-selector-trigger"]`、`[data-testid="location-selector-trigger"]`、`[data-testid="project-branch-picker"]`、`[data-testid="home-splash-content"]`）；
+     - 完整支持折叠式工具调用与进度时间线（`Worked for 1m 20s · 5 updates` → `已工作 1m 20s · 5 条进展`、`Explored file and artifact, edited` → `已探索文件与交付工件、已编辑`、`Editing/Reading/Listing/Searching <target>`、`Running for 5m 20s` 等）；
+     - 基准词典去重并扩充至 **634 条零重复词条**，完整覆盖界面布局模式切换（`Knowledge Work` / `Software Engineering`）、权限 V2 体系（`Global Permissions` / `Security Preset`）、右侧概览面板（`Overview` / `Customize Sections` / `Subagents` / `Background Tasks` / `Artifacts`）等全部新增界面；
+  4. **GPU 与运行态性能优化**：移除 `.surface-glass` / `.agy-user-bubble` 在实色主题卡片上的高开销 `backdrop-filter: blur(20~40px)` 离屏合成，优化非会话路由下的指标轮询短路与属性翻译缓存。
+- **2026-11-04（v5.0.0 · 模块化成品包与双平台全栈内核）**：
   1. **架构全面升级为「`core/` 只读黄金内核 + `user/` 无损热改装层 + `install.mjs` 一键生命周期 CLI」**：彻底告别由 Agent 现场拼装单文件代码的模式，将全部样式、450 条深度汉化词典、增量 DOM 汉化引擎与后台守护进程预封装为原生模块化成品包，实现 **Agent 零代码生成 3 秒一键部署**；
   2. **新增输入框「古朴暗红蜡封」双场景三态解耦（设计 C / A / B）**：首页新建对话保持透明外框呼吸感（悬停/聚焦浮现 `1.5px` 淡雅蜡封线）；日常会话常驻 `1.5px` 淡蜡封线（悬停/聚焦进阶为 `2px` 浓郁古朴暗红蜡封 `#7A1F1A` + 微暖内发光），纯 CSS `:has()` 驱动实现 `0ms` 无延迟切换；
   3. **开放 `user/` 2.5 秒可逆热重载改装层与 `--safe-mode` 沙箱排障**：支持用户后续随时与 Agent 自然语言沟通，在永不覆盖的 `user/` 层实时微调配色、字号、CSS、词条与前端扩展脚本，保存后 2.5 秒自动热生效（含 `WeakMap` 词条实时还原）；
@@ -53,9 +62,9 @@ Google Antigravity 原生界面采用冷灰底色、机械混黑侧栏与单一�
 - **🎨 三套暖纸护眼配色预设**：默认部署 **高对比版**（暖燕麦侧栏 `#F7F5F0` + 微暖亮白主区 `#FCFCFB` + 近纯黑深墨文字 `#0A0A0A`），同时内置 **ClaudeDesktop 净白** 与 **复古深色羊皮纸**，一键秒级热切换；
 - **🔤 四层字体排版（Solid Ink 润墨调校）**：UI 控件采用 `Anthropic Sans` + `Sarasa UI SC`，阅读正文采用 `Anthropic Serif` 古典衬线 + `Sarasa Mono Slab SC`，代码与终端采用严格 1:2 等宽，主输入框独立配置 Codex 同款打字机板状粗衬线；
 - **🕯️ 输入框「古朴暗红蜡封」三态交互**：区分「新建对话首页」与「日常聊天会话」自动切换外框呼吸感与暗红蜡封聚焦反馈；
-- **🇨🇳 450 条深度汉化 + ⚡ 实时性能指标胶囊**：全覆盖隐藏菜单与 15 个设置子页（严格隔离保护代码块、终端与对话正文不误伤），并在输入框底部同行实时展示生成速度（`tok/s`）、首字耗时（`TTFT`）、`256k` 上下文水位及缓存命中率详情仪表盘。
+- **🇨🇳 634 条深度汉化（含 `2.30.0` `Knowledge Work` 模式 1:1 对齐） + ⚡ 实时性能指标胶囊**：全覆盖隐藏菜单与 15+ 个设置子页（严格隔离保护代码块、终端与对话正文不误伤），并在输入框底部同行实时展示生成速度（`tok/s`）、首字耗时（`TTFT`）、`256k` 上下文水位及缓存命中率详情仪表盘。
 
-### 2. 当前版本五大核心亮点（v5.0.0）
+### 2. 当前版本五大核心亮点（v5.0.1）
 1. **🤖 Agent 一键极简部署，内核封装完毕无需构建**：
    所有经过深度调优与多轮对抗审计的 CSS、词典、DOM 引擎与守护进程已预封装在 `core/` 只读黄金内核中，**零第三方 npm 依赖、无需任何编译构建步骤、更不需要 Agent 现场从头手写代码**。交给你的 Agent 后 3 秒即可一键落地。
 2. **🛠️ 开放 `user/` 独立改装层，后续可随时与 Agent 沟通自我 Debug 与定制风格**：
