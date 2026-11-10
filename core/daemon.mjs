@@ -20,6 +20,7 @@ import path from 'node:path';
 import os from 'node:os';
 import http from 'node:http';
 import crypto from 'node:crypto';
+import { execFile } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -841,11 +842,53 @@ function attachTarget(target, endpoint) {
 
 let isSyncing = false;
 let syncTickCount = 0;
+let lastZhPatchSig = '';
+let isZhPatchRunning = false;
+
+function ensureZhTitlePatchIfPresent() {
+  if (SAFE_MODE || process.platform !== 'darwin' || isZhPatchRunning) return;
+  const scriptPath = path.join(os.homedir(), '.gemini/antigravity/scripts/antigravity-zh-title-patch.py');
+  if (!fs.existsSync(scriptPath)) return;
+  const lsBins = [
+    '/Applications/Antigravity.app/Contents/Resources/bin/language_server',
+    '/Applications/Antigravity - Insiders.app/Contents/Resources/bin/language_server'
+  ];
+  const sig = lsBins
+    .map((p) => {
+      try {
+        const st = fs.statSync(p);
+        return `${p}:${st.mtimeMs}:${st.size}`;
+      } catch {
+        return '';
+      }
+    })
+    .join('|');
+  if (!sig || sig === lastZhPatchSig) return;
+  isZhPatchRunning = true;
+  execFile('python3', [scriptPath, 'patch'], { timeout: 25000 }, (err, stdout) => {
+    isZhPatchRunning = false;
+    lastZhPatchSig = lsBins
+      .map((p) => {
+        try {
+          const st = fs.statSync(p);
+          return `${p}:${st.mtimeMs}:${st.size}`;
+        } catch {
+          return '';
+        }
+      })
+      .join('|');
+    if (!err && stdout && stdout.includes('中文标题补丁注入成功')) {
+      console.log('[Daemon] Auto-applied zh-title patch:', stdout.trim().split('\n')[0]);
+    }
+  });
+}
+
 async function sync() {
   if (isSyncing) return;
   isSyncing = true;
   syncTickCount = (syncTickCount + 1) % 6000;
   try {
+    if (syncTickCount % 12 === 1) ensureZhTitlePatchIfPresent();
     const bundleChanged = rebuildBundleIfNeeded();
     const shouldHeartbeatCheck = bundleChanged || syncTickCount % 6 === 1;
 

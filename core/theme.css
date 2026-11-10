@@ -154,14 +154,9 @@ div[contenteditable="true"], textarea, div[contenteditable="true"] :is(p, span, 
   --sash-line: var(--card-border, rgba(0, 0, 0, 0.35)) !important;
 }
 
-.agy-sheet[data-sheet-inset] [data-main-content-body]:not(:has([data-split-panes]))::after,
-.agy-inset-shell [data-side-panel-body]::after,
-[data-main-content-body]:not(:has([data-split-panes]))::after {
+.agy-sheet[data-sheet-inset] [data-main-content-body]::after,
+.agy-inset-shell [data-side-panel-body]::after {
   box-shadow: inset 0 0 0 1px var(--card-edge, rgba(0, 0, 0, 0.35)) !important;
-}
-
-.relative.flex.w-full.h-full.outline-none > div.flex-shrink-0.relative.z-30.w-\[1px\] {
-  background-color: var(--sash-line, rgba(0, 0, 0, 0.35)) !important;
 }
 
 /* 输入框外托盘与内卡片几何（色彩由 Part II 白天 / Part III 黑夜变量驱动） */
