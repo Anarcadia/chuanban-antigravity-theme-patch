@@ -2,10 +2,10 @@
 /**
  * chuanban-antigravity-theme-patch · CDP Theme & Live Metrics Daemon (core/daemon.mjs)
  *
- * 架构特性（v5.1.1）：
+ * 架构特性（v5.1.3）：
  * 1. 动态 Node 分级：
- *    - Node >= 22.0：完整启用昼夜双模式独立主题（暖纸浅色 + 官方 onyx 深色）、四层字体、输入框三态、634条汉化、死锁自愈。
- *    - Node >= 22.13：动态 `await import('node:sqlite')` 解锁底部实时会话指标胶囊；低版本优雅降级绝不崩溃。
+ *    - Node >= 22.0：完整启用昼夜双模式独立主题（暖纸浅色 + 官方 onyx 深色）、四层字体、输入框三态、898条汉化、死锁自愈。
+ *    - Node >= 22.13：动态 `await import('node:sqlite')` 解锁底部实时会话指标胶囊（O(1) 增量尾行解析）；低版本优雅降级绝不崩溃。
  * 2. 模块化与热重载：
  *    - 周期性检测 `user/config.json`、`user/custom.css`、`user/i18n.override.json`、`user/custom.js` 的 mtime，
  *      用户或对方 Agent 修改 `user/` 层后 2.5 秒内自动重新构建签名并热更新至所有打开的 Antigravity 窗口。
@@ -20,7 +20,7 @@ import path from 'node:path';
 import os from 'node:os';
 import http from 'node:http';
 import crypto from 'node:crypto';
-import { execFile } from 'node:child_process';
+import { execFile, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -100,7 +100,10 @@ function resolveChannelPaths(singleChannel = 'stable', userCfg = {}) {
   let fallbackPort = isInsiders ? 9223 : 9222;
   try {
     if (fs.existsSync(argvPath)) {
-      const m = fs.readFileSync(argvPath, 'utf8').match(/"remote-debugging-port"\s*:\s*(\d+)/);
+      const stripped = fs
+        .readFileSync(argvPath, 'utf8')
+        .replace(/\/\*[\s\S]*?\*\/|^\s*\/\/.*$/gm, '');
+      const m = stripped.match(/"remote-debugging-port"\s*:\s*(\d+)/);
       if (m && parseInt(m[1], 10) > 0) fallbackPort = parseInt(m[1], 10);
     }
   } catch {}
@@ -137,7 +140,7 @@ function resolveActiveChannelEndpoints(channelMode = 'auto', userCfg = {}) {
 // ============================================================================
 // 2. 动态构建注入载荷（支持 core/ + user/ 实时合并与热更新签名）
 // ============================================================================
-const BASE_VERSION = '20261110-v5.1.1';
+const BASE_VERSION = '20261111-v5.1.3';
 let cachedBundleSig = '';
 let cachedInjectScript = '';
 let cachedPatchVersion = '';
@@ -151,6 +154,7 @@ let activeConfig = {
     metrics: true,
     composerWaxSeal: true,
     deadlockHealer: true,
+    zoomShortcuts: true,
     customCss: true,
     customJs: true
   },
@@ -161,9 +165,8 @@ let activeConfig = {
 
 function getFileMtimeSig(filePath) {
   try {
-    if (!fs.existsSync(filePath)) return '0:0';
-    const st = fs.statSync(filePath);
-    return `${st.mtimeMs}:${st.size}`;
+    const st = fs.statSync(filePath, { throwIfNoEntry: false });
+    return st ? `${st.mtimeMs}:${st.size}` : '0:0';
   } catch {
     return '0:0';
   }
@@ -218,6 +221,7 @@ function rebuildBundleIfNeeded() {
       metrics: true,
       composerWaxSeal: true,
       deadlockHealer: true,
+      zoomShortcuts: true,
       customCss: true,
       customJs: true
     },
@@ -240,6 +244,14 @@ function rebuildBundleIfNeeded() {
   }
   if (normalizedSelectors.homeGreeting && !String(normalizedSelectors.homeGreeting).includes('home-splash-content')) {
     delete normalizedSelectors.homeGreeting;
+  }
+  if (
+    typeof normalizedSelectors.excludeI18n === 'string' &&
+    normalizedSelectors.excludeI18n.trim() &&
+    !normalizedSelectors.excludeI18n.includes('.monaco-editor')
+  ) {
+    normalizedSelectors.excludeI18n +=
+      ', .monaco-editor, .monaco-diff-editor, .xterm, [data-markdown-root], [data-testid="user-message-content"], .agy-user-bubble, [class*="onyx-key"]';
   }
 
   activeConfig = {
@@ -312,17 +324,39 @@ function rebuildBundleIfNeeded() {
 rebuildBundleIfNeeded();
 
 // ============================================================================
-// 3. 单实例 PID 锁（防止重复启动守护进程）
+// 3. 单实例 PID 锁（防止重复启动守护进程，Windows 校验 node.exe 防止 PID 复用误杀）
 // ============================================================================
+function isConfirmedDaemonPid(pid) {
+  if (!pid || pid <= 0 || pid === process.pid) return false;
+  try {
+    process.kill(pid, 0);
+  } catch {
+    return false;
+  }
+  if (process.platform === 'win32') {
+    try {
+      const res = spawnSync('tasklist', ['/FI', `PID eq ${pid}`, '/FO', 'CSV', '/NH'], {
+        windowsHide: true,
+        encoding: 'utf8',
+        timeout: 1500
+      });
+      const out = String(res.stdout || '').toLowerCase();
+      if (!out.includes('node.exe')) return false;
+    } catch {
+      return false;
+    }
+  }
+  return true;
+}
+
 const pidKey = CLI_CHANNEL || 'default';
 const PID_FILE = path.join(os.tmpdir(), `ag-theme-daemon-${pidKey}.pid`);
 if (!RUN_ONCE) {
   try {
     if (fs.existsSync(PID_FILE)) {
       const oldPid = parseInt(fs.readFileSync(PID_FILE, 'utf8').trim(), 10);
-      if (oldPid && oldPid !== process.pid) {
+      if (isConfirmedDaemonPid(oldPid)) {
         try {
-          process.kill(oldPid, 0);
           process.kill(oldPid, 'SIGTERM');
         } catch {}
       }
@@ -351,6 +385,7 @@ if (!RUN_ONCE) {
 // 4. SQLite + Protobuf 实时会话指标解析器（读取 ~/.gemini/antigravity/conversations/<id>.db）
 // ============================================================================
 const metricsCache = new Map(); // dbPath -> { sig, payload }
+const incrementalMetricsMap = new Map(); // dbPath -> { rowCount, maxIdx, userStepsCount, lastUserStepIdx, items, validItems, totalIn, totalCache, totalOut, totalThink, totalResp }
 const MAX_METRICS_CACHE_SIZE = 30;
 
 function setMetricsCache(dbPath, entry) {
@@ -358,7 +393,19 @@ function setMetricsCache(dbPath, entry) {
   metricsCache.set(dbPath, entry);
   if (metricsCache.size > MAX_METRICS_CACHE_SIZE) {
     const oldestKey = metricsCache.keys().next().value;
-    if (oldestKey) metricsCache.delete(oldestKey);
+    if (oldestKey) {
+      metricsCache.delete(oldestKey);
+      incrementalMetricsMap.delete(oldestKey);
+    }
+  }
+}
+
+function setIncrementalMetrics(dbPath, state) {
+  if (incrementalMetricsMap.has(dbPath)) incrementalMetricsMap.delete(dbPath);
+  incrementalMetricsMap.set(dbPath, state);
+  if (incrementalMetricsMap.size > MAX_METRICS_CACHE_SIZE) {
+    const oldestKey = incrementalMetricsMap.keys().next().value;
+    if (oldestKey) incrementalMetricsMap.delete(oldestKey);
   }
 }
 
@@ -429,18 +476,43 @@ function fmtNum(n) {
 function getDbSignature(cascadeId, conversationsDir) {
   try {
     const dbPath = path.join(conversationsDir, `${cascadeId}.db`);
-    if (!fs.existsSync(dbPath)) return null;
-    const st = fs.statSync(dbPath);
-    let walSig = '0:0';
-    const walPath = `${dbPath}-wal`;
-    if (fs.existsSync(walPath)) {
-      const wst = fs.statSync(walPath);
-      walSig = `${wst.mtimeMs}:${wst.size}`;
-    }
+    const st = fs.statSync(dbPath, { throwIfNoEntry: false });
+    if (!st) return null;
+    const wst = fs.statSync(`${dbPath}-wal`, { throwIfNoEntry: false });
+    const walSig = wst ? `${wst.mtimeMs}:${wst.size}` : '0:0';
     return `${st.mtimeMs}:${st.size}|${walSig}`;
   } catch {
     return null;
   }
+}
+
+function parseGenMetadataRow(r) {
+  const top = parseProto(r.data);
+  const chat = top.has(1) ? parseProto(top.get(1)) : new Map();
+  const usage = chat.has(4) ? parseProto(chat.get(4)) : new Map();
+  const ttftMap = chat.has(11) ? parseProto(chat.get(11)) : new Map();
+  const streamMap = chat.has(12) ? parseProto(chat.get(12)) : new Map();
+
+  const inTok = usage.get(2) || 0;
+  const outTok = usage.get(3) || 0;
+  const cacheRead = usage.get(5) || 0;
+  const thinkTok = usage.get(9) || 0;
+  const respTok = usage.get(10) || 0;
+  const ttft = (ttftMap.get(1) || 0) + (ttftMap.get(2) || 0) / 1e9;
+  const stream = (streamMap.get(1) || 0) + (streamMap.get(2) || 0) / 1e9;
+
+  return {
+    idx: r.idx,
+    inTok,
+    outTok,
+    cacheRead,
+    ctx: inTok + cacheRead,
+    thinkTok,
+    respTok,
+    ttft,
+    stream,
+    totDur: ttft + stream
+  };
 }
 
 function parseConversationMetrics(cascadeId, conversationsDir) {
@@ -458,16 +530,21 @@ function parseConversationMetrics(cascadeId, conversationsDir) {
   const contextLimitTokens = activeConfig.contextLimit || 256000;
   let db;
   try {
-    db = new DatabaseSync(dbPath, { readOnly: true });
-    const rows = db.prepare('SELECT idx, data FROM gen_metadata ORDER BY idx ASC').all();
-    if (!rows || rows.length === 0) {
+    db = new DatabaseSync(dbPath, { readOnly: true, timeout: 200 });
+    const metaStat = db.prepare('SELECT COUNT(*) AS cnt, COALESCE(MAX(idx), -1) AS maxIdx FROM gen_metadata').get();
+    const rowCount = metaStat?.cnt ?? 0;
+    const maxIdx = metaStat?.maxIdx ?? -1;
+    if (rowCount === 0 || maxIdx < 0) {
       db.close();
       db = null;
+      incrementalMetricsMap.delete(dbPath);
       const emptyPayload = { cascadeId, hasData: false, sig };
       setMetricsCache(dbPath, { sig, payload: emptyPayload });
       return emptyPayload;
     }
+
     // 利用 idx_steps_step_type 覆盖索引直接在 SQLite C 引擎内完成聚合计数，0 数组分配
+    // 注意：gen_metadata.idx 与 steps.idx 属于两套独立递增坐标系，绝不可混用！
     const userStat = db
       .prepare('SELECT COUNT(*) AS cnt, COALESCE(MAX(idx), -1) AS lastIdx FROM steps WHERE step_type = 14')
       .get();
@@ -477,52 +554,96 @@ function parseConversationMetrics(cascadeId, conversationsDir) {
       .prepare('SELECT COUNT(*) AS cnt FROM steps WHERE step_type = 15 AND idx > ?')
       .get(lastUserStepIdx);
     const rawTurnSteps = turnStat?.cnt ?? 0;
+
+    let inc = incrementalMetricsMap.get(dbPath);
+    if (
+      inc &&
+      (rowCount < inc.rowCount ||
+        maxIdx < inc.maxIdx ||
+        userStepsCount < inc.userStepsCount ||
+        lastUserStepIdx < inc.lastUserStepIdx ||
+        (lastUserStepIdx !== inc.lastUserStepIdx && userStepsCount <= inc.userStepsCount))
+    ) {
+      inc = null;
+    }
+
+    if (inc) {
+      const startIdx = inc.maxIdx;
+      const deltaRows = db.prepare('SELECT idx, data FROM gen_metadata WHERE idx >= ? ORDER BY idx ASC').all(startIdx);
+      while (inc.items.length > 0 && inc.items[inc.items.length - 1].idx >= startIdx) {
+        const popped = inc.items.pop();
+        inc.totalIn -= popped.inTok;
+        inc.totalCache -= popped.cacheRead;
+        inc.totalOut -= popped.outTok;
+        inc.totalThink -= popped.thinkTok;
+        inc.totalResp -= popped.respTok;
+      }
+      while (inc.validItems.length > 0 && inc.validItems[inc.validItems.length - 1].idx >= startIdx) {
+        inc.validItems.pop();
+      }
+      if (inc.items.length + deltaRows.length === rowCount) {
+        for (let i = 0; i < deltaRows.length; i++) {
+          const p = parseGenMetadataRow(deltaRows[i]);
+          inc.items.push(p);
+          inc.totalIn += p.inTok;
+          inc.totalCache += p.cacheRead;
+          inc.totalOut += p.outTok;
+          inc.totalThink += p.thinkTok;
+          inc.totalResp += p.respTok;
+          if (p.ctx > 0 || p.outTok > 0) {
+            inc.validItems.push(p);
+          }
+        }
+        inc.rowCount = rowCount;
+        inc.maxIdx = maxIdx;
+        inc.userStepsCount = userStepsCount;
+        inc.lastUserStepIdx = lastUserStepIdx;
+      } else {
+        inc = null;
+      }
+    }
+
+    if (!inc) {
+      const rows = db.prepare('SELECT idx, data FROM gen_metadata ORDER BY idx ASC').all();
+      const items = [];
+      const validItems = [];
+      let totalIn = 0;
+      let totalCache = 0;
+      let totalOut = 0;
+      let totalThink = 0;
+      let totalResp = 0;
+      for (let i = 0; i < rows.length; i++) {
+        const p = parseGenMetadataRow(rows[i]);
+        items.push(p);
+        totalIn += p.inTok;
+        totalCache += p.cacheRead;
+        totalOut += p.outTok;
+        totalThink += p.thinkTok;
+        totalResp += p.respTok;
+        if (p.ctx > 0 || p.outTok > 0) {
+          validItems.push(p);
+        }
+      }
+      inc = {
+        rowCount: rows.length,
+        maxIdx: rows.length > 0 ? rows[rows.length - 1].idx : -1,
+        userStepsCount,
+        lastUserStepIdx,
+        items,
+        validItems,
+        totalIn,
+        totalCache,
+        totalOut,
+        totalThink,
+        totalResp
+      };
+    }
+
     db.close();
     db = null;
+    setIncrementalMetrics(dbPath, inc);
 
-    let totalIn = 0;
-    let totalCache = 0;
-    let totalOut = 0;
-    let totalThink = 0;
-    let totalResp = 0;
-
-    const parsed = rows.map((r) => {
-      const top = parseProto(r.data);
-      const chat = top.has(1) ? parseProto(top.get(1)) : new Map();
-      const usage = chat.has(4) ? parseProto(chat.get(4)) : new Map();
-      const ttftMap = chat.has(11) ? parseProto(chat.get(11)) : new Map();
-      const streamMap = chat.has(12) ? parseProto(chat.get(12)) : new Map();
-
-      const inTok = usage.get(2) || 0;
-      const outTok = usage.get(3) || 0;
-      const cacheRead = usage.get(5) || 0;
-      const thinkTok = usage.get(9) || 0;
-      const respTok = usage.get(10) || 0;
-      const ttft = (ttftMap.get(1) || 0) + (ttftMap.get(2) || 0) / 1e9;
-      const stream = (streamMap.get(1) || 0) + (streamMap.get(2) || 0) / 1e9;
-
-      totalIn += inTok;
-      totalCache += cacheRead;
-      totalOut += outTok;
-      totalThink += thinkTok;
-      totalResp += respTok;
-
-      return {
-        idx: r.idx,
-        inTok,
-        outTok,
-        cacheRead,
-        ctx: inTok + cacheRead,
-        thinkTok,
-        respTok,
-        ttft,
-        stream,
-        totDur: ttft + stream
-      };
-    });
-
-    // 过滤尾部或中间出现的 0 用量异常记录（如无 field 2 的元数据快照），防止 Ctx 显示为 0%
-    const valid = parsed.filter((p) => p.ctx > 0 || p.outTok > 0);
+    const { validItems: valid, totalIn, totalCache, totalOut, totalThink, totalResp } = inc;
     if (valid.length === 0) {
       const emptyPayload = { cascadeId, hasData: false, sig };
       setMetricsCache(dbPath, { sig, payload: emptyPayload });
@@ -592,10 +713,12 @@ function parseConversationMetrics(cascadeId, conversationsDir) {
     setMetricsCache(dbPath, { sig, payload });
     return payload;
   } catch {
-    if (cached && cached.payload) {
-      return cached.payload;
-    }
-    return { cascadeId, hasData: false };
+    // 若遇 SQLITE_BUSY 等瞬态锁竞争，标记 transientError 使得上层不锁死 lastPushedHash，下一轮自动重试
+    return {
+      cascadeId,
+      transientError: true,
+      cachedPayload: cached?.payload || null
+    };
   } finally {
     try {
       db?.close();
@@ -610,7 +733,6 @@ const attachedTargets = new Map();
 
 function readPort(portFile) {
   try {
-    if (!fs.existsSync(portFile)) return null;
     const raw = fs.readFileSync(portFile, 'utf8').trim();
     const lines = raw.split(/\r?\n/);
     const port = parseInt(lines[0], 10);
@@ -623,7 +745,7 @@ function readPort(portFile) {
 function fetchTargets(port) {
   return new Promise((resolve) => {
     const req = http.get(
-      { host: '127.0.0.1', port, path: '/json/list', timeout: 1500 },
+      { host: '127.0.0.1', port, path: '/json/list', timeout: 450 },
       (res) => {
         let data = '';
         res.on('data', (chunk) => (data += chunk));
@@ -668,6 +790,7 @@ function attachTarget(target, endpoint) {
       let msgId = 1;
       let activeCascadeId = '';
       let lastPushedHash = '';
+      let evalScriptId = null;
       const pendingCallbacks = new Map();
 
       const send = (method, params = {}) =>
@@ -684,6 +807,19 @@ function attachTarget(target, endpoint) {
           });
           ws.send(JSON.stringify({ id, method, params }));
         });
+
+      const updateNewDocScript = async () => {
+        if (evalScriptId) {
+          await send('Page.removeScriptToEvaluateOnNewDocument', { identifier: evalScriptId });
+          evalScriptId = null;
+        }
+        if (activeConfig.enabled) {
+          const addRes = await send('Page.addScriptToEvaluateOnNewDocument', { source: cachedInjectScript });
+          if (addRes?.result?.identifier) {
+            evalScriptId = addRes.result.identifier;
+          }
+        }
+      };
 
       const inject = async () => {
         const res = await send('Runtime.evaluate', {
@@ -733,7 +869,15 @@ function attachTarget(target, endpoint) {
         if (!force && sessionKey === lastPushedHash) return;
 
         const payload = parseConversationMetrics(activeCascadeId, endpoint.conversationsDir);
-        if (!payload) return;
+        if (!payload || payload.transientError) {
+          if (force && payload?.cachedPayload) {
+            await send('Runtime.evaluate', {
+              expression: `window.__ag_render_metrics && window.__ag_render_metrics(${JSON.stringify(payload.cachedPayload)})`,
+              returnByValue: false
+            });
+          }
+          return;
+        }
 
         await send('Runtime.evaluate', {
           expression: `window.__ag_render_metrics && window.__ag_render_metrics(${JSON.stringify(payload)})`,
@@ -750,7 +894,7 @@ function attachTarget(target, endpoint) {
               JSON.stringify(cachedPatchVersion) +
               ' && (' +
               JSON.stringify(!activeConfig.enabled) +
-              ' || !!document.getElementById("ag-custom-fonts"))',
+              ' || (window.__ag_body_ready === true && !!document.getElementById("ag-custom-fonts")))',
             returnByValue: true
           });
           if (checkRes?.result?.result?.value !== true) {
@@ -768,7 +912,7 @@ function attachTarget(target, endpoint) {
         await send('Page.enable');
         await send('Runtime.enable');
         await send('Runtime.addBinding', { name: '__agRequestMetrics' });
-        await send('Page.addScriptToEvaluateOnNewDocument', { source: cachedInjectScript });
+        await updateNewDocScript();
         const ok = await inject();
         await syncMetricsForSession(true);
         initialAttachDone = true;
@@ -813,6 +957,10 @@ function attachTarget(target, endpoint) {
 
       const closeHandler = () => {
         clearTimeout(attachTimeout);
+        if (navDebounceTimer) {
+          clearTimeout(navDebounceTimer);
+          navDebounceTimer = null;
+        }
         for (const [, cb] of pendingCallbacks) cb(null);
         pendingCallbacks.clear();
         attachedTargets.delete(target.id);
@@ -824,6 +972,7 @@ function attachTarget(target, endpoint) {
       attachedTargets.set(target.id, {
         ws,
         send,
+        updateNewDocScript,
         inject,
         checkAndInject,
         syncMetricsForSession,
@@ -844,44 +993,98 @@ let isSyncing = false;
 let syncTickCount = 0;
 let lastZhPatchSig = '';
 let isZhPatchRunning = false;
+let cachedWorkingPython = undefined;
+let zhPatchFailedSig = '';
+let zhPatchFailCount = 0;
+
+function resolveWorkingPython3() {
+  if (cachedWorkingPython !== undefined) return cachedWorkingPython;
+  const candidates = [
+    '/opt/homebrew/bin/python3',
+    '/Library/Frameworks/Python.framework/Versions/Current/bin/python3',
+    '/usr/local/bin/python3',
+    'python3'
+  ];
+  for (const bin of candidates) {
+    if (bin.startsWith('/') && !fs.existsSync(bin)) continue;
+    try {
+      const res = spawnSync(bin, ['-c', 'import sys; sys.exit(0)'], {
+        timeout: 3000,
+        stdio: ['ignore', 'pipe', 'pipe'],
+        windowsHide: true
+      });
+      if (res.status === 0) {
+        cachedWorkingPython = bin;
+        return bin;
+      }
+    } catch {}
+  }
+  cachedWorkingPython = null;
+  return null;
+}
 
 function ensureZhTitlePatchIfPresent() {
   if (SAFE_MODE || process.platform !== 'darwin' || isZhPatchRunning) return;
   const scriptPath = path.join(os.homedir(), '.gemini/antigravity/scripts/antigravity-zh-title-patch.py');
   if (!fs.existsSync(scriptPath)) return;
+  const disabledMarkerPath = path.join(os.homedir(), '.gemini/antigravity/scripts/backups/zh-title/DISABLED');
   const lsBins = [
     '/Applications/Antigravity.app/Contents/Resources/bin/language_server',
     '/Applications/Antigravity - Insiders.app/Contents/Resources/bin/language_server'
   ];
-  const sig = lsBins
-    .map((p) => {
-      try {
-        const st = fs.statSync(p);
-        return `${p}:${st.mtimeMs}:${st.size}`;
-      } catch {
-        return '';
-      }
-    })
-    .join('|');
-  if (!sig || sig === lastZhPatchSig) return;
-  isZhPatchRunning = true;
-  execFile('python3', [scriptPath, 'patch'], { timeout: 25000 }, (err, stdout) => {
-    isZhPatchRunning = false;
-    lastZhPatchSig = lsBins
+  const computeZhSig = () => {
+    const scriptSig = getFileMtimeSig(scriptPath);
+    const disabledSig = getFileMtimeSig(disabledMarkerPath);
+    const binSig = lsBins
       .map((p) => {
-        try {
-          const st = fs.statSync(p);
-          return `${p}:${st.mtimeMs}:${st.size}`;
-        } catch {
-          return '';
-        }
+        const st = fs.statSync(p, { throwIfNoEntry: false });
+        return st ? `${p}:${st.mtimeMs}:${st.size}` : '';
       })
       .join('|');
-    if (!err && stdout && stdout.includes('中文标题补丁注入成功')) {
+    return binSig ? `script:${scriptSig}|disabled:${disabledSig}|${binSig}` : '';
+  };
+  const sig = computeZhSig();
+  if (!sig || sig === lastZhPatchSig) return;
+  if (sig === zhPatchFailedSig && zhPatchFailCount >= 3) return;
+
+  const pyBin = resolveWorkingPython3();
+  if (!pyBin) {
+    zhPatchFailedSig = sig;
+    zhPatchFailCount = 3;
+    console.error('[Daemon] No working python3 interpreter found (Xcode license or PATH issue); skipping zh-title auto-patch.');
+    return;
+  }
+
+  isZhPatchRunning = true;
+  const child = execFile(pyBin, [scriptPath, 'patch', '--auto'], { timeout: 25000 }, (err, stdout, stderr) => {
+    isZhPatchRunning = false;
+    if (err) {
+      if (zhPatchFailedSig !== sig) {
+        zhPatchFailedSig = sig;
+        zhPatchFailCount = 1;
+      } else {
+        zhPatchFailCount += 1;
+      }
+      console.error(
+        `[Daemon] zh-title auto-patch failed (${zhPatchFailCount}/3): ${err.message} ${String(stderr || '').trim()}`
+      );
+      return;
+    }
+    zhPatchFailedSig = '';
+    zhPatchFailCount = 0;
+    lastZhPatchSig = computeZhSig();
+    if (stdout && stdout.includes('中文标题补丁注入成功')) {
       console.log('[Daemon] Auto-applied zh-title patch:', stdout.trim().split('\n')[0]);
+    } else if (stdout && stdout.includes('DISABLED')) {
+      console.log('[Daemon] zh-title auto-patch skipped (DISABLED marker present).');
     }
   });
+  try {
+    child.stdin?.end();
+  } catch {}
 }
+
+const fallbackBackoffUntil = new Map();
 
 async function sync() {
   if (isSyncing) return;
@@ -896,6 +1099,7 @@ async function sync() {
     const attachPromises = [];
 
     const probedPorts = new Set();
+    const nowMs = Date.now();
     for (const endpoint of activeConfig.endpoints) {
       let port = readPort(endpoint.portFile);
       let targets = [];
@@ -907,10 +1111,16 @@ async function sync() {
         targets.length === 0 &&
         endpoint.channelInstalled !== false &&
         endpoint.fallbackPort &&
-        !probedPorts.has(endpoint.fallbackPort)
+        !probedPorts.has(endpoint.fallbackPort) &&
+        (RUN_ONCE || nowMs >= (fallbackBackoffUntil.get(endpoint.fallbackPort) || 0))
       ) {
         probedPorts.add(endpoint.fallbackPort);
         targets = await fetchTargets(endpoint.fallbackPort);
+        if (targets.length === 0) {
+          fallbackBackoffUntil.set(endpoint.fallbackPort, nowMs + 10000);
+        } else {
+          fallbackBackoffUntil.delete(endpoint.fallbackPort);
+        }
       }
       if (targets.length === 0) continue;
 
@@ -929,8 +1139,8 @@ async function sync() {
           attachPromises.push(attachTarget(page, endpoint));
         } else {
           const entry = attachedTargets.get(page.id);
-          if (bundleChanged && entry.send) {
-            await entry.send('Page.addScriptToEvaluateOnNewDocument', { source: cachedInjectScript });
+          if (bundleChanged && entry.updateNewDocScript) {
+            await entry.updateNewDocScript();
           }
           if (shouldHeartbeatCheck && entry.checkAndInject) await entry.checkAndInject();
           if (entry.syncMetricsForSession) await entry.syncMetricsForSession(bundleChanged);

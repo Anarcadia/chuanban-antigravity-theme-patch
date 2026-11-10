@@ -1,7 +1,7 @@
 @font-face {
   font-family: 'Anthropic Serif';
   src: local('AnthropicSerifWebWeb-TextRegular'), local('AnthropicSerifWebWeb-TextLight'), local('Anthropic Serif Web'), local('Anthropic Serif Web Text Light'), local('Anthropic Serif Web Display Light'), local('Anthropic Serif');
-  font-weight: 300 500;
+  font-weight: 300 599;
   font-style: normal;
   font-display: swap;
 }
@@ -17,7 +17,7 @@
 @font-face {
   font-family: 'Anthropic Sans';
   src: local('AnthropicSansWebVariable-TextRegular'), local('AnthropicSansWebVariable-TextLight'), local('Anthropic Sans Web'), local('Anthropic Sans Web Text'), local('Anthropic Sans Web Display Light'), local('Anthropic Sans');
-  font-weight: 300 500;
+  font-weight: 300 599;
   font-style: normal;
   font-display: swap;
 }
@@ -50,9 +50,9 @@ body[data-agy-font],
 body[data-agy-font="google-sans"],
 body[data-agy-font="inter"],
 body[data-agy-font] :where(.font-sans) {
-  --vscode-font-family: 'Anthropic Sans Web Display Light', 'Anthropic Sans', 'Anthropic Sans Web', 'Anthropic Sans Web Text', 'anthropic-sans', 'Styrene B', 'Styrene', 'Sarasa UI SC', '更纱黑体 UI SC', 'PingFang SC', 'Hiragino Sans GB', system-ui, -apple-system, BlinkMacSystemFont, 'Microsoft YaHei UI', 'Microsoft YaHei', sans-serif !important;
+  --vscode-font-family: 'Anthropic Sans', 'Anthropic Sans Web Display Light', 'Anthropic Sans Web', 'Anthropic Sans Web Text', 'anthropic-sans', 'Styrene B', 'Styrene', 'Sarasa UI SC', '更纱黑体 UI SC', 'PingFang SC', 'Hiragino Sans GB', system-ui, -apple-system, BlinkMacSystemFont, 'Microsoft YaHei UI', 'Microsoft YaHei', sans-serif !important;
   --editor-font-family: 'Anthropic Mono', 'Anthropic Mono Web', 'anthropic-mono', 'Sarasa Mono Slab SC', '等距更纱黑体 Slab SC', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Monaco, Consolas, monospace !important;
-  --font-sans: 'Anthropic Sans Web Display Light', 'Anthropic Sans', 'Anthropic Sans Web', 'Anthropic Sans Web Text', 'anthropic-sans', 'Styrene B', 'Styrene', 'Sarasa UI SC', '更纱黑体 UI SC', 'PingFang SC', 'Hiragino Sans GB', system-ui, -apple-system, BlinkMacSystemFont, 'Microsoft YaHei UI', 'Microsoft YaHei', sans-serif !important;
+  --font-sans: 'Anthropic Sans', 'Anthropic Sans Web Display Light', 'Anthropic Sans Web', 'Anthropic Sans Web Text', 'anthropic-sans', 'Styrene B', 'Styrene', 'Sarasa UI SC', '更纱黑体 UI SC', 'PingFang SC', 'Hiragino Sans GB', system-ui, -apple-system, BlinkMacSystemFont, 'Microsoft YaHei UI', 'Microsoft YaHei', sans-serif !important;
   --font-mono: 'Anthropic Mono', 'Anthropic Mono Web', 'anthropic-mono', 'Sarasa Mono Slab SC', '等距更纱黑体 Slab SC', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Monaco, Consolas, monospace !important;
   --default-font-family: var(--font-sans) !important;
   --default-mono-font-family: var(--font-mono) !important;
@@ -89,11 +89,17 @@ body[data-agy-font],
 body[data-agy-font="google-sans"] {
   font-weight: 400 !important;
   font-variation-settings: normal !important;
-  background-color: var(--background) !important;
   color: var(--foreground) !important;
 }
 
-.bg-sidebar {
+/* Antigravity 2.31.0+ 兼容：放行内置浏览器 WebContentsView 透明打孔 (data-has-browser-hole="true") */
+body:not([data-has-browser-hole="true"]),
+body[data-agy-font]:not([data-has-browser-hole="true"]),
+body[data-agy-font="google-sans"]:not([data-has-browser-hole="true"]) {
+  background-color: var(--background) !important;
+}
+
+.bg-sidebar:not([data-has-browser-hole="true"]) {
   background-color: var(--sidebar) !important;
 }
 
@@ -112,33 +118,51 @@ html, body, body[data-agy-font], button, select, nav, header, aside {
   -webkit-font-smoothing: antialiased;
 }
 
-/* 2. 对话正文与 Markdown 内容：Anthropic Serif + 更纱粗衬线/黑体 */
+/* 2. 对话正文与 Markdown 内容：Anthropic Serif + 更纱粗衬线/黑体（容器继承，不强绑泛化 span/div 以保护代码与公式继承） */
+[data-markdown-root],
+[data-testid="user-message-content"],
+.agy-user-bubble,
 .select-text,
 .prose,
 .markdown,
 article,
-.select-text :is(p, li, blockquote, h1, h2, h3, h4, h5, h6, strong, em, span, div) {
-  font-family: 'Anthropic Serif Web Display Light', 'Anthropic Serif', 'Anthropic Serif Web', 'Anthropic Serif Web Text Light', 'anthropic-serif', 'Tiempos Text', 'Tiempos', 'Sarasa Mono Slab SC', '等距更纱黑体 Slab SC', 'Sarasa Gothic SC', '更纱黑体 SC', 'PingFang SC', Georgia, Cambria, 'Times New Roman', serif;
+:is([data-markdown-root], .select-text, .prose, .markdown, article) :is(p, li, blockquote, h1, h2, h3, h4, h5, h6, td, th) {
+  font-family: 'Anthropic Serif', 'Anthropic Serif Web Display Light', 'Anthropic Serif Web', 'Anthropic Serif Web Text Light', 'anthropic-serif', 'Tiempos Text', 'Tiempos', 'Sarasa Mono Slab SC', '等距更纱黑体 Slab SC', 'Sarasa Gothic SC', '更纱黑体 SC', 'PingFang SC', Georgia, Cambria, 'Times New Roman', serif;
   font-variant-numeric: lining-nums;
   letter-spacing: -0.003em;
 }
 
-.select-text :is(p, li, blockquote) {
+:is([data-markdown-root], .select-text, .prose, .markdown) :is(p, li, blockquote) {
   line-height: 1.62;
 }
 
-html[data-ag-custom-font-size="true"] :is(.prose, .markdown, [class*="chat-message"]) {
+html[data-ag-custom-font-size="true"] :is([data-markdown-root], [data-testid="user-message-content"], [data-testid="user-message-content"] .select-text, .agy-user-bubble, .prose, .markdown, [class*="chat-message"]) {
   font-size: var(--ag-chat-font-size) !important;
 }
 
-/* 3. 代码、终端、diff 查看器、文件名、文件路径：Anthropic Mono + Sarasa Mono */
-code, pre, kbd, samp, .font-mono, [class*="language-"], .monaco-editor, .xterm, pre *, [class*="group/file-title"], [class*="group/file-title"] *, [class*="file-title"], [class*="file-path"], [data-path], [data-file-path], .tabular-nums, .select-text :is(code, pre, kbd, samp, .font-mono) {
+/* 3. 代码、终端、diff 查看器、文件名、文件路径：Anthropic Mono + Sarasa Mono（移除 .tabular-nums 避免误劫持 UI 控件） */
+code, pre, kbd, samp, .font-mono, [class*="language-"], .monaco-editor, .xterm, pre *, [class*="group/file-title"], [class*="group/file-title"] *, [class*="file-title"], [class*="file-path"], [data-path], [data-file-path], :is([data-markdown-root], .select-text) :is(code, pre, kbd, samp, .font-mono) {
   font-family: var(--font-mono) !important;
 }
 
-/* 4. 输入框编辑区：Codex 同款等距更纱黑体 SLAB (Sarasa Mono Slab SC) */
-div[contenteditable="true"], textarea, div[contenteditable="true"] :is(p, span, div), [data-composer], .ProseMirror, .ProseMirror :is(p, span) {
+/* 4. 输入框编辑区与 Lexical 占位符：Codex 同款等距更纱黑体 SLAB (Sarasa Mono Slab SC) */
+div[contenteditable="true"],
+textarea,
+div[contenteditable="true"] :is(p, span, div),
+[data-lexical-editor="true"],
+[data-lexical-editor="true"] :is(p, span, div),
+[data-lexical-editor="true"] ~ p.pointer-events-none,
+#antigravity\.agentSidePanelInputBox div:has(> [data-lexical-editor="true"]) > p.pointer-events-none,
+[data-composer],
+.ProseMirror,
+.ProseMirror :is(p, span) {
   font-family: 'Sarasa Mono Slab SC', '等距更纱黑体 Slab SC', 'Anthropic Mono', 'Anthropic Mono Web', ui-monospace, monospace !important;
+}
+
+#antigravity\.agentSidePanelInputBox [data-lexical-editor="true"],
+#antigravity\.agentSidePanelInputBox [data-lexical-editor="true"] span[data-lexical-text="true"] {
+  font-weight: 400 !important;
+  letter-spacing: normal !important;
 }
 
 /* 5. 共享 UI 几何形状、输入框三态 1.5px 过渡与 GPU 性能优化 */
@@ -220,25 +244,45 @@ body[data-agy-theme][data-newux-theme="onyx"] .surface-composer:focus-within > .
   box-shadow: var(--ag-composer-card-focus-shadow, 0 6px 20px -2px rgba(60, 20, 15, 0.07), 0 2px 6px -1px rgba(0, 0, 0, 0.04)) !important;
 }
 
-/* 输入框顶部工具栏、底部按钮与发送按钮 */
-[id="antigravity.agentSidePanelInputBox"] > div:first-child :is(button, span, svg) {
+/* 输入框顶部工具栏（排除 .surface-composer-card 本身）、底部按钮与发送/取消按钮 */
+[id="antigravity.agentSidePanelInputBox"] > div:first-child:not(.surface-composer-card) :is(button, span, svg) {
   color: var(--ag-composer-top-fg, #383431) !important;
 }
 
-[id="antigravity.agentSidePanelInputBox"] > div:first-child button:hover {
+[id="antigravity.agentSidePanelInputBox"] > div:first-child:not(.surface-composer-card) button:hover {
   background-color: var(--ag-composer-top-hover-bg, rgba(217, 119, 87, 0.08)) !important;
   color: var(--ag-composer-top-hover-fg, #1F1E1D) !important;
 }
 
-#antigravity\.agentSidePanelInputBox :is([class*="text-secondary-foreground"], button, span) {
+#antigravity\.agentSidePanelInputBox :is([class*="text-secondary-foreground"], button, span):not([data-lexical-editor="true"]):not([data-lexical-editor="true"] *) {
   font-weight: 500 !important;
   letter-spacing: -0.012em !important;
   text-shadow: var(--ag-ink-shadow-md);
 }
 
-#antigravity\.agentSidePanelInputBox :is([class*="text-secondary-foreground"]:not(#ag-live-metrics-pill *), button:not([data-testid="send-button"]):not([data-testid="voice-start-button"]), span:not([data-testid="voice-live-pill"]):not([data-testid="voice-live-pill"] *):not(#ag-live-metrics-pill):not(#ag-live-metrics-pill *), svg:not([data-testid="voice-live-pill"] *):not([data-testid="send-button"] *)) {
+#antigravity\.agentSidePanelInputBox :is([class*="text-secondary-foreground"]:not(#ag-live-metrics-pill *), button:not([data-testid="send-button"]):not(.agy-send-button):not([data-testid="voice-start-button"]):not([data-testid="input-cancel-button"]), span:not([data-testid="voice-live-pill"]):not([data-testid="voice-live-pill"] *):not(.agy-send-button):not(.agy-send-button *):not([data-testid="input-cancel-button"] *):not(#ag-live-metrics-pill):not(#ag-live-metrics-pill *), svg:not([data-testid="voice-live-pill"] *):not([data-testid="send-button"] *):not(.agy-send-button *):not([data-testid="input-cancel-button"] *)):not([data-lexical-editor="true"]):not([data-lexical-editor="true"] *) {
   color: var(--ag-composer-ctrl-fg, #0A0A0A) !important;
   opacity: 1 !important;
+}
+
+html:not([data-ag-theme-mode="dark"]) body:not(.dark):not(.theme-dark) #antigravity\.agentSidePanelInputBox button[data-testid="input-cancel-button"] {
+  background-color: rgba(31, 30, 29, 0.09) !important;
+  color: #1F1E1D !important;
+}
+
+html:not([data-ag-theme-mode="dark"]) body:not(.dark):not(.theme-dark) #antigravity\.agentSidePanelInputBox button[data-testid="input-cancel-button"]:hover {
+  background-color: rgba(31, 30, 29, 0.15) !important;
+  color: #0A0A0A !important;
+}
+
+:is(html[data-ag-theme-mode="dark"] body, body.dark, body.theme-dark) #antigravity\.agentSidePanelInputBox button[data-testid="input-cancel-button"] {
+  background-color: rgba(255, 255, 255, 0.11) !important;
+  color: #EAEBF1 !important;
+}
+
+:is(html[data-ag-theme-mode="dark"] body, body.dark, body.theme-dark) #antigravity\.agentSidePanelInputBox button[data-testid="input-cancel-button"]:hover {
+  background-color: rgba(255, 255, 255, 0.18) !important;
+  color: #FFFFFF !important;
 }
 
 #antigravity\.agentSidePanelInputBox :is([data-testid="voice-live-pill"], button[data-testid="send-button"], .agy-send-button),
@@ -260,18 +304,24 @@ body[data-agy-theme][data-newux-theme="onyx"] .surface-composer:focus-within > .
   fill: #FFFFFF !important;
 }
 
-/* 搜索栏聚焦单圈几何 */
+/* 搜索栏聚焦单圈几何（显式排除 checkbox/radio/range，兼容已汉化 placeholder，保护无障碍键盘焦点可见性） */
 input[placeholder*="Search"],
-input[class*="focus:border-ring"] {
+input[data-ag-orig-placeholder*="Search"],
+[data-testid="new-tab-search-input"],
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"])[class*="focus:border-primary"],
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"])[class*="focus:border-ring"] {
   --nux-focus-ring: transparent !important;
 }
 
 input[placeholder*="Search"]:is(:focus, :focus-visible),
-input[class*="focus:border-ring"]:is(:focus, :focus-visible) {
+input[data-ag-orig-placeholder*="Search"]:is(:focus, :focus-visible),
+[data-testid="new-tab-search-input"]:is(:focus, :focus-visible),
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"])[class*="focus:border-primary"]:is(:focus, :focus-visible),
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"])[class*="focus:border-ring"]:is(:focus, :focus-visible) {
   outline: none !important;
   outline-offset: 0 !important;
   border-color: var(--primary, #D97757) !important;
-  box-shadow: 0 0 0 1px var(--primary, #D97757) !important;
+  box-shadow: none !important;
 }
 
 /* 保护 voice-live-pill 内部状态显隐 */
@@ -294,7 +344,6 @@ html[data-ag-preset] #antigravity\.agentSidePanelInputBox [data-testid="voice-li
 aside :is(a, button) {
   font-weight: 450 !important;
   letter-spacing: -0.012em !important;
-  text-rendering: optimizeLegibility;
   color: var(--ag-sidebar-fg, #262422) !important;
   text-shadow: var(--ag-ink-shadow-sm);
 }
@@ -313,7 +362,7 @@ button[data-testid="project-header"],
 button[data-project-card="true"],
 [data-project-label],
 [data-subtext] span[class*="text-muted"],
-span:has(> svg) + span {
+.bg-sidebar span:has(> svg) + span {
   font-weight: 450 !important;
   color: var(--ag-sidebar-header-fg, #383533) !important;
   text-shadow: var(--ag-ink-shadow-xs) !important;
@@ -348,8 +397,15 @@ button, [role="button"], select {
   letter-spacing: -0.012em;
 }
 
-[role="menu"], [role="menuitem"], .agy-overlay, .agy-overlay-item, [data-radix-menu-content], [data-radix-popper-content-wrapper], [data-side] {
+[role="menu"], [role="menuitem"], [role="listbox"], [role="option"], [data-select-popup], [data-testid="title-menu-bar"], [data-testid="title-menu-bar-item"], [data-testid="title-menu-bar-option"], .agy-overlay, .agy-overlay-item, [data-radix-menu-content], [data-radix-popper-content-wrapper], [data-side] {
   font-family: var(--font-sans) !important;
+}
+
+[role="option"]:not([data-disabled]),
+[data-testid="title-menu-bar-option"] {
+  font-weight: 450 !important;
+  letter-spacing: -0.01em !important;
+  color: var(--ag-menu-item-fg, #1F1E1D) !important;
 }
 
 [role="menu"] :is([role="menuitem"], .agy-overlay-item, [class*="truncate"], [class*="text-xs"], [class*="text-[13px]"], span),
@@ -398,8 +454,8 @@ button, [role="button"], select {
  * ============================================================================ */
 
 /* 白天模式通用组件变量默认值 */
-html:not(:has(> body.dark)),
-body:not(.dark) {
+html:not([data-ag-theme-mode="dark"]):not(:has(> body.dark)),
+html:not([data-ag-theme-mode="dark"]) body:not(.dark) {
   --ag-composer-tray-bg: #F7EFE6;
   --ag-composer-card-bg: #FFFFFF;
   --ag-composer-card-border: transparent;
@@ -433,13 +489,14 @@ body:not(.dark) {
   --ag-menu-header-fg: #1A1A1A;
   --ag-dialog-title-fg: #1F1E1D;
   --ag-dialog-item-fg: #1F1E1D;
+  --code-foreground: #262422 !important;
 }
 
 /* 白天预设 1（默认首选）：高对比暖白 (high-contrast) */
-html:not(:has(> body.dark))[data-ag-preset="high-contrast"],
-html:not(:has(> body.dark)):not([data-ag-preset]),
-html[data-ag-preset="high-contrast"] body:not(.dark),
-html:not([data-ag-preset]) body:not(.dark) {
+html:not([data-ag-theme-mode="dark"]):not(:has(> body.dark))[data-ag-preset="high-contrast"],
+html:not([data-ag-theme-mode="dark"]):not(:has(> body.dark)):not([data-ag-preset]),
+html:not([data-ag-theme-mode="dark"])[data-ag-preset="high-contrast"] body:not(.dark),
+html:not([data-ag-theme-mode="dark"]):not([data-ag-preset]) body:not(.dark) {
   --primary: #D97757 !important;
   --editor-selection-background: rgba(217, 119, 87, 0.34) !important;
   --background: #FCFCFB !important;
@@ -470,8 +527,8 @@ html:not([data-ag-preset]) body:not(.dark) {
 }
 
 /* 白天预设 2：ClaudeDesktop 净白 (claude-desktop-purewhite) */
-html:not(:has(> body.dark))[data-ag-preset="claude-desktop-purewhite"],
-html[data-ag-preset="claude-desktop-purewhite"] body:not(.dark) {
+html:not([data-ag-theme-mode="dark"]):not(:has(> body.dark))[data-ag-preset="claude-desktop-purewhite"],
+html:not([data-ag-theme-mode="dark"])[data-ag-preset="claude-desktop-purewhite"] body:not(.dark) {
   --primary: #D97757 !important;
   --editor-selection-background: rgba(217, 119, 87, 0.34) !important;
   --background: #FCFCFB !important;
@@ -482,6 +539,9 @@ html[data-ag-preset="claude-desktop-purewhite"] body:not(.dark) {
   --sidebar-secondary: #EDECE9 !important;
   --sidebar-muted: #F3F2EF !important;
   --sidebar-border: #F0F0EE !important;
+  --border: rgba(44, 43, 41, 0.15) !important;
+  --secondary-foreground: #1F1E1D !important;
+  --muted-foreground: #57534E !important;
   --vscode-sideBar-background: #FBFBF9 !important;
   --card: color-mix(in srgb, #FBF9F5 70%, #ffffff) !important;
   --card-border: color-mix(in srgb, #2C2B29 12%, color-mix(in srgb, #FBF9F5 70%, #ffffff)) !important;
@@ -500,8 +560,8 @@ html[data-ag-preset="claude-desktop-purewhite"] body:not(.dark) {
 }
 
 /* 白天预设 3：复古深色羊皮纸 (vintage-deep) */
-html:not(:has(> body.dark))[data-ag-preset="vintage-deep"],
-html[data-ag-preset="vintage-deep"] body:not(.dark) {
+html:not([data-ag-theme-mode="dark"]):not(:has(> body.dark))[data-ag-preset="vintage-deep"],
+html:not([data-ag-theme-mode="dark"])[data-ag-preset="vintage-deep"] body:not(.dark) {
   --primary: #D97757 !important;
   --editor-selection-background: rgba(217, 119, 87, 0.34) !important;
   --background: #FBF9F5 !important;
@@ -531,6 +591,7 @@ html[data-ag-preset="vintage-deep"] body:not(.dark) {
   --home-glow: transparent !important;
   --ag-composer-tray-bg: #EAE0CE;
   --ag-composer-card-bg: #F8F3EC;
+  --code-foreground: #332D25 !important;
 }
 
 /* 白天模式侧栏选中项与高对比边框细节 */
@@ -551,8 +612,10 @@ html[data-ag-preset="high-contrast"] body:not(.dark) .bg-border {
 
 /* ============================================================================
  * PART III. 独立黑夜模式（Dark Mode · 切换深色按钮时自动激活）
- * 还原 Antigravity 2.30.0 官方 onyx Default Dark 基准色系，并专项强化深色可读性与边界可见性
+ * 还原 Antigravity 2.30.0 / 2.31.0 官方 onyx Default Dark 基准色系，并专项强化深色可读性与边界可见性
  * ============================================================================ */
+html[data-ag-theme-mode="dark"],
+html[data-ag-theme-mode="dark"] body,
 html:has(> body.dark),
 body.dark,
 body.theme-dark,
@@ -634,48 +697,49 @@ html[data-ag-preset] body[data-agy-theme].dark {
   --ag-menu-header-fg: #9EA0AC;
   --ag-dialog-title-fg: #FFFFFF;
   --ag-dialog-item-fg: #EAEBF1;
+  --code-foreground: #EAEBF1 !important;
 }
 
 /* 黑夜模式侧栏选中态：还原官方 onyx.dark 立体微高光胶囊 (#1F1F24) */
 body[data-agy-theme][data-newux-theme="onyx"].dark .agy-sidebar-row[data-selected="true"],
-body.dark .agy-sidebar-row[data-selected="true"] {
+:is(html[data-ag-theme-mode="dark"] body, body.dark) .agy-sidebar-row[data-selected="true"] {
   background-color: var(--onyx-selected, #1F1F24) !important;
   --row-bg: var(--onyx-selected, #1F1F24) !important;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), inset 0 0 0 1px rgba(255, 255, 255, 0.07) !important;
 }
 
-body.dark #antigravity\.agentSidePanelInputBox button:not([data-testid="send-button"]):not([data-testid="voice-start-button"]):hover,
-body.dark #antigravity\.agentSidePanelInputBox button:not([data-testid="send-button"]):not([data-testid="voice-start-button"]):hover :is(span, svg) {
+:is(html[data-ag-theme-mode="dark"] body, body.dark) #antigravity\.agentSidePanelInputBox button:not([data-testid="send-button"]):not([data-testid="voice-start-button"]):not([data-testid="input-cancel-button"]):hover,
+:is(html[data-ag-theme-mode="dark"] body, body.dark) #antigravity\.agentSidePanelInputBox button:not([data-testid="send-button"]):not([data-testid="voice-start-button"]):not([data-testid="input-cancel-button"]):hover :is(span, svg) {
   color: #FFFFFF !important;
 }
 
-body.dark :is([data-testid="conversation-row-sidebar"], .agy-sidebar-row):not([data-selected="true"]):hover span.truncate {
+:is(html[data-ag-theme-mode="dark"] body, body.dark) :is([data-testid="conversation-row-sidebar"], .agy-sidebar-row):not([data-selected="true"]):hover span.truncate {
   color: #FFFFFF !important;
 }
 
-body.dark :is(.bg-sidebar a[class*="border"], .bg-sidebar button[class*="border"], a[class*="inline-flex items-center"][class*="border"]) {
+:is(html[data-ag-theme-mode="dark"] body, body.dark) :is(.bg-sidebar a[class*="border"], .bg-sidebar button[class*="border"], a[class*="inline-flex items-center"][class*="border"]) {
   border-color: rgba(255, 255, 255, 0.12) !important;
 }
 
-body.dark .bg-border {
+:is(html[data-ag-theme-mode="dark"] body, body.dark) .bg-border {
   background-color: rgba(255, 255, 255, 0.10) !important;
 }
 
 /* 黑夜模式正文阅读与行内代码可读性微调 */
-body.dark :is(.select-text, .prose, .markdown) {
+:is(html[data-ag-theme-mode="dark"] body, body.dark, body.theme-dark) :is([data-markdown-root], [data-testid="user-message-content"], .prose, .markdown) {
   color: #ECEEF4;
 }
 
-body.dark :is(.select-text, .prose, .markdown) :is(h1, h2, h3, h4, h5, h6, strong, b) {
+:is(html[data-ag-theme-mode="dark"] body, body.dark, body.theme-dark) :is([data-markdown-root], [data-testid="user-message-content"], .select-text, .prose, .markdown) :is(h1, h2, h3, h4, h5, h6, strong, b) {
   color: #FFFFFF;
 }
 
-body.dark :is(.select-text, .prose, .markdown) :not(pre) > code {
+:is(html[data-ag-theme-mode="dark"] body, body.dark, body.theme-dark) :is([data-markdown-root], .select-text, .prose, .markdown) :not(pre) > code {
   background-color: rgba(255, 255, 255, 0.085);
   border: 1px solid rgba(255, 255, 255, 0.11);
   border-radius: 5px;
   padding: 0.12em 0.36em;
-  color: #EAEBF1;
+  color: #EAEBF1 !important;
 }
 
 
@@ -704,15 +768,15 @@ body.dark :is(.select-text, .prose, .markdown) :not(pre) > code {
   max-width: max-content !important;
   min-width: 0 !important;
   height: 22px;
-  margin-left: 6px;
-  margin-right: 4px;
-  padding: 0 4px 0 8px;
+  margin-left: 4px;
+  margin-right: 2px;
+  padding: 0 2px 0 6px;
   border-left: 1px solid rgba(0, 0, 0, 0.22);
   font-family: var(--font-mono) !important;
   font-variant-numeric: tabular-nums;
-  font-size: 11px !important;
+  font-size: 10.5px !important;
   font-weight: 500 !important;
-  letter-spacing: -0.02em !important;
+  letter-spacing: -0.025em !important;
   color: #262422 !important;
   opacity: 0.92 !important;
   line-height: 1 !important;
@@ -741,16 +805,22 @@ body.dark :is(.select-text, .prose, .markdown) :not(pre) > code {
 }
 
 #ag-live-metrics-pill #ag-live-metrics-text {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-family: var(--font-mono) !important;
-  font-size: 11px !important;
+  font-size: 10.5px !important;
   font-weight: 500 !important;
-  letter-spacing: -0.02em !important;
+  letter-spacing: -0.025em !important;
   color: inherit !important;
 }
 
 #antigravity\.agentSidePanelInputBox #ag-live-metrics-pill .ag-sep,
 #ag-live-metrics-pill .ag-sep {
-  margin: 0 3.5px;
+  margin: 0 2.5px;
   opacity: 0.45 !important;
 }
 
@@ -767,27 +837,27 @@ body.dark :is(.select-text, .prose, .markdown) :not(pre) > code {
 }
 
 /* 黑夜模式指标胶囊配色与高可见预警色 */
-body.dark #ag-live-metrics-pill {
+:is(html[data-ag-theme-mode="dark"] body, body.dark) #ag-live-metrics-pill {
   color: #C8CAD4 !important;
   border-left-color: rgba(255, 255, 255, 0.18) !important;
 }
 
-body.dark #ag-live-metrics-pill:hover,
-body.dark #ag-live-metrics-pill:hover #ag-live-metrics-text {
+:is(html[data-ag-theme-mode="dark"] body, body.dark) #ag-live-metrics-pill:hover,
+:is(html[data-ag-theme-mode="dark"] body, body.dark) #ag-live-metrics-pill:hover #ag-live-metrics-text {
   color: #FFFFFF !important;
 }
 
-body.dark #ag-live-metrics-pill[data-ag-row-mode="bottom"] {
+:is(html[data-ag-theme-mode="dark"] body, body.dark) #ag-live-metrics-pill[data-ag-row-mode="bottom"] {
   border-top-color: rgba(255, 255, 255, 0.14) !important;
 }
 
-body.dark #antigravity\.agentSidePanelInputBox #ag-live-metrics-pill .ag-ctx-warn,
-body.dark #ag-live-metrics-pill .ag-ctx-warn {
+:is(html[data-ag-theme-mode="dark"] body, body.dark) #antigravity\.agentSidePanelInputBox #ag-live-metrics-pill .ag-ctx-warn,
+:is(html[data-ag-theme-mode="dark"] body, body.dark) #ag-live-metrics-pill .ag-ctx-warn {
   color: #FBBF24 !important;
 }
 
-body.dark #antigravity\.agentSidePanelInputBox #ag-live-metrics-pill .ag-ctx-crit,
-body.dark #ag-live-metrics-pill .ag-ctx-crit {
+:is(html[data-ag-theme-mode="dark"] body, body.dark) #antigravity\.agentSidePanelInputBox #ag-live-metrics-pill .ag-ctx-crit,
+:is(html[data-ag-theme-mode="dark"] body, body.dark) #ag-live-metrics-pill .ag-ctx-crit {
   color: #F87171 !important;
 }
 
@@ -857,22 +927,22 @@ body.dark #ag-live-metrics-pill .ag-ctx-crit {
 }
 
 /* 黑夜模式悬浮指标详情卡配色 */
-body.dark #ag-live-metrics-tooltip {
+:is(html[data-ag-theme-mode="dark"] body, body.dark) #ag-live-metrics-tooltip {
   background-color: var(--onyx-raised, #18181E) !important;
   border-color: rgba(255, 255, 255, 0.14) !important;
   box-shadow: 0 14px 34px rgba(0, 0, 0, 0.65), 0 2px 8px rgba(0, 0, 0, 0.4) !important;
   color: #EAEBF1 !important;
 }
 
-body.dark #ag-live-metrics-tooltip .ag-tt-hdr {
+:is(html[data-ag-theme-mode="dark"] body, body.dark) #ag-live-metrics-tooltip .ag-tt-hdr {
   color: #FFFFFF !important;
   border-bottom-color: rgba(255, 255, 255, 0.12) !important;
 }
 
-body.dark #ag-live-metrics-tooltip .ag-tt-lbl {
+:is(html[data-ag-theme-mode="dark"] body, body.dark) #ag-live-metrics-tooltip .ag-tt-lbl {
   color: #9EA0AC !important;
 }
 
-body.dark #ag-live-metrics-tooltip .ag-tt-val {
+:is(html[data-ag-theme-mode="dark"] body, body.dark) #ag-live-metrics-tooltip .ag-tt-val {
   color: #FFFFFF !important;
 }

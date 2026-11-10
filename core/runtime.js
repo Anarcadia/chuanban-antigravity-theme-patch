@@ -8,7 +8,7 @@
   if (window.top !== window) return;
   if (!boot || typeof boot !== 'object') return;
 
-  const PATCH_VERSION = boot.version || '20261110-v5.1.1';
+  const PATCH_VERSION = boot.version || '20261111-v5.1.3';
   const ENABLED = boot.enabled !== false;
   const CSS_TEXT = boot.cssText || '';
   const CUSTOM_CSS_TEXT = boot.customCss || '';
@@ -19,6 +19,7 @@
       metrics: true,
       composerWaxSeal: true,
       deadlockHealer: true,
+      zoomShortcuts: true,
       customCss: true,
       customJs: true
     },
@@ -26,17 +27,42 @@
   );
 
   const DEFAULT_PRESET = boot.preset || 'high-contrast';
+  const DEFAULT_EXCLUDE_I18N =
+    'code, pre, kbd, samp, textarea, input, style, script, noscript, [contenteditable="true"], [data-markdown-root], [data-testid="user-message-content"], .agy-user-bubble, .monaco-editor, .monaco-diff-editor, .xterm, [class*="onyx-key"], .prose, .markdown, [class*="chat-message"], [class*="group/file-title"], [data-testid="conversation-row-sidebar"] a[href^="/c/"], [data-testid="conversation-row-sidebar"] span.truncate, #ag-live-metrics-pill, #ag-live-metrics-tooltip';
+
   const SELECTORS = Object.assign(
     {
       inputBoxId: 'antigravity.agentSidePanelInputBox',
       branchPillInBox:
         '[data-testid="branch-pill-trigger"], [data-testid="project-branch-picker"], [data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"]',
       homeGreeting: '[data-testid="home-greeting"], [data-testid="home-splash-content"]',
-      excludeI18n:
-        'code, pre, kbd, samp, textarea, input, style, script, noscript, [contenteditable="true"], .prose, .markdown, [class*="chat-message"], [class*="group/file-title"], [data-testid="conversation-row-sidebar"] a[href^="/c/"], [data-testid="conversation-row-sidebar"] span.truncate, #ag-live-metrics-pill, #ag-live-metrics-tooltip'
+      excludeI18n: DEFAULT_EXCLUDE_I18N
     },
     boot.selectors || {}
   );
+
+  // 执行上一轮 user/custom.js 或内部注册的生命周期清理函数（防止热重载或卸载逃逸）
+  if (Array.isArray(window.__ag_cleanup_fns) && window.__ag_cleanup_fns.length > 0) {
+    const prevCleanups = window.__ag_cleanup_fns.splice(0, window.__ag_cleanup_fns.length);
+    for (let i = 0; i < prevCleanups.length; i++) {
+      try {
+        if (typeof prevCleanups[i] === 'function') prevCleanups[i]();
+      } catch (e) {}
+    }
+  }
+  window.__ag_cleanup_fns = [];
+  if (window.__ag_dcl_handler) {
+    try {
+      window.removeEventListener('DOMContentLoaded', window.__ag_dcl_handler);
+    } catch (e) {}
+    window.__ag_dcl_handler = null;
+  }
+  if (window.__ag_user_231_observer) {
+    try {
+      window.__ag_user_231_observer.disconnect();
+    } catch (e) {}
+    window.__ag_user_231_observer = null;
+  }
 
   // 全局持久化的原始英文文本映射表（支持 i18n.override.json 热重载增删改与一键还原）
   if (!window.__ag_orig_text_map) {
@@ -51,28 +77,38 @@
       while (walker.nextNode()) {
         const node = walker.currentNode;
         const rec = origTextMap.get(node);
-        if (rec && node.nodeValue === rec.lastVal) {
-          node.nodeValue = rec.origRaw;
+        if (rec) {
+          if (node.nodeValue === rec.lastVal) {
+            node.nodeValue = rec.origRaw;
+          }
           origTextMap.delete(node);
         }
       }
+      const attrNames = ['title', 'placeholder', 'aria-label'];
       const attrEls = root.querySelectorAll
-        ? root.querySelectorAll('[data-ag-orig-title], [data-ag-orig-placeholder], [data-ag-orig-aria-label]')
+        ? root.querySelectorAll(
+            '[data-ag-orig-title], [data-ag-orig-title-last], [data-ag-orig-placeholder], [data-ag-orig-placeholder-last], [data-ag-orig-aria-label], [data-ag-orig-aria-label-last]'
+          )
         : [];
       for (let i = 0; i < attrEls.length; i++) {
         const el = attrEls[i];
-        if (el.hasAttribute('data-ag-orig-title')) {
-          el.setAttribute('title', el.getAttribute('data-ag-orig-title'));
-          el.removeAttribute('data-ag-orig-title');
+        for (let j = 0; j < attrNames.length; j++) {
+          const attr = attrNames[j];
+          const origAttr = 'data-ag-orig-' + attr;
+          const lastAttr = origAttr + '-last';
+          if (el.hasAttribute(origAttr) || el.hasAttribute(lastAttr)) {
+            const savedOrig = el.getAttribute(origAttr);
+            const savedLast = el.getAttribute(lastAttr);
+            const cur = el.getAttribute(attr);
+            if (savedOrig !== null && (savedLast === null || cur === savedLast)) {
+              el.setAttribute(attr, savedOrig);
+            }
+            el.removeAttribute(origAttr);
+            el.removeAttribute(lastAttr);
+            delete el['__ag_attr_ver_' + attr];
+          }
         }
-        if (el.hasAttribute('data-ag-orig-placeholder')) {
-          el.setAttribute('placeholder', el.getAttribute('data-ag-orig-placeholder'));
-          el.removeAttribute('data-ag-orig-placeholder');
-        }
-        if (el.hasAttribute('data-ag-orig-aria-label')) {
-          el.setAttribute('aria-label', el.getAttribute('data-ag-orig-aria-label'));
-          el.removeAttribute('data-ag-orig-aria-label');
-        }
+        delete el.__ag_attr_ver;
       }
     } catch (e) {}
   }
@@ -114,12 +150,31 @@
       if (!varStyle) {
         varStyle = document.createElement('style');
         varStyle.id = 'ag-user-theme-vars';
-        if (head) head.appendChild(varStyle);
+      }
+      if (head) {
+        const customStyleEl = document.getElementById('antigravity-user-custom-style');
+        if (customStyleEl && customStyleEl.parentNode === head) {
+          head.insertBefore(varStyle, customStyleEl);
+        } else if (varStyle.parentNode !== head) {
+          head.appendChild(varStyle);
+        }
       }
       const blocks = [];
-      if (globalDecls.length > 0) blocks.push(`:root, html, body { ${globalDecls.join(' ')} }`);
-      if (lightDecls.length > 0) blocks.push(`html:not(:has(> body.dark)), body:not(.dark) { ${lightDecls.join(' ')} }`);
-      if (darkDecls.length > 0) blocks.push(`html:has(> body.dark), body.dark { ${darkDecls.join(' ')} }`);
+      if (globalDecls.length > 0) {
+        blocks.push(
+          `:root, html[data-ag-os][data-ag-wax-seal]:not([data-ag-disabled]), html[data-ag-os][data-ag-wax-seal]:not([data-ag-disabled]) body { ${globalDecls.join(' ')} }`
+        );
+      }
+      if (lightDecls.length > 0) {
+        blocks.push(
+          `html[data-ag-os][data-ag-wax-seal]:not([data-ag-theme-mode="dark"]):not(:has(> body.dark)), html[data-ag-os][data-ag-wax-seal]:not([data-ag-theme-mode="dark"]) body:not(.dark) { ${lightDecls.join(' ')} }`
+        );
+      }
+      if (darkDecls.length > 0) {
+        blocks.push(
+          `html[data-ag-os][data-ag-wax-seal]:not([data-ag-disabled])[data-ag-theme-mode="dark"], html[data-ag-os][data-ag-wax-seal]:not([data-ag-disabled])[data-ag-theme-mode="dark"] body, html[data-ag-os][data-ag-wax-seal]:not([data-ag-disabled]):has(> body.dark), html[data-ag-os][data-ag-wax-seal]:not([data-ag-disabled]) body.dark { ${darkDecls.join(' ')} }`
+        );
+      }
       const nextCss = blocks.join('\n');
       if (varStyle.textContent !== nextCss) {
         varStyle.textContent = nextCss;
@@ -149,6 +204,19 @@
       } catch (e) {}
       window.__ag_i18n_observer = null;
     }
+    if (window.__ag_user_231_observer) {
+      try {
+        window.__ag_user_231_observer.disconnect();
+      } catch (e) {}
+      window.__ag_user_231_observer = null;
+    }
+    if (window.__ag_metrics_ro) {
+      try {
+        window.__ag_metrics_ro.disconnect();
+      } catch (e) {}
+      window.__ag_metrics_ro = null;
+      window.__ag_metrics_ro_target = null;
+    }
     if (window.__ag_metrics_route_watcher) {
       try {
         clearInterval(window.__ag_metrics_route_watcher);
@@ -161,18 +229,22 @@
       } catch (e) {}
       window.__ag_theme_mode_observer = null;
     }
+    window.__ag_zoom_keydown_fn = null;
+    window.__ag_settings_click_fn = null;
+    window.__ag_body_ready = false;
     applyThemeVars({});
     document.documentElement.removeAttribute('data-ag-preset');
     document.documentElement.removeAttribute('data-ag-theme-mode');
     document.documentElement.removeAttribute('data-ag-page-type');
     document.documentElement.removeAttribute('data-ag-wax-seal');
+    document.documentElement.removeAttribute('data-ag-os');
     restoreAllTranslations(document.body);
     window.__ag_patch_version = PATCH_VERSION + '-disabled';
     return;
   }
 
   // ============================================================================
-  // 1. 注入更纱黑体与主题样式（#ag-custom-fonts 与独立 #antigravity-user-custom-style）
+  // 1. 注入更纱黑体与主题样式（#ag-custom-fonts -> #ag-user-theme-vars -> #antigravity-user-custom-style）
   // ============================================================================
   const headTarget = document.head || document.getElementsByTagName('head')[0] || document.documentElement;
 
@@ -185,6 +257,12 @@
   if (style && style.textContent !== CSS_TEXT) {
     style.textContent = CSS_TEXT;
   }
+
+  document.documentElement.setAttribute('data-ag-wax-seal', MODULES.composerWaxSeal === false ? 'off' : 'on');
+  const detectedOs =
+    boot.platform || (/Win/i.test(navigator.platform || '') ? 'win32' : /Mac/i.test(navigator.platform || '') ? 'darwin' : 'linux');
+  document.documentElement.setAttribute('data-ag-os', detectedOs);
+  applyThemeVars(THEME_VARS);
 
   let userStyle = document.getElementById('antigravity-user-custom-style');
   if (MODULES.customCss && CUSTOM_CSS_TEXT.trim()) {
@@ -200,11 +278,32 @@
     userStyle.remove();
   }
 
-  applyThemeVars(THEME_VARS);
-  document.documentElement.setAttribute('data-ag-wax-seal', MODULES.composerWaxSeal === false ? 'off' : 'on');
-  const detectedOs =
-    boot.platform || (/Win/i.test(navigator.platform || '') ? 'win32' : /Mac/i.test(navigator.platform || '') ? 'darwin' : 'linux');
-  document.documentElement.setAttribute('data-ag-os', detectedOs);
+  function ensureStylesAtEndOfHead() {
+    const h = document.head || document.getElementsByTagName('head')[0];
+    if (!h) return;
+    const base = document.getElementById('ag-custom-fonts');
+    if (!base) return;
+    let needsMove = base.parentNode !== h;
+    if (!needsMove) {
+      for (let sib = base.nextElementSibling; sib; sib = sib.nextElementSibling) {
+        if (
+          sib.id !== 'ag-user-theme-vars' &&
+          sib.id !== 'antigravity-user-custom-style' &&
+          (sib.tagName === 'LINK' || sib.tagName === 'STYLE')
+        ) {
+          needsMove = true;
+          break;
+        }
+      }
+    }
+    if (needsMove) {
+      for (const id of ['ag-custom-fonts', 'ag-user-theme-vars', 'antigravity-user-custom-style']) {
+        const el = document.getElementById(id);
+        if (el) h.appendChild(el);
+      }
+    }
+  }
+  ensureStylesAtEndOfHead();
 
   // ============================================================================
   // 2. 防死锁守护：Antigravity 原生 TanStack Router 缺陷修复（支持热重载更新回调）
@@ -239,25 +338,36 @@
   }
 
   // ============================================================================
-  // 2.1 缩放快捷键原生缺陷修复（macOS: Cmd + -/=/0，Windows/Linux: Ctrl + -/=/0）
+  // 2.1 缩放快捷键原生缺陷修复（macOS: Cmd + -/=/0，Windows/Linux: Ctrl + -/=/0；兼容 2.31.0 resetZoom 与欧式键盘）
   // ============================================================================
   window.__ag_zoom_keydown_fn = (e) => {
-    if (MODULES.deadlockHealer === false) return;
+    if (MODULES.zoomShortcuts === false || MODULES.deadlockHealer === false) return;
+    if (e.isComposing) return;
     const isMac = detectedOs === 'darwin';
     const modKey = isMac ? e.metaKey && !e.ctrlKey : e.ctrlKey && !e.metaKey;
-    if (modKey && !e.altKey) {
-      if (!e.shiftKey && (e.key === '-' || e.code === 'Minus' || e.code === 'NumpadSubtract' || e.keyCode === 189)) {
+    if (!modKey || e.altKey) return;
+
+    const native = window.electronNative;
+    if (!native) return;
+
+    if (!e.shiftKey && (e.key === '-' || e.code === 'Minus' || e.code === 'NumpadSubtract')) {
+      if (typeof native.zoomOut === 'function') {
         e.preventDefault();
         e.stopPropagation();
-        window.electronNative?.zoomOut?.();
-      } else if (e.key === '=' || e.key === '+' || e.code === 'Equal' || e.code === 'NumpadAdd' || e.keyCode === 187) {
+        native.zoomOut();
+      }
+    } else if (e.key === '=' || e.key === '+' || e.code === 'Equal' || e.code === 'NumpadAdd') {
+      if (typeof native.zoomIn === 'function') {
         e.preventDefault();
         e.stopPropagation();
-        window.electronNative?.zoomIn?.();
-      } else if (!e.shiftKey && (e.key === '0' || e.code === 'Digit0' || e.code === 'Numpad0' || e.keyCode === 48)) {
+        native.zoomIn();
+      }
+    } else if (!e.shiftKey && (e.key === '0' || e.code === 'Digit0' || e.code === 'Numpad0')) {
+      const resetFn = typeof native.resetZoom === 'function' ? native.resetZoom : native.zoomReset;
+      if (typeof resetFn === 'function') {
         e.preventDefault();
         e.stopPropagation();
-        window.electronNative?.zoomReset?.();
+        resetFn.call(native);
       }
     }
   };
@@ -333,12 +443,30 @@
         document.documentElement.setAttribute('data-ag-preset', targetPreset);
       }
 
-      const isDark = !!(
-        document.body &&
-        (document.body.classList.contains('dark') ||
-          document.body.classList.contains('theme-dark') ||
-          document.body.classList.contains('dark-theme'))
+      const bodyEl = document.body;
+      const bodyExplicitDark = !!(
+        bodyEl &&
+        (bodyEl.classList.contains('dark') ||
+          bodyEl.classList.contains('theme-dark') ||
+          bodyEl.classList.contains('dark-theme'))
       );
+      const bodyExplicitLight = !!(
+        bodyEl &&
+        (bodyEl.classList.contains('theme-light') ||
+          bodyEl.classList.contains('light-theme') ||
+          bodyEl.classList.contains('light'))
+      );
+      let storedThemeMode = null;
+      try {
+        storedThemeMode = Storage.prototype.getItem.call(localStorage, 'theme-mode');
+      } catch (e) {}
+      const isDark = bodyExplicitDark
+        ? true
+        : bodyExplicitLight || storedThemeMode === 'light'
+        ? false
+        : storedThemeMode === 'dark'
+        ? true
+        : !!(document.documentElement && document.documentElement.style.colorScheme === 'dark');
       const targetMode = isDark ? 'dark' : 'light';
       const prevMode = document.documentElement.getAttribute('data-ag-theme-mode');
       if (prevMode !== targetMode || prevPreset !== targetPreset) {
@@ -402,14 +530,19 @@
     } catch (e) {}
     window.__ag_theme_mode_observer = null;
   }
-  if (document.body && typeof MutationObserver !== 'undefined') {
+  if (typeof MutationObserver !== 'undefined') {
     try {
       const modeObs = new MutationObserver(() => {
         if (typeof window.__ag_sync_preset_fn === 'function') {
           window.__ag_sync_preset_fn();
         }
       });
-      modeObs.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+      if (document.body) {
+        modeObs.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+      }
+      if (document.documentElement) {
+        modeObs.observe(document.documentElement, { attributes: true, attributeFilter: ['class', 'style'] });
+      }
       window.__ag_theme_mode_observer = modeObs;
     } catch (e) {}
   }
@@ -419,9 +552,10 @@
 
   // ============================================================================
   // 3.5 模型名称同行实时指标胶囊 (Scheme C: TPS · TTFT · Ctx/256k · Out + Hover 详情卡)
-  // 严格保证「左(模型) - 中(指标胶囊) - 右(模式与发送)」三栏结构；中间过窄(<150px)时物理跳至下方第二行。
+  // 按真实胶囊文本宽度 + 滞回防抖自适应同行(middle) / 第二行(bottom)，单次测量零震荡。
   // ============================================================================
-  const MIDDLE_MIN_WIDTH_PX = 150;
+  const MIDDLE_MIN_FLOOR_PX = 180;
+  const HYSTERESIS_PX = 10;
 
   function extractCascadeId() {
     try {
@@ -554,11 +688,30 @@
     }
 
     const rowW = bottomRow.clientWidth || 0;
+    if (rowW <= 0) return pill;
     window.__ag_last_row_width = rowW;
     const leftW = measureNaturalLeftWidth(leftGroup);
     const rightW = rightGroup ? rightGroup.offsetWidth || 0 : 0;
-    const availMiddleW = rowW - leftW - rightW - 14;
-    const useBottomRow = rowW > 0 && availMiddleW < MIDDLE_MIN_WIDTH_PX;
+    const availMiddleW = rowW - leftW - rightW - 8;
+
+    const textEl = pill.querySelector('#ag-live-metrics-text');
+    let naturalTextW = window.__ag_metrics_text_width || 0;
+    if (textEl && pill.style.display !== 'none') {
+      const curHtml = textEl.innerHTML;
+      if (naturalTextW <= 0 || window.__ag_metrics_text_sig !== curHtml) {
+        const sw = textEl.scrollWidth || 0;
+        if (sw > 0) {
+          naturalTextW = sw + 16;
+          window.__ag_metrics_text_width = naturalTextW;
+          window.__ag_metrics_text_sig = curHtml;
+        }
+      }
+    }
+    const baseNeededW = naturalTextW > 0 ? naturalTextW : 250;
+    const prevMode = pill.getAttribute('data-ag-row-mode') || 'middle';
+    const minRequiredW = Math.max(MIDDLE_MIN_FLOOR_PX, prevMode === 'bottom' ? baseNeededW + HYSTERESIS_PX : baseNeededW);
+
+    const useBottomRow = availMiddleW < minRequiredW;
     const rowMode = useBottomRow ? 'bottom' : 'middle';
 
     if (bottomRow.getAttribute('data-ag-row-mode') !== rowMode) {
@@ -620,13 +773,9 @@
     try {
       if (document.hidden) return;
       const pathname = window.location.pathname;
-      const isNonChatRoute = pathname === '/' || !pathname.startsWith('/c/');
-      let isHome = isNonChatRoute;
-      if (!isHome) {
-        const box = document.getElementById(SELECTORS.inputBoxId);
-        const hasBranchPillInBox = !!(box && box.querySelector(SELECTORS.branchPillInBox));
-        isHome = hasBranchPillInBox || !!document.querySelector(SELECTORS.homeGreeting);
-      }
+      const isChatRoute = pathname.startsWith('/c/');
+      const cid = extractCascadeId();
+      const isHome = pathname === '/' || (!isChatRoute && !cid) || (!isChatRoute && !!document.querySelector(SELECTORS.homeGreeting));
       const pageType = isHome ? 'home' : 'chat';
       if (document.documentElement.getAttribute('data-ag-page-type') !== pageType) {
         document.documentElement.setAttribute('data-ag-page-type', pageType);
@@ -638,7 +787,6 @@
         return;
       }
 
-      const cid = extractCascadeId();
       if (!cid) {
         window.__ag_watched_cascade_id = '';
         const pill = document.getElementById('ag-live-metrics-pill');
@@ -709,11 +857,13 @@
     } catch (e) {}
     window.__ag_metrics_route_watcher = null;
   }
-  window.__ag_metrics_route_watcher = setInterval(checkRouteAndMountMetrics, 1500);
-  checkRouteAndMountMetrics();
+  window.__ag_metrics_route_watcher = setInterval(checkRouteAndMountMetrics, 3000);
+  if (document.body) {
+    checkRouteAndMountMetrics();
+  }
 
   // ============================================================================
-  // 4. 高性能界面汉化引擎（无原型词典 + WeakMap 热重载还原 + 单遍扫描 + 首字符分流）
+  // 4. 高性能界面汉化引擎（无原型词典 + WeakMap O(1) 隔离缓存 + 单遍扫描 + 首字符分流）
   // ============================================================================
   if (window.__ag_i18n_observer) {
     try {
@@ -725,13 +875,128 @@
   const DICT = Object.assign(Object.create(null), boot.i18nDict || {});
   window.__ag_i18n_dict = DICT;
 
+  let scanBodyFn = null;
+  const I18N_OBS_OPTS = {
+    childList: true,
+    subtree: true,
+    characterData: true,
+    attributes: true,
+    attributeFilter: ['title', 'aria-label', 'placeholder']
+  };
+
   if (MODULES.i18n) {
-    const EXCLUDE_SELECTOR = SELECTORS.excludeI18n;
+    function splitTopLevelSelectors(selStr) {
+      const parts = [];
+      let cur = '';
+      let bracketDepth = 0;
+      let parenDepth = 0;
+      let quote = '';
+      const s = String(selStr || '');
+      for (let i = 0; i < s.length; i++) {
+        const ch = s[i];
+        if (quote) {
+          cur += ch;
+          if (ch === quote && s[i - 1] !== '\\') quote = '';
+          continue;
+        }
+        if (ch === '"' || ch === "'") {
+          quote = ch;
+          cur += ch;
+        } else if (ch === '[') {
+          bracketDepth++;
+          cur += ch;
+        } else if (ch === ']') {
+          if (bracketDepth > 0) bracketDepth--;
+          cur += ch;
+        } else if (ch === '(') {
+          parenDepth++;
+          cur += ch;
+        } else if (ch === ')') {
+          if (parenDepth > 0) parenDepth--;
+          cur += ch;
+        } else if (ch === ',' && bracketDepth === 0 && parenDepth === 0) {
+          if (cur.trim()) parts.push(cur.trim());
+          cur = '';
+        } else {
+          cur += ch;
+        }
+      }
+      if (cur.trim()) parts.push(cur.trim());
+      return parts;
+    }
+
+    const CONTAINER_IMMUTABLE_EXCLUDE_SELECTOR =
+      'code, pre, kbd, samp, style, script, noscript, [data-markdown-root], [data-testid="user-message-content"], .agy-user-bubble, .monaco-editor, .monaco-diff-editor, .xterm, #ag-live-metrics-pill, #ag-live-metrics-tooltip';
+    const TEXT_IMMUTABLE_EXCLUDE_SELECTOR = 'textarea, input, ' + CONTAINER_IMMUTABLE_EXCLUDE_SELECTOR;
+
+    const mergedExcludeParts = splitTopLevelSelectors(DEFAULT_EXCLUDE_I18N);
+    const userExcludeParts = splitTopLevelSelectors(SELECTORS.excludeI18n);
+    for (let i = 0; i < userExcludeParts.length; i++) {
+      if (!mergedExcludeParts.includes(userExcludeParts[i])) {
+        mergedExcludeParts.push(userExcludeParts[i]);
+      }
+    }
+    const EXCLUDE_SELECTOR = mergedExcludeParts.join(', ');
+    const FORM_ATTR_EXCLUDE_SELECTOR = mergedExcludeParts
+      .filter((tok) => {
+        const low = tok.toLowerCase();
+        return low !== 'input' && low !== 'textarea';
+      })
+      .join(', ');
+
+    const immutableTextExclCache = new WeakMap();
+    const immutableContainerExclCache = new WeakMap();
 
     // 预编译模块级正则常量，消除热路径重复编译与二次匹配
     const RE_HAS_CJK = /[\u4e00-\u9fa5]/;
     const RE_PURE_ALPHA = /^\s*[a-zA-Z]+\s*$/;
     const RE_HAS_ALPHA = /[a-zA-Z]/;
+    const RE_REL_TIME = /^(\d+)\s*(s|sec|secs|m|min|mins|h|hr|hrs|d|w|mo|y|yr|yrs)\s+ago$/i;
+    const REL_UNIT_MAP = {
+      s: '秒',
+      sec: '秒',
+      secs: '秒',
+      m: '分钟',
+      min: '分钟',
+      mins: '分钟',
+      h: '小时',
+      hr: '小时',
+      hrs: '小时',
+      d: '天',
+      w: '周',
+      mo: '个月',
+      y: '年',
+      yr: '年',
+      yrs: '年'
+    };
+    const UNIT_MAP_SHORT = { s: '秒', m: '分钟', h: '小时', d: '天', w: '周', mo: '个月', y: '年', yr: '年' };
+    const NAMED_PERIOD_MAP = { weekly: '每周', daily: '每日', monthly: '每月' };
+    const MONTH_SHORT_MAP = {
+      jan: 1,
+      feb: 2,
+      mar: 3,
+      apr: 4,
+      may: 5,
+      jun: 6,
+      jul: 7,
+      aug: 8,
+      sep: 9,
+      oct: 10,
+      nov: 11,
+      dec: 12
+    };
+    // 客户端 main.js ($Q 权限编辑器) 在 onBlur 中硬编码判断 relatedTarget.getAttribute("aria-label") === "Cancel"
+    const SKIP_ARIA_LABEL_VALUES = new Set(['Cancel']);
+
+    const RE_PCT_LEFT = /^(\d+(?:\.\d+)?)%\s*left$/i;
+    const RE_WINDOW_LIMIT_COMBINED = /^(\d+)\s*([smhd])\s+limit,\s*resets in\s+(.+)$/i;
+    const RE_WINDOW_LIMIT = /^(\d+)\s*([smhd])\s+limit$/i;
+    const RE_NAMED_LIMIT_RESETS = /^(Weekly|Daily|Monthly)\s+limit,\s*resets in\s+(.+)$/i;
+    const RE_RESETS_IN = /^Resets in\s+(.+)$/i;
+    const RE_SEARCH_GOOGLE = /^Search Google for "(.+)"$/;
+    const RE_UPDATED_AT =
+      /^Updated\s+(?:((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2}|\d{1,2}月\d{1,2}日),\s*)?((?:上午|下午)?\s*\d{1,2}:\d{2}(?:\s*[AP]M)?)$/;
+
     const RE_FILES_CHANGED = /^(\d+)\s+files?\s+changed$/i;
     const RE_TOOLS = /^(\d+)\s+tools?$/i;
     const RE_DEMOTED = /^(\d+)\s+demoted$/i;
@@ -820,18 +1085,77 @@
     const RE_ARIA_PROJECT = /^Select project(?:, current)?:\s*(.*)$/i;
     const RE_ARIA_LOCATION = /^(?:Where the agent runs, current|Select location(?:, current)?):\s*(.*)$/i;
     const RE_ARIA_VERSION = /^Version\s+([\d.]+(?:\s*·\s*\S+)?)$/i;
+    const RE_ARIA_MODEL = /^(?:Select model|Model(?:\s+selector)?)(?:,\s*current)?:\s*(.*)$/i;
+    const RE_ARIA_PERM_SEL =
+      /^(?:(?:Permission mode|Agent permissions preset)\s+selector(?:,\s*current)?|(?:Permission mode|Agent permissions preset),\s*current):\s*(.*)$/i;
+    const RE_ARIA_PERM_FIXED = /^(?:Permission mode|Agent permissions preset):\s*([^,(]+?)(?:\s*(?:,\s*(.+?)|\(([^)]+)\)))?$/i;
+    const RE_ARIA_TURN = /^(?:Conversation turn\s+(\d+)\s+by\s+(User|Agent|Assistant)|Turn\s+(\d+)\s+of\s+(\d+))$/i;
+    const RE_ARIA_LOAD_OLDER = /^(?:Load\s+(\d+)\s+older\s+turns?.*|Load older messages,\s*showing\s+(\d+)\s+of\s+(\d+))$/i;
+    const RE_EFFORT_SUFFIX = /^(.*?)\s*(?:\((Low|Medium|High|Max)\)|\b(Low|Medium|High|Max))\s*$/i;
+    const EFFORT_MAP = { low: '低', medium: '中', high: '高', max: '最高' };
 
-    function isExcludedElement(el) {
-      if (!el || el.nodeType !== 1) return true;
-      return !!el.closest(EXCLUDE_SELECTOR);
+    function formatCompactDurationZh(str) {
+      const s = String(str || '').trim();
+      if (s === '<1m' || s === '< 1m') return '不到 1 分钟';
+      return s
+        .replace(/(\d+)\s*d\b/gi, '$1 天')
+        .replace(/(\d+)\s*h\b/gi, '$1 小时')
+        .replace(/(\d+)\s*m\b/gi, '$1 分钟')
+        .replace(/(\d+)\s*s\b/gi, '$1 秒')
+        .replace(/\s+/g, ' ')
+        .trim();
     }
 
-    function computeTextTranslation(raw) {
+    function formatUpdatedAtZh(datePart, timePart) {
+      if (!datePart) return '更新于 ' + timePart.trim();
+      const mEnDate = datePart.trim().match(/^([A-Za-z]{3})\s+(\d{1,2})$/);
+      if (mEnDate) {
+        const mNum = MONTH_SHORT_MAP[mEnDate[1].toLowerCase()];
+        if (mNum) {
+          return '更新于 ' + mNum + '月' + mEnDate[2] + '日 ' + timePart.trim();
+        }
+      }
+      return '更新于 ' + datePart.trim() + ' ' + timePart.trim();
+    }
+
+    function isExcludedElement(el, batchSafeSet) {
+      if (!el || el.nodeType !== 1) return true;
+      if (immutableTextExclCache.get(el) === true) return true;
+      if (batchSafeSet && batchSafeSet.has(el)) return false;
+      if (el.closest(TEXT_IMMUTABLE_EXCLUDE_SELECTOR)) {
+        if (el.isConnected) immutableTextExclCache.set(el, true);
+        return true;
+      }
+      if (el.closest(EXCLUDE_SELECTOR)) {
+        return true;
+      }
+      if (batchSafeSet) batchSafeSet.add(el);
+      return false;
+    }
+
+    function canTranslateElementAttrs(el, batchSafeSet) {
+      if (!el || el.nodeType !== 1) return false;
+      if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
+        if (immutableContainerExclCache.get(el) === true) return false;
+        if (el.closest(CONTAINER_IMMUTABLE_EXCLUDE_SELECTOR)) {
+          if (el.isConnected) immutableContainerExclCache.set(el, true);
+          return false;
+        }
+        return FORM_ATTR_EXCLUDE_SELECTOR ? !el.closest(FORM_ATTR_EXCLUDE_SELECTOR) : true;
+      }
+      return !isExcludedElement(el, batchSafeSet);
+    }
+
+    function isInHeaderOrBreadcrumb(el) {
+      return !!(el && el.closest && el.closest('header, [data-testid="breadcrumb-segment"]'));
+    }
+
+    function computeTextTranslation(raw, contextEl) {
       if (!raw) return null;
       const trimmed = raw.trim();
       if (!trimmed) return null;
 
-      // 1. 无原型静态词典 O(1) 精确匹配（附句尾句号自动回退）
+      // 1. 无原型静态词典 O(1) 精确匹配（附句尾句号自动回退；函数式 replace 防止 $&/$1 二次展开）
       let replacement = DICT[trimmed];
       if (typeof replacement !== 'string' && trimmed.endsWith('.')) {
         const withoutDot = DICT[trimmed.slice(0, -1)];
@@ -843,7 +1167,7 @@
         if (RE_HAS_CJK.test(replacement) && RE_PURE_ALPHA.test(raw)) {
           return replacement;
         }
-        return raw.replace(trimmed, replacement);
+        return raw.replace(trimmed, () => replacement);
       }
 
       // 2. 快速短路：不含任何英文字母直接跳过动态正则
@@ -853,6 +1177,22 @@
       const c0 = trimmed.charCodeAt(0);
       if (c0 >= 48 && c0 <= 57) {
         // 以数字 '0'-'9' 开头
+        if (RE_PCT_LEFT.test(trimmed)) return raw.replace(RE_PCT_LEFT, '$1% 剩余');
+        const mWinComb = trimmed.match(RE_WINDOW_LIMIT_COMBINED);
+        if (mWinComb) {
+          const u = UNIT_MAP_SHORT[mWinComb[2].toLowerCase()] || mWinComb[2];
+          return raw.replace(trimmed, () => mWinComb[1] + ' ' + u + '限额，' + formatCompactDurationZh(mWinComb[3]) + '后重置');
+        }
+        const mWin = trimmed.match(RE_WINDOW_LIMIT);
+        if (mWin) {
+          const u = UNIT_MAP_SHORT[mWin[2].toLowerCase()] || mWin[2];
+          return raw.replace(trimmed, () => mWin[1] + ' ' + u + '限额');
+        }
+        const mRel = trimmed.match(RE_REL_TIME);
+        if (mRel) {
+          const unit = REL_UNIT_MAP[mRel[2].toLowerCase()] || mRel[2];
+          return raw.replace(trimmed, () => mRel[1] + ' ' + unit + '前');
+        }
         if (RE_UPDATES_COUNT.test(trimmed)) return raw.replace(RE_UPDATES_COUNT, '$1 条进展');
         if (RE_FILES_CHANGED.test(trimmed)) return raw.replace(RE_FILES_CHANGED, '$1 个文件变更');
         if (RE_TOOLS.test(trimmed)) return raw.replace(RE_TOOLS, '$1 个工具');
@@ -870,20 +1210,31 @@
         if (RE_SEE_ALL.test(trimmed)) return raw.replace(RE_SEE_ALL, '查看全部 ($1)');
         if (RE_SHOW_BREAKDOWNS.test(trimmed)) return raw.replace(RE_SHOW_BREAKDOWNS, '展开明细 ($1 项)');
         if (RE_SHOW_MORE_SUBAGENTS.test(trimmed)) return raw.replace(RE_SHOW_MORE_SUBAGENTS, '显示另外 $1 个子代理');
-        const mSearch = trimmed.match(RE_EPHEMERAL_ACTIVE);
-        if (mSearch) {
-          const noun = EPHEMERAL_NOUN_MAP[mSearch[2].toLowerCase()];
-          return raw.replace(trimmed, noun ? EPHEMERAL_VERB_MAP[mSearch[1]] + noun : EPHEMERAL_VERB_MAP[mSearch[1]] + ' ' + mSearch[2]);
+        if (RE_SEARCH_GOOGLE.test(trimmed)) return raw.replace(RE_SEARCH_GOOGLE, (_, q) => '使用 Google 搜索“' + q + '”');
+        if (!isInHeaderOrBreadcrumb(contextEl)) {
+          const mSearch = trimmed.match(RE_EPHEMERAL_ACTIVE);
+          if (mSearch) {
+            const noun = EPHEMERAL_NOUN_MAP[mSearch[2].toLowerCase()];
+            const out = noun ? EPHEMERAL_VERB_MAP[mSearch[1]] + noun : EPHEMERAL_VERB_MAP[mSearch[1]] + ' ' + mSearch[2];
+            return raw.replace(trimmed, () => out);
+          }
         }
       } else if (firstUpper === 'P') {
         if (RE_PERM_DELETE.test(trimmed)) {
-          return raw.replace(RE_PERM_DELETE, '永久删除 $1 及 $2 个进行中的会话。');
+          return raw.replace(RE_PERM_DELETE, (_, target, cnt) => '永久删除 ' + target + ' 及 ' + cnt + ' 个进行中的会话。');
         }
-      } else if (firstUpper === 'W') {
-        if (RE_WORKED_FOR_UPDATES.test(trimmed)) {
-          return raw.replace(RE_WORKED_FOR_UPDATES, (_, dur, cnt) => '已工作 ' + dur.trim() + ' · ' + cnt + ' 条进展');
+      } else if (firstUpper === 'W' || firstUpper === 'M') {
+        const mNamed = trimmed.match(RE_NAMED_LIMIT_RESETS);
+        if (mNamed) {
+          const pZh = NAMED_PERIOD_MAP[mNamed[1].toLowerCase()] || mNamed[1];
+          return raw.replace(trimmed, () => pZh + '限额，' + formatCompactDurationZh(mNamed[2]) + '后重置');
         }
-        if (RE_WORKED_FOR.test(trimmed)) return raw.replace(RE_WORKED_FOR, '已工作 $1');
+        if (firstUpper === 'W') {
+          if (RE_WORKED_FOR_UPDATES.test(trimmed)) {
+            return raw.replace(RE_WORKED_FOR_UPDATES, (_, dur, cnt) => '已工作 ' + dur.trim() + ' · ' + cnt + ' 条进展');
+          }
+          if (RE_WORKED_FOR.test(trimmed)) return raw.replace(RE_WORKED_FOR, '已工作 $1');
+        }
       } else if (firstUpper === 'T') {
         if (RE_THOUGHT_FOR.test(trimmed)) return raw.replace(RE_THOUGHT_FOR, '已思考 $1');
         if (RE_DELETE_RECORDINGS_CONFIRM.test(trimmed)) {
@@ -893,33 +1244,53 @@
           );
         }
       } else if (firstUpper === 'E' || firstUpper === 'R' || firstUpper === 'L') {
+        if (firstUpper === 'R') {
+          const mResets = trimmed.match(RE_RESETS_IN);
+          if (mResets) {
+            return raw.replace(trimmed, () => formatCompactDurationZh(mResets[1]) + '后重置');
+          }
+        }
         if (RE_EPHEMERAL_SUMMARY.test(trimmed)) {
           const translatedSummary = trimmed
             .split(/,\s*/)
             .map((part) => translateEphemeralClause(part))
             .join('、');
-          return raw.replace(trimmed, translatedSummary);
+          return raw.replace(trimmed, () => translatedSummary);
         }
-        const mActive = trimmed.match(RE_EPHEMERAL_ACTIVE);
-        if (mActive) {
-          const noun = EPHEMERAL_NOUN_MAP[mActive[2].toLowerCase()];
-          return raw.replace(trimmed, noun ? EPHEMERAL_VERB_MAP[mActive[1]] + noun : EPHEMERAL_VERB_MAP[mActive[1]] + ' ' + mActive[2]);
+        const inHdr = isInHeaderOrBreadcrumb(contextEl);
+        if (!inHdr) {
+          const mActive = trimmed.match(RE_EPHEMERAL_ACTIVE);
+          if (mActive) {
+            const noun = EPHEMERAL_NOUN_MAP[mActive[2].toLowerCase()];
+            const out = noun ? EPHEMERAL_VERB_MAP[mActive[1]] + noun : EPHEMERAL_VERB_MAP[mActive[1]] + ' ' + mActive[2];
+            return raw.replace(trimmed, () => out);
+          }
         }
         if (firstUpper === 'R') {
           if (RE_RUNNING_FOR.test(trimmed)) {
             return raw.replace(RE_RUNNING_FOR, '已运行 $1');
           }
-          if (RE_RUNNING_CMD.test(trimmed)) {
-            return raw.replace(RE_RUNNING_CMD, '正在运行 $1');
+          if (!inHdr && RE_RUNNING_CMD.test(trimmed)) {
+            return raw.replace(RE_RUNNING_CMD, (_, cmd) => '正在运行 ' + cmd);
           }
         }
       } else if (firstUpper === 'D') {
+        const mNamedD = trimmed.match(RE_NAMED_LIMIT_RESETS);
+        if (mNamedD) {
+          const pZh = NAMED_PERIOD_MAP[mNamedD[1].toLowerCase()] || mNamedD[1];
+          return raw.replace(trimmed, () => pZh + '限额，' + formatCompactDurationZh(mNamedD[2]) + '后重置');
+        }
         if (RE_DELETED_RECORDINGS.test(trimmed)) {
           return raw.replace(RE_DELETED_RECORDINGS, '已删除 $1 条录音 ($2)');
         }
+      } else if (firstUpper === 'U') {
+        const mUpd = trimmed.match(RE_UPDATED_AT);
+        if (mUpd) {
+          return raw.replace(trimmed, () => formatUpdatedAtZh(mUpd[1], mUpd[2]));
+        }
       } else if (firstUpper === 'Z') {
         if (RE_ZIPPING_FOLDER.test(trimmed)) {
-          return raw.replace(RE_ZIPPING_FOLDER, '正在打包 $1…');
+          return raw.replace(RE_ZIPPING_FOLDER, (_, folder) => '正在打包 ' + folder + '…');
         }
       } else if (firstUpper === 'Y') {
         const mUsed = trimmed.match(RE_USED_LIMIT);
@@ -959,7 +1330,7 @@
       }
       const origRaw = rec && rec.lastVal === currentVal ? rec.origRaw : currentVal;
 
-      const nextVal = computeTextTranslation(origRaw);
+      const nextVal = computeTextTranslation(origRaw, node.parentElement);
       if (nextVal !== null) {
         origTextMap.set(node, { origRaw, lastVal: nextVal, ver: PATCH_VERSION });
         if (node.nodeValue !== nextVal) {
@@ -972,33 +1343,96 @@
     }
 
     function translateSingleAttr(el, attrName, origDataAttr, customResolver) {
+      const verProp = '__ag_attr_ver_' + attrName;
+      const lastDataAttr = origDataAttr + '-last';
       const cur = el.getAttribute(attrName);
-      if (!cur) return;
-      const savedOrig = el.getAttribute(origDataAttr);
-      const savedLast = el.getAttribute(origDataAttr + '-last');
-      if (savedOrig && savedLast === cur && el.__ag_attr_ver === PATCH_VERSION) {
+      if (!cur) {
+        if (el.hasAttribute(origDataAttr)) el.removeAttribute(origDataAttr);
+        if (el.hasAttribute(lastDataAttr)) el.removeAttribute(lastDataAttr);
+        delete el[verProp];
         return;
       }
-      const origVal = savedOrig && savedLast === cur ? savedOrig : cur;
+      const savedOrig = el.getAttribute(origDataAttr);
+      const savedLast = el.getAttribute(lastDataAttr);
+      if (savedOrig !== null && savedLast === cur && el[verProp] === PATCH_VERSION) {
+        return;
+      }
+      const origVal = savedOrig !== null && savedLast === cur ? savedOrig : cur;
       const trimmed = origVal.trim();
-      const nextVal = customResolver ? customResolver(trimmed) : typeof DICT[trimmed] === 'string' ? DICT[trimmed] : null;
+      const shouldSkipAttr = attrName === 'aria-label' && SKIP_ARIA_LABEL_VALUES.has(trimmed);
+      const nextVal = shouldSkipAttr
+        ? null
+        : customResolver
+        ? customResolver(trimmed, el)
+        : typeof DICT[trimmed] === 'string'
+        ? DICT[trimmed]
+        : null;
       if (typeof nextVal === 'string') {
         if (savedOrig !== origVal) el.setAttribute(origDataAttr, origVal);
-        if (savedLast !== nextVal) el.setAttribute(origDataAttr + '-last', nextVal);
-        el.__ag_attr_ver = PATCH_VERSION;
+        if (savedLast !== nextVal) el.setAttribute(lastDataAttr, nextVal);
+        el[verProp] = PATCH_VERSION;
         if (cur !== nextVal) {
           el.setAttribute(attrName, nextVal);
         }
-      } else if (savedOrig && savedLast === cur) {
-        el.setAttribute(attrName, savedOrig);
-        el.removeAttribute(origDataAttr);
-        el.removeAttribute(origDataAttr + '-last');
-        el.__ag_attr_ver = PATCH_VERSION;
+      } else {
+        if (savedOrig !== null && savedLast === cur) {
+          el.setAttribute(attrName, savedOrig);
+        }
+        if (savedOrig !== null) el.removeAttribute(origDataAttr);
+        if (savedLast !== null) el.removeAttribute(lastDataAttr);
+        el[verProp] = PATCH_VERSION;
       }
     }
 
-    function resolveAttrTranslation(atrim) {
+    function resolveAttrTranslation(atrim, el) {
       if (typeof DICT[atrim] === 'string') return DICT[atrim];
+      const mModel = atrim.match(RE_ARIA_MODEL);
+      if (mModel) {
+        let mName = mModel[1].trim();
+        if (mName === 'Select model') return '模型，当前：选择模型';
+        const mEff = mName.match(RE_EFFORT_SUFFIX);
+        if (mEff) {
+          const effRaw = mEff[2] || mEff[3];
+          const effZh = EFFORT_MAP[effRaw.toLowerCase()] || effRaw;
+          mName = mEff[1].trim() + (mEff[2] ? ' (' + effZh + ')' : ' · ' + effZh);
+        }
+        return '模型，当前：' + mName;
+      }
+      const lookupPerm = (s) =>
+        DICT[s] || DICT[s.charAt(0).toUpperCase() + s.slice(1).toLowerCase()] || s;
+      const mPermSel = atrim.match(RE_ARIA_PERM_SEL);
+      if (mPermSel) {
+        const pMode = mPermSel[1].trim();
+        return '权限模式，当前：' + lookupPerm(pMode);
+      }
+      const mPermFixed = atrim.match(RE_ARIA_PERM_FIXED);
+      if (mPermFixed) {
+        const pMode = mPermFixed[1].trim();
+        const rawNote = (mPermFixed[2] || mPermFixed[3] || '').trim();
+        if (!rawNote) {
+          return '权限模式：' + lookupPerm(pMode);
+        }
+        const mappedNote =
+          rawNote.toLowerCase() === 'cannot be changed mid-conversation'
+            ? '会话中途无法更改'
+            : DICT[rawNote] || computeTextTranslation(rawNote, el) || rawNote;
+        return '权限模式：' + lookupPerm(pMode) + '（' + mappedNote + '）';
+      }
+      const mTurn = atrim.match(RE_ARIA_TURN);
+      if (mTurn) {
+        if (mTurn[3] && mTurn[4]) {
+          return '第 ' + mTurn[3] + ' / ' + mTurn[4] + ' 轮对话';
+        }
+        const roleZh = mTurn[2].toLowerCase() === 'user' ? '用户' : '智能体';
+        return '第 ' + mTurn[1] + ' 轮对话（' + roleZh + '）';
+      }
+      const mOlder = atrim.match(RE_ARIA_LOAD_OLDER);
+      if (mOlder) {
+        if (mOlder[2] && mOlder[3]) {
+          return '加载更早的消息（当前显示 ' + mOlder[2] + ' / ' + mOlder[3] + '）';
+        }
+        return '加载更早的 ' + mOlder[1] + ' 轮对话';
+      }
       const mBranch = atrim.match(RE_ARIA_BRANCH);
       if (mBranch) {
         const bName = mBranch[1].trim();
@@ -1020,13 +1454,13 @@
       if (mVer) {
         return '版本 ' + mVer[1].trim();
       }
-      return computeTextTranslation(atrim);
+      return computeTextTranslation(atrim, el);
     }
 
     function translateElementAttrs(el) {
       if (!el || el.nodeType !== 1) return;
       translateSingleAttr(el, 'title', 'data-ag-orig-title', resolveAttrTranslation);
-      translateSingleAttr(el, 'placeholder', 'data-ag-orig-placeholder', null);
+      translateSingleAttr(el, 'placeholder', 'data-ag-orig-placeholder', resolveAttrTranslation);
       translateSingleAttr(el, 'aria-label', 'data-ag-orig-aria-label', resolveAttrTranslation);
     }
 
@@ -1034,6 +1468,16 @@
       acceptNode(node) {
         if (node.nodeType === 1) {
           if (node.matches && node.matches(EXCLUDE_SELECTOR)) {
+            if (node.isConnected && node.matches(TEXT_IMMUTABLE_EXCLUDE_SELECTOR)) {
+              immutableTextExclCache.set(node, true);
+            }
+            if (
+              (node.tagName === 'INPUT' || node.tagName === 'TEXTAREA') &&
+              canTranslateElementAttrs(node) &&
+              (node.hasAttribute('title') || node.hasAttribute('aria-label') || node.hasAttribute('placeholder'))
+            ) {
+              translateElementAttrs(node);
+            }
             return NodeFilter.FILTER_REJECT;
           }
           if (
@@ -1056,7 +1500,17 @@
         }
         return;
       }
-      if (root.nodeType !== 1 || isExcludedElement(root)) return;
+      if (root.nodeType !== 1) return;
+      if (isExcludedElement(root)) {
+        if (
+          (root.tagName === 'INPUT' || root.tagName === 'TEXTAREA') &&
+          canTranslateElementAttrs(root) &&
+          (root.hasAttribute('title') || root.hasAttribute('aria-label') || root.hasAttribute('placeholder'))
+        ) {
+          translateElementAttrs(root);
+        }
+        return;
+      }
 
       if (
         root.hasAttribute &&
@@ -1075,7 +1529,10 @@
       }
     }
 
-    scanAndTranslate(document.body);
+    scanBodyFn = scanAndTranslate;
+    if (document.body) {
+      scanAndTranslate(document.body);
+    }
 
     const dirtyRoots = new Set();
     let pending = false;
@@ -1127,22 +1584,23 @@
     }
 
     window.__ag_i18n_observer = new MutationObserver((mutations) => {
+      const batchSafeSet = new Set();
       for (let i = 0; i < mutations.length; i++) {
         const m = mutations[i];
         if (m.type === 'characterData') {
           const t = m.target;
-          if (t && t.parentElement && !isExcludedElement(t.parentElement)) {
+          if (t && t.parentElement && !isExcludedElement(t.parentElement, batchSafeSet)) {
             dirtyRoots.add(t);
           }
         } else if (m.type === 'attributes') {
           const el = m.target;
-          if (el && el.nodeType === 1 && !isExcludedElement(el)) {
+          if (el && el.nodeType === 1 && canTranslateElementAttrs(el, batchSafeSet)) {
             try {
               translateElementAttrs(el);
             } catch (e) {}
           }
         } else if (m.type === 'childList' && m.addedNodes.length > 0) {
-          if (m.target && m.target.nodeType === 1 && isExcludedElement(m.target)) {
+          if (m.target && m.target.nodeType === 1 && isExcludedElement(m.target, batchSafeSet)) {
             continue;
           }
           for (let j = 0; j < m.addedNodes.length; j++) {
@@ -1158,19 +1616,63 @@
       }
     });
 
-    const targetNode = document.body || document.documentElement;
-    if (targetNode) {
-      window.__ag_i18n_observer.observe(targetNode, {
-        childList: true,
-        subtree: true,
-        characterData: true,
-        attributes: true,
-        attributeFilter: ['title', 'aria-label', 'placeholder']
-      });
+    if (document.body) {
+      window.__ag_i18n_observer.observe(document.body, I18N_OBS_OPTS);
     }
-  } else {
+  } else if (document.body) {
     // 若用户在配置中关闭了 i18n 模块，实时将已翻译的文本与属性还原为原始英文
     restoreAllTranslations(document.body);
+  }
+
+  // 若由 Page.addScriptToEvaluateOnNewDocument 在 <head> 早期触发（此时 document.body === null），
+  // 挂载单次 DOMContentLoaded 钩子，确保样式排在原生 <link> 之后，并在 body 就绪后完成监听挂载
+  if (document.body) {
+    window.__ag_body_ready = true;
+  } else {
+    window.__ag_body_ready = false;
+    window.__ag_dcl_handler = () => {
+      window.__ag_dcl_handler = null;
+      ensureStylesAtEndOfHead();
+      if (document.body) {
+        if (window.__ag_theme_mode_observer) {
+          try {
+            window.__ag_theme_mode_observer.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+          } catch (e) {}
+        } else if (typeof MutationObserver !== 'undefined') {
+          try {
+            const modeObs = new MutationObserver(() => {
+              if (typeof window.__ag_sync_preset_fn === 'function') {
+                window.__ag_sync_preset_fn();
+              }
+            });
+            modeObs.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+            if (document.documentElement) {
+              modeObs.observe(document.documentElement, { attributes: true, attributeFilter: ['class', 'style'] });
+            }
+            window.__ag_theme_mode_observer = modeObs;
+          } catch (e) {}
+        }
+      }
+      syncChuanbanPreset();
+      checkRouteAndMountMetrics();
+      if (MODULES.i18n && document.body) {
+        if (typeof scanBodyFn === 'function') {
+          try {
+            scanBodyFn(document.body);
+          } catch (e) {}
+        }
+        if (window.__ag_i18n_observer) {
+          try {
+            window.__ag_i18n_observer.disconnect();
+            window.__ag_i18n_observer.observe(document.body, I18N_OBS_OPTS);
+          } catch (e) {}
+        }
+      } else if (!MODULES.i18n && document.body) {
+        restoreAllTranslations(document.body);
+      }
+      window.__ag_body_ready = true;
+    };
+    window.addEventListener('DOMContentLoaded', window.__ag_dcl_handler, { once: true });
   }
 
   // ============================================================================
@@ -1188,7 +1690,12 @@
       return window.__ag_last_metrics || null;
     },
     syncPreset: syncChuanbanPreset,
-    ensureMetricsPill
+    ensureMetricsPill,
+    onCleanup(fn) {
+      if (typeof fn === 'function') {
+        window.__ag_cleanup_fns.push(fn);
+      }
+    }
   };
 
   if (MODULES.customJs && boot.customJs && typeof boot.customJs === 'string' && boot.customJs.trim()) {

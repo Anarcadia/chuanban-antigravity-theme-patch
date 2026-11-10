@@ -1,14 +1,16 @@
 #!/usr/bin/env node
 /**
- * chuanban-antigravity-theme-patch · 一键安装、自检、安全模式验证与回滚 CLI (install.mjs)
+ * chuanban-antigravity-theme-patch · 一键安装、自检、安全模式验证、打包与回滚 CLI (install.mjs)
  *
  * 支持子命令：
  *   node install.mjs install [--channel auto|stable|insiders] [--preset high-contrast] [--target-dir <dir>]
+ *   node install.mjs install-fonts --from <font-folder-path>
  *   node install.mjs doctor  [--channel auto|stable|insiders] [--target-dir <dir>]
  *   node install.mjs verify  [--safe-mode] [--channel auto|stable|insiders] [--target-dir <dir>]
  *   node install.mjs rollback [--target-dir <dir>]
  *   node install.mjs uninstall [--target-dir <dir>]
  *   node install.mjs build-manifest
+ *   node install.mjs pack
  */
 
 import fs from 'node:fs';
@@ -59,7 +61,7 @@ function resolveDefaultTargetDir() {
 }
 
 // ============================================================================
-// 1. 生成与校验 core/manifest.json
+// 1. 生成与校验 core/manifest.json 及 dist/ 发行包
 // ============================================================================
 function buildManifest(baseDir = __dirname) {
   const coreDir = path.join(baseDir, 'core');
@@ -78,7 +80,7 @@ function buildManifest(baseDir = __dirname) {
   }
   const manifest = {
     name: 'chuanban-antigravity-theme-patch',
-    version: '5.1.1',
+    version: '5.1.3',
     minNodeVersion: '22.0.0',
     fullMetricsNodeVersion: '22.13.0',
     distribution: {
@@ -91,6 +93,58 @@ function buildManifest(baseDir = __dirname) {
   const manifestPath = path.join(coreDir, 'manifest.json');
   fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n', 'utf8');
   return manifest;
+}
+
+function buildDistZip(baseDir = __dirname) {
+  const manifest = buildManifest(baseDir);
+  const distDir = path.join(baseDir, 'dist');
+  fs.mkdirSync(distDir, { recursive: true });
+  const zipName = `${manifest.name}-v${manifest.version}.zip`;
+  const zipPath = path.join(distDir, zipName);
+  if (fs.existsSync(zipPath)) fs.unlinkSync(zipPath);
+
+  const includeItems = [
+    'SKILL.md',
+    'README.md',
+    'install.mjs',
+    '.gitattributes',
+    '.gitignore',
+    'core',
+    'user',
+    'assets'
+  ].filter((item) => fs.existsSync(path.join(baseDir, item)));
+
+  if (process.platform === 'win32') {
+    const psArgs = [
+      '-NoProfile',
+      '-Command',
+      `Compress-Archive -Path ${includeItems.map((i) => `'${i}'`).join(',')} -DestinationPath '${zipPath.replace(/'/g, "''")}' -Force`
+    ];
+    const r = spawnSync('powershell', psArgs, { cwd: baseDir, stdio: 'inherit', windowsHide: true });
+    if (r.status !== 0) throw new Error('Compress-Archive failed');
+  } else {
+    const r = spawnSync('zip', ['-r', '-q', zipPath, ...includeItems, '-x', '*.DS_Store'], {
+      cwd: baseDir,
+      stdio: 'inherit'
+    });
+    if (r.status !== 0) throw new Error('zip command failed');
+    // 逐文件校验 zip 内 core/* 的 SHA-256 与字节数与 manifest 完全一致，杜绝脏包发布
+    for (const [name, meta] of Object.entries(manifest.files)) {
+      const uz = spawnSync('unzip', ['-p', zipPath, `core/${name}`], { maxBuffer: 20 * 1024 * 1024 });
+      if (uz.status !== 0) {
+        fs.unlinkSync(zipPath);
+        throw new Error(`Verification failed: missing core/${name} in ${zipName}`);
+      }
+      const actualSha = crypto.createHash('sha256').update(uz.stdout).digest('hex');
+      if (actualSha !== meta.sha256 || uz.stdout.length !== meta.bytes) {
+        fs.unlinkSync(zipPath);
+        throw new Error(
+          `Verification failed for core/${name} in ${zipName}: expected ${meta.sha256} (${meta.bytes}B), got ${actualSha} (${uz.stdout.length}B)`
+        );
+      }
+    }
+  }
+  return { zipPath, version: manifest.version, filesVerified: Object.keys(manifest.files).length };
 }
 
 function verifyCoreIntegrity(baseDir = __dirname) {
@@ -171,6 +225,7 @@ async function detectEnvironment(channel = 'auto') {
   const checkSingleChannel = (ch) => {
     const isInsiders = ch === 'insiders';
     const appDirName = isInsiders ? 'Antigravity - Insiders' : 'Antigravity';
+    const dotDir = path.join(home, isInsiders ? '.antigravity-insiders' : '.antigravity');
     let portFile;
     let appPath;
     if (process.platform === 'darwin') {
@@ -185,11 +240,15 @@ async function detectEnvironment(channel = 'auto') {
       portFile = path.join(xdg, appDirName, 'DevToolsActivePort');
       appPath = '';
     }
+    const portFileExists = fs.existsSync(portFile);
+    const appExists = appPath
+      ? fs.existsSync(appPath)
+      : portFileExists || fs.existsSync(path.dirname(portFile)) || fs.existsSync(dotDir);
     return {
       channel: ch,
-      appExists: appPath ? fs.existsSync(appPath) : true,
+      appExists,
       portFile,
-      portFileExists: fs.existsSync(portFile)
+      portFileExists
     };
   };
 
@@ -221,6 +280,90 @@ async function detectEnvironment(channel = 'auto') {
   };
 }
 
+function inspectJsoncRootObject(raw) {
+  let i = 0;
+  const len = raw.length;
+  let depth = 0;
+  let openBraceIdx = -1;
+  let closeBraceIdx = -1;
+  let hasTopProps = false;
+  let hasRemoteDebuggingPort = false;
+
+  while (i < len) {
+    const ch = raw[i];
+    const next = i + 1 < len ? raw[i + 1] : '';
+
+    if (ch === '/' && next === '/') {
+      i += 2;
+      while (i < len && raw[i] !== '\n') i++;
+      continue;
+    }
+    if (ch === '/' && next === '*') {
+      i += 2;
+      while (i + 1 < len && !(raw[i] === '*' && raw[i + 1] === '/')) i++;
+      i += 2;
+      continue;
+    }
+    if (ch === '"') {
+      i++;
+      let val = '';
+      while (i < len) {
+        if (raw[i] === '\\') {
+          val += raw.slice(i, i + 2);
+          i += 2;
+          continue;
+        }
+        if (raw[i] === '"') {
+          i++;
+          break;
+        }
+        val += raw[i++];
+      }
+      if (depth === 1 && openBraceIdx !== -1 && closeBraceIdx === -1) {
+        hasTopProps = true;
+        if (val === 'remote-debugging-port') {
+          let k = i;
+          while (k < len) {
+            if (/\s/.test(raw[k])) {
+              k++;
+            } else if (raw[k] === '/' && raw[k + 1] === '/') {
+              k += 2;
+              while (k < len && raw[k] !== '\n') k++;
+            } else if (raw[k] === '/' && raw[k + 1] === '*') {
+              k += 2;
+              while (k + 1 < len && !(raw[k] === '*' && raw[k + 1] === '/')) k++;
+              k += 2;
+            } else {
+              break;
+            }
+          }
+          if (raw[k] === ':') {
+            hasRemoteDebuggingPort = true;
+          }
+        }
+      }
+      continue;
+    }
+
+    if (ch === '{') {
+      if (depth === 0 && openBraceIdx === -1) {
+        openBraceIdx = i;
+      }
+      depth++;
+    } else if (ch === '}') {
+      depth--;
+      if (depth === 0 && openBraceIdx !== -1 && closeBraceIdx === -1) {
+        closeBraceIdx = i;
+      }
+    } else if (depth === 1 && openBraceIdx !== -1 && closeBraceIdx === -1 && !/\s/.test(ch)) {
+      hasTopProps = true;
+    }
+    i++;
+  }
+
+  return { openBraceIdx, closeBraceIdx, hasTopProps, hasRemoteDebuggingPort };
+}
+
 function ensureArgvRemoteDebugging(channel = 'auto') {
   const home = os.homedir();
   const dirs =
@@ -232,27 +375,34 @@ function ensureArgvRemoteDebugging(channel = 'auto') {
 
   const results = [];
   for (const d of dirs) {
+    const defaultPort = d === '.antigravity-insiders' ? 9223 : 9222;
     const argvDir = path.join(home, d);
     const argvPath = path.join(argvDir, 'argv.json');
     if (!fs.existsSync(argvDir)) continue;
     try {
       if (!fs.existsSync(argvPath)) {
-        fs.writeFileSync(argvPath, JSON.stringify({ 'remote-debugging-port': 9222 }, null, 2) + '\n', 'utf8');
-        results.push({ path: argvPath, action: 'created' });
+        fs.writeFileSync(argvPath, JSON.stringify({ 'remote-debugging-port': defaultPort }, null, 2) + '\n', 'utf8');
+        results.push({ path: argvPath, port: defaultPort, action: 'created' });
         continue;
       }
       const raw = fs.readFileSync(argvPath, 'utf8');
-      if (/"remote-debugging-port"\s*:/.test(raw)) {
+      const parsedInfo = inspectJsoncRootObject(raw);
+      if (parsedInfo.hasRemoteDebuggingPort) {
         results.push({ path: argvPath, action: 'already-present' });
         continue;
       }
-      const lastBrace = raw.lastIndexOf('}');
-      if (lastBrace !== -1) {
-        const before = raw.slice(0, lastBrace).trimEnd();
-        const needsComma = !before.endsWith('{') && !before.endsWith(',');
-        const patched = `${before}${needsComma ? ',' : ''}\n\t"remote-debugging-port": 9222\n}\n`;
+      if (parsedInfo.openBraceIdx !== -1 && parsedInfo.closeBraceIdx > parsedInfo.openBraceIdx) {
+        const afterOpen = raw.slice(parsedInfo.openBraceIdx + 1);
+        const comma = parsedInfo.hasTopProps ? ',' : '';
+        const trailingNl = afterOpen.startsWith('\n') || afterOpen.startsWith('\r') ? '' : '\n';
+        const patched =
+          raw.slice(0, parsedInfo.openBraceIdx + 1) +
+          `\n\t"remote-debugging-port": ${defaultPort}${comma}${trailingNl}` +
+          afterOpen;
         fs.writeFileSync(argvPath, patched, 'utf8');
-        results.push({ path: argvPath, action: 'patched' });
+        results.push({ path: argvPath, port: defaultPort, action: 'patched' });
+      } else {
+        results.push({ path: argvPath, action: 'skipped', error: 'root JSON object not found' });
       }
     } catch (e) {
       results.push({ path: argvPath, action: 'skipped', error: e.message });
@@ -268,7 +418,7 @@ function isAllowedOrigin(urlStr) {
 
 function fetchTargetsFromPort(port) {
   return new Promise((resolve) => {
-    const req = http.get({ host: '127.0.0.1', port, path: '/json/list', timeout: 1500 }, (res) => {
+    const req = http.get({ host: '127.0.0.1', port, path: '/json/list', timeout: 450 }, (res) => {
       let data = '';
       res.on('data', (c) => (data += c));
       res.on('end', () => {
@@ -295,7 +445,8 @@ async function inspectLiveWindow(portFileOrEnv, fallbackPort = 9222) {
     if (portFileOrEnv.portFile) candidateFiles.push(portFileOrEnv.portFile);
     if (portFileOrEnv.channels.stable?.portFile) candidateFiles.push(portFileOrEnv.channels.stable.portFile);
     if (portFileOrEnv.channels.insiders?.portFile) candidateFiles.push(portFileOrEnv.channels.insiders.portFile);
-    candidatePorts.push(9222, 9223);
+    if (portFileOrEnv.channels.stable?.appExists !== false) candidatePorts.push(9222);
+    if (portFileOrEnv.channels.insiders?.appExists) candidatePorts.push(9223);
   } else if (typeof portFileOrEnv === 'string' && portFileOrEnv) {
     candidateFiles.push(portFileOrEnv);
     if (fallbackPort > 0) candidatePorts.push(fallbackPort);
@@ -369,6 +520,7 @@ async function inspectLiveWindow(portFileOrEnv, fallbackPort = 9222) {
           params: {
             expression: `({
               version: window.__ag_patch_version || null,
+              bodyReady: window.__ag_body_ready === true,
               hasStyle: !!document.getElementById('ag-custom-fonts'),
               hasUserStyle: !!document.getElementById('antigravity-user-custom-style'),
               preset: document.documentElement.getAttribute('data-ag-preset'),
@@ -468,6 +620,29 @@ function copyDirRecursive(src, dest) {
   }
 }
 
+function isConfirmedDaemonPid(pid) {
+  if (!pid || pid <= 0 || pid === process.pid) return false;
+  try {
+    process.kill(pid, 0);
+  } catch {
+    return false;
+  }
+  if (process.platform === 'win32') {
+    try {
+      const res = spawnSync('tasklist', ['/FI', `PID eq ${pid}`, '/FO', 'CSV', '/NH'], {
+        windowsHide: true,
+        encoding: 'utf8',
+        timeout: 1500
+      });
+      const out = String(res.stdout || '').toLowerCase();
+      if (!out.includes('node.exe')) return false;
+    } catch {
+      return false;
+    }
+  }
+  return true;
+}
+
 function stopRunningDaemonProcesses() {
   const tmpDir = os.tmpdir();
   const stopped = [];
@@ -476,7 +651,7 @@ function stopRunningDaemonProcesses() {
       if (f.startsWith('ag-theme-daemon-') && f.endsWith('.pid')) {
         const pidPath = path.join(tmpDir, f);
         const pid = parseInt(fs.readFileSync(pidPath, 'utf8').trim(), 10);
-        if (pid > 0 && pid !== process.pid) {
+        if (isConfirmedDaemonPid(pid)) {
           try {
             process.kill(pid, 'SIGTERM');
             stopped.push(pid);
@@ -513,6 +688,11 @@ function registerSystemService(targetDir, wrapperDaemon) {
         <string>--disable-warning=ExperimentalWarning</string>
         <string>${wrapperDaemon}</string>
     </array>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/Library/Frameworks/Python.framework/Versions/Current/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    </dict>
     <key>RunAtLoad</key>
     <true/>
     <key>KeepAlive</key>
@@ -566,31 +746,13 @@ WantedBy=default.target
     const cmd = `""${process.execPath}"" --disable-warning=ExperimentalWarning ""${wrapperDaemon}""`;
     const vbsContent = `\uFEFFSet WshShell = CreateObject("WScript.Shell")\r\nWshShell.Run "${cmd}", 0, False\r\n`;
     try {
-      // 使用 UTF-16LE (带 BOM) 写入 VBS，彻底兼容 Windows 中文用户名路径 (wscript.exe 原生支持 UTF-16LE)
+      // 使用 UTF-16LE (带 BOM) 写入本地启动跳板 VBS，彻底兼容 Windows 中文用户名路径 (wscript.exe 原生支持 UTF-16LE)
       fs.writeFileSync(localVbsFile, vbsContent, 'utf16le');
-      fs.mkdirSync(startupDir, { recursive: true });
-      fs.writeFileSync(vbsFile, vbsContent, 'utf16le');
-    } catch {}
-    try {
-      spawnSync(
-        'reg',
-        [
-          'add',
-          'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run',
-          '/v',
-          'AntigravityThemeDaemon',
-          '/t',
-          'REG_SZ',
-          '/d',
-          `wscript.exe //B //NoLogo "${localVbsFile}"`,
-          '/f'
-        ],
-        { stdio: 'ignore', windowsHide: true }
-      );
     } catch {}
 
-    // 优先通过 Windows 计划任务 (schtasks) 注册并触发后台守护进程，使其由系统 Schedule 服务拉起、
-    // 彻底脱离 AI Agent run_command 沙盒的 Win32 Job Object（避免命令退出时子进程被连带终止）
+    // 单一权威自启策略：优先使用 Windows 计划任务 (schtasks ONLOGON)，由系统 Schedule 服务拉起、
+    // 脱离沙盒 Win32 Job Object；注册成功后主动清理旧版遗留的 HKCU\...\Run 与 Startup\*.vbs，避免开机三路并发争抢！
+    let autostartMethod = 'none';
     let scheduledTaskStarted = false;
     try {
       const createRes = spawnSync(
@@ -608,6 +770,19 @@ WantedBy=default.target
         { stdio: 'ignore', windowsHide: true }
       );
       if (createRes.status === 0) {
+        autostartMethod = 'schtasks';
+        // 清理旧版多重自启残留
+        try {
+          if (fs.existsSync(vbsFile)) fs.unlinkSync(vbsFile);
+        } catch {}
+        try {
+          spawnSync(
+            'reg',
+            ['delete', 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run', '/v', 'AntigravityThemeDaemon', '/f'],
+            { stdio: 'ignore', windowsHide: true }
+          );
+        } catch {}
+
         const runRes = spawnSync('schtasks', ['/Run', '/TN', 'AntigravityThemeDaemon'], {
           stdio: 'ignore',
           windowsHide: true
@@ -616,7 +791,41 @@ WantedBy=default.target
       }
     } catch {}
 
-    // 若当前环境禁用 schtasks，回退到 detached spawn 直接拉起
+    // 仅当组策略等禁用了 schtasks 时，按 HKCU\Run -> Startup 目录顺序单路降级自启
+    if (autostartMethod === 'none') {
+      try {
+        const regRes = spawnSync(
+          'reg',
+          [
+            'add',
+            'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run',
+            '/v',
+            'AntigravityThemeDaemon',
+            '/t',
+            'REG_SZ',
+            '/d',
+            `wscript.exe //B //NoLogo "${localVbsFile}"`,
+            '/f'
+          ],
+          { stdio: 'ignore', windowsHide: true }
+        );
+        if (regRes.status === 0) {
+          autostartMethod = 'registry-run';
+          try {
+            if (fs.existsSync(vbsFile)) fs.unlinkSync(vbsFile);
+          } catch {}
+        }
+      } catch {}
+    }
+    if (autostartMethod === 'none') {
+      try {
+        fs.mkdirSync(startupDir, { recursive: true });
+        fs.writeFileSync(vbsFile, vbsContent, 'utf16le');
+        autostartMethod = 'startup-vbs';
+      } catch {}
+    }
+
+    // 若计划任务未能即时拉起后台进程，回退到 detached spawn 直接拉起
     let spawnedPid = null;
     if (!scheduledTaskStarted) {
       try {
@@ -631,9 +840,10 @@ WantedBy=default.target
     }
     return {
       platform: 'win32',
-      serviceFile: vbsFile,
+      autostartMethod,
+      serviceFile: autostartMethod === 'startup-vbs' ? vbsFile : localVbsFile,
       localVbsFile,
-      scheduledTask: 'AntigravityThemeDaemon',
+      scheduledTask: autostartMethod === 'schtasks' ? 'AntigravityThemeDaemon' : null,
       scheduledTaskStarted,
       spawnedPid,
       runningNow: Boolean(scheduledTaskStarted || spawnedPid)
@@ -726,12 +936,20 @@ async function runInstall() {
     currentCfg.preset = 'high-contrast';
   }
   // 自动清理早期版本遗留在 user/config.json 中的出厂默认 selectors，确保后续升级由 core/runtime.js 统一托管
-  if (
-    currentCfg.selectors &&
-    typeof currentCfg.selectors === 'object' &&
-    currentCfg.selectors.inputBoxId === 'antigravity.agentSidePanelInputBox'
-  ) {
-    delete currentCfg.selectors;
+  if (currentCfg.selectors && typeof currentCfg.selectors === 'object') {
+    if (currentCfg.selectors.inputBoxId === 'antigravity.agentSidePanelInputBox') {
+      delete currentCfg.selectors;
+    } else if (
+      typeof currentCfg.selectors.excludeI18n === 'string' &&
+      (!currentCfg.selectors.excludeI18n.includes('.monaco-editor') ||
+        (currentCfg.selectors.excludeI18n.startsWith('code, pre, kbd, samp') &&
+          !currentCfg.selectors.excludeI18n.includes('[data-markdown-root]')))
+    ) {
+      delete currentCfg.selectors.excludeI18n;
+      if (Object.keys(currentCfg.selectors).length === 0) {
+        delete currentCfg.selectors;
+      }
+    }
   }
   fs.writeFileSync(userConfigPath, JSON.stringify(currentCfg, null, 2) + '\n', 'utf8');
 
@@ -911,7 +1129,9 @@ function runInstallFonts() {
         const destPath = path.join(destDir, entry);
         fs.copyFileSync(full, destPath);
         if (process.platform === 'win32') {
-          const fontTitle = entry.replace(/\.(ttf|otf|ttc)$/i, '') + ' (TrueType)';
+          const ext = path.extname(entry).toLowerCase();
+          const typeSuffix = ext === '.otf' ? ' (OpenType)' : ' (TrueType)';
+          const fontTitle = entry.replace(/\.(ttf|otf|ttc)$/i, '') + typeSuffix;
           try {
             spawnSync(
               'reg',
@@ -950,21 +1170,7 @@ async function runUninstall() {
   const userConfigPath = path.join(targetDir, 'user', 'config.json');
   const realDaemon = path.join(targetDir, 'core', 'daemon.mjs');
 
-  // 1. 先向当前打开的窗口发送一次禁用还原载荷，即时卸载样式并恢复英文原貌
-  if (fs.existsSync(userConfigPath) && fs.existsSync(realDaemon)) {
-    try {
-      const origRaw = fs.readFileSync(userConfigPath, 'utf8');
-      const cfg = JSON.parse(origRaw);
-      cfg.enabled = false;
-      fs.writeFileSync(userConfigPath, JSON.stringify(cfg, null, 2) + '\n', 'utf8');
-      spawnSync(process.execPath, ['--disable-warning=ExperimentalWarning', realDaemon, '--once'], {
-        stdio: 'ignore'
-      });
-      fs.writeFileSync(userConfigPath, origRaw, 'utf8');
-    } catch {}
-  }
-
-  // 2. 停止并彻底移除跨平台开机自启服务，防止重启后守护进程复活
+  // 1. 先停止正在运行的后台守护进程并移除跨平台开机自启服务，消除与 --once 还原注入的并发竞态
   stopRunningDaemonProcesses();
   if (process.platform === 'darwin') {
     const uid = process.getuid ? process.getuid() : 501;
@@ -990,8 +1196,10 @@ async function runUninstall() {
     const vbsFile = path.join(appData, 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup', 'AntigravityThemeDaemon.vbs');
     const localVbs = path.join(targetDir, 'AntigravityThemeDaemon.vbs');
     try {
-      if (fs.existsSync(vbsFile)) fs.unlinkSync(vbsFile);
-      if (fs.existsSync(localVbs)) fs.unlinkSync(localVbs);
+      spawnSync('schtasks', ['/Delete', '/TN', 'AntigravityThemeDaemon', '/F'], {
+        stdio: 'ignore',
+        windowsHide: true
+      });
     } catch {}
     try {
       spawnSync('reg', ['delete', 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run', '/v', 'AntigravityThemeDaemon', '/f'], {
@@ -1000,13 +1208,26 @@ async function runUninstall() {
       });
     } catch {}
     try {
-      spawnSync('schtasks', ['/Delete', '/TN', 'AntigravityThemeDaemon', '/F'], {
+      if (fs.existsSync(vbsFile)) fs.unlinkSync(vbsFile);
+      if (fs.existsSync(localVbs)) fs.unlinkSync(localVbs);
+    } catch {}
+  }
+
+  // 2. 在无后台守护进程干扰的纯净状态下，向打开的窗口发送一次禁用还原载荷，即时卸载样式并恢复英文原貌
+  if (fs.existsSync(userConfigPath) && fs.existsSync(realDaemon)) {
+    try {
+      const origRaw = fs.readFileSync(userConfigPath, 'utf8');
+      const cfg = JSON.parse(origRaw);
+      cfg.enabled = false;
+      fs.writeFileSync(userConfigPath, JSON.stringify(cfg, null, 2) + '\n', 'utf8');
+      spawnSync(process.execPath, ['--disable-warning=ExperimentalWarning', realDaemon, '--once'], {
         stdio: 'ignore',
         windowsHide: true
       });
+      fs.writeFileSync(userConfigPath, origRaw, 'utf8');
     } catch {}
   }
-  console.log('[Uninstall] Unloaded live styles, removed autostart services, and stopped daemon. User config in ~/.gemini/antigravity/theme-patch/user/ is preserved.');
+  console.log('[Uninstall] Stopped daemon, removed autostart services, and unloaded live styles. User config in ~/.gemini/antigravity/theme-patch/user/ is preserved.');
 }
 
 // ============================================================================
@@ -1016,6 +1237,11 @@ switch (subcommand) {
   case 'build-manifest': {
     const m = buildManifest(__dirname);
     console.log('Built core/manifest.json:', m.version, 'files:', Object.keys(m.files).length);
+    break;
+  }
+  case 'pack': {
+    const packed = buildDistZip(__dirname);
+    console.log('Packed & verified dist archive:', packed.zipPath, `(verified ${packed.filesVerified} core files)`);
     break;
   }
   case 'doctor':
@@ -1044,6 +1270,7 @@ switch (subcommand) {
   node install.mjs verify        [--safe-mode] [--channel auto|stable|insiders]
   node install.mjs rollback
   node install.mjs uninstall
-  node install.mjs build-manifest`);
+  node install.mjs build-manifest
+  node install.mjs pack`);
     break;
 }
