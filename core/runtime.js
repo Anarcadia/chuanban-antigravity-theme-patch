@@ -8,7 +8,7 @@
   if (window.top !== window) return;
   if (!boot || typeof boot !== 'object') return;
 
-  const PATCH_VERSION = boot.version || '20261111-v5.1.3';
+  const PATCH_VERSION = boot.version || '20261111-v5.1.4';
   const ENABLED = boot.enabled !== false;
   const CSS_TEXT = boot.cssText || '';
   const CUSTOM_CSS_TEXT = boot.customCss || '';
@@ -216,6 +216,8 @@
       } catch (e) {}
       window.__ag_metrics_ro = null;
       window.__ag_metrics_ro_target = null;
+      window.__ag_metrics_ro_observed = null;
+      window.__ag_last_metrics_layout_sig = '';
     }
     if (window.__ag_metrics_route_watcher) {
       try {
@@ -552,10 +554,10 @@
 
   // ============================================================================
   // 3.5 模型名称同行实时指标胶囊 (Scheme C: TPS · TTFT · Ctx/256k · Out + Hover 详情卡)
-  // 按真实胶囊文本宽度 + 滞回防抖自适应同行(middle) / 第二行(bottom)，单次测量零震荡。
+  // 常规宽度恒定锁定同行(middle)；仅窄侧边栏(<165px，恢复>=180px滞回)折入框内第二行(bottom)。
   // ============================================================================
-  const MIDDLE_MIN_FLOOR_PX = 180;
-  const HYSTERESIS_PX = 10;
+  const MIDDLE_ENTER_BOTTOM_PX = 165;
+  const MIDDLE_EXIT_BOTTOM_PX = 180;
 
   function extractCascadeId() {
     try {
@@ -616,10 +618,74 @@
     return w;
   }
 
-  function ensureMetricsPill(forceLayout = false) {
+  function syncMetricsResizeObserver(bottomRow, leftGroup, rightGroup) {
+    if (typeof ResizeObserver === 'undefined' || !bottomRow) return;
+    if (window.__ag_metrics_ro_target !== bottomRow || window.__ag_metrics_ro_ver !== PATCH_VERSION) {
+      if (window.__ag_metrics_ro) {
+        try {
+          window.__ag_metrics_ro.disconnect();
+        } catch (e) {}
+      }
+      window.__ag_metrics_ro_target = bottomRow;
+      window.__ag_metrics_ro_ver = PATCH_VERSION;
+      window.__ag_metrics_ro_observed = new WeakSet();
+      window.__ag_last_metrics_layout_sig = '';
+      window.__ag_metrics_ro = new ResizeObserver(() => {
+        if (window.__ag_metrics_raf) return;
+        window.__ag_metrics_raf = requestAnimationFrame(() => {
+          window.__ag_metrics_raf = 0;
+          const curBox = document.getElementById(SELECTORS.inputBoxId);
+          const curBottom = findFooterRow(curBox);
+          if (!curBottom || !curBottom.children[0]) return;
+          const curLeft = curBottom.children[0];
+          const curRight = curBottom.children[1] || null;
+          const rw = curBottom.clientWidth || 0;
+          if (rw <= 0) return;
+          const lw = measureNaturalLeftWidth(curLeft);
+          const rgw = curRight ? curRight.offsetWidth || 0 : 0;
+          const sig = rw + ':' + lw + ':' + rgw;
+          if (sig !== window.__ag_last_metrics_layout_sig) {
+            if (typeof window.__ag_ensure_metrics_pill_fn === 'function') {
+              window.__ag_ensure_metrics_pill_fn(true);
+            }
+          }
+        });
+      });
+    }
+    const ro = window.__ag_metrics_ro;
+    const seen = window.__ag_metrics_ro_observed;
+    if (!ro || !seen) return;
+    const observeOnce = (el) => {
+      if (el && el.nodeType === 1 && !seen.has(el)) {
+        seen.add(el);
+        try {
+          ro.observe(el);
+        } catch (e) {}
+      }
+    };
+    observeOnce(bottomRow);
+    if (rightGroup) observeOnce(rightGroup);
+    if (leftGroup) {
+      for (let i = 0; i < leftGroup.children.length; i++) {
+        const ch = leftGroup.children[i];
+        if (ch.id !== 'ag-live-metrics-pill') observeOnce(ch);
+      }
+    }
+  }
+
+  function ensureMetricsPill(forceLayout = false, resetHysteresis = false) {
     if (!MODULES.metrics) {
       const existing = document.getElementById('ag-live-metrics-pill');
       if (existing) existing.style.display = 'none';
+      if (window.__ag_metrics_ro) {
+        try {
+          window.__ag_metrics_ro.disconnect();
+        } catch (e) {}
+        window.__ag_metrics_ro = null;
+        window.__ag_metrics_ro_target = null;
+        window.__ag_metrics_ro_observed = null;
+        window.__ag_last_metrics_layout_sig = '';
+      }
       return null;
     }
     const box = document.getElementById(SELECTORS.inputBoxId);
@@ -653,65 +719,27 @@
       });
     }
 
-    if (
-      typeof ResizeObserver !== 'undefined' &&
-      (window.__ag_metrics_ro_target !== bottomRow || window.__ag_metrics_ro_ver !== PATCH_VERSION)
-    ) {
-      if (window.__ag_metrics_ro) {
-        try {
-          window.__ag_metrics_ro.disconnect();
-        } catch (e) {}
-      }
-      window.__ag_metrics_ro_target = bottomRow;
-      window.__ag_metrics_ro_ver = PATCH_VERSION;
-      window.__ag_last_row_width = -1;
-      window.__ag_metrics_ro = new ResizeObserver(() => {
-        if (window.__ag_metrics_raf) return;
-        window.__ag_metrics_raf = requestAnimationFrame(() => {
-          window.__ag_metrics_raf = 0;
-          const w = bottomRow.clientWidth || 0;
-          if (w > 0 && Math.abs(w - (window.__ag_last_row_width || 0)) >= 1) {
-            window.__ag_last_row_width = w;
-            if (typeof window.__ag_ensure_metrics_pill_fn === 'function') {
-              window.__ag_ensure_metrics_pill_fn(true);
-            }
-          }
-        });
-      });
-      window.__ag_metrics_ro.observe(bottomRow);
-    }
-
-    const isMountedHere =
-      pill.parentElement === leftGroup || (bottomRow.parentElement && pill.parentElement === bottomRow.parentElement);
-    if (!forceLayout && !isNewPill && isMountedHere) {
-      return pill;
-    }
+    syncMetricsResizeObserver(bottomRow, leftGroup, rightGroup);
 
     const rowW = bottomRow.clientWidth || 0;
     if (rowW <= 0) return pill;
-    window.__ag_last_row_width = rowW;
     const leftW = measureNaturalLeftWidth(leftGroup);
     const rightW = rightGroup ? rightGroup.offsetWidth || 0 : 0;
+    const curLayoutSig = rowW + ':' + leftW + ':' + rightW;
+
+    const isMountedHere =
+      pill.parentElement === leftGroup || (bottomRow.parentElement && pill.parentElement === bottomRow.parentElement);
+    if (!forceLayout && !isNewPill && isMountedHere && window.__ag_last_metrics_layout_sig === curLayoutSig) {
+      return pill;
+    }
+
+    window.__ag_last_metrics_layout_sig = curLayoutSig;
+    window.__ag_last_row_width = rowW;
     const availMiddleW = rowW - leftW - rightW - 8;
 
-    const textEl = pill.querySelector('#ag-live-metrics-text');
-    let naturalTextW = window.__ag_metrics_text_width || 0;
-    if (textEl && pill.style.display !== 'none') {
-      const curHtml = textEl.innerHTML;
-      if (naturalTextW <= 0 || window.__ag_metrics_text_sig !== curHtml) {
-        const sw = textEl.scrollWidth || 0;
-        if (sw > 0) {
-          naturalTextW = sw + 16;
-          window.__ag_metrics_text_width = naturalTextW;
-          window.__ag_metrics_text_sig = curHtml;
-        }
-      }
-    }
-    const baseNeededW = naturalTextW > 0 ? naturalTextW : 250;
-    const prevMode = pill.getAttribute('data-ag-row-mode') || 'middle';
-    const minRequiredW = Math.max(MIDDLE_MIN_FLOOR_PX, prevMode === 'bottom' ? baseNeededW + HYSTERESIS_PX : baseNeededW);
-
-    const useBottomRow = availMiddleW < minRequiredW;
+    const prevMode = resetHysteresis ? 'middle' : pill.getAttribute('data-ag-row-mode') || 'middle';
+    const useBottomRow =
+      prevMode === 'bottom' ? availMiddleW < MIDDLE_EXIT_BOTTOM_PX : availMiddleW < MIDDLE_ENTER_BOTTOM_PX;
     const rowMode = useBottomRow ? 'bottom' : 'middle';
 
     if (bottomRow.getAttribute('data-ag-row-mode') !== rowMode) {
@@ -751,19 +779,14 @@
         return;
       }
       const textEl = pill.querySelector('#ag-live-metrics-text');
-      let textChanged = false;
       if (textEl && textEl.innerHTML !== payload.inlineHtml) {
         textEl.innerHTML = payload.inlineHtml;
-        textChanged = true;
       }
       if (ttEl && ttEl.innerHTML !== payload.tooltipHtml) {
         ttEl.innerHTML = payload.tooltipHtml;
       }
       if (pill.style.display !== 'inline-flex') {
         pill.style.display = 'inline-flex';
-        textChanged = true;
-      }
-      if (textChanged) {
         ensureMetricsPill(true);
       }
     } catch (e) {}
@@ -800,7 +823,8 @@
 
       if (cid !== window.__ag_watched_cascade_id) {
         window.__ag_watched_cascade_id = cid;
-        const pill = document.getElementById('ag-live-metrics-pill');
+        window.__ag_last_metrics_layout_sig = '';
+        const pill = ensureMetricsPill(true, true);
         if (pill && (!window.__ag_last_metrics || window.__ag_last_metrics.cascadeId !== cid)) {
           pill.style.display = 'none';
         }
