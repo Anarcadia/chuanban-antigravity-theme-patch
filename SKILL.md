@@ -1,16 +1,16 @@
 ---
 name: chuanban-antigravity-theme-patch
-description: 船板的 Antigravity 2.0 主题、字体与深度汉化全栈成品补丁包（v5.1.0 模块化架构 · 完整对齐 Antigravity 2.30.0 / Knowledge Work 模式 + 昼夜双模式独立解耦）。采用「core/ 只读黄金内核 + user/ 永不覆盖改装层 + install.mjs 一键生命周期 CLI」，支持对方 Agent 零代码生成一键部署、2.5 秒热重载二次定制与 --safe-mode 沙箱排障。当用户提到“安装船板 Antigravity 主题”、“升级/修复 Antigravity 汉化与字体”、“定制 Antigravity 界面样式或汉化词条”时触发。
+description: 船板的 Antigravity 2.0 主题、字体与深度汉化全栈成品补丁包（v5.1.1 模块化架构 · 完整对齐 Antigravity 2.30.0 / Knowledge Work 模式 + 昼夜双模式独立解耦 + Windows DirectWrite 可变字体与计划任务常驻修复）。采用「core/ 只读黄金内核 + user/ 永不覆盖改装层 + install.mjs 一键生命周期 CLI」，支持对方 Agent 零代码生成一键部署、2.5 秒热重载二次定制与 --safe-mode 沙箱排障。当用户提到“安装船板 Antigravity 主题”、“升级/修复 Antigravity 汉化与字体”、“定制 Antigravity 界面样式或汉化词条”时触发。
 ---
 
-# 船板的 Antigravity 主题、字体与深度汉化全栈成品补丁（v5.1.0 · 昼夜双模式解耦 & 完整对齐 Antigravity 2.30.0）
+# 船板的 Antigravity 主题、字体与深度汉化全栈成品补丁（v5.1.1 · 昼夜双模式解耦 & 完整对齐 Antigravity 2.30.0）
 
 > **前置概括（致用户与执行端 AI Agent）**：
 > - **设计目的**：以纯运行时 CDP 非侵入式注入，为 Google Antigravity 提供**白天/黑夜双模式物理隔离**：
 >   - **白天模式（`body:not(.dark)`）**：提供三套 Anthropic 暖纸护眼配色预设（默认高对比暖白）与输入框「古朴暗红蜡封」三态交互；
 >   - **黑夜模式（`body.dark`）**：当点击客户端「深色 / Dark」按钮（或跟随系统深色）切换时，**100% 保持四层字体排版与 UI 几何形状（`1.5px` 三态边框厚度、单圈搜索聚焦、指标胶囊布局）不变**，同时 `0ms` 还原 Antigravity `2.30.0` 原版无补丁时的官方 `onyx` Default Dark 碳黑配色方案（`#070708` 主背景 / `#111114` 侧栏 / `#15151A` 悬浮输入卡 / `#2F71E3` 官方品牌蓝），自动关闭深色下发乌的黑色润墨阴影并专项提升深色文字对比度与边界可见性；
 >   - **全局共享能力**：四层中西文精密排版（`Anthropic` 官方字体族 + `Sarasa` 更纱黑体超集）、634 条全界面无死角汉化（含 `2.30.0` `Knowledge Work` 知识工作模式 1:1 对齐）及同行实时会话指标胶囊（`tok/s · TTFT · Ctx 256k 水位 · Out`）。
-> - **v5.1.0 核心执行铁律**：
+> - **v5.1.1 核心执行铁律**：
 >   1. **Agent 一键部署，内核已预封装无需构建**：全部样式、词典、DOM 引擎与守护进程已封装在 `core/` 只读黄金内核中，**严禁 Agent 从头手写或重生成守护代码**，直接运行 `node install.mjs` 即可 3 秒完成部署；
 >   2. **个性化修改永远只在 `user/` 改装层进行（2.5 秒可逆热重载）**：`user/` 目录在升级时 100% 永不覆盖，保存后 2.5 秒自动热更新生效。
 
@@ -20,7 +20,7 @@ description: 船板的 Antigravity 2.0 主题、字体与深度汉化全栈成�
 
 1. **Google Drive 完全资源包（全项目成品包 + 全套商业/开源字体库）**
    - 链接：<https://drive.google.com/drive/folders/1NX92SgVUqtSjWg6bt6sIJXy-cn7J_boC>
-   - 包含：**v5.1.0 完整项目成品包 + 全套必备字体包（Anthropic 官方字体族 `Anthropic Sans` / `Anthropic Serif` / `Anthropic Mono` + 更纱黑体 `Sarasa-SuperTTC.ttc` 超集）**。
+   - 包含：**v5.1.1 完整项目成品包 + 全套必备字体包（Anthropic 官方字体族 `Anthropic Sans` / `Anthropic Serif` / `Anthropic Mono` + 更纱黑体 `Sarasa-SuperTTC.ttc` 超集）**。
 2. **GitHub 权威代码库（成品补丁仓库与 `SKILL.md` 本体）**
    - 仓库：<https://github.com/Anarcadia/chuanban-antigravity-theme-patch>
    - 包含：全部 `core/` 黄金内核、`user/` 改装模板、`install.mjs` CLI 与本 `SKILL.md`（字体文件请从上方 Google Drive 链接下载）。
@@ -55,7 +55,7 @@ chuanban-antigravity-theme-patch/
 ├── SKILL.md                    # 面向 AI Agent 的极简部署与二次改装指南（本文件）
 ├── README.md                   # 面向用户的项目说明与快速上手指南
 ├── core/                       # 【只读黄金内核】随版本升级整包原子替换，对方 Agent 严禁直接修改
-│   ├── manifest.json           # 版本号（5.1.0）、三端地址与 core/* 文件 SHA-256 校验清单
+│   ├── manifest.json           # 版本号（5.1.1）、三端地址与 core/* 文件 SHA-256 校验清单
 │   ├── daemon.mjs              # Node CDP 守护进程（动态 SQLite 分级、2.5s 热重载感知、PID 锁、Stable+Insiders 同进程双守护）
 │   ├── runtime.js              # 浏览器端注入引擎（昼夜模式 MutationObserver 联动、WeakMap 热重载还原、O(N·深度) 脏根节流）
 │   ├── theme.css               # 四段式 CSS 样式表（Part I 共享排版与几何 / Part II 白天暖纸 / Part III 独立黑夜 / Part IV 指标胶囊）
@@ -92,13 +92,13 @@ node install.mjs install --channel stable
 2. 当检测到已安装的 `core/` 与新版本哈希不同时，自动将旧版备份至 `backups/<timestamp>/` 与 `core.prev/`；
 3. 原子更新 `core/` 内核，**初始化或无损保留已有的 `user/` 改装文件**（并自动清理旧版遗留在 `user/config.json` 中的出厂默认 `selectors`，确保新版 DOM 选择器由 `core/runtime.js` 统一托管）；
 4. 自动检查并修补 `~/.antigravity/argv.json`（及 `~/.antigravity-insiders/argv.json`，注入 `"remote-debugging-port": 9222`）；
-5. 自动生成 `~/.gemini/antigravity/scripts/antigravity-font-daemon.mjs` 兼容包装入口，并注册系统后台自启服务（macOS `LaunchAgent` / Linux `systemd --user` / Windows Startup VBS）。
+5. 自动生成 `~/.gemini/antigravity/scripts/antigravity-font-daemon.mjs` 兼容包装入口，并注册系统后台自启服务（macOS `LaunchAgent` / Linux `systemd --user` / Windows `schtasks` 计划任务 + Startup VBS）。
 
 ### Step 3：CDP 实机注入验收
 ```bash
 node install.mjs verify
 ```
-当终端输出 `"ok": true` 且显示 `"version": "20261110-v5.1.0-..."`、`"themeStyle": true`、`"themeMode": "light" | "dark"` 时，即代表昼夜双模式主题、字体、汉化与指标胶囊已 100% 注入成功。
+当终端输出 `"ok": true` 且显示 `"version": "20261110-v5.1.1-..."`、`"themeStyle": true`、`"themeMode": "light" | "dark"` 时，即代表昼夜双模式主题、字体、汉化与指标胶囊已 100% 注入成功。
 
 ---
 

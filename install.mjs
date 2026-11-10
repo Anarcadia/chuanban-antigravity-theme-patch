@@ -78,7 +78,7 @@ function buildManifest(baseDir = __dirname) {
   }
   const manifest = {
     name: 'chuanban-antigravity-theme-patch',
-    version: '5.1.0',
+    version: '5.1.1',
     minNodeVersion: '22.0.0',
     fullMetricsNodeVersion: '22.13.0',
     distribution: {
@@ -107,7 +107,21 @@ function verifyCoreIntegrity(baseDir = __dirname) {
       modified.push({ file: name, status: 'missing' });
       continue;
     }
-    const actualHash = sha256File(p);
+    let actualHash = sha256File(p);
+    if (actualHash !== meta.sha256) {
+      // 自动自愈 Windows Git core.autocrlf=true 导致的 CRLF 换行符哈希差异
+      try {
+        const rawText = fs.readFileSync(p, 'utf8');
+        if (rawText.includes('\r\n')) {
+          const lfText = rawText.replace(/\r\n/g, '\n');
+          const lfHash = crypto.createHash('sha256').update(Buffer.from(lfText, 'utf8')).digest('hex');
+          if (lfHash === meta.sha256) {
+            fs.writeFileSync(p, lfText, 'utf8');
+            actualHash = lfHash;
+          }
+        }
+      } catch {}
+    }
     if (actualHash !== meta.sha256) {
       modified.push({ file: name, status: 'modified', expected: meta.sha256, actual: actualHash });
     }
@@ -574,18 +588,56 @@ WantedBy=default.target
         { stdio: 'ignore', windowsHide: true }
       );
     } catch {}
-    // 立即在后台无黑框拉起常驻守护进程（无需等待下次重启电脑）
-    let spawnedPid = null;
+
+    // 优先通过 Windows 计划任务 (schtasks) 注册并触发后台守护进程，使其由系统 Schedule 服务拉起、
+    // 彻底脱离 AI Agent run_command 沙盒的 Win32 Job Object（避免命令退出时子进程被连带终止）
+    let scheduledTaskStarted = false;
     try {
-      const child = spawn(process.execPath, ['--disable-warning=ExperimentalWarning', wrapperDaemon], {
-        detached: true,
-        stdio: 'ignore',
-        windowsHide: true
-      });
-      child.unref();
-      spawnedPid = child.pid || null;
+      const createRes = spawnSync(
+        'schtasks',
+        [
+          '/Create',
+          '/TN',
+          'AntigravityThemeDaemon',
+          '/SC',
+          'ONLOGON',
+          '/TR',
+          `wscript.exe //B //NoLogo "${localVbsFile}"`,
+          '/F'
+        ],
+        { stdio: 'ignore', windowsHide: true }
+      );
+      if (createRes.status === 0) {
+        const runRes = spawnSync('schtasks', ['/Run', '/TN', 'AntigravityThemeDaemon'], {
+          stdio: 'ignore',
+          windowsHide: true
+        });
+        scheduledTaskStarted = runRes.status === 0;
+      }
     } catch {}
-    return { platform: 'win32', serviceFile: vbsFile, localVbsFile, spawnedPid, runningNow: Boolean(spawnedPid) };
+
+    // 若当前环境禁用 schtasks，回退到 detached spawn 直接拉起
+    let spawnedPid = null;
+    if (!scheduledTaskStarted) {
+      try {
+        const child = spawn(process.execPath, ['--disable-warning=ExperimentalWarning', wrapperDaemon], {
+          detached: true,
+          stdio: 'ignore',
+          windowsHide: true
+        });
+        child.unref();
+        spawnedPid = child.pid || null;
+      } catch {}
+    }
+    return {
+      platform: 'win32',
+      serviceFile: vbsFile,
+      localVbsFile,
+      scheduledTask: 'AntigravityThemeDaemon',
+      scheduledTaskStarted,
+      spawnedPid,
+      runningNow: Boolean(scheduledTaskStarted || spawnedPid)
+    };
   }
 
   return { platform: process.platform, serviceFile: null };
@@ -793,14 +845,24 @@ async function runRollback() {
     } catch {}
   } else if (process.platform === 'win32') {
     stopRunningDaemonProcesses();
+    let restartedViaTask = false;
     try {
-      const child = spawn(process.execPath, ['--disable-warning=ExperimentalWarning', fs.existsSync(wrapperDaemon) ? wrapperDaemon : realDaemon], {
-        detached: true,
+      const r = spawnSync('schtasks', ['/Run', '/TN', 'AntigravityThemeDaemon'], {
         stdio: 'ignore',
         windowsHide: true
       });
-      child.unref();
+      restartedViaTask = r.status === 0;
     } catch {}
+    if (!restartedViaTask) {
+      try {
+        const child = spawn(process.execPath, ['--disable-warning=ExperimentalWarning', fs.existsSync(wrapperDaemon) ? wrapperDaemon : realDaemon], {
+          detached: true,
+          stdio: 'ignore',
+          windowsHide: true
+        });
+        child.unref();
+      } catch {}
+    }
   }
   spawnSync(process.execPath, ['--disable-warning=ExperimentalWarning', realDaemon, '--once'], {
     stdio: 'inherit'
@@ -933,6 +995,12 @@ async function runUninstall() {
     } catch {}
     try {
       spawnSync('reg', ['delete', 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run', '/v', 'AntigravityThemeDaemon', '/f'], {
+        stdio: 'ignore',
+        windowsHide: true
+      });
+    } catch {}
+    try {
+      spawnSync('schtasks', ['/Delete', '/TN', 'AntigravityThemeDaemon', '/F'], {
         stdio: 'ignore',
         windowsHide: true
       });

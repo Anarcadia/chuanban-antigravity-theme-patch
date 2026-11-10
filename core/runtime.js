@@ -8,7 +8,7 @@
   if (window.top !== window) return;
   if (!boot || typeof boot !== 'object') return;
 
-  const PATCH_VERSION = boot.version || '20261110-v5.1.0';
+  const PATCH_VERSION = boot.version || '20261110-v5.1.1';
   const ENABLED = boot.enabled !== false;
   const CSS_TEXT = boot.cssText || '';
   const CUSTOM_CSS_TEXT = boot.customCss || '';

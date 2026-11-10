@@ -1,6 +1,6 @@
-# 船板的 Antigravity 书卷暖纸 × 官方碳黑昼夜双模式主题、字体优化与深度汉化全栈补丁 (v5.1.0 · 完整适配 Antigravity 2.30.0)
+# 船板的 Antigravity 书卷暖纸 × 官方碳黑昼夜双模式主题、字体优化与深度汉化全栈补丁 (v5.1.1 · 完整适配 Antigravity 2.30.0)
 
-[![Version](https://img.shields.io/badge/version-5.1.0-7A1F1A.svg)](https://github.com/Anarcadia/chuanban-antigravity-theme-patch)
+[![Version](https://img.shields.io/badge/version-5.1.1-7A1F1A.svg)](https://github.com/Anarcadia/chuanban-antigravity-theme-patch)
 [![Antigravity](https://img.shields.io/badge/Antigravity-2.30.0%2B%20(Knowledge%20Work%20%26%20SE)-D97757.svg)](https://github.com/Anarcadia/chuanban-antigravity-theme-patch)
 [![Node](https://img.shields.io/badge/node-%3E%3D22.0.0%20(22.13%2B%20Full)-339933.svg)](https://nodejs.org/)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey.svg)](https://github.com/Anarcadia/chuanban-antigravity-theme-patch)
@@ -30,7 +30,7 @@
 
 ---
 
-## ✨ 补丁简介：核心定位与五大亮点（v5.1.0）
+## ✨ 补丁简介：核心定位与五大亮点（v5.1.1）
 
 ### 1. 设计目的
 Google Antigravity 原生浅色界面偏冷刺眼、全局仅使用单一无衬线字体，长时间高强度阅读与编码容易视觉疲劳。本补丁以**纯运行时非侵入注入**的方式，将 Antigravity 重塑为兼具 **Anthropic 暖纸学术质感、官方原版高可读深色模式、四层中西文精密排版、全界面母语级汉化与实时模型遥测** 的主力工作台：
@@ -60,11 +60,11 @@ Google Antigravity 原生浅色界面偏冷刺眼、全局仅使用单一无衬�
 > **💬 复制发给 Agent（新用户一键安装）**：  
 > 请帮我克隆 `https://github.com/Anarcadia/chuanban-antigravity-theme-patch.git`（或读取我已下载解压的补丁目录），严格按照仓库内的 `SKILL.md` 依次执行 `node install.mjs doctor`（Windows 下若未装字体请先用 `node install.mjs install-fonts` 注册字体）、`node install.mjs install` 和 `node install.mjs verify`，帮我一键部署好船板的 Antigravity 主题补丁并验证实机生效。
 
-### 二、老版本用户无缝升级至 v5.1.0
+### 二、老版本用户无缝升级至 v5.1.1
 `node install.mjs install` 会自动备份旧内核、接管旧版常驻服务，并无损保留你在 `~/.gemini/antigravity/theme-patch/user/` 中的个人配置：
 
 > **💬 复制发给 Agent（老用户无缝升级）**：  
-> 请帮我拉取最新的 `https://github.com/Anarcadia/chuanban-antigravity-theme-patch.git`，阅读其中的 `SKILL.md`，直接运行 `node install.mjs install` 和 `node install.mjs verify` 将我的环境升级至最新 `v5.1.0` 版本（若我旧脚本里有自定义的配色预设或字号修改，请迁移保留到 `~/.gemini/antigravity/theme-patch/user/` 改装层中）。
+> 请帮我拉取最新的 `https://github.com/Anarcadia/chuanban-antigravity-theme-patch.git`，阅读其中的 `SKILL.md`，直接运行 `node install.mjs install` 和 `node install.mjs verify` 将我的环境升级至最新 `v5.1.1` 版本（若我旧脚本里有自定义的配色预设或字号修改，请迁移保留到 `~/.gemini/antigravity/theme-patch/user/` 改装层中）。
 
 ### 三、后续与 Agent 对话定制风格或排障
 - **🎨 切换白天预设、调整字号或微调外观**：
@@ -78,7 +78,10 @@ Google Antigravity 原生浅色界面偏冷刺眼、全局仅使用单一无衬�
 
 ## 🕒 版本演进简史
 
-- **2026-11-10（v5.1.0 现行版 · 昼夜双模式独立解耦 & 全栈去冗余精简）**：
+- **2026-11-10（v5.1.1 现行版 · Windows DirectWrite 双轴可变字体与计划任务常驻修复）**：
+  1. **修复 Windows `DirectWrite` 下 `Anthropic Serif / Sans` 可变字体家族重命名未命中与 `Georgia` 截胡**：兼容 OpenType `STAT` 表 `opsz` 轴生成的 `'Anthropic Serif Web Display Light'` 与 `'Anthropic Sans Web Display Light'` 家族名及 macOS `CoreText` PostScript 名称，将更纱黑体族移至 `Georgia` 与 `system-ui` 之前并启用 `font-variant-numeric: lining-nums`，彻底消除 Windows 下回退到 `Georgia` 旧式高低数字或被微软雅黑截胡的问题；
+  2. **Windows 计划任务（`schtasks`）守护常驻与 `CRLF` 自动自愈**：在 `install.mjs` 中原生接入 Windows `schtasks` 计划任务注册与触发，使后台守护进程脱离 Agent `run_command` 沙盒的 Win32 Job Object 稳定常驻；新增 `.gitattributes` 与 `CRLF -> LF` 自动归一化校验，防止 Windows Git `core.autocrlf` 引发 SHA-256 误报。
+- **2026-11-10（v5.1.0 · 昼夜双模式独立解耦 & 全栈去冗余精简）**：
   1. **白天与黑夜模式彻底解耦**：白天模式保留三套暖纸预设与古朴暗红蜡封；切换深色按钮时自动激活独立黑夜模式，在 100% 保持四层字体与 `1.5px` 三态几何形状的前提下，全量还原 Antigravity `2.30.0` 官方 `onyx` Default Dark 碳黑配色（`#070708` / `#111114` / `#15151A` / `#2F71E3`），自动关闭深色下发乌的黑色润墨阴影并大幅强化深色文字对比度、卡片边界与指标预警可见性；
   2. **全栈架构去冗余与新装流优化**：通过 CSS 变量化与 `:is()` 合并重构 `core/theme.css`（体积精简 47%），将 `user/config.json` 出厂模板精简为纯用户级配置，升级 `applyThemeVars` 为昼夜隔离样式表注入，并完善跨平台一键卸载还原闭环。
 - **2026-11-10（v5.0.1 · 完整对齐 Antigravity `2.30.0` 与 `Knowledge Work` 知识工作模式）**：

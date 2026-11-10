@@ -1,6 +1,6 @@
 @font-face {
   font-family: 'Anthropic Serif';
-  src: local('Anthropic Serif Web'), local('Anthropic Serif Web Text Light'), local('Anthropic Serif');
+  src: local('AnthropicSerifWebWeb-TextRegular'), local('AnthropicSerifWebWeb-TextLight'), local('Anthropic Serif Web'), local('Anthropic Serif Web Text Light'), local('Anthropic Serif Web Display Light'), local('Anthropic Serif');
   font-weight: 300 500;
   font-style: normal;
   font-display: swap;
@@ -8,7 +8,7 @@
 
 @font-face {
   font-family: 'Anthropic Serif';
-  src: local('Anthropic Serif Bold'), local('Anthropic Serif Web Bold');
+  src: local('AnthropicSerifWebWeb-TextSemibold'), local('AnthropicSerifWebWeb-TextBold'), local('Anthropic Serif Bold'), local('Anthropic Serif Web Bold'), local('Anthropic Serif Web Display Light'), local('AnthropicSerifWebWeb-TextRegular');
   font-weight: 600 900;
   font-style: normal;
   font-display: swap;
@@ -16,7 +16,7 @@
 
 @font-face {
   font-family: 'Anthropic Sans';
-  src: local('Anthropic Sans Web'), local('Anthropic Sans Web Text'), local('Anthropic Sans');
+  src: local('AnthropicSansWebVariable-TextRegular'), local('AnthropicSansWebVariable-TextLight'), local('Anthropic Sans Web'), local('Anthropic Sans Web Text'), local('Anthropic Sans Web Display Light'), local('Anthropic Sans');
   font-weight: 300 500;
   font-style: normal;
   font-display: swap;
@@ -24,7 +24,7 @@
 
 @font-face {
   font-family: 'Anthropic Sans';
-  src: local('Anthropic Sans Bold'), local('Anthropic Sans Web Bold');
+  src: local('AnthropicSansWebVariable-TextSemibold'), local('AnthropicSansWebVariable-TextBold'), local('Anthropic Sans Bold'), local('Anthropic Sans Web Bold'), local('Anthropic Sans Web Display Light'), local('AnthropicSansWebVariable-TextRegular');
   font-weight: 600 900;
   font-style: normal;
   font-display: swap;
@@ -32,7 +32,7 @@
 
 @font-face {
   font-family: 'Anthropic Mono';
-  src: local('Anthropic Mono Web'), local('Anthropic Mono');
+  src: local('AnthropicMonoWebWeb-Regular'), local('Anthropic Mono Web Regular'), local('Anthropic Mono Web'), local('Anthropic Mono');
   font-weight: 400 700;
   font-style: normal;
   font-display: swap;
@@ -50,9 +50,9 @@ body[data-agy-font],
 body[data-agy-font="google-sans"],
 body[data-agy-font="inter"],
 body[data-agy-font] :where(.font-sans) {
-  --vscode-font-family: 'Anthropic Sans', 'Anthropic Sans Web', 'Anthropic Sans Web Text', 'anthropic-sans', 'Styrene B', 'Styrene', system-ui, -apple-system, BlinkMacSystemFont, 'Sarasa UI SC', '更纱黑体 UI SC', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif !important;
+  --vscode-font-family: 'Anthropic Sans Web Display Light', 'Anthropic Sans', 'Anthropic Sans Web', 'Anthropic Sans Web Text', 'anthropic-sans', 'Styrene B', 'Styrene', 'Sarasa UI SC', '更纱黑体 UI SC', 'PingFang SC', 'Hiragino Sans GB', system-ui, -apple-system, BlinkMacSystemFont, 'Microsoft YaHei UI', 'Microsoft YaHei', sans-serif !important;
   --editor-font-family: 'Anthropic Mono', 'Anthropic Mono Web', 'anthropic-mono', 'Sarasa Mono Slab SC', '等距更纱黑体 Slab SC', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Monaco, Consolas, monospace !important;
-  --font-sans: 'Anthropic Sans', 'Anthropic Sans Web', 'Anthropic Sans Web Text', 'anthropic-sans', 'Styrene B', 'Styrene', system-ui, -apple-system, BlinkMacSystemFont, 'Sarasa UI SC', '更纱黑体 UI SC', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif !important;
+  --font-sans: 'Anthropic Sans Web Display Light', 'Anthropic Sans', 'Anthropic Sans Web', 'Anthropic Sans Web Text', 'anthropic-sans', 'Styrene B', 'Styrene', 'Sarasa UI SC', '更纱黑体 UI SC', 'PingFang SC', 'Hiragino Sans GB', system-ui, -apple-system, BlinkMacSystemFont, 'Microsoft YaHei UI', 'Microsoft YaHei', sans-serif !important;
   --font-mono: 'Anthropic Mono', 'Anthropic Mono Web', 'anthropic-mono', 'Sarasa Mono Slab SC', '等距更纱黑体 Slab SC', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Monaco, Consolas, monospace !important;
   --default-font-family: var(--font-sans) !important;
   --default-mono-font-family: var(--font-mono) !important;
@@ -118,7 +118,8 @@ html, body, body[data-agy-font], button, select, nav, header, aside {
 .markdown,
 article,
 .select-text :is(p, li, blockquote, h1, h2, h3, h4, h5, h6, strong, em, span, div) {
-  font-family: 'Anthropic Serif', 'Anthropic Serif Web', 'Anthropic Serif Web Text Light', 'anthropic-serif', 'Tiempos Text', 'Tiempos', Georgia, Cambria, 'Times New Roman', 'Sarasa Mono Slab SC', '等距更纱黑体 Slab SC', 'Sarasa Gothic SC', '更纱黑体 SC', 'PingFang SC', serif;
+  font-family: 'Anthropic Serif Web Display Light', 'Anthropic Serif', 'Anthropic Serif Web', 'Anthropic Serif Web Text Light', 'anthropic-serif', 'Tiempos Text', 'Tiempos', 'Sarasa Mono Slab SC', '等距更纱黑体 Slab SC', 'Sarasa Gothic SC', '更纱黑体 SC', 'PingFang SC', Georgia, Cambria, 'Times New Roman', serif;
+  font-variant-numeric: lining-nums;
   letter-spacing: -0.003em;
 }
 
@@ -137,7 +138,7 @@ code, pre, kbd, samp, .font-mono, [class*="language-"], .monaco-editor, .xterm, 
 
 /* 4. 输入框编辑区：Codex 同款等距更纱黑体 SLAB (Sarasa Mono Slab SC) */
 div[contenteditable="true"], textarea, div[contenteditable="true"] :is(p, span, div), [data-composer], .ProseMirror, .ProseMirror :is(p, span) {
-  font-family: 'Sarasa Mono Slab SC', '等距更纱黑体 Slab SC', 'Anthropic Mono', ui-monospace, monospace !important;
+  font-family: 'Sarasa Mono Slab SC', '等距更纱黑体 Slab SC', 'Anthropic Mono', 'Anthropic Mono Web', ui-monospace, monospace !important;
 }
 
 /* 5. 共享 UI 几何形状、输入框三态 1.5px 过渡与 GPU 性能优化 */
