@@ -8,15 +8,11 @@
   if (window.top !== window) return;
   if (!boot || typeof boot !== 'object') return;
 
-  const PATCH_VERSION = boot.version || '20261110-v5.0.1';
+  const PATCH_VERSION = boot.version || '20261110-v5.1.0';
   const ENABLED = boot.enabled !== false;
   const CSS_TEXT = boot.cssText || '';
   const CUSTOM_CSS_TEXT = boot.customCss || '';
   const THEME_VARS = boot.themeVars && typeof boot.themeVars === 'object' ? boot.themeVars : {};
-  const RAW_MODULES = Object.assign({}, boot.features || {}, boot.modules || {});
-  if (typeof RAW_MODULES.metricsCapsule === 'boolean' && typeof RAW_MODULES.metrics !== 'boolean') {
-    RAW_MODULES.metrics = RAW_MODULES.metricsCapsule;
-  }
   const MODULES = Object.assign(
     {
       i18n: true,
@@ -26,30 +22,21 @@
       customCss: true,
       customJs: true
     },
-    RAW_MODULES
+    boot.modules || {}
   );
-  MODULES.metricsCapsule = MODULES.metrics;
 
   const DEFAULT_PRESET = boot.preset || 'high-contrast';
-  const DEFAULT_BRANCH_PILL_SELECTOR =
-    '[data-testid="branch-pill-trigger"], [data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"]';
-  const LEGACY_BRANCH_PILL_SELECTORS = new Set([
-    '[data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"]',
-    '#antigravity\\.agentSidePanelInputBox [data-testid="branch-pill-trigger"], [id="antigravity.agentSidePanelInputBox"] [data-testid="branch-pill-trigger"], #antigravity\\.agentSidePanelInputBox [aria-label^="Select project"], [id="antigravity.agentSidePanelInputBox"] [aria-label^="Select project"], #antigravity\\.agentSidePanelInputBox [aria-label^="选择项目"], [id="antigravity.agentSidePanelInputBox"] [aria-label^="选择项目"]'
-  ]);
   const SELECTORS = Object.assign(
     {
       inputBoxId: 'antigravity.agentSidePanelInputBox',
-      branchPillInBox: DEFAULT_BRANCH_PILL_SELECTOR,
-      homeGreeting: '[data-testid="home-greeting"]',
+      branchPillInBox:
+        '[data-testid="branch-pill-trigger"], [data-testid="project-branch-picker"], [data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"]',
+      homeGreeting: '[data-testid="home-greeting"], [data-testid="home-splash-content"]',
       excludeI18n:
         'code, pre, kbd, samp, textarea, input, style, script, noscript, [contenteditable="true"], .prose, .markdown, [class*="chat-message"], [class*="group/file-title"], [data-testid="conversation-row-sidebar"] a[href^="/c/"], [data-testid="conversation-row-sidebar"] span.truncate, #ag-live-metrics-pill, #ag-live-metrics-tooltip'
     },
     boot.selectors || {}
   );
-  if (LEGACY_BRANCH_PILL_SELECTORS.has(SELECTORS.branchPillInBox)) {
-    SELECTORS.branchPillInBox = DEFAULT_BRANCH_PILL_SELECTOR;
-  }
 
   // 全局持久化的原始英文文本映射表（支持 i18n.override.json 热重载增删改与一键还原）
   if (!window.__ag_orig_text_map) {
@@ -91,33 +78,59 @@
   }
 
   function applyThemeVars(varsObj) {
+    // 清理早期版本遗留的内联 style 属性，避免压制 body.dark 或被原生 iY() 冲掉
     const prevKeys = Array.isArray(window.__ag_applied_theme_vars) ? window.__ag_applied_theme_vars : [];
-    const nextKeys = Object.keys(varsObj || {});
     for (let i = 0; i < prevKeys.length; i++) {
       const k = prevKeys[i];
-      if (!(k in (varsObj || {}))) {
-        document.documentElement.style.removeProperty(k);
-        if (document.body) document.body.style.removeProperty(k);
-      }
+      document.documentElement.style.removeProperty(k);
+      if (document.body) document.body.style.removeProperty(k);
     }
-    for (let i = 0; i < nextKeys.length; i++) {
-      const k = nextKeys[i];
+    window.__ag_applied_theme_vars = [];
+
+    const keys = Object.keys(varsObj || {});
+    const globalDecls = [];
+    const lightDecls = [];
+    const darkDecls = [];
+
+    for (let i = 0; i < keys.length; i++) {
+      const k = keys[i];
       const v = varsObj[k];
-      if (v !== null && v !== undefined && String(v).trim() !== '') {
-        const trimmedVal = String(v).trim();
-        document.documentElement.style.setProperty(k, trimmedVal, 'important');
-        if (document.body) document.body.style.setProperty(k, trimmedVal, 'important');
+      if (!k.startsWith('--') || v === null || v === undefined || String(v).trim() === '') continue;
+      const cleanVal = String(v).trim().replace(/[;{}]/g, '');
+      if (k.startsWith('--ag-dark-')) {
+        darkDecls.push(`${k}: ${cleanVal} !important;`);
+      } else if (k.startsWith('--ag-')) {
+        globalDecls.push(`${k}: ${cleanVal} !important;`);
       } else {
-        document.documentElement.style.removeProperty(k);
-        if (document.body) document.body.style.removeProperty(k);
+        lightDecls.push(`${k}: ${cleanVal} !important;`);
       }
     }
+
+    let varStyle = document.getElementById('ag-user-theme-vars');
+    if (globalDecls.length === 0 && lightDecls.length === 0 && darkDecls.length === 0) {
+      if (varStyle) varStyle.remove();
+    } else {
+      const head = document.head || document.getElementsByTagName('head')[0] || document.documentElement;
+      if (!varStyle) {
+        varStyle = document.createElement('style');
+        varStyle.id = 'ag-user-theme-vars';
+        if (head) head.appendChild(varStyle);
+      }
+      const blocks = [];
+      if (globalDecls.length > 0) blocks.push(`:root, html, body { ${globalDecls.join(' ')} }`);
+      if (lightDecls.length > 0) blocks.push(`html:not(:has(> body.dark)), body:not(.dark) { ${lightDecls.join(' ')} }`);
+      if (darkDecls.length > 0) blocks.push(`html:has(> body.dark), body.dark { ${darkDecls.join(' ')} }`);
+      const nextCss = blocks.join('\n');
+      if (varStyle.textContent !== nextCss) {
+        varStyle.textContent = nextCss;
+      }
+    }
+
     if (varsObj && varsObj['--ag-chat-font-size']) {
       document.documentElement.setAttribute('data-ag-custom-font-size', 'true');
     } else {
       document.documentElement.removeAttribute('data-ag-custom-font-size');
     }
-    window.__ag_applied_theme_vars = nextKeys;
   }
 
   // 若用户在 user/config.json 中将 enabled 设为 false，执行无损卸载还原
@@ -142,8 +155,15 @@
       } catch (e) {}
       window.__ag_metrics_route_watcher = null;
     }
+    if (window.__ag_theme_mode_observer) {
+      try {
+        window.__ag_theme_mode_observer.disconnect();
+      } catch (e) {}
+      window.__ag_theme_mode_observer = null;
+    }
     applyThemeVars({});
     document.documentElement.removeAttribute('data-ag-preset');
+    document.documentElement.removeAttribute('data-ag-theme-mode');
     document.documentElement.removeAttribute('data-ag-page-type');
     document.documentElement.removeAttribute('data-ag-wax-seal');
     restoreAllTranslations(document.body);
@@ -279,10 +299,16 @@
 
   function syncChuanbanPreset() {
     try {
-      const stored = Storage.prototype.getItem.call(localStorage, 'theme-preset-light');
-      if (ALL_CUSTOM_PRESET_NAMES.has(stored)) {
+      const storedLight = Storage.prototype.getItem.call(localStorage, 'theme-preset-light');
+      if (ALL_CUSTOM_PRESET_NAMES.has(storedLight)) {
         try {
           Storage.prototype.setItem.call(localStorage, 'theme-preset-light', 'Default Light');
+        } catch (e) {}
+      }
+      const storedDark = Storage.prototype.getItem.call(localStorage, 'theme-preset-dark');
+      if (ALL_CUSTOM_PRESET_NAMES.has(storedDark)) {
+        try {
+          Storage.prototype.setItem.call(localStorage, 'theme-preset-dark', 'Default Dark');
         } catch (e) {}
       }
 
@@ -302,8 +328,30 @@
         targetPreset = PRESETS.VINTAGE_DEEP;
       }
 
-      if (document.documentElement.getAttribute('data-ag-preset') !== targetPreset) {
+      const prevPreset = document.documentElement.getAttribute('data-ag-preset');
+      if (prevPreset !== targetPreset) {
         document.documentElement.setAttribute('data-ag-preset', targetPreset);
+      }
+
+      const isDark = !!(
+        document.body &&
+        (document.body.classList.contains('dark') ||
+          document.body.classList.contains('theme-dark') ||
+          document.body.classList.contains('dark-theme'))
+      );
+      const targetMode = isDark ? 'dark' : 'light';
+      const prevMode = document.documentElement.getAttribute('data-ag-theme-mode');
+      if (prevMode !== targetMode || prevPreset !== targetPreset) {
+        document.documentElement.setAttribute('data-ag-theme-mode', targetMode);
+        try {
+          const cs = getComputedStyle(document.body || document.documentElement);
+          const sidebarBg = cs.getPropertyValue('--sidebar').trim() || (isDark ? '#111114' : '#F7F5F0');
+          const fgColor = cs.getPropertyValue('--foreground').trim() || (isDark ? '#FAFAFA' : '#1F1E1D');
+          window.electronNative?.setTitleBarOverlay?.({
+            color: sidebarBg,
+            symbolColor: fgColor
+          });
+        } catch (e) {}
       }
     } catch (e) {}
   }
@@ -319,6 +367,9 @@
         if (key === 'theme-preset-light' && ALL_CUSTOM_PRESET_NAMES.has(val)) {
           return 'Default Light';
         }
+        if (key === 'theme-preset-dark' && ALL_CUSTOM_PRESET_NAMES.has(val)) {
+          return 'Default Dark';
+        }
         return val;
       };
 
@@ -327,13 +378,39 @@
         if (key === 'theme-preset-light' && ALL_CUSTOM_PRESET_NAMES.has(val)) {
           val = 'Default Light';
         }
+        if (key === 'theme-preset-dark' && ALL_CUSTOM_PRESET_NAMES.has(val)) {
+          val = 'Default Dark';
+        }
         origSetItem(key, val);
-        if (key === 'theme-preset-light' || key === 'theme-mode' || key === 'theme-color-flavor') {
+        if (
+          key === 'theme-preset-light' ||
+          key === 'theme-preset-dark' ||
+          key === 'theme-mode' ||
+          key === 'theme-color-flavor'
+        ) {
           setTimeout(() => {
             if (typeof window.__ag_sync_preset_fn === 'function') window.__ag_sync_preset_fn();
           }, 50);
         }
       };
+    } catch (e) {}
+  }
+
+  if (window.__ag_theme_mode_observer) {
+    try {
+      window.__ag_theme_mode_observer.disconnect();
+    } catch (e) {}
+    window.__ag_theme_mode_observer = null;
+  }
+  if (document.body && typeof MutationObserver !== 'undefined') {
+    try {
+      const modeObs = new MutationObserver(() => {
+        if (typeof window.__ag_sync_preset_fn === 'function') {
+          window.__ag_sync_preset_fn();
+        }
+      });
+      modeObs.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+      window.__ag_theme_mode_observer = modeObs;
     } catch (e) {}
   }
 
@@ -406,13 +483,6 @@
   }
 
   function ensureMetricsPill(forceLayout = false) {
-    // 清理旧版残留的 ResizeObserver，防止新旧 Observer 互相抢夺 DOM 节点引发高度震荡
-    if (window.__ag_pill_resize_observer) {
-      try {
-        window.__ag_pill_resize_observer.disconnect();
-      } catch (e) {}
-      window.__ag_pill_resize_observer = null;
-    }
     if (!MODULES.metrics) {
       const existing = document.getElementById('ag-live-metrics-pill');
       if (existing) existing.style.display = 'none';
@@ -425,23 +495,12 @@
     const leftGroup = bottomRow.children[0];
     const rightGroup = bottomRow.children[1] || null;
 
-    // 清理旧版残留类名与内联 flex 样式
-    if (bottomRow.classList.contains('ag-footer-row-wrap')) {
-      bottomRow.classList.remove('ag-footer-row-wrap');
-    }
-    if (leftGroup.style.flex) leftGroup.style.removeProperty('flex');
-    if (rightGroup && rightGroup.style.flex) rightGroup.style.removeProperty('flex');
-
     let pill = document.getElementById('ag-live-metrics-pill');
-    if (pill && (pill.getAttribute('data-v') !== '3' || pill.classList.contains('ag-pill-middle') || pill.classList.contains('ag-pill-wrapped'))) {
-      pill.classList.remove('ag-pill-middle', 'ag-pill-wrapped');
-    }
     let isNewPill = false;
     if (!pill) {
       isNewPill = true;
       pill = document.createElement('div');
       pill.id = 'ag-live-metrics-pill';
-      pill.setAttribute('data-v', '3');
       pill.innerHTML = '<span id="ag-live-metrics-text"></span>';
       pill.addEventListener('mouseenter', () => {
         const tt = ensureMetricsTooltip();
@@ -557,8 +616,6 @@
     } catch (e) {}
   };
 
-  window.__ag_update_live_metrics = window.__ag_render_metrics;
-
   function checkRouteAndMountMetrics() {
     try {
       if (document.hidden) return;
@@ -573,9 +630,6 @@
       const pageType = isHome ? 'home' : 'chat';
       if (document.documentElement.getAttribute('data-ag-page-type') !== pageType) {
         document.documentElement.setAttribute('data-ag-page-type', pageType);
-      }
-      if (document.body && document.body.hasAttribute('data-ag-page-type')) {
-        document.body.removeAttribute('data-ag-page-type');
       }
 
       if (!MODULES.metrics) {
@@ -605,11 +659,6 @@
         if (typeof window.__agRequestMetrics === 'function') {
           try {
             window.__agRequestMetrics(cid);
-          } catch (e) {}
-        }
-        if (typeof window.__ag_on_session_change === 'function') {
-          try {
-            window.__ag_on_session_change(cid);
           } catch (e) {}
         }
       } else if (window.__ag_last_metrics && window.__ag_last_metrics.cascadeId === cid) {

@@ -2,9 +2,9 @@
 /**
  * chuanban-antigravity-theme-patch · CDP Theme & Live Metrics Daemon (core/daemon.mjs)
  *
- * 架构特性（v5.0.0）：
+ * 架构特性（v5.1.0）：
  * 1. 动态 Node 分级：
- *    - Node >= 22.0：完整启用暖白主题、更纱黑体、输入框蜡封三态、450条汉化、死锁自愈。
+ *    - Node >= 22.0：完整启用昼夜双模式独立主题（暖纸浅色 + 官方 onyx 深色）、四层字体、输入框三态、634条汉化、死锁自愈。
  *    - Node >= 22.13：动态 `await import('node:sqlite')` 解锁底部实时会话指标胶囊；低版本优雅降级绝不崩溃。
  * 2. 模块化与热重载：
  *    - 周期性检测 `user/config.json`、`user/custom.css`、`user/i18n.override.json`、`user/custom.js` 的 mtime，
@@ -136,13 +136,7 @@ function resolveActiveChannelEndpoints(channelMode = 'auto', userCfg = {}) {
 // ============================================================================
 // 2. 动态构建注入载荷（支持 core/ + user/ 实时合并与热更新签名）
 // ============================================================================
-const BASE_VERSION = '20261110-v5.0.1';
-const DEFAULT_BRANCH_PILL_SELECTOR =
-  '[data-testid="branch-pill-trigger"], [data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"]';
-const LEGACY_BRANCH_PILL_SELECTORS = new Set([
-  '[data-testid="branch-pill-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"]',
-  '#antigravity\\.agentSidePanelInputBox [data-testid="branch-pill-trigger"], [id="antigravity.agentSidePanelInputBox"] [data-testid="branch-pill-trigger"], #antigravity\\.agentSidePanelInputBox [aria-label^="Select project"], [id="antigravity.agentSidePanelInputBox"] [aria-label^="Select project"], #antigravity\\.agentSidePanelInputBox [aria-label^="选择项目"], [id="antigravity.agentSidePanelInputBox"] [aria-label^="选择项目"]'
-]);
+const BASE_VERSION = '20261110-v5.1.0';
 let cachedBundleSig = '';
 let cachedInjectScript = '';
 let cachedPatchVersion = '';
@@ -237,8 +231,14 @@ function rebuildBundleIfNeeded() {
   const endpoints = resolveActiveChannelEndpoints(channel, userCfg);
 
   const normalizedSelectors = Object.assign({}, userCfg.selectors || {});
-  if (LEGACY_BRANCH_PILL_SELECTORS.has(normalizedSelectors.branchPillInBox)) {
-    normalizedSelectors.branchPillInBox = DEFAULT_BRANCH_PILL_SELECTOR;
+  if (
+    normalizedSelectors.branchPillInBox &&
+    !String(normalizedSelectors.branchPillInBox).includes('project-branch-picker')
+  ) {
+    delete normalizedSelectors.branchPillInBox;
+  }
+  if (normalizedSelectors.homeGreeting && !String(normalizedSelectors.homeGreeting).includes('home-splash-content')) {
+    delete normalizedSelectors.homeGreeting;
   }
 
   activeConfig = {
@@ -291,7 +291,6 @@ function rebuildBundleIfNeeded() {
     themeVars,
     i18nDict: mergedDict,
     modules,
-    features: modules,
     selectors: activeConfig.selectors,
     config: {
       enabled,
@@ -768,7 +767,6 @@ function attachTarget(target, endpoint) {
         await send('Page.enable');
         await send('Runtime.enable');
         await send('Runtime.addBinding', { name: '__agRequestMetrics' });
-        await send('Runtime.addBinding', { name: '__ag_on_session_change' });
         await send('Page.addScriptToEvaluateOnNewDocument', { source: cachedInjectScript });
         const ok = await inject();
         await syncMetricsForSession(true);
@@ -786,10 +784,7 @@ function attachTarget(target, endpoint) {
             cb(msg);
             return;
           }
-          if (
-            msg.method === 'Runtime.bindingCalled' &&
-            (msg.params?.name === '__agRequestMetrics' || msg.params?.name === '__ag_on_session_change')
-          ) {
+          if (msg.method === 'Runtime.bindingCalled' && msg.params?.name === '__agRequestMetrics') {
             const nextId = String(msg.params.payload || '').trim();
             if (/^[0-9a-f-]{36}$/i.test(nextId)) {
               activeCascadeId = nextId;

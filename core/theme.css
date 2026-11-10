@@ -38,14 +38,24 @@
   font-display: swap;
 }
 
-:root, html, body, body[data-agy-theme], body[data-agy-theme] :where(.font-sans), body[data-agy-font], body[data-agy-font="google-sans"], body[data-agy-font="inter"], body[data-agy-font] :where(.font-sans) {
+/* ============================================================================
+ * PART I. 全局共享层：四层字体栈、字重级阶与 UI 几何形状（白天与黑夜模式 100% 共用）
+ * ============================================================================ */
+:root,
+html,
+body,
+body[data-agy-theme],
+body[data-agy-theme] :where(.font-sans),
+body[data-agy-font],
+body[data-agy-font="google-sans"],
+body[data-agy-font="inter"],
+body[data-agy-font] :where(.font-sans) {
   --vscode-font-family: 'Anthropic Sans', 'Anthropic Sans Web', 'Anthropic Sans Web Text', 'anthropic-sans', 'Styrene B', 'Styrene', system-ui, -apple-system, BlinkMacSystemFont, 'Sarasa UI SC', '更纱黑体 UI SC', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif !important;
   --editor-font-family: 'Anthropic Mono', 'Anthropic Mono Web', 'anthropic-mono', 'Sarasa Mono Slab SC', '等距更纱黑体 Slab SC', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Monaco, Consolas, monospace !important;
   --font-sans: 'Anthropic Sans', 'Anthropic Sans Web', 'Anthropic Sans Web Text', 'anthropic-sans', 'Styrene B', 'Styrene', system-ui, -apple-system, BlinkMacSystemFont, 'Sarasa UI SC', '更纱黑体 UI SC', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif !important;
   --font-mono: 'Anthropic Mono', 'Anthropic Mono Web', 'anthropic-mono', 'Sarasa Mono Slab SC', '等距更纱黑体 Slab SC', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Monaco, Consolas, monospace !important;
   --default-font-family: var(--font-sans) !important;
   --default-mono-font-family: var(--font-mono) !important;
-  /* 恢复标准字重级阶与斜体变量，对齐稳定版（彻底消除 Insiders / 2.30.0 强制引入的 250/350/450 细字重与伪斜体失效缺陷） */
   --font-weight-light: 300 !important;
   --font-weight-normal: 400 !important;
   --font-weight-medium: 500 !important;
@@ -59,10 +69,32 @@
   --agy-gsf-slnt: 0 !important;
 }
 
-/* 基础全局字重与平滑度：保证无衬线体基底扎实、对齐稳定版 400，消除 2.30.0 data-agy-font="google-sans" 92% 可变字宽压缩并恢复真斜体 */
-body, body[data-agy-font], body[data-agy-font="google-sans"] {
+:root {
+  --ag-chat-font-size: 16px;
+  --ag-wax-seal-hover: #74221A;
+  --ag-dark-wax-seal-hover: rgba(47, 113, 227, 0.72);
+  --ag-ink-shadow-xs: 0 0 0.15px rgba(38, 36, 34, 0.25);
+  --ag-ink-shadow-sm: 0 0 0.2px rgba(38, 36, 34, 0.35);
+  --ag-ink-shadow-md: 0 0 0.25px rgba(10, 10, 10, 0.4);
+}
+
+html[data-ag-os="win32"] {
+  --ag-ink-shadow-xs: none;
+  --ag-ink-shadow-sm: none;
+  --ag-ink-shadow-md: none;
+}
+
+body,
+body[data-agy-font],
+body[data-agy-font="google-sans"] {
   font-weight: 400 !important;
   font-variation-settings: normal !important;
+  background-color: var(--background) !important;
+  color: var(--foreground) !important;
+}
+
+.bg-sidebar {
+  background-color: var(--sidebar) !important;
 }
 
 body[data-agy-font] :where(.font-sans, h1, h2, h3, h4, h5, h6, b, strong, i, em, .italic) {
@@ -74,14 +106,18 @@ body[data-agy-font] :where(i, em, .italic):not(.codicon, .google-symbols) {
   font-style: italic !important;
 }
 
-/* 1. UI 控件与全局界面：Claude Anthropic Sans / 更纱 UI */
+/* 1. UI 控件与全局界面：Anthropic Sans + 更纱 UI */
 html, body, body[data-agy-font], button, select, nav, header, aside {
   font-family: var(--font-sans) !important;
   -webkit-font-smoothing: antialiased;
 }
 
-/* 2. 对话正文与 Markdown 内容：Claude 标志性 Anthropic Serif 衬线 + 更纱粗衬线/黑体 */
-.select-text, .prose, .markdown, article, .select-text :is(p, li, blockquote, h1, h2, h3, h4, h5, h6, strong, em, span, div) {
+/* 2. 对话正文与 Markdown 内容：Anthropic Serif + 更纱粗衬线/黑体 */
+.select-text,
+.prose,
+.markdown,
+article,
+.select-text :is(p, li, blockquote, h1, h2, h3, h4, h5, h6, strong, em, span, div) {
   font-family: 'Anthropic Serif', 'Anthropic Serif Web', 'Anthropic Serif Web Text Light', 'anthropic-serif', 'Tiempos Text', 'Tiempos', Georgia, Cambria, 'Times New Roman', 'Sarasa Mono Slab SC', '等距更纱黑体 Slab SC', 'Sarasa Gothic SC', '更纱黑体 SC', 'PingFang SC', serif;
   letter-spacing: -0.003em;
 }
@@ -90,7 +126,11 @@ html, body, body[data-agy-font], button, select, nav, header, aside {
   line-height: 1.62;
 }
 
-/* 3. 代码、终端、diff查看器、文件名、文件路径：Claude Anthropic Mono / Sarasa Mono */
+html[data-ag-custom-font-size="true"] :is(.prose, .markdown, [class*="chat-message"]) {
+  font-size: var(--ag-chat-font-size) !important;
+}
+
+/* 3. 代码、终端、diff 查看器、文件名、文件路径：Anthropic Mono + Sarasa Mono */
 code, pre, kbd, samp, .font-mono, [class*="language-"], .monaco-editor, .xterm, pre *, [class*="group/file-title"], [class*="group/file-title"] *, [class*="file-title"], [class*="file-path"], [data-path], [data-file-path], .tabular-nums, .select-text :is(code, pre, kbd, samp, .font-mono) {
   font-family: var(--font-mono) !important;
 }
@@ -100,85 +140,310 @@ div[contenteditable="true"], textarea, div[contenteditable="true"] :is(p, span, 
   font-family: 'Sarasa Mono Slab SC', '等距更纱黑体 Slab SC', 'Anthropic Mono', ui-monospace, monospace !important;
 }
 
-/* 5. 配色版本 3: 复古深色 (absoulutely-chuanban / vintage-deep) */
-html[data-ag-preset="absoulutely-chuanban"], html[data-ag-preset="vintage-deep"], html[data-ag-preset="absoulutely-chuanban"] body.theme-light, html[data-ag-preset="vintage-deep"] body.theme-light, html[data-ag-preset="absoulutely-chuanban"] body[data-agy-theme], html[data-ag-preset="vintage-deep"] body[data-agy-theme] {
-  --primary: #D97757 !important;
-  --editor-selection-background: rgba(217, 119, 87, 0.34) !important;
-  --background: #FBF9F5 !important;
-  --content: #FBF9F5 !important;
-  --foreground: #26231E !important;
-  --secondary-foreground: #4A443C !important;
-  --muted-foreground: #6E665C !important;
-  --sidebar: #F1E8DC !important;
-  --shell: #F1E8DC !important;
-  --sidebar-secondary: #E6DCCE !important;
-  --sidebar-muted: #E8DFD1 !important;
-  --sidebar-border: #E0D4C3 !important;
-  --border: rgba(60, 45, 25, 0.18) !important;
-  --vscode-sideBar-background: #F1E8DC !important;
-  --card: #F8F3EC !important;
-  --card-border: rgba(60, 45, 25, 0.22) !important;
-  --card-edge: rgba(60, 45, 25, 0.22) !important;
-  --sash-line: rgba(60, 45, 25, 0.22) !important;
-  --onyx-frame: #E6DCCE !important;
-  --onyx-well: #F1E8DC !important;
-  --onyx-raised: #F8F3EC !important;
-  --onyx-selected: #E6DCCE !important;
-  --onyx-key: #F8F3EC !important;
-  --glass: #F8F3EC !important;
-  --glass-border: #E0D4C3 !important;
-  --glass-highlight: transparent !important;
-  --home-glow: transparent !important;
+/* 5. 共享 UI 几何形状、输入框三态 1.5px 过渡与 GPU 性能优化 */
+.surface-glass,
+.agy-fastpick.surface-glass,
+.quick-input-widget.surface-glass,
+.agy-user-bubble {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
 }
 
-html[data-ag-preset="absoulutely-chuanban"] .bg-sidebar, html[data-ag-preset="vintage-deep"] .bg-sidebar {
-  background-color: var(--sidebar) !important;
+.agy-inset-shell {
+  --card-edge: var(--card-border, rgba(0, 0, 0, 0.35)) !important;
+  --sash-line: var(--card-border, rgba(0, 0, 0, 0.35)) !important;
 }
 
-html[data-ag-preset="absoulutely-chuanban"] body, html[data-ag-preset="vintage-deep"] body {
-  background-color: var(--background) !important;
-  color: var(--foreground) !important;
+.agy-sheet[data-sheet-inset] [data-main-content-body]:not(:has([data-split-panes]))::after,
+.agy-inset-shell [data-side-panel-body]::after,
+[data-main-content-body]:not(:has([data-split-panes]))::after {
+  box-shadow: inset 0 0 0 1px var(--card-edge, rgba(0, 0, 0, 0.35)) !important;
 }
 
-/* 6. 配色版本 2: ClaudeDesktop 净白 (claude-desktop-official / claude-desktop-purewhite) */
-html[data-ag-preset="claude-desktop-official"], html[data-ag-preset="claude-desktop-purewhite"], html[data-ag-preset="claude-desktop-official"] body.theme-light, html[data-ag-preset="claude-desktop-purewhite"] body.theme-light, html[data-ag-preset="claude-desktop-official"] body[data-agy-theme], html[data-ag-preset="claude-desktop-purewhite"] body[data-agy-theme] {
-  --primary: #D97757 !important;
-  --editor-selection-background: rgba(217, 119, 87, 0.34) !important;
-  --background: #FCFCFB !important;
-  --content: #FCFCFB !important;
-  --foreground: #1F1E1D !important;
-  --sidebar: #FBFBF9 !important;
-  --shell: #FBFBF9 !important;
-  --sidebar-secondary: #EDECE9 !important;
-  --sidebar-muted: #F3F2EF !important;
-  --sidebar-border: #F0F0EE !important;
-  --vscode-sideBar-background: #FBFBF9 !important;
-  --card: color-mix(in srgb, #FBF9F5 70%, #ffffff) !important;
-  --card-border: color-mix(in srgb, #2C2B29 12%, color-mix(in srgb, #FBF9F5 70%, #ffffff)) !important;
-  --card-edge: rgba(44, 43, 41, 0.14) !important;
-  --sash-line: rgba(44, 43, 41, 0.14) !important;
-  --onyx-frame: #EDECE9 !important;
-  --onyx-well: #FBFBF9 !important;
-  --onyx-raised: #FFFFFF !important;
-  --onyx-selected: #EDECE9 !important;
-  --onyx-key: #FFFFFF !important;
-  --glass: #FFFFFF !important;
-  --glass-border: #F0F0EE !important;
-  --glass-highlight: transparent !important;
-  --home-glow: transparent !important;
+.relative.flex.w-full.h-full.outline-none > div.flex-shrink-0.relative.z-30.w-\[1px\] {
+  background-color: var(--sash-line, rgba(0, 0, 0, 0.35)) !important;
 }
 
-html[data-ag-preset="claude-desktop-official"] .bg-sidebar, html[data-ag-preset="claude-desktop-purewhite"] .bg-sidebar {
-  background-color: var(--sidebar) !important;
+/* 输入框外托盘与内卡片几何（色彩由 Part II 白天 / Part III 黑夜变量驱动） */
+:is(#antigravity\.agentSidePanelInputBox, [id="antigravity.agentSidePanelInputBox"], .surface-composer.bg-card-border) {
+  background-color: var(--ag-composer-tray-bg, #F7EFE6) !important;
+  outline: none !important;
+  transition: border-color 220ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 220ms cubic-bezier(0.16, 1, 0.3, 1) !important;
 }
 
-html[data-ag-preset="claude-desktop-official"] body, html[data-ag-preset="claude-desktop-purewhite"] body {
-  background-color: var(--background) !important;
-  color: var(--foreground) !important;
+/* 场景 2.1：首页新建对话日常常态（设计 C） */
+html:not([data-ag-wax-seal="off"]) :is(#antigravity\.agentSidePanelInputBox, [id="antigravity.agentSidePanelInputBox"], .surface-composer.bg-card-border):has([data-testid="branch-pill-trigger"], [data-testid="project-branch-picker"], [data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"]),
+html:not([data-ag-wax-seal="off"])[data-ag-page-type="home"] :is(#antigravity\.agentSidePanelInputBox, [id="antigravity.agentSidePanelInputBox"], .surface-composer.bg-card-border) {
+  border: 1.5px solid var(--ag-seal-home-border, transparent) !important;
+  box-shadow: var(--ag-seal-home-shadow, none) !important;
 }
 
-/* 7. 配色版本 1 (默认首选): 高对比版 (chuanban-warm-white / high-contrast) - 正文页面: 保持微暖亮白 #FCFCFB - 左边栏: 介于白色和原正文底色之间的暖白燕麦色 #F7F5F0 - 输入框: 保持白色但比正文略深一点点、带有一点接近暖棕的颜色 #F9F7F2 - 高对比强化: * 按钮主轮廓线 (新建对话、历史对话): 边框从浅淡灰提升为高清晰度对比线 * 竖线中缝 (正文与左栏右栏间): 从淡灰透明提升为清晰实线 * 输入框下方的模型名称、Turbo模式、图标等: 从浅灰提升为近乎纯黑深墨色 (#0A0A0A) */
-html[data-ag-preset="chuanban-warm-white"], html[data-ag-preset="high-contrast"], html[data-ag-preset="chuanban-warm-white"] body.theme-light, html[data-ag-preset="high-contrast"] body.theme-light, html[data-ag-preset="chuanban-warm-white"] body[data-agy-theme], html[data-ag-preset="high-contrast"] body[data-agy-theme] {
+/* 场景 2.2：首页新建对话悬停 / 聚焦（设计 A） */
+html:not([data-ag-wax-seal="off"]) :is(#antigravity\.agentSidePanelInputBox, [id="antigravity.agentSidePanelInputBox"], .surface-composer.bg-card-border):has([data-testid="branch-pill-trigger"], [data-testid="project-branch-picker"], [data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"]):is(:hover, :focus-within),
+html:not([data-ag-wax-seal="off"])[data-ag-page-type="home"] :is(#antigravity\.agentSidePanelInputBox, [id="antigravity.agentSidePanelInputBox"], .surface-composer.bg-card-border):is(:hover, :focus-within) {
+  border: 1.5px solid var(--ag-seal-home-focus-border, rgba(116, 34, 26, 0.36)) !important;
+  box-shadow: var(--ag-seal-home-focus-shadow, 0 1px 3px rgba(116, 34, 26, 0.04)) !important;
+}
+
+/* 场景 1.1：具体会话日常常态（设计 A） */
+html:not([data-ag-wax-seal="off"]):not([data-ag-page-type="home"]) :is(#antigravity\.agentSidePanelInputBox, [id="antigravity.agentSidePanelInputBox"], .surface-composer.bg-card-border):not(:has([data-testid="branch-pill-trigger"], [data-testid="project-branch-picker"], [data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"])) {
+  border: 1.5px solid var(--ag-seal-chat-border, rgba(116, 34, 26, 0.36)) !important;
+  box-shadow: var(--ag-seal-chat-shadow, 0 1px 3px rgba(116, 34, 26, 0.03)) !important;
+}
+
+/* 场景 1.2：具体会话悬停 / 聚焦（设计 B） */
+html:not([data-ag-wax-seal="off"]):not([data-ag-page-type="home"]) :is(#antigravity\.agentSidePanelInputBox, [id="antigravity.agentSidePanelInputBox"], .surface-composer.bg-card-border):not(:has([data-testid="branch-pill-trigger"], [data-testid="project-branch-picker"], [data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"])):is(:hover, :focus-within) {
+  border: 1.5px solid var(--ag-seal-chat-focus-border, #74221A) !important;
+  box-shadow: var(--ag-seal-chat-focus-shadow, 0 1px 4px rgba(116, 34, 26, 0.12)) !important;
+}
+
+/* 显式关闭蜡封模块时回退 1px 标准描边 */
+html[data-ag-wax-seal="off"] :is(#antigravity\.agentSidePanelInputBox, [id="antigravity.agentSidePanelInputBox"], .surface-composer.bg-card-border),
+html[data-ag-wax-seal="off"] :is(#antigravity\.agentSidePanelInputBox, [id="antigravity.agentSidePanelInputBox"], .surface-composer.bg-card-border):is(:hover, :focus-within) {
+  border: 1px solid var(--ag-seal-off-border, rgba(31, 30, 29, 0.15)) !important;
+  box-shadow: none !important;
+}
+
+/* 输入框内部卡片 */
+body[data-agy-theme][data-newux-theme="onyx"] .surface-composer > .surface-composer-card,
+.surface-composer-card.bg-card,
+[id="antigravity.agentSidePanelInputBox"] .surface-composer-card,
+[id="antigravity.agentSidePanelInputBox"] > div.bg-card {
+  background-color: var(--ag-composer-card-bg, #FFFFFF) !important;
+  border: 1px solid var(--ag-composer-card-border, transparent) !important;
+  box-shadow: var(--ag-composer-card-shadow, 0 1px 2px rgba(0, 0, 0, 0.02)) !important;
+  outline: none !important;
+  transition: box-shadow 250ms cubic-bezier(0.16, 1, 0.3, 1), border-color 250ms ease !important;
+}
+
+body[data-agy-theme][data-newux-theme="onyx"] .surface-composer:focus-within > .surface-composer-card,
+.surface-composer:focus-within > .surface-composer-card,
+.surface-composer-card:focus-within,
+[id="antigravity.agentSidePanelInputBox"]:focus-within .surface-composer-card {
+  border-color: var(--ag-composer-card-focus-border, transparent) !important;
+  box-shadow: var(--ag-composer-card-focus-shadow, 0 6px 20px -2px rgba(60, 20, 15, 0.07), 0 2px 6px -1px rgba(0, 0, 0, 0.04)) !important;
+}
+
+/* 输入框顶部工具栏、底部按钮与发送按钮 */
+[id="antigravity.agentSidePanelInputBox"] > div:first-child :is(button, span, svg) {
+  color: var(--ag-composer-top-fg, #383431) !important;
+}
+
+[id="antigravity.agentSidePanelInputBox"] > div:first-child button:hover {
+  background-color: var(--ag-composer-top-hover-bg, rgba(217, 119, 87, 0.08)) !important;
+  color: var(--ag-composer-top-hover-fg, #1F1E1D) !important;
+}
+
+#antigravity\.agentSidePanelInputBox :is([class*="text-secondary-foreground"], button, span) {
+  font-weight: 500 !important;
+  letter-spacing: -0.012em !important;
+  text-shadow: var(--ag-ink-shadow-md);
+}
+
+#antigravity\.agentSidePanelInputBox :is([class*="text-secondary-foreground"]:not(#ag-live-metrics-pill *), button:not([data-testid="send-button"]):not([data-testid="voice-start-button"]), span:not([data-testid="voice-live-pill"]):not([data-testid="voice-live-pill"] *):not(#ag-live-metrics-pill):not(#ag-live-metrics-pill *), svg:not([data-testid="voice-live-pill"] *):not([data-testid="send-button"] *)) {
+  color: var(--ag-composer-ctrl-fg, #0A0A0A) !important;
+  opacity: 1 !important;
+}
+
+#antigravity\.agentSidePanelInputBox :is([data-testid="voice-live-pill"], button[data-testid="send-button"], .agy-send-button),
+:is([data-testid="voice-live-pill"], button[data-testid="send-button"], .agy-send-button) {
+  background-color: var(--ag-send-btn-bg, #D97757) !important;
+  color: #FFFFFF !important;
+  border: 1px solid var(--ag-send-btn-border, #C45F40) !important;
+  box-shadow: var(--ag-send-btn-shadow, 0 1px 2px rgba(217, 119, 87, 0.25)) !important;
+}
+
+#antigravity\.agentSidePanelInputBox :is([data-testid="voice-live-pill"], button[data-testid="send-button"], .agy-send-button):hover,
+:is([data-testid="voice-live-pill"], button[data-testid="send-button"], .agy-send-button):hover {
+  background-color: var(--ag-send-btn-hover-bg, #C86646) !important;
+  opacity: 1 !important;
+}
+
+#antigravity\.agentSidePanelInputBox :is([data-testid="voice-live-pill"], button[data-testid="send-button"], .agy-send-button) * {
+  color: #FFFFFF !important;
+  fill: #FFFFFF !important;
+}
+
+/* 搜索栏聚焦单圈几何 */
+input[placeholder*="Search"],
+input[class*="focus:border-ring"] {
+  --nux-focus-ring: transparent !important;
+}
+
+input[placeholder*="Search"]:is(:focus, :focus-visible),
+input[class*="focus:border-ring"]:is(:focus, :focus-visible) {
+  outline: none !important;
+  outline-offset: 0 !important;
+  border-color: var(--primary, #D97757) !important;
+  box-shadow: 0 0 0 1px var(--primary, #D97757) !important;
+}
+
+/* 保护 voice-live-pill 内部状态显隐 */
+html[data-ag-preset] #antigravity\.agentSidePanelInputBox [data-testid="voice-live-pill"] :is(.opacity-0, [class*="opacity-0"], [class*="opacity-0"] *),
+[data-testid="voice-live-pill"] :is(.opacity-0, [class*="opacity-0"], [class*="opacity-0"] *) {
+  opacity: 0 !important;
+  visibility: hidden !important;
+  display: none !important;
+}
+
+html[data-ag-preset] #antigravity\.agentSidePanelInputBox [data-testid="voice-live-pill"] :is(.opacity-100, [class*="opacity-100"]),
+[data-testid="voice-live-pill"] :is(.opacity-100, [class*="opacity-100"]) {
+  opacity: 1 !important;
+  visibility: visible !important;
+  display: flex !important;
+}
+
+/* 6. 侧边栏、对话列表、下拉菜单与设置弹窗统一排版与色彩变量绑定 */
+.bg-sidebar :is(a, button, [class*="truncate"], [class*="text-sm"], [class*="text-xs"]),
+aside :is(a, button) {
+  font-weight: 450 !important;
+  letter-spacing: -0.012em !important;
+  text-rendering: optimizeLegibility;
+  color: var(--ag-sidebar-fg, #262422) !important;
+  text-shadow: var(--ag-ink-shadow-sm);
+}
+
+[data-testid="conversation-row-sidebar"]:not([data-selected="true"]) span.truncate,
+.bg-sidebar [data-testid="conversation-row-sidebar"]:not([data-selected="true"]) [class*="truncate"],
+.agy-sidebar-row:not([data-selected="true"]) span.truncate,
+aside [data-testid="conversation-row-sidebar"]:not([data-selected="true"]) span {
+  font-weight: 400 !important;
+  letter-spacing: -0.005em !important;
+  color: var(--ag-sidebar-row-fg, #262422) !important;
+  text-shadow: none !important;
+}
+
+button[data-testid="project-header"],
+button[data-project-card="true"],
+[data-project-label],
+[data-subtext] span[class*="text-muted"],
+span:has(> svg) + span {
+  font-weight: 450 !important;
+  color: var(--ag-sidebar-header-fg, #383533) !important;
+  text-shadow: var(--ag-ink-shadow-xs) !important;
+}
+
+button[data-testid="project-header"] span,
+button[data-project-card="true"] span {
+  font-weight: 450 !important;
+  letter-spacing: -0.01em !important;
+  color: var(--ag-sidebar-header-title-fg, #2C2B29) !important;
+  text-shadow: var(--ag-ink-shadow-xs) !important;
+}
+
+[data-testid="conversation-row-sidebar"][data-selected="true"],
+[data-testid="conversation-row-sidebar"][data-selected="true"] span,
+.bg-sidebar [data-testid="conversation-row-sidebar"][data-selected="true"] [class*="truncate"],
+.bg-sidebar [data-active="true"],
+.bg-sidebar [data-active="true"] span,
+.bg-sidebar [aria-selected="true"] {
+  font-weight: 520 !important;
+  color: var(--ag-sidebar-selected-fg, #0A0A0A) !important;
+  text-shadow: var(--ag-ink-shadow-md) !important;
+}
+
+.bg-sidebar :is([class*="text-muted"], [class*="text-[11px]"], [class*="uppercase"]) {
+  font-weight: 500 !important;
+  letter-spacing: -0.005em !important;
+  color: var(--ag-sidebar-muted-fg, #7A7670) !important;
+}
+
+button, [role="button"], select {
+  letter-spacing: -0.012em;
+}
+
+[role="menu"], [role="menuitem"], .agy-overlay, .agy-overlay-item, [data-radix-menu-content], [data-radix-popper-content-wrapper], [data-side] {
+  font-family: var(--font-sans) !important;
+}
+
+[role="menu"] :is([role="menuitem"], .agy-overlay-item, [class*="truncate"], [class*="text-xs"], [class*="text-[13px]"], span),
+.agy-overlay .agy-overlay-item {
+  font-weight: 400 !important;
+  letter-spacing: -0.01em !important;
+  color: var(--ag-menu-item-fg, #1F1E1D) !important;
+}
+
+[role="menu"] :is([role="menuitem"], .agy-overlay-item) > span,
+[role="menu"] :is([role="menuitem"], .agy-overlay-item) :is(span[class*="flex-1"], span.truncate),
+.agy-overlay .agy-overlay-item > span,
+.agy-overlay .agy-overlay-item :is(span[class*="flex-1"], span.truncate) {
+  font-weight: 450 !important;
+  letter-spacing: -0.01em !important;
+  color: var(--ag-menu-item-fg, #1F1E1D) !important;
+}
+
+[role="menu"] :is([class*="font-medium"], [class*="text-muted-foreground"], h2, h3, h4),
+.agy-overlay :is([class*="font-medium"], [class*="text-muted-foreground"]) {
+  font-weight: 500 !important;
+  letter-spacing: -0.01em !important;
+  color: var(--ag-menu-header-fg, #1A1A1A) !important;
+}
+
+[role="dialog"] {
+  font-family: var(--font-sans) !important;
+}
+
+[role="dialog"] :is(h2, h3) {
+  font-weight: 500 !important;
+  letter-spacing: -0.01em !important;
+  color: var(--ag-dialog-title-fg, #1F1E1D) !important;
+}
+
+[role="dialog"] :is(.agy-card, [class*="agy-card"], [class*="divide-border"]) span.text-sm {
+  font-weight: 450 !important;
+  letter-spacing: -0.01em !important;
+  color: var(--ag-dialog-item-fg, #1F1E1D) !important;
+  text-shadow: var(--ag-ink-shadow-xs) !important;
+}
+
+
+/* ============================================================================
+ * PART II. 白天模式（Light Mode · 非 .dark 状态：三套暖纸护眼预设 + 古朴暗红蜡封）
+ * ============================================================================ */
+
+/* 白天模式通用组件变量默认值 */
+html:not(:has(> body.dark)),
+body:not(.dark) {
+  --ag-composer-tray-bg: #F7EFE6;
+  --ag-composer-card-bg: #FFFFFF;
+  --ag-composer-card-border: transparent;
+  --ag-composer-card-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
+  --ag-composer-card-focus-border: transparent;
+  --ag-composer-card-focus-shadow: 0 6px 20px -2px rgba(60, 20, 15, 0.07), 0 2px 6px -1px rgba(0, 0, 0, 0.04);
+  --ag-seal-home-border: transparent;
+  --ag-seal-home-shadow: none;
+  --ag-seal-home-focus-border: rgba(116, 34, 26, 0.36);
+  --ag-seal-home-focus-shadow: 0 1px 3px rgba(116, 34, 26, 0.04);
+  --ag-seal-chat-border: rgba(116, 34, 26, 0.36);
+  --ag-seal-chat-shadow: 0 1px 3px rgba(116, 34, 26, 0.03);
+  --ag-seal-chat-focus-border: var(--ag-wax-seal-hover, #74221A);
+  --ag-seal-chat-focus-shadow: 0 1px 4px rgba(116, 34, 26, 0.12);
+  --ag-seal-off-border: rgba(31, 30, 29, 0.15);
+  --ag-composer-top-fg: #383431;
+  --ag-composer-top-hover-bg: rgba(217, 119, 87, 0.08);
+  --ag-composer-top-hover-fg: #1F1E1D;
+  --ag-composer-ctrl-fg: #0A0A0A;
+  --ag-send-btn-bg: #D97757;
+  --ag-send-btn-hover-bg: #C86646;
+  --ag-send-btn-border: #C45F40;
+  --ag-send-btn-shadow: 0 1px 2px rgba(217, 119, 87, 0.25);
+  --ag-sidebar-fg: #262422;
+  --ag-sidebar-row-fg: #262422;
+  --ag-sidebar-header-fg: #383533;
+  --ag-sidebar-header-title-fg: #2C2B29;
+  --ag-sidebar-selected-fg: #0A0A0A;
+  --ag-sidebar-muted-fg: #7A7670;
+  --ag-menu-item-fg: #1F1E1D;
+  --ag-menu-header-fg: #1A1A1A;
+  --ag-dialog-title-fg: #1F1E1D;
+  --ag-dialog-item-fg: #1F1E1D;
+}
+
+/* 白天预设 1（默认首选）：高对比暖白 (high-contrast) */
+html:not(:has(> body.dark))[data-ag-preset="high-contrast"],
+html:not(:has(> body.dark)):not([data-ag-preset]),
+html[data-ag-preset="high-contrast"] body:not(.dark),
+html:not([data-ag-preset]) body:not(.dark) {
   --primary: #D97757 !important;
   --editor-selection-background: rgba(217, 119, 87, 0.34) !important;
   --background: #FCFCFB !important;
@@ -208,309 +473,229 @@ html[data-ag-preset="chuanban-warm-white"], html[data-ag-preset="high-contrast"]
   --home-glow: transparent !important;
 }
 
-html[data-ag-preset="chuanban-warm-white"] .bg-sidebar, html[data-ag-preset="high-contrast"] .bg-sidebar {
-  background-color: var(--sidebar) !important;
+/* 白天预设 2：ClaudeDesktop 净白 (claude-desktop-purewhite) */
+html:not(:has(> body.dark))[data-ag-preset="claude-desktop-purewhite"],
+html[data-ag-preset="claude-desktop-purewhite"] body:not(.dark) {
+  --primary: #D97757 !important;
+  --editor-selection-background: rgba(217, 119, 87, 0.34) !important;
+  --background: #FCFCFB !important;
+  --content: #FCFCFB !important;
+  --foreground: #1F1E1D !important;
+  --sidebar: #FBFBF9 !important;
+  --shell: #FBFBF9 !important;
+  --sidebar-secondary: #EDECE9 !important;
+  --sidebar-muted: #F3F2EF !important;
+  --sidebar-border: #F0F0EE !important;
+  --vscode-sideBar-background: #FBFBF9 !important;
+  --card: color-mix(in srgb, #FBF9F5 70%, #ffffff) !important;
+  --card-border: color-mix(in srgb, #2C2B29 12%, color-mix(in srgb, #FBF9F5 70%, #ffffff)) !important;
+  --card-edge: rgba(44, 43, 41, 0.14) !important;
+  --sash-line: rgba(44, 43, 41, 0.14) !important;
+  --onyx-frame: #EDECE9 !important;
+  --onyx-well: #FBFBF9 !important;
+  --onyx-raised: #FFFFFF !important;
+  --onyx-selected: #EDECE9 !important;
+  --onyx-key: #FFFFFF !important;
+  --glass: #FFFFFF !important;
+  --glass-border: #F0F0EE !important;
+  --glass-highlight: transparent !important;
+  --home-glow: transparent !important;
+  --ag-composer-tray-bg: #F5F4F0;
 }
 
-html[data-ag-preset="chuanban-warm-white"] body, html[data-ag-preset="high-contrast"] body {
-  background-color: var(--background) !important;
-  color: var(--foreground) !important;
+/* 白天预设 3：复古深色羊皮纸 (vintage-deep) */
+html:not(:has(> body.dark))[data-ag-preset="vintage-deep"],
+html[data-ag-preset="vintage-deep"] body:not(.dark) {
+  --primary: #D97757 !important;
+  --editor-selection-background: rgba(217, 119, 87, 0.34) !important;
+  --background: #FBF9F5 !important;
+  --content: #FBF9F5 !important;
+  --foreground: #26231E !important;
+  --secondary-foreground: #4A443C !important;
+  --muted-foreground: #6E665C !important;
+  --sidebar: #F1E8DC !important;
+  --shell: #F1E8DC !important;
+  --sidebar-secondary: #E6DCCE !important;
+  --sidebar-muted: #E8DFD1 !important;
+  --sidebar-border: #E0D4C3 !important;
+  --border: rgba(60, 45, 25, 0.18) !important;
+  --vscode-sideBar-background: #F1E8DC !important;
+  --card: #F8F3EC !important;
+  --card-border: rgba(60, 45, 25, 0.22) !important;
+  --card-edge: rgba(60, 45, 25, 0.22) !important;
+  --sash-line: rgba(60, 45, 25, 0.22) !important;
+  --onyx-frame: #E6DCCE !important;
+  --onyx-well: #F1E8DC !important;
+  --onyx-raised: #F8F3EC !important;
+  --onyx-selected: #E6DCCE !important;
+  --onyx-key: #F8F3EC !important;
+  --glass: #F8F3EC !important;
+  --glass-border: #E0D4C3 !important;
+  --glass-highlight: transparent !important;
+  --home-glow: transparent !important;
+  --ag-composer-tray-bg: #EAE0CE;
+  --ag-composer-card-bg: #F8F3EC;
 }
 
-/* 7.2 2.30.0 onyx 侧边栏选中项与性能优化（移除实色卡片表面冗余 GPU backdrop-filter 离屏合成） */
-body[data-agy-theme][data-newux-theme="onyx"] .agy-sidebar-row[data-selected="true"] {
+/* 白天模式侧栏选中项与高对比边框细节 */
+body[data-agy-theme][data-newux-theme="onyx"]:not(.dark) .agy-sidebar-row[data-selected="true"] {
   background-color: var(--sidebar-secondary) !important;
   --row-bg: var(--sidebar-secondary) !important;
   box-shadow: none !important;
 }
 
-.surface-glass,
-.agy-fastpick.surface-glass,
-.quick-input-widget.surface-glass,
-.agy-user-bubble {
-  backdrop-filter: none !important;
-  -webkit-backdrop-filter: none !important;
-}
-
-/* 7.5 右侧交互页面外框线：跟随预设 --card-edge / --sash-line（兼容分屏 :not(:has([data-split-panes]))） */
-.agy-inset-shell {
-  --card-edge: var(--card-border, rgba(0, 0, 0, 0.35)) !important;
-  --sash-line: var(--card-border, rgba(0, 0, 0, 0.35)) !important;
-}
-
-.agy-sheet[data-sheet-inset] [data-main-content-body]:not(:has([data-split-panes]))::after,
-.agy-inset-shell [data-side-panel-body]::after,
-[data-main-content-body]:not(:has([data-split-panes]))::after {
-  box-shadow: inset 0 0 0 1px var(--card-edge, rgba(0, 0, 0, 0.35)) !important;
-}
-
-/* 侧栏与主交互页面中缝分割线对齐预设边框色 */
-.relative.flex.w-full.h-full.outline-none > div.flex-shrink-0.relative.z-30.w-[1px] {
-  background-color: var(--sash-line, rgba(0, 0, 0, 0.35)) !important;
-}
-
-/* 输入框外层容器：分预设匹配外托盘底色，分场景动态三形态（设计 A / B / C，宽度严格锁定 1.5px 杜绝抖动） */
-html[data-ag-preset] #antigravity\.agentSidePanelInputBox, html[data-ag-preset] [id="antigravity.agentSidePanelInputBox"], #antigravity\.agentSidePanelInputBox, [id="antigravity.agentSidePanelInputBox"], .surface-composer.bg-card-border {
-  background-color: #F7EFE6 !important;
-  outline: none !important;
-  transition: border-color 220ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 220ms cubic-bezier(0.16, 1, 0.3, 1) !important;
-}
-
-html[data-ag-preset="claude-desktop-official"] #antigravity\.agentSidePanelInputBox,
-html[data-ag-preset="claude-desktop-purewhite"] #antigravity\.agentSidePanelInputBox,
-html[data-ag-preset="claude-desktop-official"] [id="antigravity.agentSidePanelInputBox"],
-html[data-ag-preset="claude-desktop-purewhite"] [id="antigravity.agentSidePanelInputBox"],
-html[data-ag-preset="claude-desktop-official"] .surface-composer.bg-card-border,
-html[data-ag-preset="claude-desktop-purewhite"] .surface-composer.bg-card-border {
-  background-color: #F5F4F0 !important;
-}
-
-html[data-ag-preset="absoulutely-chuanban"] #antigravity\.agentSidePanelInputBox,
-html[data-ag-preset="vintage-deep"] #antigravity\.agentSidePanelInputBox,
-html[data-ag-preset="absoulutely-chuanban"] [id="antigravity.agentSidePanelInputBox"],
-html[data-ag-preset="vintage-deep"] [id="antigravity.agentSidePanelInputBox"],
-html[data-ag-preset="absoulutely-chuanban"] .surface-composer.bg-card-border,
-html[data-ag-preset="vintage-deep"] .surface-composer.bg-card-border {
-  background-color: #EAE0CE !important;
-}
-
-/* ---------------------------------------------------------------------- * 【场景 2：首页 / 空白新建对话场景（兼容默认模式与 Knowledge Work 知识工作模式）】 * 判定依据（组件级纯 CSS :has() 0ms 瞬时响应 + html[data-ag-page-type="home"] 零重算兜底）： * 1. 输入框组件自身含分支选择器 [data-testid="branch-pill-trigger"]、项目选择器 [data-testid="project-selector-trigger"] 或运行位置选择器 [data-testid="location-selector-trigger"] * 2. 或 html 根节点标记 [data-ag-page-type="home"] * ---------------------------------------------------------------------- */
-/* 2.1 新建对话日常常态：设计 C (外框完全透明，无阴影，融于背景) */
-html:not([data-ag-wax-seal="off"]) #antigravity\.agentSidePanelInputBox:has([data-testid="branch-pill-trigger"], [data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"]), html:not([data-ag-wax-seal="off"]) [id="antigravity.agentSidePanelInputBox"]:has([data-testid="branch-pill-trigger"], [data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"]), html:not([data-ag-wax-seal="off"]) .surface-composer.bg-card-border:has([data-testid="branch-pill-trigger"], [data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"]), html:not([data-ag-wax-seal="off"])[data-ag-page-type="home"] #antigravity\.agentSidePanelInputBox, html:not([data-ag-wax-seal="off"])[data-ag-page-type="home"] [id="antigravity.agentSidePanelInputBox"], html:not([data-ag-wax-seal="off"])[data-ag-page-type="home"] .surface-composer.bg-card-border {
-  border: 1.5px solid transparent !important;
-  border-color: transparent !important;
-  box-shadow: none !important;
-}
-
-/* 2.2 新建对话鼠标移上 / 聚焦：变成为设计 A (略粗一点颜色偏淡蜡封暗红，微阴影) */
-html:not([data-ag-wax-seal="off"]) #antigravity\.agentSidePanelInputBox:has([data-testid="branch-pill-trigger"], [data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"]):hover, html:not([data-ag-wax-seal="off"]) [id="antigravity.agentSidePanelInputBox"]:has([data-testid="branch-pill-trigger"], [data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"]):hover, html:not([data-ag-wax-seal="off"]) .surface-composer.bg-card-border:has([data-testid="branch-pill-trigger"], [data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"]):hover, html:not([data-ag-wax-seal="off"]) #antigravity\.agentSidePanelInputBox:has([data-testid="branch-pill-trigger"], [data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"]):focus-within, html:not([data-ag-wax-seal="off"]) [id="antigravity.agentSidePanelInputBox"]:has([data-testid="branch-pill-trigger"], [data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"]):focus-within, html:not([data-ag-wax-seal="off"]) .surface-composer.bg-card-border:has([data-testid="branch-pill-trigger"], [data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"]):focus-within, html:not([data-ag-wax-seal="off"])[data-ag-page-type="home"] #antigravity\.agentSidePanelInputBox:hover, html:not([data-ag-wax-seal="off"])[data-ag-page-type="home"] [id="antigravity.agentSidePanelInputBox"]:hover, html:not([data-ag-wax-seal="off"])[data-ag-page-type="home"] .surface-composer.bg-card-border:hover, html:not([data-ag-wax-seal="off"])[data-ag-page-type="home"] #antigravity\.agentSidePanelInputBox:focus-within, html:not([data-ag-wax-seal="off"])[data-ag-page-type="home"] [id="antigravity.agentSidePanelInputBox"]:focus-within, html:not([data-ag-wax-seal="off"])[data-ag-page-type="home"] .surface-composer.bg-card-border:focus-within {
-  border: 1.5px solid rgba(116, 34, 26, 0.36) !important;
-  border-color: rgba(116, 34, 26, 0.36) !important;
-  box-shadow: 0 1px 3px rgba(116, 34, 26, 0.04) !important;
-}
-
-/* ---------------------------------------------------------------------- * 【场景 1：日常推进具体聊天会话页面】（严格限定非新建态：排斥 branch-pill-trigger、project-selector-trigger、location-selector-trigger、项目头部与 home） * ---------------------------------------------------------------------- */
-/* 1.1 具体会话日常常态：设计 A (略粗一点颜色偏淡蜡封暗红) */
-html:not([data-ag-wax-seal="off"]):not([data-ag-page-type="home"]) #antigravity\.agentSidePanelInputBox:not(:has([data-testid="branch-pill-trigger"], [data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"])), html:not([data-ag-wax-seal="off"]):not([data-ag-page-type="home"]) [id="antigravity.agentSidePanelInputBox"]:not(:has([data-testid="branch-pill-trigger"], [data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"])), html:not([data-ag-wax-seal="off"]):not([data-ag-page-type="home"]) .surface-composer.bg-card-border:not(:has([data-testid="branch-pill-trigger"], [data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"])) {
-  border: 1.5px solid rgba(116, 34, 26, 0.36) !important;
-  border-color: rgba(116, 34, 26, 0.36) !important;
-  box-shadow: 0 1px 3px rgba(116, 34, 26, 0.03) !important;
-}
-
-/* 1.2 具体会话移上 / 聚焦：变成为设计 B (加深变浓实色蜡封暗红，支持 --ag-wax-seal-hover 覆盖) */
-html:not([data-ag-wax-seal="off"]):not([data-ag-page-type="home"]) #antigravity\.agentSidePanelInputBox:not(:has([data-testid="branch-pill-trigger"], [data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"])):hover, html:not([data-ag-wax-seal="off"]):not([data-ag-page-type="home"]) [id="antigravity.agentSidePanelInputBox"]:not(:has([data-testid="branch-pill-trigger"], [data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"])):hover, html:not([data-ag-wax-seal="off"]):not([data-ag-page-type="home"]) .surface-composer.bg-card-border:not(:has([data-testid="branch-pill-trigger"], [data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"])):hover, html:not([data-ag-wax-seal="off"]):not([data-ag-page-type="home"]) #antigravity\.agentSidePanelInputBox:not(:has([data-testid="branch-pill-trigger"], [data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"])):focus-within, html:not([data-ag-wax-seal="off"]):not([data-ag-page-type="home"]) [id="antigravity.agentSidePanelInputBox"]:not(:has([data-testid="branch-pill-trigger"], [data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"])):focus-within, html:not([data-ag-wax-seal="off"]):not([data-ag-page-type="home"]) .surface-composer.bg-card-border:not(:has([data-testid="branch-pill-trigger"], [data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"])):focus-within {
-  border: 1.5px solid var(--ag-wax-seal-hover, #74221A) !important;
-  border-color: var(--ag-wax-seal-hover, #74221A) !important;
-  box-shadow: 0 1px 4px rgba(116, 34, 26, 0.12) !important;
-}
-
-/* 上方工具栏文字与小按钮（No Project 及其箭头） */
-[id="antigravity.agentSidePanelInputBox"] > div:first-child button, [id="antigravity.agentSidePanelInputBox"] > div:first-child span, [id="antigravity.agentSidePanelInputBox"] > div:first-child svg {
-  color: #383431 !important;
-}
-
-[id="antigravity.agentSidePanelInputBox"] > div:first-child button:hover {
-  background-color: rgba(217, 119, 87, 0.08) !important;
-  color: #1F1E1D !important;
-}
-
-/* 方案2：内部打字卡片无边框，消除 2.30.0 onyx 内层灰框重影，获得焦点 (:focus-within) 时微浮雕拟物平滑抬升 */
-body[data-agy-theme][data-newux-theme="onyx"] .surface-composer > .surface-composer-card, .surface-composer-card.bg-card, [id="antigravity.agentSidePanelInputBox"] .surface-composer-card, [id="antigravity.agentSidePanelInputBox"] > div.bg-card {
-  background-color: #FFFFFF !important;
-  border: 1px solid transparent !important;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02) !important;
-  outline: none !important;
-  transition: box-shadow 250ms cubic-bezier(0.16, 1, 0.3, 1) !important;
-}
-
-html[data-ag-preset="absoulutely-chuanban"] body[data-agy-theme][data-newux-theme="onyx"] .surface-composer > .surface-composer-card,
-html[data-ag-preset="vintage-deep"] body[data-agy-theme][data-newux-theme="onyx"] .surface-composer > .surface-composer-card,
-html[data-ag-preset="absoulutely-chuanban"] .surface-composer-card.bg-card,
-html[data-ag-preset="vintage-deep"] .surface-composer-card.bg-card,
-html[data-ag-preset="absoulutely-chuanban"] [id="antigravity.agentSidePanelInputBox"] .surface-composer-card,
-html[data-ag-preset="vintage-deep"] [id="antigravity.agentSidePanelInputBox"] .surface-composer-card {
-  background-color: var(--card, #F8F3EC) !important;
-}
-
-body[data-agy-theme][data-newux-theme="onyx"] .surface-composer:focus-within > .surface-composer-card, .surface-composer:focus-within > .surface-composer-card, .surface-composer-card:focus-within, [id="antigravity.agentSidePanelInputBox"]:focus-within .surface-composer-card {
-  box-shadow: 0 6px 20px -2px rgba(60, 20, 15, 0.07), 0 2px 6px -1px rgba(0, 0, 0, 0.04) !important;
-}
-
-/* 搜索栏聚焦优化（消除双层同心圈）：激活时外圈橙色轮廓彻底隐去，原位内圈灰线直接平滑切换为品牌橙色粗线 (方案三) */
-input[placeholder*="Search"], input[class*="focus:border-ring"] {
-  --nux-focus-ring: transparent !important;
-}
-
-input[placeholder*="Search"]:focus, input[placeholder*="Search"]:focus-visible, input[class*="focus:border-ring"]:focus, input[class*="focus:border-ring"]:focus-visible {
-  outline: none !important;
-  outline-offset: 0 !important;
-  border-color: #D97757 !important;
-  box-shadow: 0 0 0 1px #D97757 !important;
-}
-
-/* 高对比主轮廓线：新建对话、历史对话及操作胶囊 */
-html[data-ag-preset="chuanban-warm-white"] a[class*="inline-flex items-center"], html[data-ag-preset="high-contrast"] a[class*="inline-flex items-center"], html[data-ag-preset="chuanban-warm-white"] .bg-sidebar a, html[data-ag-preset="high-contrast"] .bg-sidebar a, html[data-ag-preset="chuanban-warm-white"] .bg-sidebar button, html[data-ag-preset="high-contrast"] .bg-sidebar button {
+html[data-ag-preset="high-contrast"] body:not(.dark) :is(a[class*="inline-flex items-center"], .bg-sidebar a, .bg-sidebar button) {
   border-color: rgba(0, 0, 0, 0.32) !important;
 }
 
-/* 高对比竖线中缝：正文与左右栏边界 */
-html[data-ag-preset="chuanban-warm-white"] .bg-border, html[data-ag-preset="high-contrast"] .bg-border {
+html[data-ag-preset="high-contrast"] body:not(.dark) .bg-border {
   background-color: rgba(0, 0, 0, 0.28) !important;
 }
 
-/* 高对比输入框底部：模型名称、Turbo模式、图标字体深色近乎纯黑（排除 #ag-live-metrics-pill 告警色与分隔符透明度） */
-html[data-ag-preset="chuanban-warm-white"] #antigravity\.agentSidePanelInputBox [class*="text-secondary-foreground"]:not(#ag-live-metrics-pill *), html[data-ag-preset="high-contrast"] #antigravity\.agentSidePanelInputBox [class*="text-secondary-foreground"]:not(#ag-live-metrics-pill *), html[data-ag-preset="chuanban-warm-white"] #antigravity\.agentSidePanelInputBox button:not([data-testid="send-button"]):not([data-testid="voice-start-button"]), html[data-ag-preset="high-contrast"] #antigravity\.agentSidePanelInputBox button:not([data-testid="send-button"]):not([data-testid="voice-start-button"]), html[data-ag-preset="chuanban-warm-white"] #antigravity\.agentSidePanelInputBox span:not([data-testid="voice-live-pill"]):not([data-testid="voice-live-pill"] *):not(#ag-live-metrics-pill):not(#ag-live-metrics-pill *), html[data-ag-preset="high-contrast"] #antigravity\.agentSidePanelInputBox span:not([data-testid="voice-live-pill"]):not([data-testid="voice-live-pill"] *):not(#ag-live-metrics-pill):not(#ag-live-metrics-pill *), html[data-ag-preset="chuanban-warm-white"] #antigravity\.agentSidePanelInputBox svg:not([data-testid="voice-live-pill"] *):not([data-testid="send-button"] *), html[data-ag-preset="high-contrast"] #antigravity\.agentSidePanelInputBox svg:not([data-testid="voice-live-pill"] *):not([data-testid="send-button"] *) {
-  color: #0A0A0A !important;
-  opacity: 1 !important;
+
+/* ============================================================================
+ * PART III. 独立黑夜模式（Dark Mode · 切换深色按钮时自动激活）
+ * 还原 Antigravity 2.30.0 官方 onyx Default Dark 基准色系，并专项强化深色可读性与边界可见性
+ * ============================================================================ */
+html:has(> body.dark),
+body.dark,
+body.theme-dark,
+body[data-agy-theme].dark,
+html[data-ag-preset] body.dark,
+html[data-ag-preset] body[data-agy-theme].dark {
+  --background: #070708 !important;
+  --content: #070708 !important;
+  --foreground: #FFFFFF !important;
+  --primary: #2F71E3 !important;
+  --primary-foreground: #FFFFFF !important;
+  --editor-selection-background: rgba(47, 113, 227, 0.40) !important;
+  --editor-comment-selection-background: rgba(47, 113, 227, 0.24) !important;
+  --shell: #111114 !important;
+  --sidebar: #111114 !important;
+  --vscode-sideBar-background: #111114 !important;
+  --sidebar-secondary: rgba(255, 255, 255, 0.105) !important;
+  --sidebar-muted: rgba(255, 255, 255, 0.06) !important;
+  --sidebar-border: rgba(255, 255, 255, 0.11) !important;
+  --secondary: rgba(255, 255, 255, 0.09) !important;
+  --secondary-foreground: #D8DAE3 !important;
+  --muted: rgba(255, 255, 255, 0.055) !important;
+  --muted-foreground: #9EA0AC !important;
+  --placeholder: #7C7E8C !important;
+  --card: #131317 !important;
+  --card-border: rgba(255, 255, 255, 0.115) !important;
+  --card-edge: rgba(255, 255, 255, 0.115) !important;
+  --sash-line: rgba(255, 255, 255, 0.15) !important;
+  --border: rgba(255, 255, 255, 0.10) !important;
+  --glass: #16161C !important;
+  --glass-border: rgba(255, 255, 255, 0.11) !important;
+  --glass-highlight: rgba(255, 255, 255, 0.085) !important;
+  --scrim: rgba(0, 0, 0, 0.68) !important;
+  --onyx-frame: #0D0D11 !important;
+  --onyx-well: #111115 !important;
+  --onyx-raised: #15151A !important;
+  --onyx-selected: #1F1F24 !important;
+  --onyx-key: #24252A !important;
+  --home-glow: color-mix(in srgb, #2F71E3 11%, transparent) !important;
+  --error: #de5555 !important;
+  --warning: #f3c949 !important;
+  --link: #6a9fcb !important;
+  --success: #7aae66 !important;
+  /* 深色背景下禁用黑色润墨阴影，消除亮字边缘发乌光晕 */
+  --ag-ink-shadow-xs: none !important;
+  --ag-ink-shadow-sm: none !important;
+  --ag-ink-shadow-md: none !important;
+  /* 黑夜模式组件级色彩变量绑定 */
+  --ag-composer-tray-bg: #0D0D11;
+  --ag-composer-card-bg: #15151A;
+  --ag-composer-card-border: rgba(255, 255, 255, 0.075);
+  --ag-composer-card-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07), 0 3px 10px -2px rgba(0, 0, 0, 0.35);
+  --ag-composer-card-focus-border: rgba(255, 255, 255, 0.11);
+  --ag-composer-card-focus-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.10), 0 6px 18px -3px rgba(0, 0, 0, 0.45);
+  --ag-seal-home-border: rgba(255, 255, 255, 0.085);
+  --ag-seal-home-shadow: 0 14px 34px -10px rgba(0, 0, 0, 0.45);
+  --ag-seal-home-focus-border: rgba(255, 255, 255, 0.18);
+  --ag-seal-home-focus-shadow: 0 16px 36px -10px rgba(0, 0, 0, 0.55);
+  --ag-seal-chat-border: rgba(255, 255, 255, 0.14);
+  --ag-seal-chat-shadow: 0 16px 36px -10px rgba(0, 0, 0, 0.5);
+  --ag-seal-chat-focus-border: var(--ag-dark-wax-seal-hover, rgba(47, 113, 227, 0.72));
+  --ag-seal-chat-focus-shadow: 0 0 0 1px rgba(47, 113, 227, 0.18), 0 18px 40px -12px rgba(0, 0, 0, 0.55);
+  --ag-seal-off-border: rgba(255, 255, 255, 0.12);
+  --ag-composer-top-fg: #D8DAE3;
+  --ag-composer-top-hover-bg: rgba(255, 255, 255, 0.08);
+  --ag-composer-top-hover-fg: #FFFFFF;
+  --ag-composer-ctrl-fg: #D8DAE3;
+  --ag-send-btn-bg: var(--primary, #2F71E3);
+  --ag-send-btn-hover-bg: #3B7EEF;
+  --ag-send-btn-border: rgba(255, 255, 255, 0.18);
+  --ag-send-btn-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28), inset 0 -1.5px 0 rgba(0, 0, 0, 0.15), 0 2px 6px rgba(0, 0, 0, 0.3);
+  --ag-sidebar-fg: #E4E5EC;
+  --ag-sidebar-row-fg: #D4D6DF;
+  --ag-sidebar-header-fg: #C8CAD4;
+  --ag-sidebar-header-title-fg: #EAEBF1;
+  --ag-sidebar-selected-fg: #FFFFFF;
+  --ag-sidebar-muted-fg: #989AA6;
+  --ag-menu-item-fg: #EAEBF1;
+  --ag-menu-header-fg: #9EA0AC;
+  --ag-dialog-title-fg: #FFFFFF;
+  --ag-dialog-item-fg: #EAEBF1;
 }
 
-/* 发送按钮与操作胶囊：Claude 陶土暖橙与暗金质感 (#D97757)，高对比纯白图标 */
-html[data-ag-preset] #antigravity\.agentSidePanelInputBox [data-testid="voice-live-pill"], html[data-ag-preset] #antigravity\.agentSidePanelInputBox button[data-testid="send-button"], html[data-ag-preset] #antigravity\.agentSidePanelInputBox .agy-send-button, [data-testid="voice-live-pill"], button[data-testid="send-button"], .agy-send-button {
-  background-color: #D97757 !important;
+/* 黑夜模式侧栏选中态：还原官方 onyx.dark 立体微高光胶囊 (#1F1F24) */
+body[data-agy-theme][data-newux-theme="onyx"].dark .agy-sidebar-row[data-selected="true"],
+body.dark .agy-sidebar-row[data-selected="true"] {
+  background-color: var(--onyx-selected, #1F1F24) !important;
+  --row-bg: var(--onyx-selected, #1F1F24) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), inset 0 0 0 1px rgba(255, 255, 255, 0.07) !important;
+}
+
+body.dark #antigravity\.agentSidePanelInputBox button:not([data-testid="send-button"]):not([data-testid="voice-start-button"]):hover,
+body.dark #antigravity\.agentSidePanelInputBox button:not([data-testid="send-button"]):not([data-testid="voice-start-button"]):hover :is(span, svg) {
   color: #FFFFFF !important;
-  border: 1px solid #C45F40 !important;
-  box-shadow: 0 1px 2px rgba(217, 119, 87, 0.25) !important;
 }
 
-html[data-ag-preset] #antigravity\.agentSidePanelInputBox [data-testid="voice-live-pill"]:hover, html[data-ag-preset] #antigravity\.agentSidePanelInputBox button[data-testid="send-button"]:hover, html[data-ag-preset] #antigravity\.agentSidePanelInputBox .agy-send-button:hover, [data-testid="voice-live-pill"]:hover, button[data-testid="send-button"]:hover, .agy-send-button:hover {
-  background-color: #C86646 !important;
-  opacity: 1 !important;
-}
-
-html[data-ag-preset] #antigravity\.agentSidePanelInputBox [data-testid="voice-live-pill"] *, html[data-ag-preset] #antigravity\.agentSidePanelInputBox button[data-testid="send-button"] *, html[data-ag-preset] #antigravity\.agentSidePanelInputBox .agy-send-button * {
+body.dark :is([data-testid="conversation-row-sidebar"], .agy-sidebar-row):not([data-selected="true"]):hover span.truncate {
   color: #FFFFFF !important;
-  fill: #FFFFFF !important;
 }
 
-/* 严格保护 voice-live-pill 内部状态显隐 (消除默认态声波星芒与取消态 X 图标的双重重叠) */
-html[data-ag-preset] #antigravity\.agentSidePanelInputBox [data-testid="voice-live-pill"] .opacity-0, html[data-ag-preset] #antigravity\.agentSidePanelInputBox [data-testid="voice-live-pill"] [class*="opacity-0"], html[data-ag-preset] #antigravity\.agentSidePanelInputBox [data-testid="voice-live-pill"] [class*="opacity-0"] *, [data-testid="voice-live-pill"] .opacity-0, [data-testid="voice-live-pill"] [class*="opacity-0"], [data-testid="voice-live-pill"] [class*="opacity-0"] * {
-  opacity: 0 !important;
-  visibility: hidden !important;
-  display: none !important;
+body.dark :is(.bg-sidebar a[class*="border"], .bg-sidebar button[class*="border"], a[class*="inline-flex items-center"][class*="border"]) {
+  border-color: rgba(255, 255, 255, 0.12) !important;
 }
 
-html[data-ag-preset] #antigravity\.agentSidePanelInputBox [data-testid="voice-live-pill"] .opacity-100, html[data-ag-preset] #antigravity\.agentSidePanelInputBox [data-testid="voice-live-pill"] [class*="opacity-100"], [data-testid="voice-live-pill"] .opacity-100, [data-testid="voice-live-pill"] [class*="opacity-100"] {
-  opacity: 1 !important;
-  visibility: visible !important;
-  display: flex !important;
+body.dark .bg-border {
+  background-color: rgba(255, 255, 255, 0.10) !important;
 }
 
-/* 8. 界面排版扎实度与温润墨感增强（保留更纱黑体不变，通过 --ag-ink-shadow-* 变量 O(1) 兼容 Windows ClearType） */
-/* 侧边栏常规列表：字重450微收敛、微负字距凝聚、深暖炭墨色、0.2px微润墨柔化硬切角 */
-.bg-sidebar a, .bg-sidebar button, .bg-sidebar [class*="truncate"], .bg-sidebar [class*="text-sm"], .bg-sidebar [class*="text-xs"], aside a, aside button {
-  font-weight: 450 !important;
-  letter-spacing: -0.012em !important;
-  color: #262422 !important;
-  text-rendering: optimizeLegibility;
-  text-shadow: var(--ag-ink-shadow-sm);
+/* 黑夜模式正文阅读与行内代码可读性微调 */
+body.dark :is(.select-text, .prose, .markdown) {
+  color: #ECEEF4;
 }
 
-/* 侧边栏任务清单/对话列表标题：微量减轻一个层级至 400，消除墨晕阴影，西文恢复清爽秀气 */
-[data-testid="conversation-row-sidebar"]:not([data-selected="true"]) span.truncate, .bg-sidebar [data-testid="conversation-row-sidebar"]:not([data-selected="true"]) [class*="truncate"], .agy-sidebar-row:not([data-selected="true"]) span.truncate, aside [data-testid="conversation-row-sidebar"]:not([data-selected="true"]) span {
-  font-weight: 400 !important;
-  letter-spacing: -0.005em !important;
-  color: #262422 !important;
-  text-shadow: none !important;
+body.dark :is(.select-text, .prose, .markdown) :is(h1, h2, h3, h4, h5, h6, strong, b) {
+  color: #FFFFFF;
 }
 
-/* 项目目录文件夹标题 (Root / Storydesk 等展开按钮及子标签)：轻削粗度与墨晕，避免误伤 */
-button[data-testid="project-header"], button[data-project-card="true"], [data-project-label], [data-subtext] span[class*="text-muted"], span:has(> svg) + span {
-  font-weight: 450 !important;
-  color: #383533 !important;
-  text-shadow: var(--ag-ink-shadow-xs) !important;
+body.dark :is(.select-text, .prose, .markdown) :not(pre) > code {
+  background-color: rgba(255, 255, 255, 0.085);
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  border-radius: 5px;
+  padding: 0.12em 0.36em;
+  color: #EAEBF1;
 }
 
-button[data-testid="project-header"] span, button[data-project-card="true"] span {
-  font-weight: 450 !important;
-  color: #2C2B29 !important;
-  text-shadow: var(--ag-ink-shadow-xs) !important;
-  letter-spacing: -0.01em !important;
-}
 
-/* 侧栏选中态与激活项：精准限定激活对话，深墨纯黑、轮廓扎实 */
-[data-testid="conversation-row-sidebar"][data-selected="true"], [data-testid="conversation-row-sidebar"][data-selected="true"] span, .bg-sidebar [data-testid="conversation-row-sidebar"][data-selected="true"] [class*="truncate"], .bg-sidebar [data-active="true"], .bg-sidebar [data-active="true"] span, .bg-sidebar [aria-selected="true"] {
-  font-weight: 520 !important;
-  color: #0A0A0A !important;
-  text-shadow: var(--ag-ink-shadow-md) !important;
-}
-
-/* 侧栏分类小标题（如置顶对话、项目管理） */
-.bg-sidebar [class*="text-muted"], .bg-sidebar [class*="text-[11px]"], .bg-sidebar [class*="uppercase"] {
-  font-weight: 500 !important;
-  letter-spacing: -0.005em !important;
-  color: #7A7670 !important;
-}
-
-/* 界面按钮与全局操作控件：微负字距增加紧实感 */
-button, [role="button"], select {
-  letter-spacing: -0.012em;
-}
-
-/* 输入框底部模型控制栏：深墨色与扎实字重 */
-#antigravity\.agentSidePanelInputBox [class*="text-secondary-foreground"], #antigravity\.agentSidePanelInputBox button, #antigravity\.agentSidePanelInputBox span {
-  font-weight: 500 !important;
-  letter-spacing: -0.012em !important;
-  text-shadow: var(--ag-ink-shadow-md);
-}
-
-/* 8.5 菜单、弹出层与设置项目字重全面对齐稳定版 (Solid Ink Optimization) */
-[role="menu"], [role="menuitem"], .agy-overlay, .agy-overlay-item, [data-radix-menu-content], [data-radix-popper-content-wrapper], [data-side] {
-  font-family: var(--font-sans) !important;
-}
-
-/* 下拉菜单项、二级子菜单项（如 View Usage / 子项）与模型名称：扎实字重与微字距 */
-[role="menu"] [role="menuitem"], [role="menu"] .agy-overlay-item, .agy-overlay .agy-overlay-item, [role="menu"] [class*="truncate"], [role="menu"] [class*="text-xs"], [role="menu"] [class*="text-[13px]"], [role="menu"] span {
-  font-weight: 400 !important;
-  letter-spacing: -0.01em !important;
-  color: #1F1E1D !important;
-}
-
-/* 菜单主项目、动作按钮与模型名称统一扎实字重 450（彻底统一 View Usage、Main Agent、各模型名称等） */
-[role="menu"] [role="menuitem"] > span, [role="menu"] [role="menuitem"] span[class*="flex-1"], [role="menu"] [role="menuitem"] span.truncate, [role="menu"] .agy-overlay-item > span, [role="menu"] .agy-overlay-item span[class*="flex-1"], [role="menu"] .agy-overlay-item span.truncate, .agy-overlay .agy-overlay-item > span, .agy-overlay .agy-overlay-item span[class*="flex-1"], .agy-overlay .agy-overlay-item span.truncate {
-  font-weight: 450 !important;
-  letter-spacing: -0.01em !important;
-  color: #1F1E1D !important;
-}
-
-/* 菜单与弹窗小标题、头部（如 "Model", "Usage", "Gemini 模型", "Claude 与 GPT 模型"） */
-[role="menu"] [class*="font-medium"], [role="menu"] [class*="text-muted-foreground"], [role="menu"] h2, [role="menu"] h3, [role="menu"] h4, .agy-overlay [class*="font-medium"], .agy-overlay [class*="text-muted-foreground"] {
-  font-weight: 500 !important;
-  letter-spacing: -0.01em !important;
-  color: #1A1A1A !important;
-}
-
-/* 系统设置主菜单右侧二级菜单/配置卡片项目 (Settings Dialog Items) */
-[role="dialog"] {
-  font-family: var(--font-sans) !important;
-}
-
-[role="dialog"] h2, [role="dialog"] h3 {
-  font-weight: 500 !important;
-  letter-spacing: -0.01em !important;
-  color: #1F1E1D !important;
-}
-
-[role="dialog"] .agy-card span.text-sm, [role="dialog"] [class*="agy-card"] span.text-sm, [role="dialog"] [class*="divide-border"] span.text-sm {
-  font-weight: 450 !important;
-  letter-spacing: -0.01em !important;
-  color: #1F1E1D !important;
-  text-shadow: var(--ag-ink-shadow-xs) !important;
-}
-
-/* 9. 模型名称同行实时指标胶囊 (TPS / TTFT / Ctx 256k / Out) 布局铁律： - 常态 (data-ag-row-mode="middle")：严格处于「左：+ 与模型选择」和「右：模式选择与发送按钮」正中间，随宽度自动 ellipsis 缩略； - 极窄 (data-ag-row-mode="bottom")：当中间可用宽度 < 150px (损失过多信息) 时，物理挂载至 bottomRow 正下方作为独立第二行，绝不改变第一行左右布局。 */
-#antigravity\.agentSidePanelInputBox div[data-ag-row-mode="middle"] > div:first-child,
-#antigravity\.agentSidePanelInputBox div[data-ag-row-mode="bottom"] > div:first-child {
+/* ============================================================================
+ * PART IV. 模型名称同行实时指标胶囊与悬浮详情卡（结构共用 + 白天/黑夜色彩自适应）
+ * ============================================================================ */
+#antigravity\.agentSidePanelInputBox div[data-ag-row-mode] > div:first-child {
   overflow: hidden !important;
   min-width: 0 !important;
 }
 
-#antigravity\.agentSidePanelInputBox div[data-ag-row-mode="middle"] > div:first-child > *:not(#ag-live-metrics-pill),
-#antigravity\.agentSidePanelInputBox div[data-ag-row-mode="bottom"] > div:first-child > *:not(#ag-live-metrics-pill) {
+#antigravity\.agentSidePanelInputBox div[data-ag-row-mode] > div:first-child > *:not(#ag-live-metrics-pill) {
   flex-shrink: 0 !important;
 }
 
-#antigravity\.agentSidePanelInputBox div[data-ag-row-mode="middle"] > div:last-child,
-#antigravity\.agentSidePanelInputBox div[data-ag-row-mode="bottom"] > div:last-child {
+#antigravity\.agentSidePanelInputBox div[data-ag-row-mode] > div:last-child {
   flex-shrink: 0 !important;
   margin-left: auto !important;
 }
@@ -542,25 +727,24 @@ button, [role="button"], select {
   cursor: default;
 }
 
-#ag-live-metrics-pill:hover {
+#ag-live-metrics-pill:hover,
+#ag-live-metrics-pill:hover #ag-live-metrics-text {
   opacity: 1 !important;
   color: #0A0A0A !important;
 }
 
-#ag-live-metrics-pill[data-ag-row-mode="bottom"],
-#ag-live-metrics-pill.ag-pill-wrapped {
+#ag-live-metrics-pill[data-ag-row-mode="bottom"] {
   flex: 0 0 100% !important;
   width: calc(100% - 8px) !important;
   max-width: calc(100% - 8px) !important;
   height: 20px !important;
-  margin: 2px 4px 2px 4px !important;
+  margin: 2px 4px !important;
   padding: 2px 4px 0 6px !important;
   border-left: none !important;
   border-top: 1px dashed rgba(0, 0, 0, 0.14) !important;
 }
 
-#ag-live-metrics-pill #ag-live-metrics-text,
-#ag-live-metrics-pill .ag-m-item {
+#ag-live-metrics-pill #ag-live-metrics-text {
   font-family: var(--font-mono) !important;
   font-size: 11px !important;
   font-weight: 500 !important;
@@ -568,30 +752,47 @@ button, [role="button"], select {
   color: inherit !important;
 }
 
-#ag-live-metrics-pill:hover #ag-live-metrics-text {
-  opacity: 1 !important;
-  color: #0A0A0A !important;
-}
-
 #antigravity\.agentSidePanelInputBox #ag-live-metrics-pill .ag-sep,
-#ag-live-metrics-pill .ag-sep,
-#ag-live-metrics-pill .ag-m-sep {
+#ag-live-metrics-pill .ag-sep {
   margin: 0 3.5px;
   opacity: 0.45 !important;
 }
 
 #antigravity\.agentSidePanelInputBox #ag-live-metrics-pill .ag-ctx-warn,
-#ag-live-metrics-pill .ag-ctx-warn,
-#ag-live-metrics-pill[data-ctx-warn="high"] .ag-m-ctx {
+#ag-live-metrics-pill .ag-ctx-warn {
   color: #B45309 !important;
   font-weight: 600 !important;
 }
 
 #antigravity\.agentSidePanelInputBox #ag-live-metrics-pill .ag-ctx-crit,
-#ag-live-metrics-pill .ag-ctx-crit,
-#ag-live-metrics-pill[data-ctx-warn="crit"] .ag-m-ctx {
+#ag-live-metrics-pill .ag-ctx-crit {
   color: #DC2626 !important;
   font-weight: 700 !important;
+}
+
+/* 黑夜模式指标胶囊配色与高可见预警色 */
+body.dark #ag-live-metrics-pill {
+  color: #C8CAD4 !important;
+  border-left-color: rgba(255, 255, 255, 0.18) !important;
+}
+
+body.dark #ag-live-metrics-pill:hover,
+body.dark #ag-live-metrics-pill:hover #ag-live-metrics-text {
+  color: #FFFFFF !important;
+}
+
+body.dark #ag-live-metrics-pill[data-ag-row-mode="bottom"] {
+  border-top-color: rgba(255, 255, 255, 0.14) !important;
+}
+
+body.dark #antigravity\.agentSidePanelInputBox #ag-live-metrics-pill .ag-ctx-warn,
+body.dark #ag-live-metrics-pill .ag-ctx-warn {
+  color: #FBBF24 !important;
+}
+
+body.dark #antigravity\.agentSidePanelInputBox #ag-live-metrics-pill .ag-ctx-crit,
+body.dark #ag-live-metrics-pill .ag-ctx-crit {
+  color: #F87171 !important;
 }
 
 #ag-live-metrics-tooltip {
@@ -618,15 +819,13 @@ button, [role="button"], select {
   transition: opacity 0.12s ease, transform 0.12s ease, visibility 0.12s;
 }
 
-#ag-live-metrics-tooltip[data-visible="1"],
-#ag-live-metrics-tooltip.ag-tt-visible {
+#ag-live-metrics-tooltip[data-visible="1"] {
   opacity: 1 !important;
   visibility: visible !important;
   transform: translateY(0);
 }
 
-#ag-live-metrics-tooltip .ag-tt-hdr,
-#ag-live-metrics-tooltip .ag-tt-title {
+#ag-live-metrics-tooltip .ag-tt-hdr {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -642,12 +841,6 @@ button, [role="button"], select {
   margin-top: 8px;
 }
 
-#ag-live-metrics-tooltip .ag-tt-div {
-  height: 1px;
-  background: rgba(0, 0, 0, 0.1);
-  margin: 6px 0;
-}
-
 #ag-live-metrics-tooltip .ag-tt-row {
   display: flex;
   justify-content: space-between;
@@ -656,8 +849,7 @@ button, [role="button"], select {
   font-weight: 450 !important;
 }
 
-#ag-live-metrics-tooltip .ag-tt-lbl,
-#ag-live-metrics-tooltip .ag-tt-label {
+#ag-live-metrics-tooltip .ag-tt-lbl {
   color: #57534E !important;
   flex-shrink: 0;
 }
@@ -668,43 +860,23 @@ button, [role="button"], select {
   text-align: right;
 }
 
-#ag-live-metrics-tooltip .ag-tt-accent {
-  color: #7A1F1A !important;
-  font-weight: 600 !important;
+/* 黑夜模式悬浮指标详情卡配色 */
+body.dark #ag-live-metrics-tooltip {
+  background-color: var(--onyx-raised, #18181E) !important;
+  border-color: rgba(255, 255, 255, 0.14) !important;
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.65), 0 2px 8px rgba(0, 0, 0, 0.4) !important;
+  color: #EAEBF1 !important;
 }
 
-/* === v5.0.0 User Theme Variables, Windows ClearType & Feature Switches === */
-:root {
-  --ag-chat-font-size: 16px;
-  --ag-wax-seal-hover: #74221A;
-  --ag-ink-shadow-xs: 0 0 0.15px rgba(38, 36, 34, 0.25);
-  --ag-ink-shadow-sm: 0 0 0.2px rgba(38, 36, 34, 0.35);
-  --ag-ink-shadow-md: 0 0 0.25px rgba(10, 10, 10, 0.4);
+body.dark #ag-live-metrics-tooltip .ag-tt-hdr {
+  color: #FFFFFF !important;
+  border-bottom-color: rgba(255, 255, 255, 0.12) !important;
 }
 
-/* Windows ClearType 亚像素抗锯齿适配：O(1) 根变量级移除微墨晕 text-shadow 防止低分屏发毛，杜绝通配符 * 遍历 */
-html[data-ag-os="win32"] {
-  --ag-ink-shadow-xs: none;
-  --ag-ink-shadow-sm: none;
-  --ag-ink-shadow-md: none;
+body.dark #ag-live-metrics-tooltip .ag-tt-lbl {
+  color: #9EA0AC !important;
 }
 
-html[data-ag-custom-font-size="true"] .prose,
-html[data-ag-custom-font-size="true"] .markdown,
-html[data-ag-custom-font-size="true"] [class*="chat-message"] {
-  font-size: var(--ag-chat-font-size) !important;
-}
-
-html[data-ag-wax-seal="off"] #antigravity\.agentSidePanelInputBox,
-html[data-ag-wax-seal="off"] #antigravity\.agentSidePanelInputBox:hover,
-html[data-ag-wax-seal="off"] #antigravity\.agentSidePanelInputBox:focus-within,
-html[data-ag-wax-seal="off"] [id="antigravity.agentSidePanelInputBox"],
-html[data-ag-wax-seal="off"] [id="antigravity.agentSidePanelInputBox"]:hover,
-html[data-ag-wax-seal="off"] [id="antigravity.agentSidePanelInputBox"]:focus-within,
-html[data-ag-wax-seal="off"] .surface-composer.bg-card-border,
-html[data-ag-wax-seal="off"] .surface-composer.bg-card-border:hover,
-html[data-ag-wax-seal="off"] .surface-composer.bg-card-border:focus-within {
-  border-width: 1px !important;
-  border-color: rgba(31, 30, 29, 0.15) !important;
-  box-shadow: none !important;
+body.dark #ag-live-metrics-tooltip .ag-tt-val {
+  color: #FFFFFF !important;
 }

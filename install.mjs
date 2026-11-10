@@ -78,7 +78,7 @@ function buildManifest(baseDir = __dirname) {
   }
   const manifest = {
     name: 'chuanban-antigravity-theme-patch',
-    version: '5.0.1',
+    version: '5.1.0',
     minNodeVersion: '22.0.0',
     fullMetricsNodeVersion: '22.13.0',
     distribution: {
@@ -358,6 +358,7 @@ async function inspectLiveWindow(portFileOrEnv, fallbackPort = 9222) {
               hasStyle: !!document.getElementById('ag-custom-fonts'),
               hasUserStyle: !!document.getElementById('antigravity-user-custom-style'),
               preset: document.documentElement.getAttribute('data-ag-preset'),
+              themeMode: document.documentElement.getAttribute('data-ag-theme-mode'),
               pageType: document.documentElement.getAttribute('data-ag-page-type'),
               waxSeal: document.documentElement.getAttribute('data-ag-wax-seal'),
               dictCount: window.__ag_i18n_dict ? Object.keys(window.__ag_i18n_dict).length : 0,
@@ -672,6 +673,14 @@ async function runInstall() {
   } else if (!currentCfg.preset) {
     currentCfg.preset = 'high-contrast';
   }
+  // 自动清理早期版本遗留在 user/config.json 中的出厂默认 selectors，确保后续升级由 core/runtime.js 统一托管
+  if (
+    currentCfg.selectors &&
+    typeof currentCfg.selectors === 'object' &&
+    currentCfg.selectors.inputBoxId === 'antigravity.agentSidePanelInputBox'
+  ) {
+    delete currentCfg.selectors;
+  }
   fs.writeFileSync(userConfigPath, JSON.stringify(currentCfg, null, 2) + '\n', 'utf8');
 
   // 自动检查并修补 ~/.antigravity/argv.json (remote-debugging-port)
@@ -875,22 +884,49 @@ function runInstallFonts() {
 
 async function runUninstall() {
   const home = os.homedir();
+  const targetDir = path.resolve(getArg('--target-dir', resolveDefaultTargetDir()));
+  const userConfigPath = path.join(targetDir, 'user', 'config.json');
+  const realDaemon = path.join(targetDir, 'core', 'daemon.mjs');
+
+  // 1. 先向当前打开的窗口发送一次禁用还原载荷，即时卸载样式并恢复英文原貌
+  if (fs.existsSync(userConfigPath) && fs.existsSync(realDaemon)) {
+    try {
+      const origRaw = fs.readFileSync(userConfigPath, 'utf8');
+      const cfg = JSON.parse(origRaw);
+      cfg.enabled = false;
+      fs.writeFileSync(userConfigPath, JSON.stringify(cfg, null, 2) + '\n', 'utf8');
+      spawnSync(process.execPath, ['--disable-warning=ExperimentalWarning', realDaemon, '--once'], {
+        stdio: 'ignore'
+      });
+      fs.writeFileSync(userConfigPath, origRaw, 'utf8');
+    } catch {}
+  }
+
+  // 2. 停止并彻底移除跨平台开机自启服务，防止重启后守护进程复活
   stopRunningDaemonProcesses();
   if (process.platform === 'darwin') {
     const uid = process.getuid ? process.getuid() : 501;
+    const launchAgentsDir = path.join(home, 'Library', 'LaunchAgents');
     for (const label of ['com.antigravity.customfont', 'com.antigravity.theme']) {
       try {
         execSync(`launchctl bootout gui/${uid}/${label} 2>/dev/null || true`);
+      } catch {}
+      try {
+        const plistFile = path.join(launchAgentsDir, `${label}.plist`);
+        if (fs.existsSync(plistFile)) fs.unlinkSync(plistFile);
       } catch {}
     }
   } else if (process.platform === 'linux') {
     try {
       execSync('systemctl --user disable --now antigravity-theme.service 2>/dev/null || true');
+      const serviceFile = path.join(home, '.config', 'systemd', 'user', 'antigravity-theme.service');
+      if (fs.existsSync(serviceFile)) fs.unlinkSync(serviceFile);
+      execSync('systemctl --user daemon-reload 2>/dev/null || true');
     } catch {}
   } else if (process.platform === 'win32') {
     const appData = process.env.APPDATA || path.join(home, 'AppData', 'Roaming');
     const vbsFile = path.join(appData, 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup', 'AntigravityThemeDaemon.vbs');
-    const localVbs = path.join(resolveDefaultTargetDir(), 'AntigravityThemeDaemon.vbs');
+    const localVbs = path.join(targetDir, 'AntigravityThemeDaemon.vbs');
     try {
       if (fs.existsSync(vbsFile)) fs.unlinkSync(vbsFile);
       if (fs.existsSync(localVbs)) fs.unlinkSync(localVbs);
@@ -902,7 +938,7 @@ async function runUninstall() {
       });
     } catch {}
   }
-  console.log('[Uninstall] Stopped background daemon services. User config in ~/.gemini/antigravity/theme-patch/user/ is preserved.');
+  console.log('[Uninstall] Unloaded live styles, removed autostart services, and stopped daemon. User config in ~/.gemini/antigravity/theme-patch/user/ is preserved.');
 }
 
 // ============================================================================
