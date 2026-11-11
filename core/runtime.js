@@ -8,7 +8,7 @@
   if (window.top !== window) return;
   if (!boot || typeof boot !== 'object') return;
 
-  const PATCH_VERSION = boot.version || '20261111-v5.1.4';
+  const PATCH_VERSION = boot.version || '20261112-v5.1.5';
   const ENABLED = boot.enabled !== false;
   const CSS_TEXT = boot.cssText || '';
   const CUSTOM_CSS_TEXT = boot.customCss || '';
@@ -899,6 +899,24 @@
   const DICT = Object.assign(Object.create(null), boot.i18nDict || {});
   window.__ag_i18n_dict = DICT;
 
+  // 大小写不敏感兜底索引（2.31.1 起同一文案并存 "Toggle Sidebar" / "Toggle sidebar" 等多种大小写）
+  // 仅对首字母大写的界面文案生效，避免误伤小写标识符；精确匹配始终优先。
+  const DICT_CI = new Map();
+  for (const k in DICT) {
+    const v = DICT[k];
+    if (typeof v !== 'string') continue;
+    const lk = k.toLowerCase();
+    if (!DICT_CI.has(lk)) DICT_CI.set(lk, v);
+  }
+  function dictLookup(s) {
+    if (!s) return undefined;
+    const exact = DICT[s];
+    if (typeof exact === 'string') return exact;
+    const c0 = s.charCodeAt(0);
+    if (c0 < 65 || c0 > 90) return undefined;
+    return DICT_CI.get(s.toLowerCase());
+  }
+
   let scanBodyFn = null;
   const I18N_OBS_OPTS = {
     childList: true,
@@ -1114,7 +1132,8 @@
       /^(?:(?:Permission mode|Agent permissions preset)\s+selector(?:,\s*current)?|(?:Permission mode|Agent permissions preset),\s*current):\s*(.*)$/i;
     const RE_ARIA_PERM_FIXED = /^(?:Permission mode|Agent permissions preset):\s*([^,(]+?)(?:\s*(?:,\s*(.+?)|\(([^)]+)\)))?$/i;
     const RE_ARIA_TURN = /^(?:Conversation turn\s+(\d+)\s+by\s+(User|Agent|Assistant)|Turn\s+(\d+)\s+of\s+(\d+))$/i;
-    const RE_ARIA_LOAD_OLDER = /^(?:Load\s+(\d+)\s+older\s+turns?.*|Load older messages,\s*showing\s+(\d+)\s+of\s+(\d+))$/i;
+    const RE_ARIA_GOTO_TURN = /^Go to turn\s+(\d+)\s+of\s+(\d+)$/i;
+    const RE_ARIA_LOAD_OLDER = /^(?:Load\s+(\d+)\s+older\s+turns?.*|(Load|No more) older messages,\s*showing\s+(\d+)\s+of\s+(\d+))$/i;
     const RE_EFFORT_SUFFIX = /^(.*?)\s*(?:\((Low|Medium|High|Max)\)|\b(Low|Medium|High|Max))\s*$/i;
     const EFFORT_MAP = { low: '低', medium: '中', high: '高', max: '最高' };
 
@@ -1180,9 +1199,9 @@
       if (!trimmed) return null;
 
       // 1. 无原型静态词典 O(1) 精确匹配（附句尾句号自动回退；函数式 replace 防止 $&/$1 二次展开）
-      let replacement = DICT[trimmed];
+      let replacement = dictLookup(trimmed);
       if (typeof replacement !== 'string' && trimmed.endsWith('.')) {
-        const withoutDot = DICT[trimmed.slice(0, -1)];
+        const withoutDot = dictLookup(trimmed.slice(0, -1));
         if (typeof withoutDot === 'string') {
           replacement = withoutDot.endsWith('。') ? withoutDot : withoutDot + '。';
         }
@@ -1388,8 +1407,8 @@
         ? null
         : customResolver
         ? customResolver(trimmed, el)
-        : typeof DICT[trimmed] === 'string'
-        ? DICT[trimmed]
+        : typeof dictLookup(trimmed) === 'string'
+        ? dictLookup(trimmed)
         : null;
       if (typeof nextVal === 'string') {
         if (savedOrig !== origVal) el.setAttribute(origDataAttr, origVal);
@@ -1409,7 +1428,8 @@
     }
 
     function resolveAttrTranslation(atrim, el) {
-      if (typeof DICT[atrim] === 'string') return DICT[atrim];
+      const directHit = dictLookup(atrim);
+      if (typeof directHit === 'string') return directHit;
       const mModel = atrim.match(RE_ARIA_MODEL);
       if (mModel) {
         let mName = mModel[1].trim();
@@ -1423,7 +1443,7 @@
         return '模型，当前：' + mName;
       }
       const lookupPerm = (s) =>
-        DICT[s] || DICT[s.charAt(0).toUpperCase() + s.slice(1).toLowerCase()] || s;
+        dictLookup(s) || dictLookup(s.charAt(0).toUpperCase() + s.slice(1)) || s;
       const mPermSel = atrim.match(RE_ARIA_PERM_SEL);
       if (mPermSel) {
         const pMode = mPermSel[1].trim();
@@ -1439,8 +1459,12 @@
         const mappedNote =
           rawNote.toLowerCase() === 'cannot be changed mid-conversation'
             ? '会话中途无法更改'
-            : DICT[rawNote] || computeTextTranslation(rawNote, el) || rawNote;
+            : dictLookup(rawNote) || computeTextTranslation(rawNote, el) || rawNote;
         return '权限模式：' + lookupPerm(pMode) + '（' + mappedNote + '）';
+      }
+      const mGoTurn = atrim.match(RE_ARIA_GOTO_TURN);
+      if (mGoTurn) {
+        return '跳转至第 ' + mGoTurn[1] + ' / ' + mGoTurn[2] + ' 轮对话';
       }
       const mTurn = atrim.match(RE_ARIA_TURN);
       if (mTurn) {
@@ -1452,8 +1476,8 @@
       }
       const mOlder = atrim.match(RE_ARIA_LOAD_OLDER);
       if (mOlder) {
-        if (mOlder[2] && mOlder[3]) {
-          return '加载更早的消息（当前显示 ' + mOlder[2] + ' / ' + mOlder[3] + '）';
+        if (mOlder[3] && mOlder[4]) {
+          return (/^no/i.test(mOlder[2]) ? '没有更早的消息' : '加载更早的消息') + '（当前显示 ' + mOlder[3] + ' / ' + mOlder[4] + '）';
         }
         return '加载更早的 ' + mOlder[1] + ' 轮对话';
       }
@@ -1471,7 +1495,7 @@
       if (mLoc) {
         const locName = mLoc[1].trim();
         const mappedLoc =
-          locName === 'This Computer' ? '本机' : locName === 'Remote' ? '远程' : DICT[locName] || locName;
+          locName === 'This Computer' ? '本机' : locName === 'Remote' ? '远程' : dictLookup(locName) || locName;
         return '智能体运行位置，当前：' + mappedLoc;
       }
       const mVer = atrim.match(RE_ARIA_VERSION);

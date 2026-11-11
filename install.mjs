@@ -24,6 +24,14 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// 屏蔽 Node 22.x 动态探测 node:sqlite 时的 ExperimentalWarning 噪声，保持 doctor/verify JSON 输出纯净
+const _origEmitWarning = process.emitWarning;
+process.emitWarning = function (warning, ...rest) {
+  const type = typeof rest[0] === 'string' ? rest[0] : rest[0] && rest[0].type;
+  if (type === 'ExperimentalWarning' || (warning && warning.name === 'ExperimentalWarning')) return;
+  return _origEmitWarning.call(this, warning, ...rest);
+};
+
 const GOOGLE_DRIVE_URL = 'https://drive.google.com/drive/folders/1NX92SgVUqtSjWg6bt6sIJXy-cn7J_boC';
 const NOTION_GUIDE_URL = 'https://chuanban.notion.site/chuanban-antigravity-theme-patch-db7c5846f37546be9481cd791aed0554';
 const GITHUB_REPO_URL = 'https://github.com/Anarcadia/chuanban-antigravity-theme-patch';
@@ -80,7 +88,7 @@ function buildManifest(baseDir = __dirname) {
   }
   const manifest = {
     name: 'chuanban-antigravity-theme-patch',
-    version: '5.1.4',
+    version: '5.1.5',
     minNodeVersion: '22.0.0',
     fullMetricsNodeVersion: '22.13.0',
     distribution: {

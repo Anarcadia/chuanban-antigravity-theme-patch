@@ -379,8 +379,8 @@ button[data-project-card="true"] span {
 [data-testid="conversation-row-sidebar"][data-selected="true"],
 [data-testid="conversation-row-sidebar"][data-selected="true"] span,
 .bg-sidebar [data-testid="conversation-row-sidebar"][data-selected="true"] [class*="truncate"],
-.bg-sidebar [data-active="true"],
-.bg-sidebar [data-active="true"] span,
+.bg-sidebar :is([data-active="true"], [data-active=""]),
+.bg-sidebar :is([data-active="true"], [data-active=""]) span,
 .bg-sidebar [aria-selected="true"] {
   font-weight: 520 !important;
   color: var(--ag-sidebar-selected-fg, #0A0A0A) !important;
