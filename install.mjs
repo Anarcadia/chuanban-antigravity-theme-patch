@@ -88,7 +88,7 @@ function buildManifest(baseDir = __dirname) {
   }
   const manifest = {
     name: 'chuanban-antigravity-theme-patch',
-    version: '5.1.6',
+    version: '5.1.7',
     minNodeVersion: '22.0.0',
     fullMetricsNodeVersion: '22.13.0',
     distribution: {
@@ -123,16 +123,104 @@ function buildDistZip(baseDir = __dirname) {
     'assets'
   ].filter((item) => fs.existsSync(path.join(baseDir, item)));
 
+  const allowedUserFiles = new Set(['config.json', 'custom.css', 'custom.js', 'i18n.override.json']);
+  const skipNames = new Set(['.DS_Store', 'Thumbs.db', 'desktop.ini']);
+  const entriesToPack = [];
+  const collectEntries = (relPosix) => {
+    const fullPath = path.join(baseDir, ...relPosix.split('/'));
+    if (!fs.existsSync(fullPath)) return;
+    const st = fs.statSync(fullPath);
+    if (st.isDirectory()) {
+      for (const child of fs.readdirSync(fullPath).sort()) {
+        if (skipNames.has(child)) continue;
+        if (relPosix === 'user' && !allowedUserFiles.has(child)) continue;
+        collectEntries(`${relPosix}/${child}`);
+      }
+    } else if (st.isFile()) {
+      entriesToPack.push({ abs: fullPath, entry: relPosix });
+    }
+  };
+  for (const item of includeItems) {
+    collectEntries(item.replace(/\\/g, '/'));
+  }
+
   if (process.platform === 'win32') {
-    const psArgs = [
-      '-NoProfile',
-      '-Command',
-      `Compress-Archive -Path ${includeItems.map((i) => `'${i}'`).join(',')} -DestinationPath '${zipPath.replace(/'/g, "''")}' -Force`
-    ];
-    const r = spawnSync('powershell', psArgs, { cwd: baseDir, stdio: 'inherit', windowsHide: true });
-    if (r.status !== 0) throw new Error('Compress-Archive failed');
+    const listTmpPath = path.join(os.tmpdir(), `ag-pack-entries-${process.pid}-${Date.now()}.json`);
+    fs.writeFileSync(listTmpPath, JSON.stringify(entriesToPack), 'utf8');
+    try {
+      const psScript = [
+        '$ErrorActionPreference = "Stop"',
+        'Add-Type -AssemblyName System.IO.Compression',
+        'Add-Type -AssemblyName System.IO.Compression.FileSystem',
+        `$zipPath = '${zipPath.replace(/'/g, "''")}'`,
+        `$listPath = '${listTmpPath.replace(/'/g, "''")}'`,
+        '$items = @(Get-Content -LiteralPath $listPath -Raw -Encoding UTF8 | ConvertFrom-Json)',
+        '$zip = [System.IO.Compression.ZipFile]::Open($zipPath, [System.IO.Compression.ZipArchiveMode]::Create)',
+        'try {',
+        '  foreach ($it in $items) {',
+        '    [void][System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile($zip, [string]$it.abs, [string]$it.entry, [System.IO.Compression.CompressionLevel]::Optimal)',
+        '  }',
+        '} finally {',
+        '  $zip.Dispose()',
+        '}',
+        '$zr = [System.IO.Compression.ZipFile]::OpenRead($zipPath)',
+        '$sha = [System.Security.Cryptography.SHA256]::Create()',
+        '$out = @{ hasBackslash = $false; core = @{} }',
+        'try {',
+        '  foreach ($e in $zr.Entries) {',
+        '    if ($e.FullName.Contains("\\")) { $out.hasBackslash = $true }',
+        '    if ($e.FullName.StartsWith("core/") -and $e.Name -ne "") {',
+        '      $s = $e.Open()',
+        '      $ms = New-Object System.IO.MemoryStream',
+        '      try { $s.CopyTo($ms) } finally { $s.Dispose() }',
+        '      $bytes = $ms.ToArray()',
+        '      $ms.Dispose()',
+        '      $hash = ([System.BitConverter]::ToString($sha.ComputeHash($bytes))).Replace("-", "").ToLowerInvariant()',
+        '      $out.core[$e.Name] = @{ sha256 = $hash; bytes = $bytes.Length }',
+        '    }',
+        '  }',
+        '} finally {',
+        '  $sha.Dispose()',
+        '  $zr.Dispose()',
+        '}',
+        '$out | ConvertTo-Json -Compress -Depth 4'
+      ].join('; ');
+
+      const r = spawnSync('powershell', ['-NoProfile', '-NonInteractive', '-Command', psScript], {
+        cwd: baseDir,
+        encoding: 'utf8',
+        windowsHide: true,
+        maxBuffer: 10 * 1024 * 1024
+      });
+      if (r.status !== 0) {
+        if (fs.existsSync(zipPath)) fs.unlinkSync(zipPath);
+        throw new Error(`ZipArchive pack failed: ${(r.stderr || r.stdout || '').trim()}`);
+      }
+      const verifyData = JSON.parse(String(r.stdout || '').trim());
+      if (verifyData.hasBackslash) {
+        fs.unlinkSync(zipPath);
+        throw new Error(`Verification failed: backslash path detected in ${zipName}`);
+      }
+      for (const [name, meta] of Object.entries(manifest.files)) {
+        const actual = verifyData.core?.[name];
+        if (!actual) {
+          fs.unlinkSync(zipPath);
+          throw new Error(`Verification failed: missing core/${name} in ${zipName}`);
+        }
+        if (actual.sha256 !== meta.sha256 || actual.bytes !== meta.bytes) {
+          fs.unlinkSync(zipPath);
+          throw new Error(
+            `Verification failed for core/${name} in ${zipName}: expected ${meta.sha256} (${meta.bytes}B), got ${actual.sha256} (${actual.bytes}B)`
+          );
+        }
+      }
+    } finally {
+      try {
+        if (fs.existsSync(listTmpPath)) fs.unlinkSync(listTmpPath);
+      } catch {}
+    }
   } else {
-    const r = spawnSync('zip', ['-r', '-q', zipPath, ...includeItems, '-x', '*.DS_Store'], {
+    const r = spawnSync('zip', ['-q', zipPath, ...entriesToPack.map((e) => e.entry)], {
       cwd: baseDir,
       stdio: 'inherit'
     });
@@ -629,27 +717,65 @@ function copyDirRecursive(src, dest) {
   }
 }
 
-function isConfirmedDaemonPid(pid) {
-  if (!pid || pid <= 0 || pid === process.pid) return false;
+function checkDaemonPidState(pid) {
+  if (!pid || pid <= 0 || pid === process.pid) return 'not_daemon';
   try {
     process.kill(pid, 0);
-  } catch {
-    return false;
+  } catch (err) {
+    return err && err.code === 'EPERM' ? 'uncertain' : 'not_daemon';
   }
   if (process.platform === 'win32') {
-    try {
-      const res = spawnSync('tasklist', ['/FI', `PID eq ${pid}`, '/FO', 'CSV', '/NH'], {
-        windowsHide: true,
-        encoding: 'utf8',
-        timeout: 1500
-      });
-      const out = String(res.stdout || '').toLowerCase();
-      if (!out.includes('node.exe')) return false;
-    } catch {
-      return false;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const res = spawnSync('tasklist', ['/FI', `PID eq ${pid}`, '/FO', 'CSV', '/NH'], {
+          windowsHide: true,
+          encoding: 'utf8',
+          timeout: 4000
+        });
+        if (res.status === 0) {
+          const out = String(res.stdout || '').toLowerCase();
+          if (!out.includes('node.exe')) return 'not_daemon';
+        } else if (attempt === 0) {
+          continue;
+        } else {
+          return 'uncertain';
+        }
+        const cimRes = spawnSync(
+          'powershell',
+          [
+            '-NoProfile',
+            '-NonInteractive',
+            '-ExecutionPolicy',
+            'Bypass',
+            '-Command',
+            `$p = Get-CimInstance Win32_Process -Filter "ProcessId = ${Number(pid)}" -ErrorAction SilentlyContinue; if ($p) { $p.CommandLine }`
+          ],
+          {
+            windowsHide: true,
+            encoding: 'utf8',
+            timeout: 12000
+          }
+        );
+        if (cimRes.status === 0) {
+          const cmdLine = String(cimRes.stdout || '').trim().toLowerCase();
+          if (!cmdLine) {
+            try {
+              process.kill(pid, 0);
+              return 'uncertain';
+            } catch {
+              return 'not_daemon';
+            }
+          }
+          if (cmdLine.includes('daemon.mjs') || cmdLine.includes('antigravity-font-daemon')) {
+            return 'confirmed';
+          }
+          return 'not_daemon';
+        }
+      } catch {}
     }
+    return 'uncertain';
   }
-  return true;
+  return 'confirmed';
 }
 
 function stopRunningDaemonProcesses() {
@@ -660,11 +786,15 @@ function stopRunningDaemonProcesses() {
       if (f.startsWith('ag-theme-daemon-') && f.endsWith('.pid')) {
         const pidPath = path.join(tmpDir, f);
         const pid = parseInt(fs.readFileSync(pidPath, 'utf8').trim(), 10);
-        if (isConfirmedDaemonPid(pid)) {
+        const pidState = checkDaemonPidState(pid);
+        if (pidState === 'confirmed') {
           try {
             process.kill(pid, 'SIGTERM');
             stopped.push(pid);
           } catch {}
+        } else if (pidState === 'uncertain') {
+          console.warn(`[Install] Skipping PID file unlink for active node.exe PID ${pid} (WMI check inconclusive).`);
+          continue;
         }
         try {
           fs.unlinkSync(pidPath);
@@ -809,6 +939,7 @@ WantedBy=default.target
     // 脱离沙盒 Win32 Job Object；注册成功后主动清理旧版遗留的 HKCU\...\Run 与 Startup\*.vbs，避免开机三路并发争抢！
     let autostartMethod = 'none';
     let scheduledTaskStarted = false;
+    let taskSettingsUpdated = false;
     try {
       const createRes = spawnSync(
         'schtasks',
@@ -826,6 +957,22 @@ WantedBy=default.target
       );
       if (createRes.status === 0) {
         autostartMethod = 'schtasks';
+        // 修正 Windows 计划任务默认策略：允许电池供电启动与持续运行、解除 72 小时超时强杀、允许重装时并发拉起新实例
+        try {
+          const settingsRes = spawnSync(
+            'powershell',
+            [
+              '-NoProfile',
+              '-NonInteractive',
+              '-ExecutionPolicy',
+              'Bypass',
+              '-Command',
+              "$s = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit ([TimeSpan]::Zero) -MultipleInstances Parallel; Set-ScheduledTask -TaskName 'AntigravityThemeDaemon' -Settings $s -ErrorAction Stop | Out-Null"
+            ],
+            { stdio: 'ignore', windowsHide: true, timeout: 12000 }
+          );
+          taskSettingsUpdated = settingsRes.status === 0;
+        } catch {}
         // 清理旧版多重自启残留
         try {
           if (fs.existsSync(vbsFile)) fs.unlinkSync(vbsFile);
@@ -899,6 +1046,7 @@ WantedBy=default.target
       serviceFile: autostartMethod === 'startup-vbs' ? vbsFile : localVbsFile,
       localVbsFile,
       scheduledTask: autostartMethod === 'schtasks' ? 'AntigravityThemeDaemon' : null,
+      taskSettingsUpdated,
       scheduledTaskStarted,
       spawnedPid,
       runningNow: Boolean(scheduledTaskStarted || spawnedPid)
@@ -967,7 +1115,7 @@ async function runInstall() {
       }
     }
 
-    for (const docFile of ['install.mjs', 'SKILL.md', 'README.md']) {
+    for (const docFile of ['install.mjs', 'SKILL.md', 'README.md', 'CHANGELOG.md']) {
       const s = path.join(__dirname, docFile);
       const d = path.join(targetDir, docFile);
       if (fs.existsSync(s)) fs.copyFileSync(s, d);
@@ -1173,6 +1321,7 @@ function runInstallFonts() {
 
   fs.mkdirSync(destDir, { recursive: true });
   const installed = [];
+  const skippedLocked = [];
 
   const walkFonts = (dir) => {
     for (const entry of fs.readdirSync(dir)) {
@@ -1182,7 +1331,21 @@ function runInstallFonts() {
         walkFonts(full);
       } else if (/\.(ttf|otf|ttc)$/i.test(entry)) {
         const destPath = path.join(destDir, entry);
-        fs.copyFileSync(full, destPath);
+        let copied = false;
+        try {
+          fs.copyFileSync(full, destPath);
+          copied = true;
+        } catch (err) {
+          if (
+            process.platform === 'win32' &&
+            (err?.code === 'EBUSY' || err?.code === 'EPERM' || err?.code === 'EACCES') &&
+            fs.existsSync(destPath)
+          ) {
+            skippedLocked.push(destPath);
+          } else {
+            throw err;
+          }
+        }
         if (process.platform === 'win32') {
           const ext = path.extname(entry).toLowerCase();
           const typeSuffix = ext === '.otf' ? ' (OpenType)' : ' (TrueType)';
@@ -1205,18 +1368,69 @@ function runInstallFonts() {
             );
           } catch {}
         }
-        installed.push(destPath);
+        if (copied) installed.push(destPath);
       }
     }
   };
 
   walkFonts(path.resolve(fromDir));
-  if (process.platform === 'linux') {
+  let fontBroadcastOk = process.platform !== 'win32';
+  if (process.platform === 'win32' && (installed.length > 0 || skippedLocked.length > 0)) {
+    fontBroadcastOk = false;
+    try {
+      const fontListJson = JSON.stringify(Array.from(new Set([...installed, ...skippedLocked])));
+      const listTmp = path.join(os.tmpdir(), `ag-fonts-${process.pid}-${Date.now()}.json`);
+      fs.writeFileSync(listTmp, fontListJson, 'utf8');
+      try {
+        const psNotify = [
+          'Add-Type -TypeDefinition @"',
+          'using System; using System.Runtime.InteropServices;',
+          'public static class AgFontBroadcast {',
+          '  [DllImport("gdi32.dll", CharSet = CharSet.Unicode)] public static extern int AddFontResource(string lpFileName);',
+          '  [DllImport("user32.dll", CharSet = CharSet.Auto)] public static extern bool SendNotifyMessage(IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam);',
+          '}',
+          '"@',
+          `$paths = @(Get-Content -LiteralPath '${listTmp.replace(/'/g, "''")}' -Raw -Encoding UTF8 | ConvertFrom-Json)`,
+          'foreach ($fp in $paths) { if ($fp) { [void][AgFontBroadcast]::AddFontResource([string]$fp) } }',
+          '[void][AgFontBroadcast]::SendNotifyMessage([IntPtr]0xffff, 0x001D, [IntPtr]::Zero, [IntPtr]::Zero)'
+        ].join("\n");
+        const psRes = spawnSync(
+          'powershell',
+          ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', psNotify],
+          {
+            stdio: 'ignore',
+            windowsHide: true,
+            timeout: 25000
+          }
+        );
+        fontBroadcastOk = psRes.status === 0;
+      } finally {
+        try {
+          if (fs.existsSync(listTmp)) fs.unlinkSync(listTmp);
+        } catch {}
+      }
+    } catch {}
+  } else if (process.platform === 'linux') {
     try {
       execSync('fc-cache -f 2>/dev/null || true');
     } catch {}
   }
-  console.log(JSON.stringify({ ok: true, platform: process.platform, destDir, installedCount: installed.length, installed }, null, 2));
+  console.log(
+    JSON.stringify(
+      {
+        ok: true,
+        platform: process.platform,
+        destDir,
+        installedCount: installed.length,
+        skippedLockedCount: skippedLocked.length,
+        fontBroadcastOk,
+        installed,
+        skippedLocked
+      },
+      null,
+      2
+    )
+  );
 }
 
 async function runUninstall() {

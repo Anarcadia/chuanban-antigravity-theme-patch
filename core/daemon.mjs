@@ -2,9 +2,9 @@
 /**
  * chuanban-antigravity-theme-patch · CDP Theme & Live Metrics Daemon (core/daemon.mjs)
  *
- * 架构特性（v5.1.6）：
+ * 架构特性（v5.1.7）：
  * 1. 动态 Node 分级：
- *    - Node >= 22.0：完整启用昼夜双模式独立主题（暖纸浅色 + 官方 onyx 深色）、四层字体、输入框三态、1500条汉化、死锁自愈与 2.31.2 curtainView/Swarm 适配。
+ *    - Node >= 22.0：完整启用昼夜双模式独立主题（暖纸浅色 + 官方 onyx 深色）、四层字体、输入框三态、1554条汉化、死锁自愈与 2.31.2 curtainView/Swarm 适配。
  *    - Node >= 22.13：动态 `await import('node:sqlite')` 解锁底部实时会话指标胶囊（O(1) 增量尾行解析）；低版本优雅降级绝不崩溃。
  * 2. 模块化与热重载：
  *    - 周期性检测 `user/config.json`、`user/custom.css`、`user/i18n.override.json`、`user/custom.js` 的 mtime，
@@ -77,6 +77,84 @@ function readTextSafe(filePath, fallback = '') {
   }
 }
 
+function getFileMtimeSig(filePath) {
+  try {
+    const st = fs.statSync(filePath, { throwIfNoEntry: false });
+    return st ? `${st.mtimeMs}:${st.size}` : '0:0';
+  } catch {
+    return '0:0';
+  }
+}
+
+const wslDirsCache = new Map(); // cacheKey -> { sig, distro, dirs, probedAt }
+let wslUncBackoffUntil = 0;
+
+function resolveWin32WslConversationsDirs(portFile, geminiSubDir) {
+  if (process.platform !== 'win32' || !portFile || !geminiSubDir) return [];
+  const now = Date.now();
+  if (now < wslUncBackoffUntil) return [];
+  try {
+    const wslStatePath = path.join(path.dirname(portFile), 'wsl_state.json');
+    const fileSig = getFileMtimeSig(wslStatePath);
+    const envDistro = String(process.env.ANTIGRAVITY_WSL_DISTRO || '').trim();
+    const compositeSig = `${fileSig}|env:${envDistro}`;
+    if (fileSig === '0:0' && !envDistro) {
+      wslDirsCache.delete(wslStatePath);
+      return [];
+    }
+    const cached = wslDirsCache.get(wslStatePath);
+    if (
+      cached &&
+      cached.sig === compositeSig &&
+      (!cached.distro ||
+        (cached.dirs.length > 0 && now - cached.probedAt < 60000) ||
+        now - cached.probedAt < 15000)
+    ) {
+      return cached.dirs;
+    }
+
+    const wslState = fileSig !== '0:0' ? readJsonSafe(wslStatePath, {}) : {};
+    const persistedDistro = String(wslState?.distro || wslState?.distroName || wslState?.defaultDistro || '').trim();
+    const rawDistro = persistedDistro || envDistro;
+    if (!rawDistro || !/^[A-Za-z0-9._-]+$/.test(rawDistro)) {
+      wslDirsCache.set(wslStatePath, { sig: compositeSig, distro: '', dirs: [], probedAt: now });
+      return [];
+    }
+
+    const t0 = Date.now();
+    const subParts = geminiSubDir.split('/');
+    const found = [];
+    for (const uncHost of ['wsl.localhost', 'wsl$']) {
+      const distroRoot = `\\\\${uncHost}\\${rawDistro}`;
+      if (!fs.existsSync(distroRoot)) {
+        if (Date.now() - t0 > 400) break;
+        continue;
+      }
+      const homeRoot = path.join(distroRoot, 'home');
+      if (fs.existsSync(homeRoot)) {
+        try {
+          for (const userEntry of fs.readdirSync(homeRoot)) {
+            const convDir = path.join(homeRoot, userEntry, ...subParts, 'conversations');
+            if (fs.existsSync(convDir)) found.push(convDir);
+          }
+        } catch {}
+      }
+      const rootConvDir = path.join(distroRoot, 'root', ...subParts, 'conversations');
+      if (fs.existsSync(rootConvDir)) found.push(rootConvDir);
+      if (found.length > 0 || Date.now() - t0 > 400) break;
+    }
+    if (Date.now() - t0 > 400) {
+      wslUncBackoffUntil = Date.now() + 45000;
+    }
+    const uniqueDirs = Array.from(new Set(found));
+    wslDirsCache.set(wslStatePath, { sig: compositeSig, distro: rawDistro, dirs: uniqueDirs, probedAt: Date.now() });
+    return uniqueDirs;
+  } catch {
+    wslUncBackoffUntil = Date.now() + 45000;
+    return [];
+  }
+}
+
 function resolveChannelPaths(singleChannel = 'stable', userCfg = {}) {
   const home = os.homedir();
   const isInsiders = singleChannel === 'insiders';
@@ -111,13 +189,17 @@ function resolveChannelPaths(singleChannel = 'stable', userCfg = {}) {
   const portFile = getArg('--port-file', userCfg.portFile || defaultPortFile);
   const channelInstalled =
     fs.existsSync(portFile) || fs.existsSync(path.dirname(defaultPortFile)) || fs.existsSync(dotDir);
+  const explicitConvDir = getArg('--conversations-dir', userCfg.conversationsDir || '');
+  const primaryConvDir = explicitConvDir || defaultConvDir;
 
   return {
     channel: singleChannel,
     portFile,
+    geminiSubDir,
+    explicitConvDir: Boolean(explicitConvDir),
     fallbackPort: Number(userCfg.fallbackPort) > 0 ? Number(userCfg.fallbackPort) : fallbackPort,
     channelInstalled,
-    conversationsDir: getArg('--conversations-dir', userCfg.conversationsDir || defaultConvDir)
+    conversationsDir: primaryConvDir
   };
 }
 
@@ -140,7 +222,7 @@ function resolveActiveChannelEndpoints(channelMode = 'auto', userCfg = {}) {
 // ============================================================================
 // 2. 动态构建注入载荷（支持 core/ + user/ 实时合并与热更新签名）
 // ============================================================================
-const BASE_VERSION = '20261113-v5.1.6';
+const BASE_VERSION = '20261114-v5.1.7';
 let cachedBundleSig = '';
 let cachedInjectScript = '';
 let cachedPatchVersion = '';
@@ -170,15 +252,6 @@ let activeConfig = {
   endpoints: []
 };
 
-function getFileMtimeSig(filePath) {
-  try {
-    const st = fs.statSync(filePath, { throwIfNoEntry: false });
-    return st ? `${st.mtimeMs}:${st.size}` : '0:0';
-  } catch {
-    return '0:0';
-  }
-}
-
 function normalizeOverrideDict(rawObj) {
   if (!rawObj || typeof rawObj !== 'object') return {};
   const source = rawObj.exact && typeof rawObj.exact === 'object' ? rawObj.exact : rawObj;
@@ -190,6 +263,33 @@ function normalizeOverrideDict(rawObj) {
     }
   }
   return clean;
+}
+
+const HOST_CONFIG_PATH = path.join(os.homedir(), '.gemini', 'config', 'config.json');
+let cachedHostCfgFileSig = '';
+let cachedHostThemeMode = null;
+
+function readHostThemeMode() {
+  const fileSig = getFileMtimeSig(HOST_CONFIG_PATH);
+  if (fileSig === cachedHostCfgFileSig) {
+    return cachedHostThemeMode;
+  }
+  cachedHostCfgFileSig = fileSig;
+  if (fileSig === '0:0') {
+    cachedHostThemeMode = null;
+    return null;
+  }
+  try {
+    const hostCfg = readJsonSafe(HOST_CONFIG_PATH, {});
+    const raw = String(hostCfg?.userSettings?.themeMode || '').toUpperCase();
+    if (raw === 'THEME_MODE_DARK') cachedHostThemeMode = 'dark';
+    else if (raw === 'THEME_MODE_LIGHT') cachedHostThemeMode = 'light';
+    else if (raw === 'THEME_MODE_INHERIT') cachedHostThemeMode = 'inherit';
+    else cachedHostThemeMode = null;
+  } catch {
+    cachedHostThemeMode = null;
+  }
+  return cachedHostThemeMode;
 }
 
 function rebuildBundleIfNeeded() {
@@ -207,7 +307,10 @@ function rebuildBundleIfNeeded() {
         path.join(USER_DIR, 'custom.js')
       ];
 
-  const sig = [...coreFiles, ...userFiles].map(getFileMtimeSig).join('|') + `|safe:${SAFE_MODE}|cli:${CLI_CHANNEL || ''}`;
+  const hostThemeMode = readHostThemeMode();
+  const sig =
+    [...coreFiles, ...userFiles].map(getFileMtimeSig).join('|') +
+    `|hostTheme:${hostThemeMode || ''}|safe:${SAFE_MODE}|cli:${CLI_CHANNEL || ''}`;
   if (sig === cachedBundleSig && cachedInjectScript) {
     return false;
   }
@@ -303,7 +406,7 @@ function rebuildBundleIfNeeded() {
     .update(customCss)
     .update(JSON.stringify(mergedDict))
     .update(customJs)
-    .update(JSON.stringify({ preset, modules, themeVars, selectors: activeConfig.selectors }))
+    .update(JSON.stringify({ preset, modules, themeVars, selectors: activeConfig.selectors, hostThemeMode }))
     .digest('hex')
     .slice(0, 8);
 
@@ -313,6 +416,7 @@ function rebuildBundleIfNeeded() {
   const bootPayload = {
     version: cachedPatchVersion,
     platform: process.platform,
+    hostThemeMode,
     enabled,
     preset,
     cssText: baseCss,
@@ -342,27 +446,65 @@ rebuildBundleIfNeeded();
 // ============================================================================
 // 3. 单实例 PID 锁（防止重复启动守护进程，Windows 校验 node.exe 防止 PID 复用误杀）
 // ============================================================================
-function isConfirmedDaemonPid(pid) {
-  if (!pid || pid <= 0 || pid === process.pid) return false;
+function checkDaemonPidState(pid) {
+  if (!pid || pid <= 0 || pid === process.pid) return 'not_daemon';
   try {
     process.kill(pid, 0);
-  } catch {
-    return false;
+  } catch (err) {
+    return err && err.code === 'EPERM' ? 'uncertain' : 'not_daemon';
   }
   if (process.platform === 'win32') {
-    try {
-      const res = spawnSync('tasklist', ['/FI', `PID eq ${pid}`, '/FO', 'CSV', '/NH'], {
-        windowsHide: true,
-        encoding: 'utf8',
-        timeout: 1500
-      });
-      const out = String(res.stdout || '').toLowerCase();
-      if (!out.includes('node.exe')) return false;
-    } catch {
-      return false;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const res = spawnSync('tasklist', ['/FI', `PID eq ${pid}`, '/FO', 'CSV', '/NH'], {
+          windowsHide: true,
+          encoding: 'utf8',
+          timeout: 4000
+        });
+        if (res.status === 0) {
+          const out = String(res.stdout || '').toLowerCase();
+          if (!out.includes('node.exe')) return 'not_daemon';
+        } else if (attempt === 0) {
+          continue;
+        } else {
+          return 'uncertain';
+        }
+        const cimRes = spawnSync(
+          'powershell',
+          [
+            '-NoProfile',
+            '-NonInteractive',
+            '-ExecutionPolicy',
+            'Bypass',
+            '-Command',
+            `$p = Get-CimInstance Win32_Process -Filter "ProcessId = ${Number(pid)}" -ErrorAction SilentlyContinue; if ($p) { $p.CommandLine }`
+          ],
+          {
+            windowsHide: true,
+            encoding: 'utf8',
+            timeout: 12000
+          }
+        );
+        if (cimRes.status === 0) {
+          const cmdLine = String(cimRes.stdout || '').trim().toLowerCase();
+          if (!cmdLine) {
+            try {
+              process.kill(pid, 0);
+              return 'uncertain';
+            } catch {
+              return 'not_daemon';
+            }
+          }
+          if (cmdLine.includes('daemon.mjs') || cmdLine.includes('antigravity-font-daemon')) {
+            return 'confirmed';
+          }
+          return 'not_daemon';
+        }
+      } catch {}
     }
+    return 'uncertain';
   }
-  return true;
+  return 'confirmed';
 }
 
 const pidKey = CLI_CHANNEL || 'default';
@@ -371,10 +513,14 @@ if (!RUN_ONCE) {
   try {
     if (fs.existsSync(PID_FILE)) {
       const oldPid = parseInt(fs.readFileSync(PID_FILE, 'utf8').trim(), 10);
-      if (isConfirmedDaemonPid(oldPid)) {
+      const pidState = checkDaemonPidState(oldPid);
+      if (pidState === 'confirmed') {
         try {
           process.kill(oldPid, 'SIGTERM');
         } catch {}
+      } else if (pidState === 'uncertain') {
+        console.warn(`[Daemon] Existing node.exe PID ${oldPid} still active while WMI busy; skipping duplicate startup.`);
+        process.exit(0);
       }
     }
     fs.writeFileSync(PID_FILE, String(process.pid), 'utf8');
@@ -489,17 +635,101 @@ function fmtNum(n) {
   return (n || 0).toLocaleString('en-US');
 }
 
-function getDbSignature(cascadeId, conversationsDir) {
+const resolvedCascadeDbCache = new Map();
+const negativeCascadeWslCache = new Map(); // cacheKey -> expireAtMs
+
+function resolveConversationDbPath(cascadeId, endpointOrDir) {
+  if (!cascadeId || !endpointOrDir) return '';
+  if (Array.isArray(endpointOrDir)) {
+    const dirs = endpointOrDir.filter(Boolean);
+    for (let i = 0; i < dirs.length; i++) {
+      const candidate = path.join(dirs[i], `${cascadeId}.db`);
+      if (fs.existsSync(candidate)) return candidate;
+    }
+    return dirs.length > 0 ? path.join(dirs[0], `${cascadeId}.db`) : '';
+  }
+  if (typeof endpointOrDir === 'string') {
+    return path.join(endpointOrDir, `${cascadeId}.db`);
+  }
+
+  const primaryDir = endpointOrDir.conversationsDir || '';
+  const cacheKey = `${endpointOrDir.channel || 'default'}|${primaryDir}|${cascadeId}`;
+  const cachedPath = resolvedCascadeDbCache.get(cacheKey);
+  if (cachedPath && fs.existsSync(cachedPath)) {
+    return cachedPath;
+  }
+  if (cachedPath) {
+    resolvedCascadeDbCache.delete(cacheKey);
+  }
+
+  const remember = (foundPath) => {
+    negativeCascadeWslCache.delete(cacheKey);
+    if (resolvedCascadeDbCache.size >= 64) {
+      const oldestKey = resolvedCascadeDbCache.keys().next().value;
+      if (oldestKey !== undefined) resolvedCascadeDbCache.delete(oldestKey);
+    }
+    resolvedCascadeDbCache.set(cacheKey, foundPath);
+    return foundPath;
+  };
+
+  if (primaryDir) {
+    const primaryCandidate = path.join(primaryDir, `${cascadeId}.db`);
+    if (fs.existsSync(primaryCandidate)) {
+      return remember(primaryCandidate);
+    }
+  }
+
+  const now = Date.now();
+  if (
+    process.platform === 'win32' &&
+    !endpointOrDir.explicitConvDir &&
+    endpointOrDir.portFile &&
+    now >= wslUncBackoffUntil &&
+    (negativeCascadeWslCache.get(cacheKey) || 0) <= now
+  ) {
+    const t0 = Date.now();
+    const wslDirs = resolveWin32WslConversationsDirs(
+      endpointOrDir.portFile,
+      endpointOrDir.geminiSubDir || '.gemini/antigravity'
+    );
+    for (let i = 0; i < wslDirs.length; i++) {
+      const wslCandidate = path.join(wslDirs[i], `${cascadeId}.db`);
+      if (fs.existsSync(wslCandidate)) {
+        return remember(wslCandidate);
+      }
+      if (Date.now() - t0 > 400) break;
+    }
+    if (Date.now() - t0 > 400) {
+      wslUncBackoffUntil = Date.now() + 45000;
+    }
+    if (negativeCascadeWslCache.size >= 128) {
+      negativeCascadeWslCache.clear();
+    }
+    negativeCascadeWslCache.set(cacheKey, Date.now() + 10000);
+  }
+
+  return primaryDir ? path.join(primaryDir, `${cascadeId}.db`) : '';
+}
+
+function getDbState(cascadeId, endpointOrDir) {
   try {
-    const dbPath = path.join(conversationsDir, `${cascadeId}.db`);
+    const dbPath = resolveConversationDbPath(cascadeId, endpointOrDir);
+    if (!dbPath) return null;
     const st = fs.statSync(dbPath, { throwIfNoEntry: false });
     if (!st) return null;
     const wst = fs.statSync(`${dbPath}-wal`, { throwIfNoEntry: false });
     const walSig = wst ? `${wst.mtimeMs}:${wst.size}` : '0:0';
-    return `${st.mtimeMs}:${st.size}|${walSig}`;
+    return {
+      dbPath,
+      sig: `${dbPath}#${st.mtimeMs}:${st.size}|${walSig}`
+    };
   } catch {
     return null;
   }
+}
+
+function getDbSignature(cascadeId, endpointOrDir) {
+  return getDbState(cascadeId, endpointOrDir)?.sig || null;
 }
 
 function parseGenMetadataRow(r) {
@@ -531,12 +761,12 @@ function parseGenMetadataRow(r) {
   };
 }
 
-function parseConversationMetrics(cascadeId, conversationsDir) {
+function parseConversationMetrics(cascadeId, endpointOrDir, precomputedState = null) {
   if (!DatabaseSync) return null;
   if (!cascadeId || !/^[0-9a-f-]{36}$/i.test(cascadeId)) return null;
-  const dbPath = path.join(conversationsDir, `${cascadeId}.db`);
-  const sig = getDbSignature(cascadeId, conversationsDir);
-  if (!sig) return { cascadeId, hasData: false };
+  const state = precomputedState || getDbState(cascadeId, endpointOrDir);
+  if (!state || !state.dbPath || !state.sig) return { cascadeId, hasData: false };
+  const { dbPath, sig } = state;
 
   const cached = metricsCache.get(dbPath);
   if (cached && cached.sig === sig) {
@@ -879,12 +1109,14 @@ function attachTarget(target, endpoint) {
         }
         if (!activeCascadeId) return;
 
-        // 先在 Node 本地通过 statSync 检查 .db/.db-wal 签名，未变化则 0 WebSocket 通信直接返回
-        const sig = getDbSignature(activeCascadeId, endpoint.conversationsDir) || 'empty';
+        // 先在 Node 本地通过 statSync 检查 .db/.db-wal 签名（兼容 Windows WSL 按需懒探测），未变化则 0 WebSocket 通信直接返回
+        const currentEndpoint = attachedTargets.get(target.id)?.endpoint || endpoint;
+        const dbState = getDbState(activeCascadeId, currentEndpoint);
+        const sig = dbState?.sig || 'empty';
         const sessionKey = `${activeCascadeId}@${sig}`;
         if (!force && sessionKey === lastPushedHash) return;
 
-        const payload = parseConversationMetrics(activeCascadeId, endpoint.conversationsDir);
+        const payload = parseConversationMetrics(activeCascadeId, currentEndpoint, dbState);
         if (!payload || payload.transientError) {
           if (force && payload?.cachedPayload) {
             await send('Runtime.evaluate', {
@@ -960,7 +1192,7 @@ function attachTarget(target, endpoint) {
             msg.method === 'Page.loadEventFired' ||
             msg.method === 'Page.domContentEventFired'
           ) {
-            if (!msg.params?.frame || !msg.params.frame.parentId) {
+            if (!msg.params?.frame || !msg.params.frame.parentId || msg.params.frame.id === target.id) {
               if (navDebounceTimer) clearTimeout(navDebounceTimer);
               navDebounceTimer = setTimeout(() => {
                 navDebounceTimer = null;
@@ -1170,6 +1402,7 @@ async function sync() {
           attachPromises.push(attachTarget(page, endpoint));
         } else {
           const entry = attachedTargets.get(page.id);
+          entry.endpoint = endpoint;
           if (bundleChanged && entry.updateNewDocScript) {
             await entry.updateNewDocScript();
           }

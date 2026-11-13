@@ -8,7 +8,7 @@
 
 @font-face {
   font-family: 'Anthropic Serif';
-  src: local('AnthropicSerifWebWeb-TextSemibold'), local('AnthropicSerifWebWeb-TextBold'), local('Anthropic Serif Bold'), local('Anthropic Serif Web Bold'), local('Anthropic Serif Web Display Light'), local('AnthropicSerifWebWeb-TextRegular');
+  src: local('AnthropicSerifWebWeb-TextSemibold'), local('AnthropicSerifWebWeb-TextBold'), local('Anthropic Serif Bold'), local('Anthropic Serif Web Bold'), local('Anthropic Serif Web Display Light'), local('AnthropicSerifWebWeb-TextRegular'), local('AnthropicSerifWebWeb-TextLight'), local('Anthropic Serif Web Text Light');
   font-weight: 600 900;
   font-style: normal;
   font-display: swap;
@@ -16,7 +16,7 @@
 
 @font-face {
   font-family: 'Anthropic Sans';
-  src: local('AnthropicSansWebVariable-TextRegular'), local('AnthropicSansWebVariable-TextLight'), local('Anthropic Sans Web'), local('Anthropic Sans Web Text'), local('Anthropic Sans Web Display Light'), local('Anthropic Sans');
+  src: local('AnthropicSansWebVariable-TextRegular'), local('Anthropic Sans Web Text Regular'), local('AnthropicSansWebVariable-TextLight'), local('Anthropic Sans Web'), local('Anthropic Sans Web Text'), local('Anthropic Sans Web Display Light'), local('Anthropic Sans');
   font-weight: 300 599;
   font-style: normal;
   font-display: swap;
@@ -24,7 +24,7 @@
 
 @font-face {
   font-family: 'Anthropic Sans';
-  src: local('AnthropicSansWebVariable-TextSemibold'), local('AnthropicSansWebVariable-TextBold'), local('Anthropic Sans Bold'), local('Anthropic Sans Web Bold'), local('Anthropic Sans Web Display Light'), local('AnthropicSansWebVariable-TextRegular');
+  src: local('AnthropicSansWebVariable-TextSemibold'), local('AnthropicSansWebVariable-TextBold'), local('Anthropic Sans Bold'), local('Anthropic Sans Web Bold'), local('Anthropic Sans Web Display Light'), local('Anthropic Sans Web Text Regular'), local('AnthropicSansWebVariable-TextRegular');
   font-weight: 600 900;
   font-style: normal;
   font-display: swap;
@@ -135,6 +135,31 @@ article,
 
 :is([data-markdown-root], .select-text, .prose, .markdown) :is(p, li, blockquote) {
   line-height: 1.62;
+}
+
+/* Windows DirectWrite 可变字体命名实例修正：Windows 版 AnthropicSerif TTF 仅暴露 TextLight (wght=300) 实例名，显式驱动 wght 轴还原 400 正文/斜体、500 中黑与 600 粗体/粗斜体 */
+html[data-ag-os="win32"] :is([data-markdown-root], [data-testid="user-message-content"], .agy-user-bubble, .select-text, .prose, .markdown, article),
+html[data-ag-os="win32"] :is([data-markdown-root], [data-testid="user-message-content"], .agy-user-bubble, .select-text, .prose, .markdown, article) :is(i, em, .italic) {
+  font-variation-settings: 'wght' 400, 'opsz' 16 !important;
+}
+
+html[data-ag-os="win32"] :is([data-markdown-root], [data-testid="user-message-content"], .agy-user-bubble, .select-text, .prose, .markdown, article) .font-medium,
+html[data-ag-os="win32"] :is([data-markdown-root], [data-testid="user-message-content"], .agy-user-bubble, .select-text, .prose, .markdown, article) .font-medium :is(i, em, .italic) {
+  font-weight: 500 !important;
+  font-variation-settings: 'wght' 500, 'opsz' 16 !important;
+}
+
+html[data-ag-os="win32"] :is([data-markdown-root], [data-testid="user-message-content"], .agy-user-bubble, .select-text, .prose, .markdown, article) :is(strong, b, h1, h2, h3, h4, h5, h6, th, .font-semibold, .font-bold),
+html[data-ag-os="win32"] :is([data-markdown-root], [data-testid="user-message-content"], .agy-user-bubble, .select-text, .prose, .markdown, article) :is(strong, b, h1, h2, h3, h4, h5, h6, th, .font-semibold, .font-bold) :is(i, em, .italic) {
+  font-weight: 600 !important;
+  font-variation-settings: 'wght' 600, 'opsz' 16 !important;
+}
+
+html[data-ag-os="win32"] :is(code, pre, kbd, samp, .font-mono, [class*="language-"], .monaco-editor, .xterm),
+html[data-ag-os="win32"] :is(code, pre, kbd, samp, .font-mono, [class*="language-"], .monaco-editor, .xterm) *,
+html[data-ag-os="win32"] :is([data-markdown-root], [data-testid="user-message-content"], .agy-user-bubble, .select-text, .prose, .markdown, article) :is(code, pre, kbd, samp, .font-mono, [class*="language-"]),
+html[data-ag-os="win32"] :is([data-markdown-root], [data-testid="user-message-content"], .agy-user-bubble, .select-text, .prose, .markdown, article) :is(code, pre, kbd, samp, .font-mono, [class*="language-"]) :is(*, strong, b, i, em, .italic, .font-medium, .font-semibold, .font-bold) {
+  font-variation-settings: normal !important;
 }
 
 html[data-ag-custom-font-size="true"] :is([data-markdown-root], [data-testid="user-message-content"], [data-testid="user-message-content"] .select-text, .agy-user-bubble, .prose, .markdown, [class*="chat-message"]) {

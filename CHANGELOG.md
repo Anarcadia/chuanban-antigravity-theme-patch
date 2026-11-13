@@ -4,6 +4,40 @@
 
 ---
 
+## [v5.1.7] - 2026-11-14
+
+> **适用版本**：Antigravity `2.31.2+`（`CL=1019359392`，向下完全兼容 `2.31.1` / `2.31.0` / `2.30.0`）  
+> **核验基线**：Windows `2.31.2` 实机排障热修合流 + macOS `2.31.2` 实机 CDP 全断言回归 + `Claude Sonnet 5.5 (High)` 独立对抗审查闭环加固
+
+### Fixed（Windows `2.31.2` 专有缺陷根治与双平台对称加固）
+- **Windows `DirectWrite` 可变字体 `wght/opsz` 双轴全字重/斜体修复（`core/theme.css`）**：
+  - 针对 `AnthropicSerif-*.ttf` 默认 `wght=300` 轴导致 Windows `DirectWrite` 将 `nameID 4/6` 暴露为 `'Anthropic Serif Web Text Light'` / `'AnthropicSerifWebWeb-TextLight'` 进而使 `600 900` 粗体回退至 `Sarasa Mono Slab SC` 的底层缺陷，补齐 `Anthropic Serif` 与 `Anthropic Sans` `@font-face` `local()` 全名声明；
+  - 在 `html[data-ag-os="win32"]` 下显式注入 `:is(p, li, ...)` 正文（`'wght' 400, 'opsz' 16`）、`:is(i, em, .italic)` 斜体（`'wght' 400`）、`.font-medium` 中黑（`'wght' 500`）、`:is(strong, b, h1~h6, th, .font-semibold, .font-bold)` 粗体及粗斜体嵌套（`'wght' 600, 'opsz' 16`）与代码块内嵌 `normal` 还原规则，同时对 macOS `CoreText` 保持 0 干扰。
+- **Windows 计划任务电池断电强杀与 72 小时时限修复（`install.mjs`）**：
+  - `registerSystemService()` 在创建 `AntigravityThemeDaemon` 后通过 PowerShell `Set-ScheduledTask` 关闭 `DisallowStartIfOnBatteries`、`StopIfGoingOnBatteries`、清除 `ExecutionTimeLimit='PT0S'` 72 小时上限并设置 `MultipleInstances='Parallel'`，根治笔记本拔电休眠唤醒后守护进程失活；同步在 `install` 流程向安装目录拷入 `CHANGELOG.md`。
+- **Windows/Linux `0ms` 长按连发缩放、异步 `resize` 水位追踪与欧式键盘保护（`core/runtime.js`）**：
+  - 保留 macOS 主键盘 `60ms` `NSMenu` 原生菜单加速双倍跳变防抖窗口，将无原生 `NSMenu` 加速器的 Windows / Linux 及 macOS 数字小键盘与 `_` 改为 `0ms` 即时执行（彻底修复长按 `Ctrl + =/-` `e.repeat` `33ms` 周期被 `60ms` 定时器重置吞键的缺陷）；
+  - 修复 `void ipcRenderer.invoke('window:zoom-*')` 异步缩放期间 `__ag_zoom_resize_fn` 水位吸收逻辑，补齐 `plugin://swarm--` 子帧小键盘 `Ctrl + Numpad0`、`_` 及中文输入法归一化转发，并收窄 `isCjkImeKey`（移除 `Dead` 重音死键）防止误伤德语 QWERTZ `Ctrl+ß` / `Ctrl+´`。
+- **Windows 原生标题栏按钮 `setTitleBarOverlay` 昼夜反差同步与 `2.31.2` 主题优先级对齐（`core/runtime.js`）**：
+  - 新增支持 `color-mix()` / `oklch()` 零 DOM 污染离屏解析的 `resolveCssColorToHex6()` 与仅在 `win32` 顶层窗口激活的 `syncWinTitleBarOverlay()`，实时同步标题栏最小化/最大化/关闭按钮反差，禁用/卸载（含 `<head>` 早注阶段）时精准还原宿主原生色值；
+  - 修正跨版本升级场景下旧版 `localStorage['theme-mode']` 残留压过 `2.31.2` 实时 `colorScheme` 与 `hostThemeMode` 的优先级缺陷。
+- **Windows WSL 会话库按需懒探测、休眠退避与双游标零重扫（`core/daemon.mjs`）**：
+  - 新增基于 `%APPDATA%\Antigravity\wsl_state.json`（及 `ANTIGRAVITY_WSL_DISTRO` 环境变量）缓存、未命中短冷却负缓存与 `>400ms` 慢响应 `45s` 自动熔断退避的 WSL `\\wsl.localhost\<distro>` / `\\wsl$\<distro>` 按需懒解析（本地会话命中时 0 UNC 网络探测，避免休眠 WSL2 VM 被轮询唤醒或阻塞主线程），并合并 `getDbState` 消除单轮重复 `statSync`。
+- **Windows 守护进程三态 PID 防误杀、字体占用容错与 `.NET ZipFile` 打包（`install.mjs` / `core/daemon.mjs`）**：
+  - `checkDaemonPidState()` 引入 `'confirmed' | 'not_daemon' | 'uncertain'` 三态校验与 `12s` WMI 超时重试，既杜绝系统重启后 PID 复用误杀无关 `node.exe`，又防止登录高负载超时误删 `.pid` 制造孤儿双守护进程；
+  - `install-fonts` 捕获客户端运行期 `EBUSY/EPERM/EACCES` 字体内存映射锁并归入 `skippedLocked`，通过 `25s` 超时的 `gdi32!AddFontResource` 与异步 `SendNotifyMessage(HWND_BROADCAST, WM_FONTCHANGE)` 即时广播刷新；
+  - `buildDistZip()` 双端共享 `user/` 4 模板白名单，Windows 下采用 `.NET System.IO.Compression.ZipFile` 原生流式生成 POSIX `/` 路径规范压缩包，彻底告别 `Compress-Archive` 30 秒卡顿与反斜杠归档污染。
+
+### Added（Swarm 隐藏预加载感知、弯引号归一与 1,554 条词典扩充）
+- **`plugin://swarm--` OOPIF 顶层重注入与宿主 `config.json` 主题兜底（`core/daemon.mjs` / `core/runtime.js`）**：
+  - 修复 `daemon.mjs` `Page.frameNavigated` 在 OOPIF 子帧上因携带 `frame.parentId` 漏触发重注入的问题；
+  - `daemon.mjs` 新增 `~/.gemini/config/config.json` `userSettings.themeMode` `mtime` 缓存读取并注入 `bootPayload.hostThemeMode`（纳入热更新签名），解决 Swarm 面板隐藏预加载期 `hostLum === null` 时的初始深浅色对齐。
+- **弯引号（`\u2018`/`\u2019`）双向归一化与 1,554 条零冲突词典（`core/i18n.json` / `core/runtime.js`）**：
+  - `dictLookup()` 新增 `DICT_APOS` 双向弯单引号（`’`/`‘` ↔ `'`）归一化映射（同时兼容宿主弯引号 DOM 与用户 `i18n.override.json` 弯引号覆盖，且保持 `dictCount` 精确恒定）；
+  - `core/i18n.json` 扩充 54 条新词条至 **1,554 条**（保持 100% 大小写不敏感与弯直引号不敏感唯一性），支持带多词后缀的 `Version X.Y.Z · <Channel>` 版本号文本与 4 组 Swarm 任务/讨论计数动态正则（`X of Y tasks done`、`Up next · N`、`N posts`、`N members`）。
+
+---
+
 ## [v5.1.6] - 2026-11-13
 
 > **适用版本**：Antigravity `2.31.2+`（`CL=1019359392`，向下完全兼容 `2.31.1` / `2.31.0` / `2.30.0`）  

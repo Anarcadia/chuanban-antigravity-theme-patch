@@ -1,6 +1,6 @@
-# 船板的 Antigravity 书卷暖纸 × 官方碳黑昼夜双模式主题、字体优化与深度汉化全栈补丁 (v5.1.6 · 完整适配 Antigravity 2.31.2)
+# 船板的 Antigravity 书卷暖纸 × 官方碳黑昼夜双模式主题、字体优化与深度汉化全栈补丁 (v5.1.7 · 完整适配 Antigravity 2.31.2 双平台)
 
-[![Version](https://img.shields.io/badge/version-5.1.6-7A1F1A.svg)](https://github.com/Anarcadia/chuanban-antigravity-theme-patch)
+[![Version](https://img.shields.io/badge/version-5.1.7-7A1F1A.svg)](https://github.com/Anarcadia/chuanban-antigravity-theme-patch)
 [![Antigravity](https://img.shields.io/badge/Antigravity-2.31.2%2B-D97757.svg)](https://github.com/Anarcadia/chuanban-antigravity-theme-patch)
 [![Node](https://img.shields.io/badge/node-%3E%3D22.0.0%20(22.13%2B%20Full)-339933.svg)](https://nodejs.org/)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey.svg)](https://github.com/Anarcadia/chuanban-antigravity-theme-patch)
@@ -30,7 +30,7 @@
 
 ---
 
-## ✨ 补丁简介：核心定位与五大亮点（v5.1.6）
+## ✨ 补丁简介：核心定位与五大亮点（v5.1.7）
 
 ### 1. 设计目的
 Google Antigravity 原生浅色界面偏冷刺眼、全局仅使用单一无衬线字体，长时间高强度阅读与编码容易视觉疲劳。本补丁以**纯运行时非侵入注入**的方式，将 Antigravity 重塑为兼具 **Anthropic 暖纸学术质感、官方原版高可读深色模式、四层中西文精密排版、全界面母语级汉化与实时模型遥测** 的主力工作台：
@@ -38,9 +38,9 @@ Google Antigravity 原生浅色界面偏冷刺眼、全局仅使用单一无衬�
 - **🌓 昼夜双模式独立解耦（暖纸白天 + 官方碳黑黑夜）**：
   - **白天模式（Light）**：内置 **高对比暖白**（默认，暖燕麦侧栏 `#F7F5F0` + 微暖亮白主区 `#FCFCFB` + 深墨文字 `#0A0A0A`）、**ClaudeDesktop 净白** 与 **复古深色羊皮纸** 三套护眼预设；
   - **黑夜模式（Dark）**：当你点击设置中的「深色 / Dark」按钮（或跟随系统深色）时，**100% 保持四层字体与 UI 形状要素不变**，同时 `0ms` 自动还原 **Antigravity `2.30.0 ~ 2.31.2` 官方无补丁时的 `onyx` Default Dark 碳黑配色方案**（`#070708` 主背景 / `#111114` 侧栏 / `#15151A` 悬浮输入卡 / `#2F71E3` 官方品牌蓝），并专项提升深色下的文字对比度、卡片边界与指标可读性。
-- **🔤 四层字体排版（昼夜完全共用 · 原生适配 `2.31.2` `[data-markdown-root]`、`data-agy-font`、Lexical 编辑器与 `plugin://swarm--` 子帧）**：UI 控件采用 `Anthropic Sans` + `Sarasa UI SC`，阅读正文采用 `Anthropic Serif` 古典衬线 + `Sarasa Mono Slab SC`，代码与终端采用严格 1:2 等宽，主输入框独立配置 Codex 同款打字机板状粗衬线。
+- **🔤 四层字体排版（昼夜完全共用 · 原生适配 `2.31.2` `[data-markdown-root]`、`data-agy-font`、Lexical 编辑器、`plugin://swarm--` 子帧与 Windows `DirectWrite` 可变字重轴）**：UI 控件采用 `Anthropic Sans` + `Sarasa UI SC`，阅读正文采用 `Anthropic Serif` 古典衬线 + `Sarasa Mono Slab SC`，代码与终端采用严格 1:2 等宽，主输入框独立配置 Codex 同款打字机板状粗衬线。
 - **🕯️ 输入框三态 `1.5px` 交互结构**：区分「新建对话首页」与「日常聊天会话」自动切换外框呼吸感与聚焦反馈（白天为古朴暗红蜡封，黑夜为官方微亮边与 `#2F71E3` 品牌蓝聚焦光环）。
-- **🇨🇳 1,500 条零大小写冲突深度汉化 + 首字母大写不敏感兜底索引（`DICT_CI`） + ⚡ `O(1)` 增量实时指标胶囊**：全覆盖 `2.31.2` 新增的蜂群协作面板（Swarm Collaboration Board）、自动化与协调员（Automations / Coordinators）、运行环境（Environments）、插件市场（Marketplace）、归档筛选、队列快捷键及 Lexical `[contenteditable="true"]` 无障碍属性（基于 `WeakMap` `O(1)` 隔离保护代码块、Monaco 编辑器、终端、Swarm 原始消息与对话正文不误伤），并在输入框底部同行实时展示生成速度（`tok/s`）、首字耗时（`TTFT`）、`256k` 上下文水位及缓存命中率详情面板。
+- **🇨🇳 1,554 条零冲突深度汉化 + 弯引号自动归一与 `DICT_CI` 兜底索引 + ⚡ `O(1)` 增量实时指标胶囊（原生兼容本地与 Windows WSL 会话库）**：全覆盖 `2.31.2` 新增的蜂群协作面板（Swarm Collaboration Board）、自动化与协调员（Automations / Coordinators）、运行环境（Environments）、插件市场（Marketplace）、归档筛选、队列快捷键及 Lexical `[contenteditable="true"]` 无障碍属性（基于 `WeakMap` `O(1)` 隔离保护代码块、Monaco 编辑器、终端、Swarm 原始消息与对话正文不误伤），并在输入框底部同行实时展示生成速度（`tok/s`）、首字耗时（`TTFT`）、`256k` 上下文水位及缓存命中率详情面板。
 
 ### 2. 五大工程亮点
 1. **🤖 Agent 3 秒一键部署，零构建零依赖**：所有 CSS、词典、DOM 引擎与守护进程已预封装在 `core/` 只读内核中，无需任何 npm 依赖或编译构建，交给你的 Agent 即可 3 秒一键安装。
@@ -60,11 +60,11 @@ Google Antigravity 原生浅色界面偏冷刺眼、全局仅使用单一无衬�
 > **💬 复制发给 Agent（新用户一键安装）**：  
 > 请帮我克隆 `https://github.com/Anarcadia/chuanban-antigravity-theme-patch.git`（或读取我已下载解压的补丁目录），严格按照仓库内的 `SKILL.md` 依次执行 `node install.mjs doctor`（Windows 下若未装字体请先用 `node install.mjs install-fonts` 注册字体）、`node install.mjs install` 和 `node install.mjs verify`，帮我一键部署好船板的 Antigravity 主题补丁并验证实机生效。
 
-### 二、老版本用户无缝升级至 v5.1.6
+### 二、老版本用户无缝升级至 v5.1.7
 `node install.mjs install` 会自动备份旧内核、接管旧版常驻服务，并无损保留你在 `~/.gemini/antigravity/theme-patch/user/` 中的个人配置：
 
 > **💬 复制发给 Agent（老用户无缝升级）**：  
-> 请帮我拉取最新的 `https://github.com/Anarcadia/chuanban-antigravity-theme-patch.git`，阅读其中的 `SKILL.md`，直接运行 `node install.mjs install` 和 `node install.mjs verify` 将我的环境升级至最新 `v5.1.6` 版本（若我旧脚本里有自定义的配色预设或字号修改，请迁移保留到 `~/.gemini/antigravity/theme-patch/user/` 改装层中）。
+> 请帮我拉取最新的 `https://github.com/Anarcadia/chuanban-antigravity-theme-patch.git`，阅读其中的 `SKILL.md`，直接运行 `node install.mjs install` 和 `node install.mjs verify` 将我的环境升级至最新 `v5.1.7` 版本（若我旧脚本里有自定义的配色预设或字号修改，请迁移保留到 `~/.gemini/antigravity/theme-patch/user/` 改装层中）。
 
 ### 三、后续与 Agent 对话定制风格或排障
 - **🎨 切换白天预设、调整字号或微调外观**：
@@ -78,7 +78,12 @@ Google Antigravity 原生浅色界面偏冷刺眼、全局仅使用单一无衬�
 
 ## 🕒 版本演进简史（完整变更日志见 [`CHANGELOG.md`](CHANGELOG.md)）
 
-- **2026-11-13（v5.1.6 现行版 · Antigravity `2.31.2` 全栈漂移修复、新模型汉化、Swarm 跨域子帧注入、原生幕布底色桥接与 Sonnet 对抗审阅加固）**：
+- **2026-11-14（v5.1.7 现行版 · Windows `2.31.2` 全栈热修合流、`DirectWrite` 可变字体全字重轴、WSL 会话遥测懒探测与 1,554 条弯引号兼容词典）**：
+  联合 Windows 端 `2.31.2` 实机排障热修与 macOS 端全量交叉验证完成双端合流：
+  1. **Windows `DirectWrite` 可变字体粗体/斜体回退根治与原生标题栏同步**：补齐 `Anthropic Serif` 粗体 `@font-face` `local('Anthropic Serif Web Text Light')` 声明与 `html[data-ag-os="win32"]` `font-variation-settings` 正文/斜体/粗体/粗斜体显式轴控制，彻底解决 Windows 下 `<strong>` 退化为中文等宽衬线体的顽疾；新增 `syncWinTitleBarOverlay()` 实时桥接 Windows 顶层窗口最小化/最大化/关闭按钮昼夜反差；
+  2. **Windows 计划任务拔电常驻、WSL 会话遥测按需懒探测与连发缩放修复**：修复 Windows 任务计划程序电池断电强杀与 72 小时时限，新增 `Win32_Process.CommandLine` PID 复用防误杀、`install-fonts` 运行期字体内存锁容错与 `WM_FONTCHANGE` 异步广播、`.NET ZipFile` 原生流式打包；支持从 `%APPDATA%\Antigravity\wsl_state.json` 按需懒探测 `\\wsl.localhost` 会话数据库（本地会话 0 UNC 开销）；Windows / Linux 缩放快捷键改为 `0ms` 即时响应（修复长按 `Ctrl + =/-` 连发吞键，完整保留 macOS `60ms` `NSMenu` 防双倍跳变保护与德语 QWERTZ `Ctrl+ß` 豁免）；
+  3. **Swarm 隐藏预加载感知与 1,554 条零冲突词典**：修复 `plugin://swarm--` OOPIF 子帧顶层导航重注入条件，接入 `~/.gemini/config/config.json` `userSettings.themeMode` 兜底对齐，新增弯单引号（`’`/`‘` → `'`）归一化查找、54 条新词条与 Swarm 任务进度及 `Version X.Y.Z` 动态汉化。
+- **2026-11-13（v5.1.6 · Antigravity `2.31.2` 全栈漂移修复、新模型汉化、Swarm 跨域子帧注入、原生幕布底色桥接与 Sonnet 对抗审阅加固）**：
   面向 Antigravity `2.31.2`（`CL=1019359392`）完成全量静态/实机审计修复与 `Claude Sonnet 5.5` 对抗复核加固：
   1. **原生缩放防双倍跳变与 `curtainView` 底色同步**：针对 `2.31.2` 新增的原生 `View` 菜单加速器（`hubZoom.js` / `menu.js`）引入 `resize` 缩放水位跟踪与 `80ms/60ms` 双向差值保护，根治 `Cmd/Ctrl + -/=/0` 双倍缩放跳变同时保留数字小键盘与欧式键盘兼容；新增 `electronNative.wcvBrowser.setThemeColor` 主动桥接（兼容 `#hex`、`rgb()`、`color(srgb)`），修复 `preload.js` 漏检导致的 `curtainView` 与 `app_storage.json` 底色失步闪白；移除宿主布尔空属性 `data-agy-theme` 误判依赖；
   2. **内置浏览器 `WebContentsView` 打孔与 `.agy-titlebar` 透明兼容**：补齐 `data-has-drawer-browser-hole="true"`、`.surface-opaque`、`.browser-hole-ancestor` 与 `[data-browser-hole="true"]` 伪元素内嵌描边豁免，保持 `.agy-sheet .agy-titlebar.bg-sidebar` 原生透明设计；
