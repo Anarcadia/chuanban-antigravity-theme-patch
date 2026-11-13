@@ -80,7 +80,7 @@ Google Antigravity 原生浅色界面偏冷刺眼、全局仅使用单一无衬�
 ## 🕒 版本演进简史（完整变更日志见 [`CHANGELOG.md`](CHANGELOG.md)）
 
 - **2026-11-14（v5.1.8 现行版 · 冷启动兜底包零流量安全自愈、1,575 条词典补全、未装更纱中文字形兜底与社区共建合流）**：
-  核验并择优吸收社区反馈（感谢 `@webber181` `#1` 与 `@pumblus` `#2`）：新增基于 `HEAD /main.js` `ETag` 零流量比对与六重空输入安全门禁的冷启动内嵌兜底包无感自愈器（解决客户端冷启动竞态偶发丢失 `Remote` 入口且绝不吞草稿）；修复 `Auto (Preview)` 带括号权限预设的无障碍标签匹配与运行态会话 `Stop` 标签；扩充 21 条 `2.31.2` 跨平台原生漏翻词条至 **1,575 条**；补充 `Anthropic Sans/Serif Text` 桌面版字体别名兼容、未安装更纱黑体时输入框中文字体回退链（防 Windows 新宋体退化）、`install.mjs install --sync-user` 备份同步开关与更纱黑体 Homebrew / GitHub 官方备用下载源说明。
+  核验并择优吸收社区反馈（特别感谢 [@webber181](https://github.com/webber181) [#1](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/issues/1) 与 [@pumblus](https://github.com/pumblus) [#2](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/pull/2)）：新增基于 `HEAD /main.js` `ETag` 零流量比对与六重空输入安全门禁的冷启动内嵌兜底包无感自愈器（解决客户端冷启动竞态偶发丢失 `Remote` 入口且绝不吞草稿）；修复 `Auto (Preview)` 带括号权限预设的无障碍标签匹配与运行态会话 `Stop` 标签；扩充 21 条 `2.31.2` 跨平台原生漏翻词条至 **1,575 条**；补充 `Anthropic Sans/Serif Text` 桌面版字体别名兼容、未安装更纱黑体时输入框中文字体回退链（防 Windows 新宋体退化）、`install.mjs install --sync-user` 备份同步开关与更纱黑体 Homebrew / GitHub 官方备用下载源说明。
 - **2026-11-14（v5.1.7 · Windows `2.31.2` 全栈热修合流、`DirectWrite` 可变字体全字重轴、WSL 会话遥测懒探测与 1,554 条弯引号兼容词典）**：
   联合 Windows 端 `2.31.2` 实机排障热修与 macOS 端全量交叉验证完成双端合流：
   1. **Windows `DirectWrite` 可变字体粗体/斜体回退根治与原生标题栏同步**：补齐 `Anthropic Serif` 粗体 `@font-face` `local('Anthropic Serif Web Text Light')` 声明与 `html[data-ag-os="win32"]` `font-variation-settings` 正文/斜体/粗体/粗斜体显式轴控制，彻底解决 Windows 下 `<strong>` 退化为中文等宽衬线体的顽疾；新增 `syncWinTitleBarOverlay()` 实时桥接 Windows 顶层窗口最小化/最大化/关闭按钮昼夜反差；
