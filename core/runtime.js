@@ -13,7 +13,7 @@
   if (window.top !== window && !IS_SWARM_PLUGIN_FRAME) return;
   if (!boot || typeof boot !== 'object') return;
 
-  const PATCH_VERSION = boot.version || '20261114-v5.1.8';
+  const PATCH_VERSION = boot.version || '20261114-v5.1.9';
   const DETECTED_OS =
     boot.platform || (/Win/i.test(navigator.platform || '') ? 'win32' : /Mac/i.test(navigator.platform || '') ? 'darwin' : 'linux');
   const ENABLED = boot.enabled !== false;
@@ -640,11 +640,27 @@
         return false;
       }
       const editableList = document.querySelectorAll(
-        '[data-lexical-editor="true"], [contenteditable="true"], textarea, input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"])'
+        '[data-lexical-editor="true"], [contenteditable="true"], textarea, input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="file"])'
       );
       for (let i = 0; i < editableList.length; i++) {
         const el = editableList[i];
         if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
+          if (el.tagName === 'INPUT') {
+            const itype = String(el.type || '').toLowerCase();
+            if (
+              itype === 'hidden' ||
+              itype === 'checkbox' ||
+              itype === 'radio' ||
+              itype === 'range' ||
+              itype === 'color' ||
+              itype === 'button' ||
+              itype === 'submit' ||
+              itype === 'reset' ||
+              itype === 'file'
+            ) {
+              continue;
+            }
+          }
           if (String(el.value || '').trim() !== '') return false;
         } else {
           const txt = String(el.textContent || '').replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
@@ -1800,6 +1816,14 @@
     const RE_WORKED_FOR_UPDATES = /^Worked for\s+([<0-9smhd\s]+?)\s*·\s*(\d+)\s+updates?$/i;
     const RE_WORKED_FOR = /^Worked for\s+([<0-9smhd]+(?:\s+\d+[smhd])*)$/i;
     const RE_WAITING_CMD_SEC = /^Waiting for command completion\s*\(up to\s+(\d+)\s+seconds?\)$/i;
+    const RE_HOME_HEY_NAME = /^Hey\s+([^\r\n]{1,40}?),\s+what should we build today\?$/i;
+    const RE_HOME_WELCOME_NAME = /^Welcome back,\s*([^\r\n]{1,40}?)\.\s+Where should we pick up\?$/i;
+    const RE_HOME_GOOD_SEE_NAME = /^Good to see you,\s*([^\r\n]{1,40}?)\.\s+What['\u2019]s next\?$/i;
+    const RE_WORK_LOCALLY_ON = /^Work locally on\s+([^\r\n]{1,80})$/;
+    const RE_WORK_IN_TARGET = /^Work in\s+(?!a New Worktree$)([^\r\n]{1,80})$/;
+    const RE_WORKTREE_FROM = /^Worktree from\s+([^\r\n,]{1,80}?)(?:,\s*and reuse\s+([^\r\n]{1,80}))?$/;
+    const RE_AUTO_FIG_WORKSPACE =
+      /^Automatically create a new\s+(Fig|Piper|JJ)\s+workspace when the conversation starts(?:,\s*Worktree from\s+([^\r\n,]{1,80}?))?(?:,\s*and reuse\s+([^\r\n]{1,80}))?$/;
     const RE_THOUGHT_FOR = /^Thought for\s+([<0-9smhd]+(?:\s+\d+[smhd])*)$/i;
     const RE_THINKING_FOR = /^Thinking for\s+([<0-9smhd]+(?:\s+\d+[smhd])*)$/i;
     const RE_USING_BROWSER_SEC = /^Using browser\s*\((\d+)s\)$/i;
@@ -2098,6 +2122,28 @@
           if (RE_WAITING_CMD_SEC.test(trimmed)) {
             return raw.replace(RE_WAITING_CMD_SEC, '正在等待命令完成（最多 $1 秒）');
           }
+          const mWel = trimmed.match(RE_HOME_WELCOME_NAME);
+          if (mWel) {
+            return raw.replace(trimmed, () => '欢迎回来，' + mWel[1].trim() + '。我们从哪里继续？');
+          }
+          const mWorkLocal = trimmed.match(RE_WORK_LOCALLY_ON);
+          if (mWorkLocal) {
+            return raw.replace(trimmed, () => '在本地 ' + mWorkLocal[1].trim() + ' 上工作');
+          }
+          const mWorkFrom = trimmed.match(RE_WORKTREE_FROM);
+          if (mWorkFrom) {
+            return raw.replace(
+              trimmed,
+              () =>
+                mWorkFrom[2]
+                  ? '从 ' + mWorkFrom[1].trim() + ' 创建 Worktree，并复用 ' + mWorkFrom[2].trim()
+                  : '从 ' + mWorkFrom[1].trim() + ' 创建 Worktree'
+            );
+          }
+          const mWorkIn = trimmed.match(RE_WORK_IN_TARGET);
+          if (mWorkIn) {
+            return raw.replace(trimmed, () => '在 ' + mWorkIn[1].trim() + ' 中工作');
+          }
         } else if (RE_MARKED_READ.test(trimmed)) {
           return raw.replace(RE_MARKED_READ, '已将 $1 个对话标为已读');
         }
@@ -2225,6 +2271,29 @@
         }
         if (RE_BASELINE_QUOTA_REFRESH.test(trimmed)) {
           return raw.replace(RE_BASELINE_QUOTA_REFRESH, '您套餐的基础配额将于 $1 刷新。');
+        }
+      } else if (firstUpper === 'H') {
+        const mHey = trimmed.match(RE_HOME_HEY_NAME);
+        if (mHey) {
+          return raw.replace(trimmed, () => '嗨，' + mHey[1].trim() + '，今天想构建些什么？');
+        }
+      } else if (firstUpper === 'G') {
+        const mGood = trimmed.match(RE_HOME_GOOD_SEE_NAME);
+        if (mGood) {
+          return raw.replace(trimmed, () => '很高兴见到你，' + mGood[1].trim() + '。接下来做什么？');
+        }
+      } else if (firstUpper === 'A') {
+        const mAutoFig = trimmed.match(RE_AUTO_FIG_WORKSPACE);
+        if (mAutoFig) {
+          return raw.replace(
+            trimmed,
+            () =>
+              '会话开始时自动新建 ' +
+              mAutoFig[1] +
+              ' 工作区' +
+              (mAutoFig[2] ? '，从 ' + mAutoFig[2].trim() + ' 创建 Worktree' : '') +
+              (mAutoFig[3] ? '，并复用 ' + mAutoFig[3].trim() : '')
+          );
         }
       }
 
@@ -2423,6 +2492,12 @@
       const mVer = atrim.match(RE_ARIA_VERSION);
       if (mVer) {
         return '版本 ' + mVer[1].trim();
+      }
+      if (
+        atrim === 'File' &&
+        (IS_SWARM_PLUGIN_FRAME || (el && el.classList && el.classList.contains('segmented')))
+      ) {
+        return '文件';
       }
       if (
         el &&

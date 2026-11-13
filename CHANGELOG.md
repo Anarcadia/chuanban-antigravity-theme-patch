@@ -4,6 +4,32 @@
 
 ---
 
+## [v5.1.9] - 2026-11-14
+
+> **适用版本**：Antigravity `2.31.2+`（`CL=1019359392`，向下完全兼容 `2.31.1` / `2.31.0` / `2.30.0`）  
+> **核验基线**：Windows 11 `2.31.2` 发版后全链路回归审计热修（Batch `#007`）+ macOS `2.31.2` 沙箱与真机 CDP 双重验收
+
+### Fixed（Windows PowerShell 5.1 二维数组兼容、回滚安全校验与 `--target-dir` 沙箱隔离）
+- **Windows PowerShell `5.1` `ConvertFrom-Json` 嵌套二维数组兼容修复（`install.mjs`）**：
+  - 修复 `buildDistZip()`（`pack` 子命令）与 `runInstallFonts()`（`install-fonts` 子命令）在 Windows PowerShell `5.1` 下因 `@(Get-Content ... | ConvertFrom-Json)` 将 JSON 数组包装为单元素外层 `Object[][]` 导致的成员枚举扁平化异常（此前在 Windows PowerShell 5.1 下运行 `pack` 会必现抛出 `System.NotSupportedException`，运行 `install-fonts` 安装 `>=2` 个字体时会导致 Win32 `AddFontResourceW` 收到空格拼接路径而静默注册 `0` 个字体）；
+  - `runInstallFonts()` 新增 `AddFontResourceW > 0` 真实会话注册计数（`fontRegisteredCount`）与 `SendNotifyMessage` 返回值联合校验，并补充 `--from` 指向已安装字体目录时的同路径自拷贝保护。
+- **`rollback` 核心备份完整性校验与 `--sync-user` 备份目录隔离（`install.mjs`）**：
+  - 修复启用 `--sync-user` 生成 `backups/<timestamp>-user/` 后，若在缺失 `core.prev` 的极端情况下执行 `rollback`，按字典序倒序枚举会误命中 `<timestamp>-user` 并将仅含用户配置的目录覆盖至 `core/` 的高危隐患；现强制排除 `-user` 后缀并通过 `isValidCoreBackup()` 校验 `daemon.mjs` 与 `runtime.js` 同时存在。
+- **`--target-dir` 自定义沙箱测试目录全生命周期隔离与软链接路径等价识别（`install.mjs`）**：
+  - 当显式传入非默认 `--target-dir`（且未带 `--register-service`）执行 `install`、`rollback` 或 `uninstall` 时，自动跳过全局 `~/.antigravity/argv.json` 修改、`~/.gemini/antigravity/scripts/antigravity-font-daemon.mjs` 包装脚本重写以及宿主系统 `LaunchAgent` / `systemd` / `schtasks` 常驻服务启停销毁，确保沙箱演练对正式运行环境零惊扰；
+  - `isSameTargetPath()` 结合 `fs.realpathSync.native`（含父目录软链接回退）与大小写归一化，完整兼容 macOS `/tmp` ↔ `/private/tmp` 软链接及 Windows 大小写不敏感路径比对。
+- **冷启动兜底包自愈器非文本 `<input>` 控件误判排除（`core/runtime.js`）**：
+  - `isWindowUntouchedAndIdleForColdHeal()` 在原有 `hidden` / `checkbox` / `radio` 豁免基础上，进一步排除自带非空默认 `.value` 的 `range`（默认 `"50"`）、`color`（默认 `"#000000"`）、`button`、`submit`、`reset` 与 `file` 类型 `<input>`，避免首屏挂载滑块或取色控件时误阻断冷启动自愈。
+
+### Added（1,587 条零冲突词典、动态人名首页问候与 Worktree / Swarm 细节汉化）
+- **扩充 `2.31.2` 首页卡片与 Worktree 分支词条至 1,587 条（`core/i18n.json`）**：
+  - 新增 `Local Checkout`、`New Fig Workspace`、`Unknown Environment`、`Worktree Branches`、`Configure Branches`、`Loading worktrees…`、`Announcements and tips`、`Previous card`、`Next card` 及无署名首页问候语等 12 条静态词条，保持 100% 原始 JSON 零重复键、零大小写与弯直引号冲突。
+- **新增 7 条首页动态人名问候与 Worktree / Fig 工作区副标题动态汉化（`core/runtime.js`）**：
+  - 支持带用户昵称的 `2.31.2` 首页问候（`Hey <name>, what should we build today?`、`Welcome back, <name>. Where should we pick up?`、`Good to see you, <name>. What's next?`）动态汉化；
+  - 支持新建对话分支选择器动态副标题（`Work locally on <branch>`、`Work in <target>`、`Worktree from <branch>[, and reuse <env>]`、`Automatically create a new Fig/Piper/JJ workspace...`）及 Swarm 面板分段控件 `aria-label="File"`（`文件`）精准汉化。
+
+---
+
 ## [v5.1.8] - 2026-11-14
 
 > **适用版本**：Antigravity `2.31.2+`（`CL=1019359392`，向下完全兼容 `2.31.1` / `2.31.0` / `2.30.0`）  

@@ -60,8 +60,36 @@ function sha256File(filePath) {
   return crypto.createHash('sha256').update(buf).digest('hex');
 }
 
+function canonicalPath(p) {
+  const resolved = path.resolve(p);
+  try {
+    return fs.realpathSync.native ? fs.realpathSync.native(resolved) : fs.realpathSync(resolved);
+  } catch {
+    const parent = path.dirname(resolved);
+    if (parent && parent !== resolved) {
+      try {
+        const realParent = fs.realpathSync.native ? fs.realpathSync.native(parent) : fs.realpathSync(parent);
+        return path.join(realParent, path.basename(resolved));
+      } catch {}
+    }
+    return resolved;
+  }
+}
+
+function isSameTargetPath(a, b) {
+  const pa = canonicalPath(a);
+  const pb = canonicalPath(b);
+  return process.platform === 'win32' || process.platform === 'darwin'
+    ? pa.toLowerCase() === pb.toLowerCase()
+    : pa === pb;
+}
+
+function resolveGlobalInstallDir() {
+  return path.join(os.homedir(), '.gemini', 'antigravity', 'theme-patch');
+}
+
 function resolveDefaultTargetDir() {
-  const installed = path.join(os.homedir(), '.gemini', 'antigravity', 'theme-patch');
+  const installed = resolveGlobalInstallDir();
   if (fs.existsSync(path.join(installed, 'core', 'daemon.mjs'))) {
     return installed;
   }
@@ -88,7 +116,7 @@ function buildManifest(baseDir = __dirname) {
   }
   const manifest = {
     name: 'chuanban-antigravity-theme-patch',
-    version: '5.1.8',
+    version: '5.1.9',
     minNodeVersion: '22.0.0',
     fullMetricsNodeVersion: '22.13.0',
     distribution: {
@@ -154,7 +182,8 @@ function buildDistZip(baseDir = __dirname) {
         'Add-Type -AssemblyName System.IO.Compression.FileSystem',
         `$zipPath = '${zipPath.replace(/'/g, "''")}'`,
         `$listPath = '${listTmpPath.replace(/'/g, "''")}'`,
-        '$items = @(Get-Content -LiteralPath $listPath -Raw -Encoding UTF8 | ConvertFrom-Json)',
+        '$parsed = Get-Content -LiteralPath $listPath -Raw -Encoding UTF8 | ConvertFrom-Json',
+        '$items = @(foreach ($x in $parsed) { if ($null -ne $x) { $x } })',
         '$zip = [System.IO.Compression.ZipFile]::Open($zipPath, [System.IO.Compression.ZipArchiveMode]::Create)',
         'try {',
         '  foreach ($it in $items) {',
@@ -1061,8 +1090,10 @@ async function runInstall() {
   const channel = cliChannel || 'auto';
   const preset = getArg('--preset', null);
   const syncUser = hasFlag('--sync-user');
-  const defaultTarget = path.join(os.homedir(), '.gemini', 'antigravity', 'theme-patch');
+  const defaultTarget = resolveGlobalInstallDir();
   const targetDir = path.resolve(getArg('--target-dir', defaultTarget));
+  const isCustomSandboxTarget =
+    hasFlag('--target-dir') && !isSameTargetPath(targetDir, defaultTarget) && !hasFlag('--register-service');
 
   const env = await detectEnvironment(channel);
   if (!env.nodeBasicOk) {
@@ -1081,7 +1112,7 @@ async function runInstall() {
 
   let backupCreated = null;
   let userBackupCreated = null;
-  if (path.resolve(__dirname) !== targetDir) {
+  if (!isSameTargetPath(__dirname, targetDir)) {
     fs.mkdirSync(targetDir, { recursive: true });
 
     // 仅当已安装的 core/ 与当前待安装 core/ 的 manifest SHA-256 不同时才备份，防止重复 install 冲掉上一版快照
@@ -1166,30 +1197,35 @@ async function runInstall() {
   }
   fs.writeFileSync(userConfigPath, JSON.stringify(currentCfg, null, 2) + '\n', 'utf8');
 
-  // 自动检查并修补 ~/.antigravity/argv.json (remote-debugging-port)
-  const argvStatus = ensureArgvRemoteDebugging(currentCfg.channel);
-
-  // 创建兼容包装脚本 ~/.gemini/antigravity/scripts/antigravity-font-daemon.mjs（使用 pathToFileURL 兼容 Windows C:\ 路径）
-  const scriptsDir = path.join(os.homedir(), '.gemini', 'antigravity', 'scripts');
-  fs.mkdirSync(scriptsDir, { recursive: true });
-  const wrapperDaemon = path.join(scriptsDir, 'antigravity-font-daemon.mjs');
   const realDaemon = path.join(targetCore, 'daemon.mjs');
-  const realDaemonUrl = pathToFileURL(realDaemon).href;
-  fs.writeFileSync(
-    wrapperDaemon,
-    `#!/usr/bin/env node\n// Auto-generated wrapper -> ${realDaemon}\nawait import(${JSON.stringify(realDaemonUrl)});\n`,
-    { encoding: 'utf8', mode: 0o755 }
-  );
+  let argvStatus = { skipped: true, reason: 'custom-target-dir' };
+  let serviceInfo = { skipped: true, reason: 'custom-target-dir' };
 
-  // 注册/更新跨平台自启服务
-  const serviceInfo = registerSystemService(targetDir, wrapperDaemon);
+  if (!isCustomSandboxTarget) {
+    // 自动检查并修补 ~/.antigravity/argv.json (remote-debugging-port)
+    argvStatus = ensureArgvRemoteDebugging(currentCfg.channel);
 
-  // 立即执行一次 --once 同步注入
-  spawnSync(process.execPath, ['--disable-warning=ExperimentalWarning', realDaemon, '--once'], {
-    stdio: 'inherit'
-  });
+    // 创建兼容包装脚本 ~/.gemini/antigravity/scripts/antigravity-font-daemon.mjs（使用 pathToFileURL 兼容 Windows C:\ 路径）
+    const scriptsDir = path.join(os.homedir(), '.gemini', 'antigravity', 'scripts');
+    fs.mkdirSync(scriptsDir, { recursive: true });
+    const wrapperDaemon = path.join(scriptsDir, 'antigravity-font-daemon.mjs');
+    const realDaemonUrl = pathToFileURL(realDaemon).href;
+    fs.writeFileSync(
+      wrapperDaemon,
+      `#!/usr/bin/env node\n// Auto-generated wrapper -> ${realDaemon}\nawait import(${JSON.stringify(realDaemonUrl)});\n`,
+      { encoding: 'utf8', mode: 0o755 }
+    );
 
-  const live = await inspectLiveWindow(env);
+    // 注册/更新跨平台自启服务
+    serviceInfo = registerSystemService(targetDir, wrapperDaemon);
+
+    // 立即执行一次 --once 同步注入
+    spawnSync(process.execPath, ['--disable-warning=ExperimentalWarning', realDaemon, '--once'], {
+      stdio: 'inherit'
+    });
+  }
+
+  const live = isCustomSandboxTarget ? { skipped: true, reason: 'custom-target-dir' } : await inspectLiveWindow(env);
   console.log(
     '\n[Install Complete]',
     JSON.stringify(
@@ -1241,68 +1277,80 @@ async function runVerify() {
 }
 
 async function runRollback() {
+  const defaultTarget = resolveGlobalInstallDir();
   const targetDir = path.resolve(getArg('--target-dir', resolveDefaultTargetDir()));
+  const isCustomSandboxTarget =
+    hasFlag('--target-dir') && !isSameTargetPath(targetDir, defaultTarget) && !hasFlag('--register-service');
   const targetCore = path.join(targetDir, 'core');
   const targetPrev = path.join(targetDir, 'core.prev');
   const backupsDir = path.join(targetDir, 'backups');
 
+  const isValidCoreBackup = (dir) =>
+    fs.existsSync(path.join(dir, 'daemon.mjs')) && fs.existsSync(path.join(dir, 'runtime.js'));
+
   let restoreSource = null;
-  if (fs.existsSync(targetPrev)) {
+  if (isValidCoreBackup(targetPrev)) {
     restoreSource = targetPrev;
   } else if (fs.existsSync(backupsDir)) {
-    const stamps = fs.readdirSync(backupsDir).sort().reverse();
+    const stamps = fs
+      .readdirSync(backupsDir)
+      .filter((name) => !name.endsWith('-user') && isValidCoreBackup(path.join(backupsDir, name)))
+      .sort()
+      .reverse();
     if (stamps.length > 0) {
       restoreSource = path.join(backupsDir, stamps[0]);
     }
   }
 
   if (!restoreSource) {
-    console.error(`[ERROR] No backup found at ${targetPrev} or ${backupsDir}`);
+    console.error(`[ERROR] No valid core backup found at ${targetPrev} or ${backupsDir}`);
     process.exit(1);
   }
 
   fs.rmSync(targetCore, { recursive: true, force: true });
   copyDirRecursive(restoreSource, targetCore);
 
-  // 重启守护进程并立即执行一次 --once 重新注入
+  // 重启守护进程并立即执行一次 --once 重新注入（沙箱 --target-dir 隔离模式下跳过全局服务干预）
   const realDaemon = path.join(targetCore, 'daemon.mjs');
   const wrapperDaemon = path.join(os.homedir(), '.gemini', 'antigravity', 'scripts', 'antigravity-font-daemon.mjs');
-  if (process.platform === 'darwin') {
-    const uid = process.getuid ? process.getuid() : 501;
-    try {
-      execSync(`launchctl kickstart -k gui/${uid}/com.antigravity.customfont 2>/dev/null || launchctl kickstart -k gui/${uid}/com.antigravity.theme 2>/dev/null || true`);
-    } catch {}
-  } else if (process.platform === 'linux') {
-    try {
-      execSync('systemctl --user restart antigravity-theme.service 2>/dev/null || true');
-    } catch {}
-  } else if (process.platform === 'win32') {
-    stopRunningDaemonProcesses();
-    let restartedViaTask = false;
-    try {
-      const r = spawnSync('schtasks', ['/Run', '/TN', 'AntigravityThemeDaemon'], {
-        stdio: 'ignore',
-        windowsHide: true
-      });
-      restartedViaTask = r.status === 0;
-    } catch {}
-    if (!restartedViaTask) {
+  if (!isCustomSandboxTarget) {
+    if (process.platform === 'darwin') {
+      const uid = process.getuid ? process.getuid() : 501;
       try {
-        const child = spawn(process.execPath, ['--disable-warning=ExperimentalWarning', fs.existsSync(wrapperDaemon) ? wrapperDaemon : realDaemon], {
-          detached: true,
+        execSync(`launchctl kickstart -k gui/${uid}/com.antigravity.customfont 2>/dev/null || launchctl kickstart -k gui/${uid}/com.antigravity.theme 2>/dev/null || true`);
+      } catch {}
+    } else if (process.platform === 'linux') {
+      try {
+        execSync('systemctl --user restart antigravity-theme.service 2>/dev/null || true');
+      } catch {}
+    } else if (process.platform === 'win32') {
+      stopRunningDaemonProcesses();
+      let restartedViaTask = false;
+      try {
+        const r = spawnSync('schtasks', ['/Run', '/TN', 'AntigravityThemeDaemon'], {
           stdio: 'ignore',
           windowsHide: true
         });
-        child.unref();
+        restartedViaTask = r.status === 0;
       } catch {}
+      if (!restartedViaTask) {
+        try {
+          const child = spawn(process.execPath, ['--disable-warning=ExperimentalWarning', fs.existsSync(wrapperDaemon) ? wrapperDaemon : realDaemon], {
+            detached: true,
+            stdio: 'ignore',
+            windowsHide: true
+          });
+          child.unref();
+        } catch {}
+      }
     }
+    spawnSync(process.execPath, ['--disable-warning=ExperimentalWarning', realDaemon, '--once'], {
+      stdio: 'inherit'
+    });
   }
-  spawnSync(process.execPath, ['--disable-warning=ExperimentalWarning', realDaemon, '--once'], {
-    stdio: 'inherit'
-  });
 
   const env = await detectEnvironment('auto');
-  const live = await inspectLiveWindow(env);
+  const live = isCustomSandboxTarget ? { skipped: true, reason: 'custom-target-dir' } : await inspectLiveWindow(env);
   console.log(
     JSON.stringify(
       {
@@ -1344,18 +1392,22 @@ function runInstallFonts() {
       } else if (/\.(ttf|otf|ttc)$/i.test(entry)) {
         const destPath = path.join(destDir, entry);
         let copied = false;
-        try {
-          fs.copyFileSync(full, destPath);
-          copied = true;
-        } catch (err) {
-          if (
-            process.platform === 'win32' &&
-            (err?.code === 'EBUSY' || err?.code === 'EPERM' || err?.code === 'EACCES') &&
-            fs.existsSync(destPath)
-          ) {
-            skippedLocked.push(destPath);
-          } else {
-            throw err;
+        if (isSameTargetPath(full, destPath)) {
+          skippedLocked.push(destPath);
+        } else {
+          try {
+            fs.copyFileSync(full, destPath);
+            copied = true;
+          } catch (err) {
+            if (
+              process.platform === 'win32' &&
+              (err?.code === 'EBUSY' || err?.code === 'EPERM' || err?.code === 'EACCES') &&
+              fs.existsSync(destPath)
+            ) {
+              skippedLocked.push(destPath);
+            } else {
+              throw err;
+            }
           }
         }
         if (process.platform === 'win32') {
@@ -1387,6 +1439,7 @@ function runInstallFonts() {
 
   walkFonts(path.resolve(fromDir));
   let fontBroadcastOk = process.platform !== 'win32';
+  let fontRegisteredCount = 0;
   if (process.platform === 'win32' && (installed.length > 0 || skippedLocked.length > 0)) {
     fontBroadcastOk = false;
     try {
@@ -1395,6 +1448,7 @@ function runInstallFonts() {
       fs.writeFileSync(listTmp, fontListJson, 'utf8');
       try {
         const psNotify = [
+          '$ErrorActionPreference = "Stop"',
           'Add-Type -TypeDefinition @"',
           'using System; using System.Runtime.InteropServices;',
           'public static class AgFontBroadcast {',
@@ -1402,20 +1456,27 @@ function runInstallFonts() {
           '  [DllImport("user32.dll", CharSet = CharSet.Auto)] public static extern bool SendNotifyMessage(IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam);',
           '}',
           '"@',
-          `$paths = @(Get-Content -LiteralPath '${listTmp.replace(/'/g, "''")}' -Raw -Encoding UTF8 | ConvertFrom-Json)`,
-          'foreach ($fp in $paths) { if ($fp) { [void][AgFontBroadcast]::AddFontResource([string]$fp) } }',
-          '[void][AgFontBroadcast]::SendNotifyMessage([IntPtr]0xffff, 0x001D, [IntPtr]::Zero, [IntPtr]::Zero)'
-        ].join("\n");
+          `$parsed = Get-Content -LiteralPath '${listTmp.replace(/'/g, "''")}' -Raw -Encoding UTF8 | ConvertFrom-Json`,
+          '$paths = @(foreach ($x in $parsed) { if ($null -ne $x) { [string]$x } })',
+          '$added = 0',
+          'foreach ($fp in $paths) { if ($fp -and ([AgFontBroadcast]::AddFontResource($fp) -gt 0)) { $added++ } }',
+          '$notified = [AgFontBroadcast]::SendNotifyMessage([IntPtr]0xffff, 0x001D, [IntPtr]::Zero, [IntPtr]::Zero)',
+          '@{ added = $added; notified = [bool]$notified } | ConvertTo-Json -Compress'
+        ].join('\n');
         const psRes = spawnSync(
           'powershell',
           ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', psNotify],
           {
-            stdio: 'ignore',
+            encoding: 'utf8',
             windowsHide: true,
             timeout: 25000
           }
         );
-        fontBroadcastOk = psRes.status === 0;
+        if (psRes.status === 0) {
+          const notifyData = JSON.parse(String(psRes.stdout || '').trim() || '{}');
+          fontRegisteredCount = Number(notifyData.added) || 0;
+          fontBroadcastOk = fontRegisteredCount > 0 && Boolean(notifyData.notified);
+        }
       } finally {
         try {
           if (fs.existsSync(listTmp)) fs.unlinkSync(listTmp);
@@ -1435,6 +1496,7 @@ function runInstallFonts() {
         destDir,
         installedCount: installed.length,
         skippedLockedCount: skippedLocked.length,
+        fontRegisteredCount,
         fontBroadcastOk,
         installed,
         skippedLocked
@@ -1447,9 +1509,21 @@ function runInstallFonts() {
 
 async function runUninstall() {
   const home = os.homedir();
+  const defaultTarget = resolveGlobalInstallDir();
   const targetDir = path.resolve(getArg('--target-dir', resolveDefaultTargetDir()));
+  const isCustomSandboxTarget =
+    hasFlag('--target-dir') && !isSameTargetPath(targetDir, defaultTarget) && !hasFlag('--register-service');
   const userConfigPath = path.join(targetDir, 'user', 'config.json');
   const realDaemon = path.join(targetDir, 'core', 'daemon.mjs');
+
+  if (isCustomSandboxTarget) {
+    const localVbs = path.join(targetDir, 'AntigravityThemeDaemon.vbs');
+    try {
+      if (fs.existsSync(localVbs)) fs.unlinkSync(localVbs);
+    } catch {}
+    console.log(`[Uninstall] Cleaned custom sandbox target (${targetDir}); global daemon and services were left untouched.`);
+    return;
+  }
 
   // 1. 先移除跨平台开机自启服务（防止 KeepAlive/Restart 自动拉起），再彻底终止残留后台守护进程，消除与 --once 还原注入的并发竞态
   if (process.platform === 'darwin') {
