@@ -1,6 +1,6 @@
 {
   "name": "chuanban-antigravity-theme-patch",
-  "version": "5.1.5",
+  "version": "5.1.6",
   "minNodeVersion": "22.0.0",
   "fullMetricsNodeVersion": "22.13.0",
   "distribution": {
@@ -10,20 +10,20 @@
   },
   "files": {
     "daemon.mjs": {
-      "sha256": "43cee5d1d71b51c51140f7df916f2246965edcdfd930cb8934fe18d45a94512c",
-      "bytes": 42178
+      "sha256": "2e9a1cdb617cfe1f61601951c412aa5a8d44544b03a7d0298bebf0f60d8a205d",
+      "bytes": 43140
     },
     "runtime.js": {
-      "sha256": "a85852a327a98d34b6c286dbee1ec50b62b3197ab814a44e45a9879a1d004114",
-      "bytes": 71243
+      "sha256": "ca015946b5ada198c826896508f7b89f2086e2b78c75442bda43bd97e0ce9386",
+      "bytes": 92175
     },
     "theme.css": {
-      "sha256": "e77374230915070cc1c43a3a7dc5b3151243ee44ef4841e942194dcd0ab4c96f",
-      "bytes": 43301
+      "sha256": "3b1f841d05116b35d42dfea9c63cf6819922be96ad0836246a5dd12a89595a5f",
+      "bytes": 43784
     },
     "i18n.json": {
-      "sha256": "90edd4be92dad1081848a21fd7e2df05da8fb47fe7a4a3c1e28484cfd6ce52b1",
-      "bytes": 67298
+      "sha256": "db6b3f7243962d8a7c7ba6510c7a49150436cccb226220642b0fb7156d5a3a01",
+      "bytes": 90388
     }
   }
 }

@@ -2,9 +2,9 @@
 /**
  * chuanban-antigravity-theme-patch · CDP Theme & Live Metrics Daemon (core/daemon.mjs)
  *
- * 架构特性（v5.1.5）：
+ * 架构特性（v5.1.6）：
  * 1. 动态 Node 分级：
- *    - Node >= 22.0：完整启用昼夜双模式独立主题（暖纸浅色 + 官方 onyx 深色）、四层字体、输入框三态、1094条汉化、死锁自愈。
+ *    - Node >= 22.0：完整启用昼夜双模式独立主题（暖纸浅色 + 官方 onyx 深色）、四层字体、输入框三态、1500条汉化、死锁自愈与 2.31.2 curtainView/Swarm 适配。
  *    - Node >= 22.13：动态 `await import('node:sqlite')` 解锁底部实时会话指标胶囊（O(1) 增量尾行解析）；低版本优雅降级绝不崩溃。
  * 2. 模块化与热重载：
  *    - 周期性检测 `user/config.json`、`user/custom.css`、`user/i18n.override.json`、`user/custom.js` 的 mtime，
@@ -140,7 +140,7 @@ function resolveActiveChannelEndpoints(channelMode = 'auto', userCfg = {}) {
 // ============================================================================
 // 2. 动态构建注入载荷（支持 core/ + user/ 实时合并与热更新签名）
 // ============================================================================
-const BASE_VERSION = '20261112-v5.1.5';
+const BASE_VERSION = '20261113-v5.1.6';
 let cachedBundleSig = '';
 let cachedInjectScript = '';
 let cachedPatchVersion = '';
@@ -159,7 +159,14 @@ let activeConfig = {
     customJs: true
   },
   themeVars: {},
-  allowedOrigins: ['http://127.0.0.1', 'https://127.0.0.1', 'http://localhost', 'https://localhost', 'vscode-file://'],
+  allowedOrigins: [
+    'http://127.0.0.1',
+    'https://127.0.0.1',
+    'http://localhost',
+    'https://localhost',
+    'vscode-file://',
+    'plugin://swarm--'
+  ],
   endpoints: []
 };
 
@@ -254,6 +261,15 @@ function rebuildBundleIfNeeded() {
       ', .monaco-editor, .monaco-diff-editor, .xterm, [data-markdown-root], [data-testid="user-message-content"], .agy-user-bubble, [class*="onyx-key"]';
   }
 
+  const DEFAULT_ALLOWED_ORIGINS = [
+    'http://127.0.0.1',
+    'https://127.0.0.1',
+    'http://localhost',
+    'https://localhost',
+    'vscode-file://',
+    'plugin://swarm--'
+  ];
+
   activeConfig = {
     enabled,
     channel,
@@ -263,8 +279,8 @@ function rebuildBundleIfNeeded() {
     themeVars,
     selectors: normalizedSelectors,
     allowedOrigins: Array.isArray(userCfg.allowedOrigins)
-      ? userCfg.allowedOrigins
-      : ['http://127.0.0.1', 'https://127.0.0.1', 'http://localhost', 'https://localhost', 'vscode-file://'],
+      ? Array.from(new Set([...DEFAULT_ALLOWED_ORIGINS, ...userCfg.allowedOrigins]))
+      : DEFAULT_ALLOWED_ORIGINS,
     endpoints
   };
 
@@ -842,7 +858,7 @@ function attachTarget(target, endpoint) {
       };
 
       const syncMetricsForSession = async (force = false) => {
-        if (!DatabaseSync || !activeConfig.modules.metrics || !activeConfig.enabled) return;
+        if (target.type === 'iframe' || !DatabaseSync || !activeConfig.modules.metrics || !activeConfig.enabled) return;
 
         // 仅在尚未获知 activeCascadeId 或强制重同步时向前端发起 Runtime.evaluate，日常靠 __agRequestMetrics 绑定事件实时驱动
         if (!activeCascadeId || force) {
@@ -1058,7 +1074,22 @@ function ensureZhTitlePatchIfPresent() {
   isZhPatchRunning = true;
   const child = execFile(pyBin, [scriptPath, 'patch', '--auto'], { timeout: 25000 }, (err, stdout, stderr) => {
     isZhPatchRunning = false;
+    const outStr = String(stdout || '').trim();
+    const errStr = String(stderr || '').trim();
     if (err) {
+      if (
+        err.code === 3 ||
+        outStr.includes('[PERM_DENIED]') ||
+        /Operation not permitted|PermissionError/i.test(errStr) ||
+        /Operation not permitted|PermissionError/i.test(outStr)
+      ) {
+        zhPatchFailedSig = sig;
+        zhPatchFailCount = 3;
+        console.log(
+          '[Daemon] zh-title auto-patch skipped (macOS App Management TCC blocks background LaunchAgent write; run `python3 ~/.gemini/antigravity/scripts/antigravity-zh-title-patch.py patch` in an authorized terminal).'
+        );
+        return;
+      }
       if (zhPatchFailedSig !== sig) {
         zhPatchFailedSig = sig;
         zhPatchFailCount = 1;
@@ -1066,16 +1097,16 @@ function ensureZhTitlePatchIfPresent() {
         zhPatchFailCount += 1;
       }
       console.error(
-        `[Daemon] zh-title auto-patch failed (${zhPatchFailCount}/3): ${err.message} ${String(stderr || '').trim()}`
+        `[Daemon] zh-title auto-patch failed (${zhPatchFailCount}/3): ${err.message} ${errStr}`
       );
       return;
     }
     zhPatchFailedSig = '';
     zhPatchFailCount = 0;
     lastZhPatchSig = computeZhSig();
-    if (stdout && stdout.includes('中文标题补丁注入成功')) {
-      console.log('[Daemon] Auto-applied zh-title patch:', stdout.trim().split('\n')[0]);
-    } else if (stdout && stdout.includes('DISABLED')) {
+    if (outStr.includes('中文标题补丁注入成功')) {
+      console.log('[Daemon] Auto-applied zh-title patch:', outStr.split('\n')[0]);
+    } else if (outStr.includes('DISABLED')) {
       console.log('[Daemon] zh-title auto-patch skipped (DISABLED marker present).');
     }
   });
@@ -1126,7 +1157,7 @@ async function sync() {
 
       const pages = targets.filter(
         (t) =>
-          t.type === 'page' &&
+          (t.type === 'page' || (t.type === 'iframe' && String(t.url || '').startsWith('plugin://swarm--'))) &&
           t.webSocketDebuggerUrl &&
           !String(t.url || '').startsWith('devtools://') &&
           isAllowedOrigin(t.url) &&

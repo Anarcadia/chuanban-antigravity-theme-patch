@@ -88,7 +88,7 @@ function buildManifest(baseDir = __dirname) {
   }
   const manifest = {
     name: 'chuanban-antigravity-theme-patch',
-    version: '5.1.5',
+    version: '5.1.6',
     minNodeVersion: '22.0.0',
     fullMetricsNodeVersion: '22.13.0',
     distribution: {
@@ -114,6 +114,7 @@ function buildDistZip(baseDir = __dirname) {
   const includeItems = [
     'SKILL.md',
     'README.md',
+    'CHANGELOG.md',
     'install.mjs',
     '.gitattributes',
     '.gitignore',
@@ -712,14 +713,60 @@ function registerSystemService(targetDir, wrapperDaemon) {
 </dict>
 </plist>
 `;
-    fs.writeFileSync(activePlist, plistContent, 'utf8');
+    const prevPlist = fs.existsSync(activePlist) ? fs.readFileSync(activePlist, 'utf8') : '';
+    const plistChanged = prevPlist !== plistContent;
+    if (plistChanged) {
+      fs.writeFileSync(activePlist, plistContent, 'utf8');
+    }
+
+    const uid = process.getuid ? process.getuid() : 501;
+    const domainTarget = `gui/${uid}/${label}`;
+    const sleepSync = (ms) => {
+      try {
+        Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+      } catch {}
+    };
+    const queryServiceState = () => {
+      const r = spawnSync('launchctl', ['print', domainTarget], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+      const out = String(r.stdout || '');
+      return { loaded: r.status === 0, running: r.status === 0 && /\bpid\s*=\s*\d+/i.test(out) };
+    };
+
+    let runningNow = false;
     try {
-      const uid = process.getuid ? process.getuid() : 501;
-      execSync(`launchctl bootout gui/${uid}/${label} 2>/dev/null || true`);
-      execSync(`launchctl bootstrap gui/${uid} "${activePlist}" 2>/dev/null || launchctl load -w "${activePlist}" 2>/dev/null || true`);
-      execSync(`launchctl kickstart -k gui/${uid}/${label} 2>/dev/null || true`);
+      const initial = queryServiceState();
+      if (initial.loaded && !plistChanged) {
+        spawnSync('launchctl', ['kickstart', '-k', domainTarget], { stdio: 'ignore' });
+      } else {
+        if (initial.loaded) {
+          spawnSync('launchctl', ['bootout', domainTarget], { stdio: 'ignore' });
+          for (let i = 0; i < 20 && queryServiceState().loaded; i++) {
+            sleepSync(100);
+          }
+        }
+        for (let i = 0; i < 6; i++) {
+          if (!queryServiceState().loaded) {
+            const bootRes = spawnSync('launchctl', ['bootstrap', `gui/${uid}`, activePlist], { stdio: 'ignore' });
+            if (bootRes.status !== 0 && !queryServiceState().loaded) {
+              spawnSync('launchctl', ['load', '-w', activePlist], { stdio: 'ignore' });
+            }
+          }
+          if (queryServiceState().loaded) break;
+          sleepSync(120);
+        }
+        spawnSync('launchctl', ['kickstart', '-k', domainTarget], { stdio: 'ignore' });
+      }
+      for (let i = 0; i < 5; i++) {
+        const st = queryServiceState();
+        if (st.running) {
+          runningNow = true;
+          break;
+        }
+        sleepSync(60);
+      }
+      if (!runningNow) runningNow = queryServiceState().loaded;
     } catch {}
-    return { platform: 'darwin', serviceFile: activePlist, label, runningNow: true };
+    return { platform: 'darwin', serviceFile: activePlist, label, runningNow };
   }
 
   if (process.platform === 'linux') {
@@ -1178,8 +1225,7 @@ async function runUninstall() {
   const userConfigPath = path.join(targetDir, 'user', 'config.json');
   const realDaemon = path.join(targetDir, 'core', 'daemon.mjs');
 
-  // 1. 先停止正在运行的后台守护进程并移除跨平台开机自启服务，消除与 --once 还原注入的并发竞态
-  stopRunningDaemonProcesses();
+  // 1. 先移除跨平台开机自启服务（防止 KeepAlive/Restart 自动拉起），再彻底终止残留后台守护进程，消除与 --once 还原注入的并发竞态
   if (process.platform === 'darwin') {
     const uid = process.getuid ? process.getuid() : 501;
     const launchAgentsDir = path.join(home, 'Library', 'LaunchAgents');
@@ -1187,6 +1233,11 @@ async function runUninstall() {
       try {
         execSync(`launchctl bootout gui/${uid}/${label} 2>/dev/null || true`);
       } catch {}
+      for (let i = 0; i < 15; i++) {
+        const res = spawnSync('launchctl', ['print', `gui/${uid}/${label}`], { stdio: 'ignore' });
+        if (res.status !== 0) break;
+        Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100);
+      }
       try {
         const plistFile = path.join(launchAgentsDir, `${label}.plist`);
         if (fs.existsSync(plistFile)) fs.unlinkSync(plistFile);
@@ -1220,6 +1271,7 @@ async function runUninstall() {
       if (fs.existsSync(localVbs)) fs.unlinkSync(localVbs);
     } catch {}
   }
+  stopRunningDaemonProcesses();
 
   // 2. 在无后台守护进程干扰的纯净状态下，向打开的窗口发送一次禁用还原载荷，即时卸载样式并恢复英文原貌
   if (fs.existsSync(userConfigPath) && fs.existsSync(realDaemon)) {

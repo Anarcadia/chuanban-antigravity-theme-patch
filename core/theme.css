@@ -56,6 +56,7 @@ body[data-agy-font] :where(.font-sans) {
   --font-mono: 'Anthropic Mono', 'Anthropic Mono Web', 'anthropic-mono', 'Sarasa Mono Slab SC', '等距更纱黑体 Slab SC', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Monaco, Consolas, monospace !important;
   --default-font-family: var(--font-sans) !important;
   --default-mono-font-family: var(--font-mono) !important;
+  --font-family: var(--font-sans) !important;
   --font-weight-light: 300 !important;
   --font-weight-normal: 400 !important;
   --font-weight-medium: 500 !important;
@@ -92,14 +93,14 @@ body[data-agy-font="google-sans"] {
   color: var(--foreground) !important;
 }
 
-/* Antigravity 2.31.0+ 兼容：放行内置浏览器 WebContentsView 透明打孔 (data-has-browser-hole="true") */
-body:not([data-has-browser-hole="true"]),
-body[data-agy-font]:not([data-has-browser-hole="true"]),
-body[data-agy-font="google-sans"]:not([data-has-browser-hole="true"]) {
+/* Antigravity 2.31.0+ / 2.31.2 兼容：放行内置浏览器 WebContentsView 透明打孔与抽屉打孔，保留 .agy-titlebar 与 .surface-opaque 原生底色语义 */
+body:not([data-has-browser-hole="true"]):not([data-has-drawer-browser-hole="true"]),
+body[data-agy-font]:not([data-has-browser-hole="true"]):not([data-has-drawer-browser-hole="true"]),
+body[data-agy-font="google-sans"]:not([data-has-browser-hole="true"]):not([data-has-drawer-browser-hole="true"]) {
   background-color: var(--background) !important;
 }
 
-.bg-sidebar:not([data-has-browser-hole="true"]) {
+.bg-sidebar:not([data-has-browser-hole="true"]):not([data-has-drawer-browser-hole="true"]):not(.agy-titlebar):not(.surface-opaque):not(.browser-hole-ancestor) {
   background-color: var(--sidebar) !important;
 }
 
@@ -179,8 +180,8 @@ div[contenteditable="true"] :is(p, span, div),
   --sash-line: var(--card-border, rgba(0, 0, 0, 0.35)) !important;
 }
 
-.agy-sheet[data-sheet-inset] [data-main-content-body]::after,
-.agy-inset-shell [data-side-panel-body]::after {
+.agy-sheet[data-sheet-inset] [data-main-content-body]:not(:has([data-browser-hole="true"]))::after,
+.agy-inset-shell [data-side-panel-body]:not(:has([data-browser-hole="true"]))::after {
   box-shadow: inset 0 0 0 1px var(--card-edge, rgba(0, 0, 0, 0.35)) !important;
 }
 
@@ -601,11 +602,11 @@ body[data-agy-theme][data-newux-theme="onyx"]:not(.dark) .agy-sidebar-row[data-s
   box-shadow: none !important;
 }
 
-html[data-ag-preset="high-contrast"] body:not(.dark) :is(a[class*="inline-flex items-center"], .bg-sidebar a, .bg-sidebar button) {
+html[data-ag-preset="high-contrast"]:not([data-ag-theme-mode="dark"]) body:not(.dark) :is(a[class*="inline-flex items-center"], .bg-sidebar a, .bg-sidebar button) {
   border-color: rgba(0, 0, 0, 0.32) !important;
 }
 
-html[data-ag-preset="high-contrast"] body:not(.dark) .bg-border {
+html[data-ag-preset="high-contrast"]:not([data-ag-theme-mode="dark"]) body:not(.dark) .bg-border {
   background-color: rgba(0, 0, 0, 0.28) !important;
 }
 

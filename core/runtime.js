@@ -4,11 +4,16 @@
  * 由 core/daemon.mjs 读取并将文件末尾的启动载荷占位符替换为实时配置与资源对象。
  */
 ((boot) => {
-  // 0. 顶层窗口隔离：绝不注入 Artifact / HTML 预览等子 iframe
-  if (window.top !== window) return;
+  // 0. 顶层窗口隔离：仅允许主窗口与官方内置 Swarm 协作侧栏插件帧（绝不注入 Artifact / HTML 预览等子 iframe）
+  const IS_SWARM_PLUGIN_FRAME = !!(
+    window.location &&
+    ((window.location.protocol === 'plugin:' && /^swarm--/i.test(window.location.hostname || '')) ||
+      /^plugin:\/\/swarm--/i.test(String(window.location.href || '')))
+  );
+  if (window.top !== window && !IS_SWARM_PLUGIN_FRAME) return;
   if (!boot || typeof boot !== 'object') return;
 
-  const PATCH_VERSION = boot.version || '20261112-v5.1.5';
+  const PATCH_VERSION = boot.version || '20261113-v5.1.6';
   const ENABLED = boot.enabled !== false;
   const CSS_TEXT = boot.cssText || '';
   const CUSTOM_CSS_TEXT = boot.customCss || '';
@@ -28,7 +33,7 @@
 
   const DEFAULT_PRESET = boot.preset || 'high-contrast';
   const DEFAULT_EXCLUDE_I18N =
-    'code, pre, kbd, samp, textarea, input, style, script, noscript, [contenteditable="true"], [data-markdown-root], [data-testid="user-message-content"], .agy-user-bubble, .monaco-editor, .monaco-diff-editor, .xterm, [class*="onyx-key"], .prose, .markdown, [class*="chat-message"], [class*="group/file-title"], [data-testid="conversation-row-sidebar"] a[href^="/c/"], [data-testid="conversation-row-sidebar"] span.truncate, #ag-live-metrics-pill, #ag-live-metrics-tooltip';
+    'code, pre, kbd, samp, textarea, input, style, script, noscript, [contenteditable="true"], [data-markdown-root], [data-testid="user-message-content"], .agy-user-bubble, .monaco-editor, .monaco-diff-editor, .xterm, [class*="onyx-key"], .prose, .markdown, [class*="chat-message"], [class*="group/file-title"], [data-testid="conversation-row-sidebar"] a[href^="/c/"], [data-testid="conversation-row-sidebar"] span.truncate, [data-testid="conversation-navigator-turn"], .msg-body, #raw, [data-testid="swarm-raw"], #swarm-title, #ag-live-metrics-pill, #ag-live-metrics-tooltip';
 
   const SELECTORS = Object.assign(
     {
@@ -188,6 +193,78 @@
     }
   }
 
+  // Antigravity 2.31.2+ BaseWindow + curtainView 底色同步与宿主内联色彩亮度解析
+  function parseColorToRgb(rawColor, requireOpaque = false) {
+    const s = String(rawColor || '').trim();
+    if (!s) return null;
+    if (/^#[0-9a-fA-F]{6}$/.test(s)) {
+      return [parseInt(s.slice(1, 3), 16), parseInt(s.slice(3, 5), 16), parseInt(s.slice(5, 7), 16)];
+    }
+    if (/^#[0-9a-fA-F]{3}$/.test(s)) {
+      return [parseInt(s[1] + s[1], 16), parseInt(s[2] + s[2], 16), parseInt(s[3] + s[3], 16)];
+    }
+    const mRgb = s.match(/^rgba?\(\s*([\d.]+%?)\s*[,\s]\s*([\d.]+%?)\s*[,\s]\s*([\d.]+%?)(?:\s*[,/]\s*([\d.%]+))?\s*\)$/i);
+    if (mRgb) {
+      if (mRgb[4] !== undefined) {
+        const a = mRgb[4].endsWith('%') ? parseFloat(mRgb[4]) / 100 : parseFloat(mRgb[4]);
+        if (!Number.isFinite(a) || (requireOpaque && a < 1)) return null;
+      }
+      const c255 = (v) =>
+        Math.max(0, Math.min(255, Math.round(v.endsWith('%') ? parseFloat(v) * 2.55 : Number(v))));
+      return [c255(mRgb[1]), c255(mRgb[2]), c255(mRgb[3])];
+    }
+    const mSrgb = s.match(/^color\(\s*srgb\s+([\d.]+%?)\s+([\d.]+%?)\s+([\d.]+%?)(?:\s*\/\s*([\d.%]+))?\s*\)$/i);
+    if (mSrgb) {
+      if (mSrgb[4] !== undefined) {
+        const a = mSrgb[4].endsWith('%') ? parseFloat(mSrgb[4]) / 100 : parseFloat(mSrgb[4]);
+        if (!Number.isFinite(a) || (requireOpaque && a < 1)) return null;
+      }
+      const f255 = (v) =>
+        Math.max(0, Math.min(255, Math.round(v.endsWith('%') ? parseFloat(v) * 2.55 : parseFloat(v) * 255)));
+      return [f255(mSrgb[1]), f255(mSrgb[2]), f255(mSrgb[3])];
+    }
+    return null;
+  }
+
+  function parseColorToHex6(rawColor) {
+    const rgb = parseColorToRgb(rawColor, true);
+    if (!rgb) return null;
+    const h2 = (v) => v.toString(16).padStart(2, '0');
+    return ('#' + h2(rgb[0]) + h2(rgb[1]) + h2(rgb[2])).toUpperCase();
+  }
+
+  function computeColorLuminance(rawColor) {
+    const rgb = parseColorToRgb(rawColor, false);
+    if (!rgb) return null;
+    return (0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2]) / 255;
+  }
+
+  function syncCurtainSurfaceColor(force = false) {
+    if (IS_SWARM_PLUGIN_FRAME) return;
+    try {
+      const setThemeColor = window.electronNative?.wcvBrowser?.setThemeColor;
+      if (typeof setThemeColor !== 'function') return;
+      const targetEl = document.body || document.documentElement;
+      if (!targetEl || typeof getComputedStyle !== 'function') return;
+      const cs = getComputedStyle(targetEl);
+      let cur = (cs.getPropertyValue('--background') || '').trim();
+      let hex = parseColorToHex6(cur);
+      for (let depth = 0; depth < 3 && !hex && cur; depth++) {
+        const mVar = cur.match(/^var\(\s*(--[A-Za-z0-9_-]+)(?:\s*,\s*([^)]+))?\s*\)$/);
+        if (!mVar) break;
+        cur = (cs.getPropertyValue(mVar[1]) || mVar[2] || '').trim();
+        hex = parseColorToHex6(cur);
+      }
+      if (!hex) {
+        hex = parseColorToHex6(cs.backgroundColor);
+      }
+      if (hex && (force || window.__ag_last_curtain_hex !== hex)) {
+        window.__ag_last_curtain_hex = hex;
+        Promise.resolve(setThemeColor(hex)).catch(() => {});
+      }
+    } catch (e) {}
+  }
+
   // 若用户在 user/config.json 中将 enabled 设为 false，执行无损卸载还原
   if (!ENABLED) {
     const s1 = document.getElementById('ag-custom-fonts');
@@ -231,7 +308,20 @@
       } catch (e) {}
       window.__ag_theme_mode_observer = null;
     }
+    if (window.__ag_mql_cleanup) {
+      try {
+        window.__ag_mql_cleanup();
+      } catch (e) {}
+      window.__ag_mql_cleanup = null;
+    }
+    if (window.__ag_zoom_timer) {
+      try {
+        clearTimeout(window.__ag_zoom_timer);
+      } catch (e) {}
+      window.__ag_zoom_timer = null;
+    }
     window.__ag_zoom_keydown_fn = null;
+    window.__ag_zoom_resize_fn = null;
     window.__ag_settings_click_fn = null;
     window.__ag_body_ready = false;
     applyThemeVars({});
@@ -241,6 +331,17 @@
     document.documentElement.removeAttribute('data-ag-wax-seal');
     document.documentElement.removeAttribute('data-ag-os');
     restoreAllTranslations(document.body);
+    syncCurtainSurfaceColor(true);
+    if (!IS_SWARM_PLUGIN_FRAME) {
+      try {
+        const cs = getComputedStyle(document.body || document.documentElement);
+        const sidebarBg = cs.getPropertyValue('--sidebar').trim();
+        const fgColor = cs.getPropertyValue('--foreground').trim();
+        if (sidebarBg && fgColor) {
+          window.electronNative?.setTitleBarOverlay?.({ color: sidebarBg, symbolColor: fgColor });
+        }
+      } catch (e) {}
+    }
     window.__ag_patch_version = PATCH_VERSION + '-disabled';
     return;
   }
@@ -311,7 +412,7 @@
   // 2. 防死锁守护：Antigravity 原生 TanStack Router 缺陷修复（支持热重载更新回调）
   // ============================================================================
   window.__ag_settings_click_fn = (e) => {
-    if (MODULES.deadlockHealer === false) return;
+    if (IS_SWARM_PLUGIN_FRAME || MODULES.deadlockHealer === false) return;
     const btn = e.target && e.target.closest && e.target.closest('[data-testid="settings-button"]');
     if (!btn) return;
 
@@ -340,10 +441,32 @@
   }
 
   // ============================================================================
-  // 2.1 缩放快捷键原生缺陷修复（macOS: Cmd + -/=/0，Windows/Linux: Ctrl + -/=/0；兼容 2.31.0 resetZoom 与欧式键盘）
+  // 2.1 缩放快捷键修复与 2.31.2 原生菜单快捷键防双倍缩放保护（兼容 Numpad、欧式键盘与 Windows BaseWindow）
   // ============================================================================
+  try {
+    const initZoom = window.electronNative?.getZoomLevel?.();
+    if (typeof initZoom === 'number' && typeof window.__ag_settled_zoom !== 'number') {
+      window.__ag_settled_zoom = initZoom;
+    }
+  } catch (e) {}
+
+  window.__ag_zoom_resize_fn = () => {
+    if (window.__ag_self_zooming) return;
+    const native = window.electronNative;
+    if (!native || typeof native.getZoomLevel !== 'function') return;
+    try {
+      const cur = native.getZoomLevel();
+      if (typeof cur === 'number') {
+        if (typeof window.__ag_settled_zoom === 'number' && Math.abs(cur - window.__ag_settled_zoom) > 0.003) {
+          window.__ag_last_ext_zoom_ts = typeof performance !== 'undefined' ? performance.now() : Date.now();
+        }
+        window.__ag_settled_zoom = cur;
+      }
+    } catch (e) {}
+  };
+
   window.__ag_zoom_keydown_fn = (e) => {
-    if (MODULES.zoomShortcuts === false || MODULES.deadlockHealer === false) return;
+    if (IS_SWARM_PLUGIN_FRAME || MODULES.zoomShortcuts === false || MODULES.deadlockHealer === false) return;
     if (e.isComposing) return;
     const isMac = detectedOs === 'darwin';
     const modKey = isMac ? e.metaKey && !e.ctrlKey : e.ctrlKey && !e.metaKey;
@@ -352,30 +475,80 @@
     const native = window.electronNative;
     if (!native) return;
 
+    let action = null;
+    let actionFn = null;
     if (!e.shiftKey && (e.key === '-' || e.code === 'Minus' || e.code === 'NumpadSubtract')) {
-      if (typeof native.zoomOut === 'function') {
-        e.preventDefault();
-        e.stopPropagation();
-        native.zoomOut();
-      }
+      action = 'out';
+      actionFn = native.zoomOut;
     } else if (e.key === '=' || e.key === '+' || e.code === 'Equal' || e.code === 'NumpadAdd') {
-      if (typeof native.zoomIn === 'function') {
-        e.preventDefault();
-        e.stopPropagation();
-        native.zoomIn();
-      }
+      action = 'in';
+      actionFn = native.zoomIn;
     } else if (!e.shiftKey && (e.key === '0' || e.code === 'Digit0' || e.code === 'Numpad0')) {
-      const resetFn = typeof native.resetZoom === 'function' ? native.resetZoom : native.zoomReset;
-      if (typeof resetFn === 'function') {
-        e.preventDefault();
-        e.stopPropagation();
-        resetFn.call(native);
-      }
+      action = 'reset';
+      actionFn = typeof native.resetZoom === 'function' ? native.resetZoom : native.zoomReset;
     }
+    if (!action || typeof actionFn !== 'function') return;
+
+    const nowTs = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    const curFactor = typeof native.getZoomLevel === 'function' ? native.getZoomLevel() : null;
+    const settledBefore = typeof window.__ag_settled_zoom === 'number' ? window.__ag_settled_zoom : curFactor;
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    // 若原生菜单加速器已在 keydown 到达渲染进程前刚完成缩放，直接同步状态并跳过补触发
+    if (
+      (typeof curFactor === 'number' && typeof settledBefore === 'number' && Math.abs(curFactor - settledBefore) > 0.003) ||
+      nowTs - (window.__ag_last_ext_zoom_ts || 0) < 80
+    ) {
+      if (typeof curFactor === 'number') window.__ag_settled_zoom = curFactor;
+      return;
+    }
+
+    // preload.js 中 getZoomLevel() 底层为 webFrame.getZoomFactor()，100% 原始大小恒为 1.0
+    if (action === 'reset' && typeof curFactor === 'number' && Math.abs(curFactor - 1) < 0.005) {
+      return;
+    }
+
+    if (window.__ag_zoom_timer) {
+      clearTimeout(window.__ag_zoom_timer);
+      window.__ag_zoom_timer = null;
+    }
+
+    window.__ag_zoom_timer = setTimeout(() => {
+      window.__ag_zoom_timer = null;
+      try {
+        const afterFactor = typeof native.getZoomLevel === 'function' ? native.getZoomLevel() : null;
+        if (
+          (typeof curFactor === 'number' && typeof afterFactor === 'number' && Math.abs(afterFactor - curFactor) > 0.003) ||
+          (typeof performance !== 'undefined' ? performance.now() : Date.now()) - (window.__ag_last_ext_zoom_ts || 0) < 80
+        ) {
+          if (typeof afterFactor === 'number') window.__ag_settled_zoom = afterFactor;
+          return;
+        }
+        window.__ag_self_zooming = true;
+        try {
+          actionFn.call(native);
+          const nextFactor = typeof native.getZoomLevel === 'function' ? native.getZoomLevel() : null;
+          if (typeof nextFactor === 'number') window.__ag_settled_zoom = nextFactor;
+        } finally {
+          window.__ag_self_zooming = false;
+        }
+      } catch (err) {}
+    }, 60);
   };
 
   if (!window.__ag_zoom_guard_installed) {
     window.__ag_zoom_guard_installed = true;
+    window.addEventListener(
+      'resize',
+      () => {
+        if (typeof window.__ag_zoom_resize_fn === 'function') {
+          window.__ag_zoom_resize_fn();
+        }
+      },
+      { passive: true }
+    );
     window.addEventListener(
       'keydown',
       (e) => {
@@ -445,44 +618,74 @@
         document.documentElement.setAttribute('data-ag-preset', targetPreset);
       }
 
+      const htmlEl = document.documentElement;
       const bodyEl = document.body;
-      const bodyExplicitDark = !!(
-        bodyEl &&
-        (bodyEl.classList.contains('dark') ||
-          bodyEl.classList.contains('theme-dark') ||
-          bodyEl.classList.contains('dark-theme'))
+      const htmlDataTheme = htmlEl ? htmlEl.getAttribute('data-theme') : null;
+      const systemPrefersDark = !!(
+        typeof window.matchMedia === 'function' && window.matchMedia('(prefers-color-scheme: dark)').matches
       );
-      const bodyExplicitLight = !!(
-        bodyEl &&
-        (bodyEl.classList.contains('theme-light') ||
-          bodyEl.classList.contains('light-theme') ||
-          bodyEl.classList.contains('light'))
-      );
-      let storedThemeMode = null;
-      try {
-        storedThemeMode = Storage.prototype.getItem.call(localStorage, 'theme-mode');
-      } catch (e) {}
-      const isDark = bodyExplicitDark
-        ? true
-        : bodyExplicitLight || storedThemeMode === 'light'
-        ? false
-        : storedThemeMode === 'dark'
-        ? true
-        : !!(document.documentElement && document.documentElement.style.colorScheme === 'dark');
+      let isDark = false;
+      if (IS_SWARM_PLUGIN_FRAME) {
+        // Swarm 插件 preload 直接向 html 内联 style 注入宿主 --background（不受样式表 !important 覆盖影响）
+        const inlineHostBg = htmlEl ? (htmlEl.style.getPropertyValue('--background') || '').trim() : '';
+        const hostLum = computeColorLuminance(inlineHostBg);
+        if (hostLum !== null) {
+          isDark = hostLum < 0.5;
+        } else if (htmlDataTheme === 'dark') {
+          isDark = true;
+        } else if (htmlDataTheme === 'light') {
+          isDark = false;
+        } else {
+          isDark = systemPrefersDark;
+        }
+        const swarmMode = isDark ? 'dark' : 'light';
+        if (htmlEl && htmlEl.getAttribute('data-theme') !== swarmMode) {
+          htmlEl.setAttribute('data-theme', swarmMode);
+        }
+      } else {
+        const bodyExplicitDark = !!(
+          htmlDataTheme === 'dark' ||
+          (bodyEl &&
+            (bodyEl.classList.contains('dark') ||
+              bodyEl.classList.contains('theme-dark') ||
+              bodyEl.classList.contains('dark-theme')))
+        );
+        const bodyExplicitLight = !!(
+          htmlDataTheme === 'light' ||
+          (bodyEl &&
+            (bodyEl.classList.contains('theme-light') ||
+              bodyEl.classList.contains('light-theme') ||
+              bodyEl.classList.contains('light')))
+        );
+        let storedThemeMode = null;
+        try {
+          storedThemeMode = Storage.prototype.getItem.call(localStorage, 'theme-mode');
+        } catch (e) {}
+        isDark = bodyExplicitDark
+          ? true
+          : bodyExplicitLight || storedThemeMode === 'light'
+          ? false
+          : storedThemeMode === 'dark'
+          ? true
+          : !!(htmlEl && htmlEl.style.colorScheme === 'dark') || systemPrefersDark;
+      }
       const targetMode = isDark ? 'dark' : 'light';
       const prevMode = document.documentElement.getAttribute('data-ag-theme-mode');
       if (prevMode !== targetMode || prevPreset !== targetPreset) {
         document.documentElement.setAttribute('data-ag-theme-mode', targetMode);
-        try {
-          const cs = getComputedStyle(document.body || document.documentElement);
-          const sidebarBg = cs.getPropertyValue('--sidebar').trim() || (isDark ? '#111114' : '#F7F5F0');
-          const fgColor = cs.getPropertyValue('--foreground').trim() || (isDark ? '#FAFAFA' : '#1F1E1D');
-          window.electronNative?.setTitleBarOverlay?.({
-            color: sidebarBg,
-            symbolColor: fgColor
-          });
-        } catch (e) {}
+        if (!IS_SWARM_PLUGIN_FRAME) {
+          try {
+            const cs = getComputedStyle(document.body || document.documentElement);
+            const sidebarBg = cs.getPropertyValue('--sidebar').trim() || (isDark ? '#111114' : '#F7F5F0');
+            const fgColor = cs.getPropertyValue('--foreground').trim() || (isDark ? '#FAFAFA' : '#1F1E1D');
+            window.electronNative?.setTitleBarOverlay?.({
+              color: sidebarBg,
+              symbolColor: fgColor
+            });
+          } catch (e) {}
+        }
       }
+      syncCurtainSurfaceColor();
     } catch (e) {}
   }
 
@@ -543,9 +746,25 @@
         modeObs.observe(document.body, { attributes: true, attributeFilter: ['class'] });
       }
       if (document.documentElement) {
-        modeObs.observe(document.documentElement, { attributes: true, attributeFilter: ['class', 'style'] });
+        modeObs.observe(document.documentElement, { attributes: true, attributeFilter: ['class', 'style', 'data-theme'] });
       }
       window.__ag_theme_mode_observer = modeObs;
+    } catch (e) {}
+  }
+  if (window.__ag_mql_cleanup) {
+    try {
+      window.__ag_mql_cleanup();
+    } catch (e) {}
+    window.__ag_mql_cleanup = null;
+  }
+  if (typeof window.matchMedia === 'function') {
+    try {
+      const mql = window.matchMedia('(prefers-color-scheme: dark)');
+      const onSchemeChange = () => {
+        if (typeof window.__ag_sync_preset_fn === 'function') window.__ag_sync_preset_fn();
+      };
+      mql.addEventListener?.('change', onSchemeChange);
+      window.__ag_mql_cleanup = () => mql.removeEventListener?.('change', onSchemeChange);
     } catch (e) {}
   }
 
@@ -794,6 +1013,12 @@
 
   function checkRouteAndMountMetrics() {
     try {
+      if (IS_SWARM_PLUGIN_FRAME) {
+        if (document.documentElement.getAttribute('data-ag-page-type') !== 'plugin') {
+          document.documentElement.setAttribute('data-ag-page-type', 'plugin');
+        }
+        return;
+      }
       if (document.hidden) return;
       const pathname = window.location.pathname;
       const isChatRoute = pathname.startsWith('/c/');
@@ -842,7 +1067,7 @@
     } catch (e) {}
   }
 
-  if (!window.__ag_history_hook_installed) {
+  if (!IS_SWARM_PLUGIN_FRAME && !window.__ag_history_hook_installed) {
     window.__ag_history_hook_installed = true;
     const triggerRouteCheck = () => {
       requestAnimationFrame(() => {
@@ -881,8 +1106,10 @@
     } catch (e) {}
     window.__ag_metrics_route_watcher = null;
   }
-  window.__ag_metrics_route_watcher = setInterval(checkRouteAndMountMetrics, 3000);
-  if (document.body) {
+  if (!IS_SWARM_PLUGIN_FRAME) {
+    window.__ag_metrics_route_watcher = setInterval(checkRouteAndMountMetrics, 3000);
+  }
+  if (document.body || IS_SWARM_PLUGIN_FRAME) {
     checkRouteAndMountMetrics();
   }
 
@@ -968,8 +1195,10 @@
     }
 
     const CONTAINER_IMMUTABLE_EXCLUDE_SELECTOR =
-      'code, pre, kbd, samp, style, script, noscript, [data-markdown-root], [data-testid="user-message-content"], .agy-user-bubble, .monaco-editor, .monaco-diff-editor, .xterm, #ag-live-metrics-pill, #ag-live-metrics-tooltip';
-    const TEXT_IMMUTABLE_EXCLUDE_SELECTOR = 'textarea, input, ' + CONTAINER_IMMUTABLE_EXCLUDE_SELECTOR;
+      'code, pre, kbd, samp, style, script, noscript, [data-markdown-root], [data-testid="user-message-content"], .agy-user-bubble, .monaco-editor, .monaco-diff-editor, .xterm, #ag-live-metrics-pill, #ag-live-metrics-tooltip, .msg-body, #raw, [data-testid="swarm-raw"], #swarm-title';
+    const TEXT_IMMUTABLE_EXCLUDE_SELECTOR =
+      'textarea, input, [contenteditable="true"], [data-testid="conversation-navigator-turn"], ' +
+      CONTAINER_IMMUTABLE_EXCLUDE_SELECTOR;
 
     const mergedExcludeParts = splitTopLevelSelectors(DEFAULT_EXCLUDE_I18N);
     const userExcludeParts = splitTopLevelSelectors(SELECTORS.excludeI18n);
@@ -981,10 +1210,29 @@
     const EXCLUDE_SELECTOR = mergedExcludeParts.join(', ');
     const FORM_ATTR_EXCLUDE_SELECTOR = mergedExcludeParts
       .filter((tok) => {
-        const low = tok.toLowerCase();
-        return low !== 'input' && low !== 'textarea';
+        const low = tok.toLowerCase().replace(/\s+/g, '');
+        return (
+          low !== 'input' &&
+          low !== 'textarea' &&
+          low !== '[contenteditable="true"]' &&
+          low !== "[contenteditable='true']" &&
+          low !== '[contenteditable]' &&
+          low !== '[data-testid="conversation-navigator-turn"]' &&
+          low !== "[data-testid='conversation-navigator-turn']"
+        );
       })
       .join(', ');
+
+    function isFormAttrTarget(el) {
+      return !!(
+        el &&
+        (el.tagName === 'INPUT' ||
+          el.tagName === 'TEXTAREA' ||
+          (el.getAttribute &&
+            (el.getAttribute('contenteditable') === 'true' ||
+              el.getAttribute('data-testid') === 'conversation-navigator-turn')))
+      );
+    }
 
     const immutableTextExclCache = new WeakMap();
     const immutableContainerExclCache = new WeakMap();
@@ -1044,19 +1292,40 @@
     const RE_DEMOTED = /^(\d+)\s+demoted$/i;
     const RE_EXCLUDED = /^(\d+)\s+excluded$/i;
     const RE_TOOLS_EXCLUDED = /^(\d+)\s+tools?\s+excluded$/i;
-    const RE_ACTIVE_CONVS = /^(\d+)\s+active\s+conversations$/i;
+    const RE_ACTIVE_CONVS = /^(\d+)\s+active\s+conversations?$/i;
+    const RE_ARCHIVED_CONVS = /^(\d+)\s+archived\s+conversations?$/i;
+    const RE_PINNED_COUNT = /^(\d+)\s+pinned(?:\s+tabs?)?$/i;
+    const RE_MODELS_SELECTED = /^(\d+)\s+models?\s+selected$/i;
+    const RE_BROWSER_STEPS = /^(\d+)\s+browser\s+steps?$/i;
+    const RE_MEDIA_ATTACHMENTS = /^(\d+)\s+(image|audio|video)\s+attachments?$/i;
+    const RE_ATTACHMENTS_COUNT = /^(\d+)\s+attachments?$/i;
+    const RE_COMMENTS_COUNT = /^(\d+)\s+comments?$/i;
+    const RE_INSTALLED_COUNT = /^(\d+)\s+installed$/i;
+    const RE_ACCOUNTS_COUNT = /^(\d+)\s+accounts?$/i;
     const RE_UPDATES_COUNT = /^(\d+)\s+updates?$/i;
     const RE_PROJECTS_COUNT = /^(\d+)\s+projects?$/i;
     const RE_CALLS_MB = /^(\d+)\s+calls?\s*·\s*([\d.]+\s*MB)$/i;
+    const RE_PLUS_ATTACHMENTS = /^\+(\d+)\s+attachments?$/i;
+    const RE_PLUS_MORE = /^\+(\d+)\s+more(\s*\(Show all\))?$/i;
     const RE_SEE_ALL = /^See all\s*\((\d+)\)$/i;
     const RE_SHOW_BREAKDOWNS = /^Show\s+(\d+)\s+breakdowns?$/i;
     const RE_SHOW_MORE_SUBAGENTS = /^Show\s+(\d+)\s+more\s+subagents?$/i;
+    const RE_SHOW_EARLIER_STEPS = /^Show\s+(\d+)\s+earlier\s+steps?$/i;
+    const RE_SORT_FILTER_ACTIVE = /^Sort and filter conversations\s*\((\d+)\s+active\)$/i;
+    const RE_STILL_THINKING_SEC = /^Still thinking,\s*(\d+)\s*seconds?$/i;
+    const RE_MARKED_READ = /^Marked\s+(\d+)\s+conversations?\s+as\s+read$/i;
     const RE_ZIPPING_FOLDER = /^Zipping\s+(.+?)(?:…|\.\.\.)$/i;
     const RE_PERM_DELETE = /^Permanently delete\s+(.*)\s+including\s+(\d+)\s+active\s+conversations\.?$/i;
     const RE_WORKED_FOR_UPDATES = /^Worked for\s+([<0-9smhd\s]+?)\s*·\s*(\d+)\s+updates?$/i;
     const RE_WORKED_FOR = /^Worked for\s+([<0-9smhd]+(?:\s+\d+[smhd])*)$/i;
+    const RE_WAITING_CMD_SEC = /^Waiting for command completion\s*\(up to\s+(\d+)\s+seconds?\)$/i;
     const RE_THOUGHT_FOR = /^Thought for\s+([<0-9smhd]+(?:\s+\d+[smhd])*)$/i;
+    const RE_THINKING_FOR = /^Thinking for\s+([<0-9smhd]+(?:\s+\d+[smhd])*)$/i;
+    const RE_USING_BROWSER_SEC = /^Using browser\s*\((\d+)s\)$/i;
     const RE_RUNNING_FOR = /^Running\s+for\s+([<0-9smhd]+(?:\s+\d+[smhd])*)$/i;
+    const RE_KEY_QUEUES_AFTER = /^(\S+)\s+Queues after the turn$/i;
+    const RE_KEY_SENDS_IMMEDIATELY = /^(\S+)\s+Sends immediately$/i;
+    const RE_KEY_EMPTY_NEXT_QUEUE = /^(\S+)\s+On empty prompt,\s*sends next in queue$/i;
     const RE_EPHEMERAL_SUMMARY =
       /^(Explored(?:\s+(?:\d+\s+)?(?:files?|artifacts?)(?:\s+and\s+(?:\d+\s+)?(?:files?|artifacts?))?)?|Ran\s+(?:\d+\s+)?commands?|Edited(?:\s+(?:\d+\s+)?(?:files?|artifacts?)(?:\s+and\s+(?:\d+\s+)?(?:files?|artifacts?))?)?)(?:,\s*(explored(?:\s+(?:\d+\s+)?(?:files?|artifacts?)(?:\s+and\s+(?:\d+\s+)?(?:files?|artifacts?))?)?|ran\s+(?:\d+\s+)?commands?|edited(?:\s+(?:\d+\s+)?(?:files?|artifacts?)(?:\s+and\s+(?:\d+\s+)?(?:files?|artifacts?))?)?))*$/i;
     const EPHEMERAL_CLAUSE_MAP = {
@@ -1123,6 +1392,19 @@
       /^This deletes\s+(\d+)\s+call recordings?\s*\(([\d.]+\s*MB)\)\s+from your machine\.\s*You can't undo this\.$/i;
     const RE_USED_LIMIT = /^You have used (some|all|most) of your (weekly|5-hour|five-hour|daily) limit,?\s*it will fully refresh in (.*)\.?$/i;
     const RE_NOT_USED_LIMIT = /^You have not used any of your (weekly|5-hour|five-hour|daily) limit\.?$/i;
+    const RE_ORCHESTRATOR_MODEL = /^Orchestrator\s*\(([^)]+)\)$/i;
+    const RE_MODEL_OFFLOAD_DESC =
+      /^([A-Za-z0-9 .+-]+?)\s+that may offload routine steps to\s+([A-Za-z0-9 .+-]+?)\.\s*Same\s+([A-Za-z0-9 .+-]+?)-level quality,\s*fewer tokens used\.?$/i;
+    const RE_MODEL_REMOVED_ON = /^(.+?)\s+will be removed from Antigravity on\s+(.+?)\.?$/i;
+    const RE_MODEL_PERIOD_LIMIT =
+      /^(Gemini\b[\w .+-]*|Claude\b[\w .+-]*|GPT\b[\w .+-]*|Orchestrator\b[\w .+()-]*)\s+(Weekly|Daily|Monthly)\s+Limit$/i;
+    const RE_QUOTA_RESET_SWITCH =
+      /^Your quota for\s+(.+?)\s+will reset on\s+(.+?)\.\s*Switch to another available model to continue\.?$/i;
+    const RE_QUOTA_REACHED_SWITCH =
+      /^Your quota for\s+(.+?)\s+has been reached\.\s*Switch to another available model to continue\.?$/i;
+    const RE_NEED_CREDITS_MODEL =
+      /^You need\s+(?:at least\s+(\d+)|more)\s+AI Credits to send messages\.\s*To continue using\s+(.+?)\s+now,\s*purchase more AI Credits\.(?:\s*Your plan's baseline quota will refresh on\s+(.+?)\.)?(?:\s*To continue using this model now,\s*enable AI Credit overages\.)?$/i;
+    const RE_BASELINE_QUOTA_REFRESH = /^Your plan's baseline quota will refresh on\s+(.+?)\.?$/i;
     const RE_ARIA_BRANCH = /^Branch, current:\s*(.*)$/i;
     const RE_ARIA_PROJECT = /^Select project(?:, current)?:\s*(.*)$/i;
     const RE_ARIA_LOCATION = /^(?:Where the agent runs, current|Select location(?:, current)?):\s*(.*)$/i;
@@ -1134,8 +1416,33 @@
     const RE_ARIA_TURN = /^(?:Conversation turn\s+(\d+)\s+by\s+(User|Agent|Assistant)|Turn\s+(\d+)\s+of\s+(\d+))$/i;
     const RE_ARIA_GOTO_TURN = /^Go to turn\s+(\d+)\s+of\s+(\d+)$/i;
     const RE_ARIA_LOAD_OLDER = /^(?:Load\s+(\d+)\s+older\s+turns?.*|(Load|No more) older messages,\s*showing\s+(\d+)\s+of\s+(\d+))$/i;
-    const RE_EFFORT_SUFFIX = /^(.*?)\s*(?:\((Low|Medium|High|Max)\)|\b(Low|Medium|High|Max))\s*$/i;
-    const EFFORT_MAP = { low: '低', medium: '中', high: '高', max: '最高' };
+    const RE_EFFORT_SUFFIX =
+      /^(.*?)\s*(?:\((Extra\s+High|Low|Medium|High|Extra|XHigh|Max)(?:\s+thinking)?\)|\b(Extra\s+High|Low|Medium|High|Extra|XHigh|Max))(?:\s*·\s*(.+))?\s*$/i;
+    const EFFORT_MAP = { low: '低', medium: '中', high: '高', extra: '超高', 'extra high': '超高', xhigh: '超高', max: '最高' };
+    const MONTH_FULL_MAP = {
+      january: 1,
+      february: 2,
+      march: 3,
+      april: 4,
+      may: 5,
+      june: 6,
+      july: 7,
+      august: 8,
+      september: 9,
+      october: 10,
+      november: 11,
+      december: 12
+    };
+
+    function formatEnglishDateZh(dateStr) {
+      const s = String(dateStr || '').trim().replace(/\.$/, '');
+      const m = s.match(/^([A-Za-z]+)\s+(\d{1,2}),\s*(\d{4})$/);
+      if (m) {
+        const mon = MONTH_FULL_MAP[m[1].toLowerCase()] || MONTH_SHORT_MAP[m[1].slice(0, 3).toLowerCase()];
+        if (mon) return m[3] + ' 年 ' + mon + ' 月 ' + m[2] + ' 日';
+      }
+      return s + ' ';
+    }
 
     function formatCompactDurationZh(str) {
       const s = String(str || '').trim();
@@ -1178,7 +1485,7 @@
 
     function canTranslateElementAttrs(el, batchSafeSet) {
       if (!el || el.nodeType !== 1) return false;
-      if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
+      if (isFormAttrTarget(el)) {
         if (immutableContainerExclCache.get(el) === true) return false;
         if (el.closest(CONTAINER_IMMUTABLE_EXCLUDE_SELECTOR)) {
           if (el.isConnected) immutableContainerExclCache.set(el, true);
@@ -1243,8 +1550,31 @@
         if (RE_EXCLUDED.test(trimmed)) return raw.replace(RE_EXCLUDED, '$1 项已排除');
         if (RE_TOOLS_EXCLUDED.test(trimmed)) return raw.replace(RE_TOOLS_EXCLUDED, '$1 个工具已排除');
         if (RE_ACTIVE_CONVS.test(trimmed)) return raw.replace(RE_ACTIVE_CONVS, '$1 个进行中的会话');
+        if (RE_ARCHIVED_CONVS.test(trimmed)) return raw.replace(RE_ARCHIVED_CONVS, '$1 个已归档会话');
+        if (RE_PINNED_COUNT.test(trimmed)) return raw.replace(RE_PINNED_COUNT, '$1 个已固定标签页');
+        if (RE_MODELS_SELECTED.test(trimmed)) return raw.replace(RE_MODELS_SELECTED, '已选择 $1 个模型');
+        if (RE_BROWSER_STEPS.test(trimmed)) return raw.replace(RE_BROWSER_STEPS, '$1 个浏览器步骤');
+        const mMediaAtt = trimmed.match(RE_MEDIA_ATTACHMENTS);
+        if (mMediaAtt) {
+          const mediaMap = { image: '图片', audio: '音频', video: '视频' };
+          const mediaZh = mediaMap[mMediaAtt[2].toLowerCase()] || mMediaAtt[2];
+          return raw.replace(trimmed, () => mMediaAtt[1] + ' 个' + mediaZh + '附件');
+        }
+        if (RE_ATTACHMENTS_COUNT.test(trimmed)) return raw.replace(RE_ATTACHMENTS_COUNT, '$1 个附件');
+        if (RE_COMMENTS_COUNT.test(trimmed)) return raw.replace(RE_COMMENTS_COUNT, '$1 条评论');
+        if (RE_INSTALLED_COUNT.test(trimmed)) return raw.replace(RE_INSTALLED_COUNT, '已安装 $1 项');
+        if (RE_ACCOUNTS_COUNT.test(trimmed)) return raw.replace(RE_ACCOUNTS_COUNT, '$1 个账号');
         if (RE_PROJECTS_COUNT.test(trimmed)) return raw.replace(RE_PROJECTS_COUNT, '$1 个项目');
         if (RE_CALLS_MB.test(trimmed)) return raw.replace(RE_CALLS_MB, '$1 次通话 · $2');
+        return null;
+      }
+      if (c0 === 43) {
+        // 以 '+' 开头
+        if (RE_PLUS_ATTACHMENTS.test(trimmed)) return raw.replace(RE_PLUS_ATTACHMENTS, '+$1 个附件');
+        const mPlusMore = trimmed.match(RE_PLUS_MORE);
+        if (mPlusMore) {
+          return raw.replace(trimmed, () => (mPlusMore[2] ? '+' + mPlusMore[1] + ' 更多（显示全部）' : '+' + mPlusMore[1] + ' 更多'));
+        }
         return null;
       }
 
@@ -1253,6 +1583,9 @@
         if (RE_SEE_ALL.test(trimmed)) return raw.replace(RE_SEE_ALL, '查看全部 ($1)');
         if (RE_SHOW_BREAKDOWNS.test(trimmed)) return raw.replace(RE_SHOW_BREAKDOWNS, '展开明细 ($1 项)');
         if (RE_SHOW_MORE_SUBAGENTS.test(trimmed)) return raw.replace(RE_SHOW_MORE_SUBAGENTS, '显示另外 $1 个子代理');
+        if (RE_SHOW_EARLIER_STEPS.test(trimmed)) return raw.replace(RE_SHOW_EARLIER_STEPS, '展开前 $1 个步骤');
+        if (RE_SORT_FILTER_ACTIVE.test(trimmed)) return raw.replace(RE_SORT_FILTER_ACTIVE, '排序与筛选对话（已启用 $1 项）');
+        if (RE_STILL_THINKING_SEC.test(trimmed)) return raw.replace(RE_STILL_THINKING_SEC, '仍在思考（$1 秒）');
         if (RE_SEARCH_GOOGLE.test(trimmed)) return raw.replace(RE_SEARCH_GOOGLE, (_, q) => '使用 Google 搜索“' + q + '”');
         if (!isInHeaderOrBreadcrumb(contextEl)) {
           const mSearch = trimmed.match(RE_EPHEMERAL_ACTIVE);
@@ -1277,9 +1610,15 @@
             return raw.replace(RE_WORKED_FOR_UPDATES, (_, dur, cnt) => '已工作 ' + dur.trim() + ' · ' + cnt + ' 条进展');
           }
           if (RE_WORKED_FOR.test(trimmed)) return raw.replace(RE_WORKED_FOR, '已工作 $1');
+          if (RE_WAITING_CMD_SEC.test(trimmed)) {
+            return raw.replace(RE_WAITING_CMD_SEC, '正在等待命令完成（最多 $1 秒）');
+          }
+        } else if (RE_MARKED_READ.test(trimmed)) {
+          return raw.replace(RE_MARKED_READ, '已将 $1 个对话标为已读');
         }
       } else if (firstUpper === 'T') {
         if (RE_THOUGHT_FOR.test(trimmed)) return raw.replace(RE_THOUGHT_FOR, '已思考 $1');
+        if (RE_THINKING_FOR.test(trimmed)) return raw.replace(RE_THINKING_FOR, '已思考 $1');
         if (RE_DELETE_RECORDINGS_CONFIRM.test(trimmed)) {
           return raw.replace(
             RE_DELETE_RECORDINGS_CONFIRM,
@@ -1327,6 +1666,9 @@
           return raw.replace(RE_DELETED_RECORDINGS, '已删除 $1 条录音 ($2)');
         }
       } else if (firstUpper === 'U') {
+        if (RE_USING_BROWSER_SEC.test(trimmed)) {
+          return raw.replace(RE_USING_BROWSER_SEC, '正在操作浏览器 ($1s)');
+        }
         const mUpd = trimmed.match(RE_UPDATED_AT);
         if (mUpd) {
           return raw.replace(trimmed, () => formatUpdatedAtZh(mUpd[1], mUpd[2]));
@@ -1334,6 +1676,21 @@
       } else if (firstUpper === 'Z') {
         if (RE_ZIPPING_FOLDER.test(trimmed)) {
           return raw.replace(RE_ZIPPING_FOLDER, (_, folder) => '正在打包 ' + folder + '…');
+        }
+      } else if (firstUpper === 'N') {
+        if (trimmed === 'New' || trimmed === 'NEW') {
+          const btn = contextEl && contextEl.closest && contextEl.closest('button');
+          const isActionBtn = !!(
+            btn &&
+            !btn.hasAttribute('data-model-label') &&
+            !(contextEl && contextEl.closest && contextEl.closest('[data-testid*="model-selector"]')) &&
+            (btn.textContent || '').replace(/\badd\b|\+/gi, '').trim() === trimmed
+          );
+          return raw.replace(trimmed, () => (isActionBtn ? '新建' : '新'));
+        }
+      } else if (firstUpper === 'O') {
+        if (RE_ORCHESTRATOR_MODEL.test(trimmed)) {
+          return raw.replace(RE_ORCHESTRATOR_MODEL, '编排器 ($1)');
         }
       } else if (firstUpper === 'Y') {
         const mUsed = trimmed.match(RE_USED_LIMIT);
@@ -1357,6 +1714,70 @@
           const typeMap = { weekly: '每周', '5-hour': '5 小时', 'five-hour': '5 小时', daily: '每日' };
           const type = typeMap[mNotUsed[1].toLowerCase()] || mNotUsed[1];
           return '您尚未消耗任何' + type + '额度。';
+        }
+        if (RE_QUOTA_RESET_SWITCH.test(trimmed)) {
+          return raw.replace(RE_QUOTA_RESET_SWITCH, (_, m, dt) => '您的 ' + (dictLookup(m.trim()) || m.trim()) + ' 配额将于 ' + dt + ' 重置，请切换至其他可用模型以继续。');
+        }
+        if (RE_QUOTA_REACHED_SWITCH.test(trimmed)) {
+          return raw.replace(RE_QUOTA_REACHED_SWITCH, (_, m) => '您的 ' + (dictLookup(m.trim()) || m.trim()) + ' 配额已用尽，请切换至其他可用模型以继续。');
+        }
+        const mNeedCred = trimmed.match(RE_NEED_CREDITS_MODEL);
+        if (mNeedCred) {
+          const amtPart = mNeedCred[1] ? '至少 ' + mNeedCred[1] + ' 点' : '更多';
+          const modName = mNeedCred[2].trim() === 'this model' ? '该模型' : dictLookup(mNeedCred[2].trim()) || mNeedCred[2].trim();
+          let out = '发送消息需要' + amtPart + ' AI 点数。若需立即继续使用 ' + modName + '，请购买更多 AI 点数。';
+          if (mNeedCred[3]) out += ' 您套餐的基础配额将于 ' + mNeedCred[3] + ' 刷新。';
+          if (/enable AI Credit overages/i.test(trimmed)) out += ' 若需立即继续使用该模型，请开启 AI 点数超额使用。';
+          return out;
+        }
+        if (RE_BASELINE_QUOTA_REFRESH.test(trimmed)) {
+          return raw.replace(RE_BASELINE_QUOTA_REFRESH, '您套餐的基础配额将于 $1 刷新。');
+        }
+      }
+
+      // 跨首字母动态模型提示与限额规则（长度与特征子串前置门控，防止长文本回溯与普通英语短语误伤）
+      if (trimmed.length < 220 && trimmed.includes('offload routine steps')) {
+        const mOffload = trimmed.match(RE_MODEL_OFFLOAD_DESC);
+        if (mOffload) {
+          return raw.replace(
+            trimmed,
+            () =>
+              '可将常规步骤分流至 ' +
+              mOffload[2] +
+              ' 执行的 ' +
+              mOffload[1] +
+              ' 编排模型。保持 ' +
+              mOffload[3] +
+              ' 同等质量，消耗更少 Token。'
+          );
+        }
+      }
+      if (trimmed.length < 160 && trimmed.includes('removed from Antigravity')) {
+        const mRemoved = trimmed.match(RE_MODEL_REMOVED_ON);
+        if (mRemoved) {
+          return raw.replace(
+            trimmed,
+            () => mRemoved[1].trim() + ' 将于 ' + formatEnglishDateZh(mRemoved[2]) + '从 Antigravity 下线。'
+          );
+        }
+      }
+      if (trimmed.length < 80 && (firstUpper === 'G' || firstUpper === 'C' || firstUpper === 'O')) {
+        const mPeriodLim = trimmed.match(RE_MODEL_PERIOD_LIMIT);
+        if (mPeriodLim) {
+          const pZh = NAMED_PERIOD_MAP[mPeriodLim[2].toLowerCase()] || mPeriodLim[2];
+          return raw.replace(trimmed, () => mPeriodLim[1].trim() + ' ' + pZh + '限额');
+        }
+      }
+
+      if (trimmed.length < 64) {
+        if (RE_KEY_QUEUES_AFTER.test(trimmed)) {
+          return raw.replace(RE_KEY_QUEUES_AFTER, '$1 当前轮次结束后排队发送');
+        }
+        if (RE_KEY_SENDS_IMMEDIATELY.test(trimmed)) {
+          return raw.replace(RE_KEY_SENDS_IMMEDIATELY, '$1 立即发送');
+        }
+        if (RE_KEY_EMPTY_NEXT_QUEUE.test(trimmed)) {
+          return raw.replace(RE_KEY_EMPTY_NEXT_QUEUE, '$1 输入为空时发送队列下一条');
         }
       }
 
@@ -1433,12 +1854,20 @@
       const mModel = atrim.match(RE_ARIA_MODEL);
       if (mModel) {
         let mName = mModel[1].trim();
-        if (mName === 'Select model') return '模型，当前：选择模型';
-        const mEff = mName.match(RE_EFFORT_SUFFIX);
-        if (mEff) {
-          const effRaw = mEff[2] || mEff[3];
-          const effZh = EFFORT_MAP[effRaw.toLowerCase()] || effRaw;
-          mName = mEff[1].trim() + (mEff[2] ? ' (' + effZh + ')' : ' · ' + effZh);
+        if (mName === 'Select model' || mName === 'Select Model') return '模型，当前：选择模型';
+        const directModelZh = dictLookup(mName) || computeTextTranslation(mName, el);
+        if (directModelZh) {
+          mName = directModelZh;
+        } else {
+          const mEff = mName.match(RE_EFFORT_SUFFIX);
+          if (mEff) {
+            const effRaw = mEff[2] || mEff[3];
+            const effZh = EFFORT_MAP[effRaw.replace(/\s+/g, ' ').toLowerCase()] || effRaw;
+            const baseRaw = mEff[1].trim();
+            const baseZh = dictLookup(baseRaw) || computeTextTranslation(baseRaw, el) || baseRaw;
+            const ctxTail = mEff[4] ? ' · ' + mEff[4].trim() : '';
+            mName = baseZh + (mEff[2] ? ' (' + effZh + ')' : ' · ' + effZh) + ctxTail;
+          }
         }
         return '模型，当前：' + mName;
       }
@@ -1520,7 +1949,7 @@
               immutableTextExclCache.set(node, true);
             }
             if (
-              (node.tagName === 'INPUT' || node.tagName === 'TEXTAREA') &&
+              isFormAttrTarget(node) &&
               canTranslateElementAttrs(node) &&
               (node.hasAttribute('title') || node.hasAttribute('aria-label') || node.hasAttribute('placeholder'))
             ) {
@@ -1551,7 +1980,7 @@
       if (root.nodeType !== 1) return;
       if (isExcludedElement(root)) {
         if (
-          (root.tagName === 'INPUT' || root.tagName === 'TEXTAREA') &&
+          isFormAttrTarget(root) &&
           canTranslateElementAttrs(root) &&
           (root.hasAttribute('title') || root.hasAttribute('aria-label') || root.hasAttribute('placeholder'))
         ) {
@@ -1684,7 +2113,10 @@
       if (document.body) {
         if (window.__ag_theme_mode_observer) {
           try {
-            window.__ag_theme_mode_observer.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+            window.__ag_theme_mode_observer.observe(document.body, {
+              attributes: true,
+              attributeFilter: ['class']
+            });
           } catch (e) {}
         } else if (typeof MutationObserver !== 'undefined') {
           try {
@@ -1695,7 +2127,10 @@
             });
             modeObs.observe(document.body, { attributes: true, attributeFilter: ['class'] });
             if (document.documentElement) {
-              modeObs.observe(document.documentElement, { attributes: true, attributeFilter: ['class', 'style'] });
+              modeObs.observe(document.documentElement, {
+                attributes: true,
+                attributeFilter: ['class', 'style', 'data-theme']
+              });
             }
             window.__ag_theme_mode_observer = modeObs;
           } catch (e) {}
