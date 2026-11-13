@@ -8,6 +8,8 @@
     "metrics": true,
     "composerWaxSeal": true,
     "deadlockHealer": true,
+    "coldBootHealer": true,
+    "zoomShortcuts": true,
     "customCss": true,
     "customJs": true
   },

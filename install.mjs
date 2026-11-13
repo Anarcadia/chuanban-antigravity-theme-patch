@@ -3,7 +3,7 @@
  * chuanban-antigravity-theme-patch · 一键安装、自检、安全模式验证、打包与回滚 CLI (install.mjs)
  *
  * 支持子命令：
- *   node install.mjs install [--channel auto|stable|insiders] [--preset high-contrast] [--target-dir <dir>]
+ *   node install.mjs install [--channel auto|stable|insiders] [--preset high-contrast] [--sync-user] [--target-dir <dir>]
  *   node install.mjs install-fonts --from <font-folder-path>
  *   node install.mjs doctor  [--channel auto|stable|insiders] [--target-dir <dir>]
  *   node install.mjs verify  [--safe-mode] [--channel auto|stable|insiders] [--target-dir <dir>]
@@ -88,7 +88,7 @@ function buildManifest(baseDir = __dirname) {
   }
   const manifest = {
     name: 'chuanban-antigravity-theme-patch',
-    version: '5.1.7',
+    version: '5.1.8',
     minNodeVersion: '22.0.0',
     fullMetricsNodeVersion: '22.13.0',
     distribution: {
@@ -1060,6 +1060,7 @@ async function runInstall() {
   const cliChannel = getArg('--channel', null);
   const channel = cliChannel || 'auto';
   const preset = getArg('--preset', null);
+  const syncUser = hasFlag('--sync-user');
   const defaultTarget = path.join(os.homedir(), '.gemini', 'antigravity', 'theme-patch');
   const targetDir = path.resolve(getArg('--target-dir', defaultTarget));
 
@@ -1079,6 +1080,7 @@ async function runInstall() {
   const targetUser = path.join(targetDir, 'user');
 
   let backupCreated = null;
+  let userBackupCreated = null;
   if (path.resolve(__dirname) !== targetDir) {
     fs.mkdirSync(targetDir, { recursive: true });
 
@@ -1105,12 +1107,20 @@ async function runInstall() {
     fs.rmSync(targetCore, { recursive: true, force: true });
     copyDirRecursive(srcCore, targetCore);
 
-    // user/ 层永不覆盖已有文件
+    // user/ 层默认永不覆盖已有文件；仅在显式传入 --sync-user 时先备份旧 user/ 再按标准 4 模板白名单同步
+    const USER_TEMPLATE_FILES = ['config.json', 'custom.css', 'i18n.override.json', 'custom.js'];
+    if (syncUser && fs.existsSync(targetUser)) {
+      const userStamp = new Date().toISOString().replace(/[:.]/g, '-') + '-user';
+      const stampedUserBackupDir = path.join(backupsDir, userStamp);
+      fs.mkdirSync(backupsDir, { recursive: true });
+      copyDirRecursive(targetUser, stampedUserBackupDir);
+      userBackupCreated = stampedUserBackupDir;
+    }
     fs.mkdirSync(targetUser, { recursive: true });
-    for (const item of fs.readdirSync(srcUser)) {
+    for (const item of USER_TEMPLATE_FILES) {
       const s = path.join(srcUser, item);
       const d = path.join(targetUser, item);
-      if (!fs.existsSync(d)) {
+      if (fs.existsSync(s) && (!fs.existsSync(d) || syncUser)) {
         fs.copyFileSync(s, d);
       }
     }
@@ -1187,6 +1197,8 @@ async function runInstall() {
         ok: true,
         targetDir,
         backupCreated,
+        userSynced: syncUser,
+        userBackupCreated,
         argvStatus,
         serviceInfo,
         config: currentCfg,
@@ -1538,7 +1550,7 @@ switch (subcommand) {
     break;
   default:
     console.log(`Usage:
-  node install.mjs install       [--channel auto|stable|insiders] [--preset high-contrast]
+  node install.mjs install       [--channel auto|stable|insiders] [--preset high-contrast] [--sync-user]
   node install.mjs install-fonts --from <font-folder-path>
   node install.mjs doctor        [--channel auto|stable|insiders]
   node install.mjs verify        [--safe-mode] [--channel auto|stable|insiders]

@@ -2,9 +2,9 @@
 /**
  * chuanban-antigravity-theme-patch · CDP Theme & Live Metrics Daemon (core/daemon.mjs)
  *
- * 架构特性（v5.1.7）：
+ * 架构特性（v5.1.8）：
  * 1. 动态 Node 分级：
- *    - Node >= 22.0：完整启用昼夜双模式独立主题（暖纸浅色 + 官方 onyx 深色）、四层字体、输入框三态、1554条汉化、死锁自愈与 2.31.2 curtainView/Swarm 适配。
+ *    - Node >= 22.0：完整启用昼夜双模式独立主题（暖纸浅色 + 官方 onyx 深色）、四层字体、输入框三态、1575条汉化、死锁与冷启动兜底包自愈及 2.31.2 curtainView/Swarm 适配。
  *    - Node >= 22.13：动态 `await import('node:sqlite')` 解锁底部实时会话指标胶囊（O(1) 增量尾行解析）；低版本优雅降级绝不崩溃。
  * 2. 模块化与热重载：
  *    - 周期性检测 `user/config.json`、`user/custom.css`、`user/i18n.override.json`、`user/custom.js` 的 mtime，
@@ -222,7 +222,7 @@ function resolveActiveChannelEndpoints(channelMode = 'auto', userCfg = {}) {
 // ============================================================================
 // 2. 动态构建注入载荷（支持 core/ + user/ 实时合并与热更新签名）
 // ============================================================================
-const BASE_VERSION = '20261114-v5.1.7';
+const BASE_VERSION = '20261114-v5.1.8';
 let cachedBundleSig = '';
 let cachedInjectScript = '';
 let cachedPatchVersion = '';
@@ -236,6 +236,7 @@ let activeConfig = {
     metrics: true,
     composerWaxSeal: true,
     deadlockHealer: true,
+    coldBootHealer: true,
     zoomShortcuts: true,
     customCss: true,
     customJs: true
@@ -331,6 +332,7 @@ function rebuildBundleIfNeeded() {
       metrics: true,
       composerWaxSeal: true,
       deadlockHealer: true,
+      coldBootHealer: true,
       zoomShortcuts: true,
       customCss: true,
       customJs: true
@@ -1154,12 +1156,16 @@ function attachTarget(target, endpoint) {
 
       let initialAttachDone = false;
       let navDebounceTimer = null;
+      let lastHardReloadAt = 0;
 
       ws.addEventListener('open', async () => {
         console.log(`[Daemon] Attached target: ${target.id} (${target.title || 'Untitled'}) [${endpoint.channel}]`);
         await send('Page.enable');
         await send('Runtime.enable');
         await send('Runtime.addBinding', { name: '__agRequestMetrics' });
+        if (target.type === 'page') {
+          await send('Runtime.addBinding', { name: '__agRequestHardReload' });
+        }
         await updateNewDocScript();
         const ok = await inject();
         await syncMetricsForSession(true);
@@ -1184,6 +1190,25 @@ function attachTarget(target, endpoint) {
               lastPushedHash = '';
               syncMetricsForSession(true);
             }
+            return;
+          }
+          if (msg.method === 'Runtime.bindingCalled' && msg.params?.name === '__agRequestHardReload') {
+            if (
+              target.type !== 'page' ||
+              !activeConfig.enabled ||
+              activeConfig.modules.deadlockHealer === false ||
+              activeConfig.modules.coldBootHealer === false
+            ) {
+              return;
+            }
+            const now = Date.now();
+            if (now - lastHardReloadAt < 60000) return;
+            lastHardReloadAt = now;
+            const reason = String(msg.params.payload || 'coldboot-drift').slice(0, 80);
+            console.log(
+              `[Daemon] Cold-boot embedded UI drift detected on target ${target.id} (${reason}), triggering ignoreCache reload`
+            );
+            send('Page.reload', { ignoreCache: true });
             return;
           }
           if (!initialAttachDone) return;

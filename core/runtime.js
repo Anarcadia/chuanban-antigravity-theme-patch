@@ -13,7 +13,7 @@
   if (window.top !== window && !IS_SWARM_PLUGIN_FRAME) return;
   if (!boot || typeof boot !== 'object') return;
 
-  const PATCH_VERSION = boot.version || '20261114-v5.1.7';
+  const PATCH_VERSION = boot.version || '20261114-v5.1.8';
   const DETECTED_OS =
     boot.platform || (/Win/i.test(navigator.platform || '') ? 'win32' : /Mac/i.test(navigator.platform || '') ? 'darwin' : 'linux');
   const ENABLED = boot.enabled !== false;
@@ -26,6 +26,7 @@
       metrics: true,
       composerWaxSeal: true,
       deadlockHealer: true,
+      coldBootHealer: true,
       zoomShortcuts: true,
       customCss: true,
       customJs: true
@@ -69,6 +70,12 @@
       window.__ag_user_231_observer.disconnect();
     } catch (e) {}
     window.__ag_user_231_observer = null;
+  }
+  if (window.__ag_coldboot_timer) {
+    try {
+      clearTimeout(window.__ag_coldboot_timer);
+    } catch (e) {}
+    window.__ag_coldboot_timer = null;
   }
 
   // 全局持久化的原始英文文本映射表（支持 i18n.override.json 热重载增删改与一键还原）
@@ -568,6 +575,221 @@
       },
       true
     );
+  }
+
+  // ============================================================================
+  // 2.05 冷启动内嵌兜底包漂移安全自愈（HEAD ETag 零流量比对 + 六重空输入/零交互安全门禁）
+  // ============================================================================
+  if (
+    !IS_SWARM_PLUGIN_FRAME &&
+    window.top === window &&
+    MODULES.deadlockHealer !== false &&
+    MODULES.coldBootHealer !== false &&
+    /^https?:\/\/(?:127\.0\.0\.1|localhost)(?::\d+)?$/i.test(String(window.location.origin || ''))
+  ) {
+    const markUserDirty = () => {
+      window.__ag_user_interacted_dirty = true;
+      if (window.__ag_coldboot_timer) {
+        try {
+          clearTimeout(window.__ag_coldboot_timer);
+        } catch (e) {}
+        window.__ag_coldboot_timer = null;
+      }
+    };
+
+    if (!window.__ag_user_dirty_guard_installed) {
+      window.__ag_user_dirty_guard_installed = true;
+      const PURE_MOD_KEYS = new Set(['Meta', 'Control', 'Alt', 'Shift', 'CapsLock', 'NumLock', 'ScrollLock', 'Fn']);
+      document.addEventListener(
+        'keydown',
+        (e) => {
+          const k = String(e.key || '');
+          if (PURE_MOD_KEYS.has(k)) return;
+          if ((e.metaKey || e.ctrlKey) && !e.altKey && (k === '-' || k === '_' || k === '=' || k === '+' || k === '0')) {
+            return;
+          }
+          markUserDirty();
+        },
+        { capture: true, passive: true }
+      );
+      for (const evtName of ['paste', 'drop', 'compositionstart', 'input']) {
+        document.addEventListener(evtName, markUserDirty, { capture: true, passive: true });
+      }
+    }
+
+    const readSessionHealedFlag = () => {
+      try {
+        return window.sessionStorage.getItem('__ag_coldboot_bundle_healed') === '1';
+      } catch (e) {
+        return true;
+      }
+    };
+
+    const isWindowUntouchedAndIdleForColdHeal = () => {
+      if (!ENABLED || MODULES.deadlockHealer === false || MODULES.coldBootHealer === false) return false;
+      if (window.__ag_user_interacted_dirty) return false;
+      if (typeof performance === 'undefined' || typeof performance.now !== 'function' || performance.now() >= 25000) {
+        return false;
+      }
+      if (readSessionHealedFlag()) return false;
+      if (
+        document.querySelector(
+          '[role="dialog"], [data-testid="input-cancel-button"], [data-testid*="running-"], button[aria-label="Stop execution"], button[aria-label="停止执行"], button[aria-label*="Cancel ("], button[aria-label*="取消生成"]'
+        )
+      ) {
+        return false;
+      }
+      const editableList = document.querySelectorAll(
+        '[data-lexical-editor="true"], [contenteditable="true"], textarea, input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"])'
+      );
+      for (let i = 0; i < editableList.length; i++) {
+        const el = editableList[i];
+        if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
+          if (String(el.value || '').trim() !== '') return false;
+        } else {
+          const txt = String(el.textContent || '').replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
+          if (txt !== '') return false;
+        }
+      }
+      return true;
+    };
+
+    const probeColdBootBundleDrift = async (attempt) => {
+      window.__ag_coldboot_timer = null;
+      if (!isWindowUntouchedAndIdleForColdHeal()) {
+        window.__ag_coldboot_probe_done = true;
+        window.__ag_coldboot_healer_state = { probeDone: true, drifted: false, skippedReason: 'gate-blocked' };
+        return;
+      }
+      try {
+        const entries =
+          typeof performance.getEntriesByType === 'function'
+            ? performance.getEntriesByType('resource').filter((e) => /\/main\.js(?:\?|$)/.test(String(e.name || '')))
+            : [];
+        const mainEntry = entries.length > 0 ? entries[entries.length - 1] : null;
+        const loadedDecoded = Number(mainEntry && mainEntry.decodedBodySize) || 0;
+        const loadedEncoded = Number(mainEntry && mainEntry.encodedBodySize) || 0;
+        if (loadedDecoded <= 0 && loadedEncoded <= 0) {
+          window.__ag_coldboot_probe_done = true;
+          window.__ag_coldboot_healer_state = { probeDone: true, drifted: false, skippedReason: 'no-perf-entry' };
+          return;
+        }
+
+        const ctrl = typeof AbortController === 'function' ? new AbortController() : null;
+        const abortTimer = ctrl ? setTimeout(() => ctrl.abort(), 2500) : null;
+        let res = null;
+        try {
+          res = await fetch('/main.js', {
+            method: 'HEAD',
+            cache: 'no-store',
+            signal: ctrl ? ctrl.signal : undefined
+          });
+        } finally {
+          if (abortTimer) clearTimeout(abortTimer);
+        }
+        if (!res || !res.ok) {
+          window.__ag_coldboot_probe_done = true;
+          window.__ag_coldboot_healer_state = { probeDone: true, drifted: false, skippedReason: 'head-failed' };
+          return;
+        }
+
+        const etag = String(res.headers.get('etag') || '').trim();
+        const mEtag = etag.match(/^(?:W\/)?"([0-9a-f]+)-[0-9a-f]+"$/i);
+        const serverDecoded = mEtag ? parseInt(mEtag[1], 16) : 0;
+        const serverEncoded = Number(res.headers.get('content-length')) || 0;
+
+        let hasDrift = false;
+        if (serverDecoded > 0 && loadedDecoded > 0) {
+          hasDrift = Math.abs(serverDecoded - loadedDecoded) > 1024;
+        } else if (serverEncoded > 0 && loadedEncoded > 0) {
+          hasDrift = Math.abs(serverEncoded - loadedEncoded) > 1024;
+        }
+
+        if (!isWindowUntouchedAndIdleForColdHeal()) {
+          window.__ag_coldboot_probe_done = true;
+          window.__ag_coldboot_healer_state = {
+            probeDone: true,
+            loadedDecoded,
+            serverDecoded,
+            drifted: hasDrift,
+            skippedReason: 'dirty-after-head'
+          };
+          return;
+        }
+
+        if (hasDrift) {
+          window.__ag_coldboot_probe_done = true;
+          window.__ag_coldboot_healer_state = {
+            probeDone: true,
+            loadedDecoded,
+            serverDecoded,
+            drifted: true,
+            healed: true
+          };
+          try {
+            window.sessionStorage.setItem('__ag_coldboot_bundle_healed', '1');
+          } catch (e) {
+            return;
+          }
+          const driftTag = `decoded:${loadedDecoded}->${serverDecoded || serverEncoded}`;
+          if (typeof window.__agRequestHardReload === 'function') {
+            try {
+              window.__agRequestHardReload(driftTag);
+            } catch (e) {}
+          }
+          window.__ag_coldboot_timer = setTimeout(() => {
+            window.__ag_coldboot_timer = null;
+            if (!window.__ag_user_interacted_dirty) {
+              window.location.reload();
+            }
+          }, 280);
+          return;
+        }
+
+        const hasRemoteTrigger = !!document.querySelector(
+          '[data-testid="project-selector-this-machine-trigger"], [data-testid="location-selector-trigger"]'
+        );
+        if (attempt === 1 && !hasRemoteTrigger && performance.now() < 16000) {
+          window.__ag_coldboot_healer_state = {
+            probeDone: false,
+            attempt: 1,
+            loadedDecoded,
+            serverDecoded,
+            drifted: false
+          };
+          window.__ag_coldboot_timer = setTimeout(() => {
+            probeColdBootBundleDrift(2);
+          }, 5500);
+          return;
+        }
+
+        window.__ag_coldboot_probe_done = true;
+        window.__ag_coldboot_healer_state = {
+          probeDone: true,
+          attempt,
+          loadedDecoded,
+          serverDecoded,
+          drifted: false
+        };
+      } catch (e) {
+        window.__ag_coldboot_probe_done = true;
+        window.__ag_coldboot_healer_state = { probeDone: true, drifted: false, skippedReason: 'exception' };
+      }
+    };
+
+    if (!window.__ag_coldboot_probe_done && isWindowUntouchedAndIdleForColdHeal() && performance.now() < 20000) {
+      const delayMs = Math.max(1500, Math.round(5800 - Math.min(4300, performance.now())));
+      window.__ag_coldboot_healer_state = { armed: true, delayMs, probeDone: false };
+      window.__ag_coldboot_timer = setTimeout(() => {
+        probeColdBootBundleDrift(1);
+      }, delayMs);
+    } else if (!window.__ag_coldboot_healer_state) {
+      window.__ag_coldboot_healer_state = {
+        armed: false,
+        probeDone: true,
+        skippedReason: performance.now() >= 20000 ? 'warm-window' : 'gate-blocked'
+      };
+    }
   }
 
   // ============================================================================
@@ -1671,7 +1893,8 @@
     const RE_ARIA_MODEL = /^(?:Select model|Model(?:\s+selector)?)(?:,\s*current)?:\s*(.*)$/i;
     const RE_ARIA_PERM_SEL =
       /^(?:(?:Permission mode|Agent permissions preset)\s+selector(?:,\s*current)?|(?:Permission mode|Agent permissions preset),\s*current):\s*(.*)$/i;
-    const RE_ARIA_PERM_FIXED = /^(?:Permission mode|Agent permissions preset):\s*([^,(]+?)(?:\s*(?:,\s*(.+?)|\(([^)]+)\)))?$/i;
+    const RE_ARIA_PERM_FIXED =
+      /^(?:Permission mode|Agent permissions preset):\s*(.+?)(?:\s*,\s*(.+?)|\s+\((cannot be changed[^)]*)\))?$/i;
     const RE_ARIA_TURN = /^(?:Conversation turn\s+(\d+)\s+by\s+(User|Agent|Assistant)|Turn\s+(\d+)\s+of\s+(\d+))$/i;
     const RE_ARIA_GOTO_TURN = /^Go to turn\s+(\d+)\s+of\s+(\d+)$/i;
     const RE_ARIA_LOAD_OLDER = /^(?:Load\s+(\d+)\s+older\s+turns?.*|(Load|No more) older messages,\s*showing\s+(\d+)\s+of\s+(\d+))$/i;
@@ -2200,6 +2423,14 @@
       const mVer = atrim.match(RE_ARIA_VERSION);
       if (mVer) {
         return '版本 ' + mVer[1].trim();
+      }
+      if (
+        el &&
+        el.getAttribute &&
+        el.getAttribute('data-testid') === 'running-row-stop' &&
+        /^Stop\s+(.+)$/i.test(atrim)
+      ) {
+        return '停止 ' + atrim.replace(/^Stop\s+/i, '');
       }
       return computeTextTranslation(atrim, el);
     }

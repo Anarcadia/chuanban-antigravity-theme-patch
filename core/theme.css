@@ -1,6 +1,6 @@
 @font-face {
   font-family: 'Anthropic Serif';
-  src: local('AnthropicSerifWebWeb-TextRegular'), local('AnthropicSerifWebWeb-TextLight'), local('Anthropic Serif Web'), local('Anthropic Serif Web Text Light'), local('Anthropic Serif Web Display Light'), local('Anthropic Serif');
+  src: local('AnthropicSerifWebWeb-TextRegular'), local('AnthropicSerifWebWeb-TextLight'), local('Anthropic Serif Web'), local('Anthropic Serif Web Text Light'), local('Anthropic Serif Web Display Light'), local('Anthropic Serif'), local('Anthropic Serif Text'), local('Anthropic Serif Text Regular'), local('AnthropicSerifText-Regular');
   font-weight: 300 599;
   font-style: normal;
   font-display: swap;
@@ -8,7 +8,7 @@
 
 @font-face {
   font-family: 'Anthropic Serif';
-  src: local('AnthropicSerifWebWeb-TextSemibold'), local('AnthropicSerifWebWeb-TextBold'), local('Anthropic Serif Bold'), local('Anthropic Serif Web Bold'), local('Anthropic Serif Web Display Light'), local('AnthropicSerifWebWeb-TextRegular'), local('AnthropicSerifWebWeb-TextLight'), local('Anthropic Serif Web Text Light');
+  src: local('AnthropicSerifWebWeb-TextSemibold'), local('AnthropicSerifWebWeb-TextBold'), local('Anthropic Serif Bold'), local('Anthropic Serif Web Bold'), local('Anthropic Serif Text Bold'), local('AnthropicSerifText-Bold'), local('Anthropic Serif Web Display Light'), local('AnthropicSerifWebWeb-TextRegular'), local('AnthropicSerifWebWeb-TextLight'), local('Anthropic Serif Web Text Light');
   font-weight: 600 900;
   font-style: normal;
   font-display: swap;
@@ -16,7 +16,7 @@
 
 @font-face {
   font-family: 'Anthropic Sans';
-  src: local('AnthropicSansWebVariable-TextRegular'), local('Anthropic Sans Web Text Regular'), local('AnthropicSansWebVariable-TextLight'), local('Anthropic Sans Web'), local('Anthropic Sans Web Text'), local('Anthropic Sans Web Display Light'), local('Anthropic Sans');
+  src: local('AnthropicSansWebVariable-TextRegular'), local('Anthropic Sans Web Text Regular'), local('AnthropicSansWebVariable-TextLight'), local('Anthropic Sans Web'), local('Anthropic Sans Web Text'), local('Anthropic Sans Web Display Light'), local('Anthropic Sans'), local('Anthropic Sans Text'), local('Anthropic Sans Text Regular'), local('AnthropicSansText-Regular');
   font-weight: 300 599;
   font-style: normal;
   font-display: swap;
@@ -24,7 +24,7 @@
 
 @font-face {
   font-family: 'Anthropic Sans';
-  src: local('AnthropicSansWebVariable-TextSemibold'), local('AnthropicSansWebVariable-TextBold'), local('Anthropic Sans Bold'), local('Anthropic Sans Web Bold'), local('Anthropic Sans Web Display Light'), local('Anthropic Sans Web Text Regular'), local('AnthropicSansWebVariable-TextRegular');
+  src: local('AnthropicSansWebVariable-TextSemibold'), local('AnthropicSansWebVariable-TextBold'), local('Anthropic Sans Bold'), local('Anthropic Sans Web Bold'), local('Anthropic Sans Text Bold'), local('AnthropicSansText-Bold'), local('Anthropic Sans Web Display Light'), local('Anthropic Sans Web Text Regular'), local('AnthropicSansWebVariable-TextRegular');
   font-weight: 600 900;
   font-style: normal;
   font-display: swap;
@@ -171,7 +171,7 @@ code, pre, kbd, samp, .font-mono, [class*="language-"], .monaco-editor, .xterm, 
   font-family: var(--font-mono) !important;
 }
 
-/* 4. 输入框编辑区与 Lexical 占位符：Codex 同款等距更纱黑体 SLAB (Sarasa Mono Slab SC) */
+/* 4. 输入框编辑区与 Lexical 占位符：Codex 同款等距更纱黑体 SLAB (未装更纱时中文字形优雅回退至苹方/雅黑，防 Windows 新宋体点阵退化) */
 div[contenteditable="true"],
 textarea,
 div[contenteditable="true"] :is(p, span, div),
@@ -182,7 +182,7 @@ div[contenteditable="true"] :is(p, span, div),
 [data-composer],
 .ProseMirror,
 .ProseMirror :is(p, span) {
-  font-family: 'Sarasa Mono Slab SC', '等距更纱黑体 Slab SC', 'Anthropic Mono', 'Anthropic Mono Web', ui-monospace, monospace !important;
+  font-family: 'Sarasa Mono Slab SC', '等距更纱黑体 Slab SC', 'Anthropic Mono', 'Anthropic Mono Web', ui-monospace, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei UI', 'Microsoft YaHei', monospace !important;
 }
 
 #antigravity\.agentSidePanelInputBox [data-lexical-editor="true"],

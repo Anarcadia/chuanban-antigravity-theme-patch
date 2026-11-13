@@ -4,6 +4,32 @@
 
 ---
 
+## [v5.1.8] - 2026-11-14
+
+> **适用版本**：Antigravity `2.31.2+`（`CL=1019359392`，向下完全兼容 `2.31.1` / `2.31.0` / `2.30.0`）  
+> **核验基线**：社区 Issue `#1` / PR `#2` 实机源码核验与择优吸收 + macOS `2.31.2` CDP 全断言回归验证  
+> **社区致谢**：感谢 `@webber181`（[#1](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/issues/1)）与 `@pumblus`（[#2](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/pull/2)）的详实排查与贡献
+
+### Fixed（冷启动内嵌兜底包无感自愈、无障碍正则修复与字体回退兜底）
+- **冷启动 `embedded assets` 旧版兜底包零流量安全自愈（`core/daemon.mjs` / `core/runtime.js`）**：
+  - 针对 Antigravity 冷启动期 `language_server` 先返回内置旧版兜底包（导致偶发缺失 `Remote` 远程项目入口）、约 1~5 秒后才切换至 Mendel/Fastpush 新版 `/main.js` 的官方竞态缺陷（由 `@webber181` 在 `#1` 定位反馈），新增受 `modules.coldBootHealer`（默认 `true`）控制的零流量安全自愈器；
+  - 采用 `PerformanceResourceTiming` 已加载字节数与 `HEAD /main.js`（`ETag` 十六进制体积头 / `Content-Length`，**0 字节响应体下载开销**）比对，并在重载前强制校验六重安全门禁（仅限冷启动前 `25s` 窗口、未发生任何键盘输入/粘贴/输入法组合、所有 Lexical/输入框草稿为空、无打开弹窗或运行中任务、`sessionStorage` 单会话单次锁），通过 `daemon.mjs` `__agRequestHardReload` 绑定执行 `Page.reload({ ignoreCache: true })`（`60s` 冷却保护），彻底杜绝额外拉取 ~12MB 脚本或误清用户草稿的风险。
+- **带括号权限预设名称（`Auto (Preview)`）的无障碍标签匹配修复（`core/runtime.js`）**：
+  - 修复 `RE_ARIA_PERM_FIXED` 在匹配 `"Agent permissions preset: Auto (Preview), Automatically decide if commands run."` 时因模式名自身含括号被提前截断导致漏翻的正则缺陷，并补齐运行态会话行 `[data-testid="running-row-stop"]` 的 `"Stop <会话名>"` 动态无障碍标签翻译。
+- **未安装更纱黑体时的输入框中文字形防点阵退化与桌面版 Anthropic 字体别名兼容（`core/theme.css`）**：
+  - 在 `Anthropic Serif` / `Anthropic Sans` `@font-face` 中追加 `Anthropic Serif Text`、`Anthropic Sans Text` 及对应 `Bold` 桌面版 `local()` 别名兜底（由 `@pumblus` 在 `#2` 建议，置于现有 Web 可变字体声明之后，对 Google Drive 官方字体包与 Windows `DirectWrite` 零干扰）；
+  - 在输入框编辑区（Lexical / `contenteditable` / `textarea`）字体栈末尾 `monospace` 之前补充 `'PingFang SC'`、`'Hiragino Sans GB'`、`'Microsoft YaHei UI'`、`'Microsoft YaHei'`，确保未安装 `Sarasa-SuperTTC.ttc` 的 Windows 用户在输入框中文排版时优雅回退至微软雅黑，不再跌落至新宋体（`NSimSun`）。
+
+### Added（1,575 条零冲突词典补全、`--sync-user` 安全同步开关与备用字体源指引）
+- **补齐 21 条 `2.31.2` 原生漏翻 UI 词条至 1,575 条（`core/i18n.json`）**：
+  - 基于 `#2` 核验并补齐跨平台对称词条：文件管理器定位（`Reveal in Finder` / `Show in File Explorer` / `Show in File Manager`）、会话已读状态与调试菜单（`Mark Read` / `Mark Unread` / `View Debug`）、项目与工作区排序筛选（`Sort Projects` / `Sort Workspaces` / `Filter` / `Display`）、思考与复制状态（`Thinking...` / `Thinking…` / `Thought Process` / `Copy code` / `Copy error messages` / `Copied` / `Stop`）及生命周期钩子事件名（`Pre/Post Tool Use`、`Pre/Post Invocation`），保持 100% 大小写与弯直引号不敏感唯一性。
+- **`install.mjs install --sync-user` 可选非破坏性同步参数（`install.mjs`）**：
+  - 默认继续严格保护已有 `user/` 改装层永不覆盖；当进阶用户或调试场景显式传入 `--sync-user` 时，自动先将原 `target/user/` 备份至 `backups/<timestamp>-user/`，再按 4 模板白名单同步最新 `user/` 模板。
+- **文档补充 `Sarasa-SuperTTC.ttc` 官方开源备用源与冷启动排障说明（`README.md` / `SKILL.md`）**：
+  - 针对 `791 MB` `Sarasa-SuperTTC.ttc` 偶发触发 Google Drive 24 小时单文件下载配额限制的问题，补充 macOS（`brew install --cask font-sarasa-gothic`）与 Windows/Linux（`be5invis/Sarasa-Gothic` GitHub Releases）备用获取方式及冷启动 `Cmd/Ctrl + Shift + R` 手动强刷提示。
+
+---
+
 ## [v5.1.7] - 2026-11-14
 
 > **适用版本**：Antigravity `2.31.2+`（`CL=1019359392`，向下完全兼容 `2.31.1` / `2.31.0` / `2.30.0`）  
