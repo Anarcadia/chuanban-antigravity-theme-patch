@@ -2,9 +2,9 @@
 /**
  * chuanban-antigravity-theme-patch · CDP Theme & Live Metrics Daemon (core/daemon.mjs)
  *
- * 架构特性（v5.2.0）：
+ * 架构特性（v5.3.0）：
  * 1. 动态 Node 分级：
- *    - Node >= 22.0：完整启用昼夜双模式独立主题（暖纸浅色 + 官方 onyx 深色）、四层字体、输入框三态、1630条母语级汉化、死锁与冷启动兜底包自愈及 2.32.0/2.31.2 curtainView/Swarm 适配。
+ *    - Node >= 22.0：完整启用昼夜双模式独立主题（暖纸浅色 + 官方 onyx 深色）、四层字体、输入框三态、1740条母语级汉化、死锁与冷启动兜底包自愈及 2.32.1/2.32.0 curtainView/Swarm 适配。
  *    - Node >= 22.13：动态 `await import('node:sqlite')` 解锁底部实时会话指标胶囊（O(1) 增量尾行解析）；低版本优雅降级绝不崩溃。
  * 2. 模块化与热重载：
  *    - 周期性检测 `user/config.json`、`user/custom.css`、`user/i18n.override.json`、`user/custom.js` 的 mtime，
@@ -222,7 +222,7 @@ function resolveActiveChannelEndpoints(channelMode = 'auto', userCfg = {}) {
 // ============================================================================
 // 2. 动态构建注入载荷（支持 core/ + user/ 实时合并与热更新签名）
 // ============================================================================
-const BASE_VERSION = '20261114-v5.2.0';
+const BASE_VERSION = '20261115-v5.3.0';
 let cachedBundleSig = '';
 let cachedInjectScript = '';
 let cachedPatchVersion = '';
@@ -356,6 +356,7 @@ function rebuildBundleIfNeeded() {
     (contextLimit !== activeConfig.contextLimit || contextLimitOverride !== activeConfig.contextLimitOverride)
   ) {
     metricsCache.clear();
+    lastBestEffortPayloadCache.clear();
     metricsConfigEpoch += 1;
   }
 
@@ -654,10 +655,12 @@ function fmtNum(n) {
 
 const resolvedCascadeDbCache = new Map();
 const negativeCascadeWslCache = new Map(); // cacheKey -> expireAtMs
+const lastKnownDbStateCache = new Map(); // dbPath -> { dbPath, rawSig, sig }
+const lastBestEffortPayloadCache = new Map(); // dbPath -> payload
 const UUID_RE = /^[0-9a-f-]{36}$/i;
 const DB_FILE_RE = /^([0-9a-f-]{36})\.db$/i;
 const textDecoder = new TextDecoder('utf-8', { fatal: false });
-const MAX_CHILD_METRICS_CACHE_SIZE = 256;
+const MAX_CHILD_METRICS_CACHE_SIZE = 4096;
 const MAX_NO_META_PENDING_IDS = 64;
 const LINEAGE_TICK_MAX_OPENS = 45;
 const LINEAGE_TICK_MAX_MS = 60;
@@ -665,6 +668,21 @@ const NO_META_RESCAN_LOCAL_MS = 2500;
 const NO_META_RESCAN_UNC_MS = 15000;
 const childMetricsCache = new Map(); // dbPath -> { sig, hasData, calls, totalIn, totalCache, totalOut, totalThink, totalResp }
 const lineageStateByDir = new Map(); // conversationsDir -> dirState
+let zhTitleStatus = { state: 'ok', label: '', detail: '' };
+
+function setZhTitleStatus(nextState, label = '', detail = '') {
+  if (
+    zhTitleStatus.state === nextState &&
+    zhTitleStatus.label === label &&
+    zhTitleStatus.detail === detail
+  ) {
+    return;
+  }
+  zhTitleStatus = { state: nextState, label, detail };
+  metricsCache.clear();
+  lastBestEffortPayloadCache.clear();
+  metricsConfigEpoch += 1;
+}
 
 function setChildMetricsCache(dbPath, entry) {
   if (childMetricsCache.has(dbPath)) childMetricsCache.delete(dbPath);
@@ -677,7 +695,22 @@ function setChildMetricsCache(dbPath, entry) {
 
 function isUncPath(p) {
   if (!p || process.platform !== 'win32') return false;
-  return p.startsWith('\\\\wsl.localhost\\') || p.startsWith('\\\\wsl$\\') || p.startsWith('\\\\');
+  return (
+    p.startsWith('\\\\wsl.localhost\\') ||
+    p.startsWith('\\\\wsl$\\') ||
+    p.startsWith('\\\\?\\UNC\\') ||
+    p.startsWith('\\\\') ||
+    p.startsWith('//wsl')
+  );
+}
+
+function setBoundedMap(map, key, val, maxEntries = 64) {
+  if (map.has(key)) map.delete(key);
+  map.set(key, val);
+  if (map.size > maxEntries) {
+    const oldestKey = map.keys().next().value;
+    if (oldestKey !== undefined) map.delete(oldestKey);
+  }
 }
 
 function readUtf8(val) {
@@ -720,10 +753,19 @@ function resolveConversationDbPath(cascadeId, endpointOrDir) {
   const primaryDir = endpointOrDir.conversationsDir || '';
   const cacheKey = `${endpointOrDir.channel || 'default'}|${primaryDir}|${cascadeId}`;
   const cachedPath = resolvedCascadeDbCache.get(cacheKey);
-  if (cachedPath && fs.existsSync(cachedPath)) {
-    return cachedPath;
-  }
   if (cachedPath) {
+    const cachedUnc = isUncPath(cachedPath);
+    if (cachedUnc && Date.now() < wslUncBackoffUntil) {
+      return cachedPath;
+    }
+    const tCheck = Date.now();
+    const exists = fs.existsSync(cachedPath);
+    if (cachedUnc && Date.now() - tCheck > 400) {
+      wslUncBackoffUntil = Date.now() + 45000;
+    }
+    if (exists) {
+      return cachedPath;
+    }
     resolvedCascadeDbCache.delete(cacheKey);
   }
 
@@ -780,16 +822,36 @@ function getDbState(cascadeId, endpointOrDir) {
   try {
     const dbPath = resolveConversationDbPath(cascadeId, endpointOrDir);
     if (!dbPath) return null;
+    const unc = isUncPath(dbPath);
+    if (unc && Date.now() < wslUncBackoffUntil) {
+      const prev = lastKnownDbStateCache.get(dbPath);
+      return prev ? { ...prev, uncDeferred: true } : { dbPath, rawSig: 'unc_deferred', sig: `${dbPath}#unc_deferred`, uncDeferred: true };
+    }
+    const t0 = Date.now();
     const st = fs.statSync(dbPath, { throwIfNoEntry: false });
-    if (!st) return null;
-    const wst = fs.statSync(`${dbPath}-wal`, { throwIfNoEntry: false });
+    if (unc && Date.now() - t0 > 400) {
+      wslUncBackoffUntil = Date.now() + 45000;
+    }
+    if (!st) {
+      lastKnownDbStateCache.delete(dbPath);
+      return null;
+    }
+    let wst = null;
+    if (!unc || Date.now() >= wslUncBackoffUntil) {
+      wst = fs.statSync(`${dbPath}-wal`, { throwIfNoEntry: false });
+      if (unc && Date.now() - t0 > 400) {
+        wslUncBackoffUntil = Date.now() + 45000;
+      }
+    }
     const walSig = wst ? `${wst.mtimeMs}:${wst.size}` : '0:0';
     const rawSig = `${st.mtimeMs}:${st.size}|${walSig}`;
-    return {
+    const stateObj = {
       dbPath,
       rawSig,
       sig: `${dbPath}#${rawSig}`
     };
+    setBoundedMap(lastKnownDbStateCache, dbPath, stateObj, 64);
+    return stateObj;
   } catch {
     return null;
   }
@@ -815,6 +877,9 @@ function readTrajectoryLineage(dbPath) {
     const msg = String(err?.message || '');
     if (/no such table/i.test(msg)) {
       return { ok: true, hasMeta: false, parentId: '', rootId: '' };
+    }
+    if (!/locked|busy/i.test(msg)) {
+      return { ok: true, hasMeta: false, permanentInvalid: true, parentId: '', rootId: '' };
     }
     return { ok: false, error: err };
   } finally {
@@ -931,6 +996,11 @@ function refreshLineageIndex(conversationsDir) {
     const seenIds = new Set();
     let enqueued = false;
     for (let i = 0; i < entries.length; i++) {
+      if (unc && Date.now() - tWallStart > 400) {
+        wslUncBackoffUntil = Date.now() + 45000;
+        backoffSkipped = true;
+        break;
+      }
       const m = entries[i].match(DB_FILE_RE);
       if (!m) continue;
       const uuid = m[1];
@@ -952,33 +1022,42 @@ function refreshLineageIndex(conversationsDir) {
       enqueued = true;
     }
 
-    for (const existingId of Array.from(dirState.nodes.keys())) {
-      if (!seenIds.has(existingId)) {
-        deleteNodeLineage(dirState, existingId);
-      }
-    }
-    if (dirState.unindexedQueue.length > 0) {
-      const nextQueue = [];
-      for (let i = 0; i < dirState.unindexedQueue.length; i++) {
-        const item = dirState.unindexedQueue[i];
-        if (seenIds.has(item.uuid)) {
-          nextQueue.push(item);
-        } else {
-          dirState.unindexedSet.delete(item.uuid);
+    if (!backoffSkipped) {
+      for (const existingId of Array.from(dirState.nodes.keys())) {
+        if (!seenIds.has(existingId)) {
+          deleteNodeLineage(dirState, existingId);
         }
       }
-      if (enqueued || nextQueue.length !== dirState.unindexedQueue.length) {
-        nextQueue.sort((a, b) => b.mtimeMs - a.mtimeMs);
+      if (dirState.unindexedQueue.length > 0) {
+        const nextQueue = [];
+        for (let i = 0; i < dirState.unindexedQueue.length; i++) {
+          const item = dirState.unindexedQueue[i];
+          if (seenIds.has(item.uuid)) {
+            nextQueue.push(item);
+          } else {
+            dirState.unindexedSet.delete(item.uuid);
+          }
+        }
+        if (enqueued || nextQueue.length !== dirState.unindexedQueue.length) {
+          nextQueue.sort((a, b) => b.mtimeMs - a.mtimeMs);
+        }
+        dirState.unindexedQueue = nextQueue;
       }
-      dirState.unindexedQueue = nextQueue;
+      dirState.scanningDirMtimeMs = dirSt.mtimeMs;
+    } else if (enqueued && dirState.unindexedQueue.length > 1) {
+      dirState.unindexedQueue.sort((a, b) => b.mtimeMs - a.mtimeMs);
     }
-    dirState.scanningDirMtimeMs = dirSt.mtimeMs;
   } else if (dirState.unindexedQueue.length === 0) {
     const pendingRescanMs = unc ? NO_META_RESCAN_UNC_MS : NO_META_RESCAN_LOCAL_MS;
     if (dirState.noMetaPending.size > 0 && nowMs - dirState.lastPendingScanAt >= pendingRescanMs) {
       dirState.lastPendingScanAt = nowMs;
       const newlyChanged = [];
       for (const [uuid, prevSig] of Array.from(dirState.noMetaPending.entries())) {
+        if (unc && Date.now() - tWallStart > 400) {
+          wslUncBackoffUntil = Date.now() + 45000;
+          backoffSkipped = true;
+          break;
+        }
         if (dirState.nodes.get(uuid)?.hasMeta) {
           dirState.noMetaPending.delete(uuid);
           continue;
@@ -1002,10 +1081,18 @@ function refreshLineageIndex(conversationsDir) {
   }
 
   if (dirState.unindexedQueue.length === 0) {
-    if (!backoffSkipped) {
+    if (!backoffSkipped && dirState.scanningDirMtimeMs >= 0) {
       dirState.dirMtimeMs = dirState.scanningDirMtimeMs;
     }
     return { dirState, isDraining: false, backoffSkipped };
+  }
+
+  if (backoffSkipped || (unc && Date.now() < wslUncBackoffUntil)) {
+    return {
+      dirState,
+      isDraining: dirState.unindexedQueue.length > 0,
+      backoffSkipped: true
+    };
   }
 
   const tPerfStart = performance.now();
@@ -1042,8 +1129,12 @@ function refreshLineageIndex(conversationsDir) {
           rootId: '',
           statSig: item.statSig
         });
-        rememberNoMetaPending(dirState, item.uuid, item.statSig);
-        dirState.lastPendingScanAt = Date.now();
+        if (!res.permanentInvalid) {
+          rememberNoMetaPending(dirState, item.uuid, item.statSig);
+          dirState.lastPendingScanAt = Date.now();
+        } else {
+          dirState.noMetaPending.delete(item.uuid);
+        }
       }
     } else {
       busyRetry.push(item);
@@ -1064,7 +1155,7 @@ function refreshLineageIndex(conversationsDir) {
     backoffSkipped = true;
   }
 
-  if (dirState.unindexedQueue.length === 0 && !backoffSkipped) {
+  if (dirState.unindexedQueue.length === 0 && !backoffSkipped && dirState.scanningDirMtimeMs >= 0) {
     dirState.dirMtimeMs = dirState.scanningDirMtimeMs;
   }
 
@@ -1141,47 +1232,64 @@ function getCompositeChildSnapshot(cascadeId, conversationsDir, parentSig = '') 
     partialStale = true;
     for (let i = 0; i < descendantIds.length; i++) {
       const cid = descendantIds[i];
-      const prev = childMetricsCache.get(path.join(conversationsDir, `${cid}.db`))?.sig || '0:0|0:0';
-      childSigs.set(cid, prev);
-      childSigParts.push(`${cid}=${prev}`);
+      const prev = childMetricsCache.get(path.join(conversationsDir, `${cid}.db`))?.sig || '';
+      childSigs.set(cid, prev || 'unc_deferred');
+      childSigParts.push(`${cid}=${prev || '0:0|0:0'}`);
     }
   } else {
     for (let i = 0; i < descendantIds.length; i++) {
       const cid = descendantIds[i];
-      if (unc && Date.now() - t0 > 400) {
-        wslUncBackoffUntil = Date.now() + 45000;
+      if (unc && (Date.now() < wslUncBackoffUntil || Date.now() - t0 > 400)) {
+        if (Date.now() >= wslUncBackoffUntil) {
+          wslUncBackoffUntil = Date.now() + 45000;
+        }
         partialStale = true;
-        const prev = childMetricsCache.get(path.join(conversationsDir, `${cid}.db`))?.sig || '0:0|0:0';
-        childSigs.set(cid, prev);
-        childSigParts.push(`${cid}=${prev}`);
+        const prev = childMetricsCache.get(path.join(conversationsDir, `${cid}.db`))?.sig || '';
+        childSigs.set(cid, prev || 'unc_deferred');
+        childSigParts.push(`${cid}=${prev || '0:0|0:0'}`);
         continue;
       }
       const statInfo = getDbStatByPath(path.join(conversationsDir, `${cid}.db`));
-      const csig = statInfo ? statInfo.sig : '0:0|0:0';
-      childSigs.set(cid, csig);
-      childSigParts.push(`${cid}=${csig}`);
+      if (unc && Date.now() - t0 > 400) {
+        wslUncBackoffUntil = Date.now() + 45000;
+        partialStale = true;
+      }
+      childSigs.set(cid, statInfo ? statInfo.sig : 'missing');
+      childSigParts.push(`${cid}=${statInfo ? statInfo.sig : '0:0|0:0'}`);
     }
   }
 
+  const uncBackoffActive = Boolean(unc && Date.now() < wslUncBackoffUntil);
   return {
     conversationsDir,
     descendantIds,
     childSigs,
     isDraining: Boolean(isDraining),
     partialStale,
+    uncBackoffActive,
     sig: `${parentSig}|children:${childSigParts.join(',')}${isDraining ? '|draining' : ''}${partialStale ? '|stale' : ''}`
   };
 }
 
-function loadChildScalarMetrics(childId, conversationsDir, knownStatSig = null) {
+function loadChildScalarMetrics(childId, conversationsDir, knownStatSig = null, allowUncachedOpen = true) {
+  if (knownStatSig === 'missing') return { exists: false };
   const dbPath = path.join(conversationsDir, `${childId}.db`);
+  const cached = childMetricsCache.get(dbPath);
+  if (knownStatSig === 'unc_deferred') {
+    return { exists: true, deferred: true, staleMetrics: cached || null };
+  }
+  if (!knownStatSig && !allowUncachedOpen) {
+    return cached ? { exists: true, deferred: true, staleMetrics: cached } : { exists: true, deferred: true, staleMetrics: null };
+  }
   const sig = knownStatSig || getDbStatByPath(dbPath)?.sig || '';
   if (!sig) return { exists: false };
 
-  const cached = childMetricsCache.get(dbPath);
   if (cached && cached.sig === sig) {
     setChildMetricsCache(dbPath, cached);
-    return { exists: true, metrics: cached };
+    return { exists: true, fromCache: true, metrics: cached };
+  }
+  if (!allowUncachedOpen) {
+    return { exists: true, deferred: true, staleMetrics: cached || null };
   }
 
   let db;
@@ -1216,24 +1324,24 @@ function loadChildScalarMetrics(childId, conversationsDir, knownStatSig = null) 
       totalResp
     };
     setChildMetricsCache(dbPath, entry);
-    return { exists: true, metrics: entry };
+    return { exists: true, fromCache: false, metrics: entry };
   } catch (err) {
     const msg = String(err?.message || '');
-    if (/no such table/i.test(msg)) {
-      const emptyEntry = {
-        sig,
-        hasData: false,
-        calls: 0,
-        totalIn: 0,
-        totalCache: 0,
-        totalOut: 0,
-        totalThink: 0,
-        totalResp: 0
-      };
-      setChildMetricsCache(dbPath, emptyEntry);
-      return { exists: true, metrics: emptyEntry };
+    if (/locked|busy/i.test(msg)) {
+      return { exists: true, fromCache: false, transientError: true, staleMetrics: cached || null };
     }
-    return { exists: true, transientError: true, staleMetrics: cached || null };
+    const emptyEntry = {
+      sig,
+      hasData: false,
+      calls: 0,
+      totalIn: 0,
+      totalCache: 0,
+      totalOut: 0,
+      totalThink: 0,
+      totalResp: 0
+    };
+    setChildMetricsCache(dbPath, emptyEntry);
+    return { exists: true, fromCache: false, metrics: emptyEntry };
   } finally {
     try {
       db?.close();
@@ -1303,7 +1411,26 @@ function parseConversationMetrics(cascadeId, endpointOrDir, precomputedState = n
     return cached.payload;
   }
 
+  const uncParent = isUncPath(dbPath);
+  if (uncParent && Date.now() < wslUncBackoffUntil) {
+    const bestEffort = cached?.payload || lastBestEffortPayloadCache.get(dbPath) || null;
+    if (bestEffort) {
+      return {
+        ...bestEffort,
+        partialStale: true,
+        uncBackoffActive: true
+      };
+    }
+    return {
+      cascadeId,
+      transientError: true,
+      uncBackoffActive: true,
+      cachedPayload: null
+    };
+  }
+
   let db;
+  const tParentWallStart = Date.now();
   try {
     db = new DatabaseSync(dbPath, { readOnly: true, timeout: 200 });
     const metaStat = db.prepare('SELECT COUNT(*) AS cnt, COALESCE(MAX(idx), -1) AS maxIdx FROM gen_metadata').get();
@@ -1424,6 +1551,9 @@ function parseConversationMetrics(cascadeId, endpointOrDir, precomputedState = n
 
     db.close();
     db = null;
+    if (uncParent && Date.now() - tParentWallStart > 400) {
+      wslUncBackoffUntil = Date.now() + 45000;
+    }
     setIncrementalMetrics(dbPath, inc);
 
     const { validItems: valid, totalIn, totalCache, totalOut, totalThink, totalResp } = inc;
@@ -1451,21 +1581,42 @@ function parseConversationMetrics(cascadeId, endpointOrDir, precomputedState = n
     let childOut = 0;
     let childThink = 0;
     let childResp = 0;
+    let childSqlOpens = 0;
+    const tChildPerfStart = performance.now();
+    const tChildWallStart = Date.now();
+    const uncChildren = isUncPath(conversationsDir);
 
     for (let i = 0; i < descendantIds.length; i++) {
       const childId = descendantIds[i];
       if (childId === cascadeId) continue;
 
       const knownChildSig = childSnap.childSigs?.get(childId) || null;
+      const uncNowBlocked =
+        uncChildren && (Date.now() < wslUncBackoffUntil || Date.now() - tChildWallStart > 400);
+      if (uncChildren && Date.now() - tChildWallStart > 400 && Date.now() >= wslUncBackoffUntil) {
+        wslUncBackoffUntil = Date.now() + 45000;
+      }
+      const allowUncachedOpen =
+        !uncNowBlocked &&
+        (childSqlOpens === 0 ||
+          (childSqlOpens < LINEAGE_TICK_MAX_OPENS &&
+            performance.now() - tChildPerfStart < LINEAGE_TICK_MAX_MS));
       const childRes = loadChildScalarMetrics(
         childId,
         conversationsDir,
-        knownChildSig && knownChildSig !== '0:0|0:0' ? knownChildSig : null
+        knownChildSig,
+        allowUncachedOpen
       );
       if (!childRes.exists) continue;
+      if (!childRes.fromCache && !childRes.deferred) {
+        childSqlOpens += 1;
+        if (uncChildren && Date.now() - tChildWallStart > 400) {
+          wslUncBackoffUntil = Date.now() + 45000;
+        }
+      }
 
       let cm = null;
-      if (childRes.transientError) {
+      if (childRes.deferred || childRes.transientError) {
         partialStale = true;
         if (childRes.staleMetrics && childRes.staleMetrics.hasData) {
           cm = childRes.staleMetrics;
@@ -1524,6 +1675,13 @@ function parseConversationMetrics(cascadeId, endpointOrDir, precomputedState = n
     const sessionCacheRate = totalIn + totalCache > 0 ? ((totalCache / (totalIn + totalCache)) * 100).toFixed(1) : '0.0';
     const remainCtx = Math.max(0, contextLimitTokens - last.ctx);
 
+    const zhWarnActive =
+      process.platform === 'darwin' &&
+      (zhTitleStatus.state === 'tcc_blocked' || zhTitleStatus.state === 'stale_inode');
+    const zhWarnInlineHtml = zhWarnActive
+      ? `<span class="ag-sep">·</span><span class="ag-zh-warn-dot" title="${zhTitleStatus.label}">●</span>`
+      : '';
+    const subSyncing = isDraining || partialStale;
     const subInlineHtml =
       childCount > 0 ? `<span class="ag-sep">·</span><span class="ag-sub-badge">+${childCount} sub</span>` : '';
     const inlineHtml = [
@@ -1534,7 +1692,8 @@ function parseConversationMetrics(cascadeId, endpointOrDir, precomputedState = n
       `<span>Ctx ${fmtTok(last.ctx)}/${limitStr} <span class="${ctxClass}">(${ctxPct}%)</span></span>`,
       `<span class="ag-sep">·</span>`,
       `<span>Out ${fmtTok(last.outTok)}</span>`,
-      subInlineHtml
+      subInlineHtml,
+      zhWarnInlineHtml
     ].join('');
 
     const turnRowHtml =
@@ -1545,12 +1704,17 @@ function parseConversationMetrics(cascadeId, endpointOrDir, precomputedState = n
     const combinedOut = totalOut + childOut;
     const subRowHtml =
       childCount > 0
-        ? `<div class="ag-tt-row"><span class="ag-tt-lbl">子 Agent (${childCount}${partialStale ? ' · 同步中' : ''})</span><span class="ag-tt-val">${childCalls} 次 · 新增 ${fmtTok(childIn)} + 缓存 ${fmtTok(childCache)} · 输出 ${fmtTok(childOut)}</span></div>`
-        : '';
+        ? `<div class="ag-tt-row"><span class="ag-tt-lbl">子 Agent (${childCount}${subSyncing ? ' · 同步中' : ''})</span><span class="ag-tt-val">${childCalls} 次 · 新增 ${fmtTok(childIn)} + 缓存 ${fmtTok(childCache)} · 输出 ${fmtTok(childOut)}</span></div>`
+        : descendantIds.length > 0 && subSyncing
+          ? `<div class="ag-tt-row"><span class="ag-tt-lbl">子 Agent (同步中)</span><span class="ag-tt-val">正在索引 ${descendantIds.length} 个子会话…</span></div>`
+          : '';
     const outputRowHtml =
       childCount > 0
         ? `<div class="ag-tt-row"><span class="ag-tt-lbl">累计输出量</span><span class="ag-tt-val">总计 ${fmtTok(combinedOut)} (主 ${fmtTok(totalOut)} + 子 ${fmtTok(childOut)})</span></div>`
         : `<div class="ag-tt-row"><span class="ag-tt-lbl">累计输出量</span><span class="ag-tt-val">总计 ${fmtTok(totalOut)} (思考链 ${fmtTok(totalThink)} + 正文/工具 ${fmtTok(totalResp)})</span></div>`;
+    const zhWarnRowHtml = zhWarnActive
+      ? `<div class="ag-tt-warn"><span class="ag-tt-warn-lbl">⚠ ${zhTitleStatus.label}</span><span class="ag-tt-warn-val">${zhTitleStatus.detail}</span></div>`
+      : '';
 
     const tooltipRows = [
       `<div class="ag-tt-hdr">本轮最新调用 (Gen #${last.idx + 1})</div>`,
@@ -1563,19 +1727,25 @@ function parseConversationMetrics(cascadeId, endpointOrDir, precomputedState = n
       `<div class="ag-tt-row"><span class="ag-tt-lbl">压缩水位线</span><span class="ag-tt-val">${fmtTok(last.ctx)} / ${limitStr} (${ctxPct}%) · 距压缩余 ${fmtTok(remainCtx)}</span></div>`,
       `<div class="ag-tt-row"><span class="ag-tt-lbl">累计输入量</span><span class="ag-tt-val">新增 ${fmtTok(totalIn)} + 缓存读取 ${fmtTok(totalCache)} (命中率 ${sessionCacheRate}%)</span></div>`,
       subRowHtml,
-      outputRowHtml
+      outputRowHtml,
+      zhWarnRowHtml
     ];
     const tooltipHtml = tooltipRows.join('');
 
+    const uncBackoffActive = Boolean(
+      childSnap?.uncBackoffActive || (uncParent && Date.now() < wslUncBackoffUntil)
+    );
     const payload = {
       cascadeId,
       hasData: true,
       sig: compositeSig,
       isDraining,
       partialStale,
+      uncBackoffActive,
       inlineHtml,
       tooltipHtml
     };
+    setBoundedMap(lastBestEffortPayloadCache, dbPath, payload, 64);
     if (!isDraining && !partialStale) {
       setMetricsCache(dbPath, { sig: compositeSig, payload });
     }
@@ -1741,7 +1911,16 @@ function attachTarget(target, endpoint) {
           : null;
         const sig = childSnap?.sig || dbState?.sig || 'empty';
         const sessionKey = `${activeCascadeId}@${sig}|${metricsConfigEpoch}`;
-        if (!force && !childSnap?.isDraining && !childSnap?.partialStale && sessionKey === lastPushedHash) return;
+        const uncCoolingDown = Boolean(
+          (dbState?.uncDeferred || childSnap?.uncBackoffActive) && Date.now() < wslUncBackoffUntil
+        );
+        if (
+          !force &&
+          ((!childSnap?.isDraining && !childSnap?.partialStale && sessionKey === lastPushedHash) ||
+            (uncCoolingDown && lastRenderedSig !== ''))
+        ) {
+          return;
+        }
 
         const payload = parseConversationMetrics(activeCascadeId, currentEndpoint, dbState, childSnap);
         if (!payload || payload.transientError) {
@@ -1901,9 +2080,46 @@ let isSyncing = false;
 let syncTickCount = 0;
 let lastZhPatchSig = '';
 let isZhPatchRunning = false;
+let isZhStatusProbing = false;
+let hasProbedZhLiveOnce = false;
 let cachedWorkingPython = undefined;
 let zhPatchFailedSig = '';
 let zhPatchFailCount = 0;
+
+function probeZhTitleLiveState(pyBin, scriptPath) {
+  if (SAFE_MODE || process.platform !== 'darwin' || isZhStatusProbing || !pyBin || !scriptPath) return;
+  isZhStatusProbing = true;
+  const child = execFile(pyBin, [scriptPath, 'status', '--json'], { timeout: 8000 }, (err, stdout) => {
+    isZhStatusProbing = false;
+    hasProbedZhLiveOnce = true;
+    if (err) return;
+    try {
+      const records = JSON.parse(String(stdout || '').trim());
+      if (!Array.isArray(records) || records.length === 0) return;
+      const activeRecs = records.filter((r) => r && !r.disabled);
+      if (activeRecs.length === 0) {
+        setZhTitleStatus('ok');
+        return;
+      }
+      if (activeRecs.some((r) => r.diskState === 'PATCHED' && r.liveState === 'STALE_RUNNING_INODE')) {
+        setZhTitleStatus(
+          'stale_inode',
+          '标题补丁待内存重载',
+          '磁盘已修补但运行中服务仍挂载旧镜像，运行 reload-hub 或重启生效'
+        );
+        return;
+      }
+      if (activeRecs.every((r) => r.diskState === 'PATCHED')) {
+        setZhTitleStatus('ok');
+      }
+    } catch {
+      // 旧版脚本尚不支持 status --json 时静默兼容降级
+    }
+  });
+  try {
+    child.stdin?.end();
+  } catch {}
+}
 
 function resolveWorkingPython3() {
   if (cachedWorkingPython !== undefined) return cachedWorkingPython;
@@ -1952,7 +2168,19 @@ function ensureZhTitlePatchIfPresent() {
     return binSig ? `script:${scriptSig}|disabled:${disabledSig}|${binSig}` : '';
   };
   const sig = computeZhSig();
-  if (!sig || sig === lastZhPatchSig) return;
+  if (!sig) return;
+  if (fs.existsSync(disabledMarkerPath)) {
+    lastZhPatchSig = sig;
+    setZhTitleStatus('ok');
+    return;
+  }
+  if (sig === lastZhPatchSig) {
+    if (!hasProbedZhLiveOnce || zhTitleStatus.state === 'stale_inode') {
+      const pyProbe = resolveWorkingPython3();
+      if (pyProbe) probeZhTitleLiveState(pyProbe, scriptPath);
+    }
+    return;
+  }
   if (sig === zhPatchFailedSig && zhPatchFailCount >= 3) return;
 
   const pyBin = resolveWorkingPython3();
@@ -1977,8 +2205,13 @@ function ensureZhTitlePatchIfPresent() {
       ) {
         zhPatchFailedSig = sig;
         zhPatchFailCount = 3;
+        setZhTitleStatus(
+          'tcc_blocked',
+          '标题补丁待终端授权',
+          '客户端更新后后台补丁受 macOS 权限拦截，请终端运行 patch --reload-hub'
+        );
         console.log(
-          '[Daemon] zh-title auto-patch skipped (macOS App Management TCC blocks background LaunchAgent write; run `python3 ~/.gemini/antigravity/scripts/antigravity-zh-title-patch.py patch` in an authorized terminal).'
+          '[Daemon] zh-title auto-patch skipped (macOS App Management TCC blocks background LaunchAgent write; run `python3 ~/.gemini/antigravity/scripts/antigravity-zh-title-patch.py patch --reload-hub` in an authorized terminal).'
         );
         return;
       }
@@ -2000,7 +2233,10 @@ function ensureZhTitlePatchIfPresent() {
       console.log('[Daemon] Auto-applied zh-title patch:', outStr.split('\n')[0]);
     } else if (outStr.includes('DISABLED')) {
       console.log('[Daemon] zh-title auto-patch skipped (DISABLED marker present).');
+      setZhTitleStatus('ok');
+      return;
     }
+    probeZhTitleLiveState(pyBin, scriptPath);
   });
   try {
     child.stdin?.end();

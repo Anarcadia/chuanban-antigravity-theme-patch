@@ -49,7 +49,8 @@ body[data-agy-theme] :where(.font-sans),
 body[data-agy-font],
 body[data-agy-font="google-sans"],
 body[data-agy-font="inter"],
-body[data-agy-font] :where(.font-sans) {
+body[data-agy-font] :where(.font-sans),
+.pdf-sdk-root {
   --vscode-font-family: 'Anthropic Sans', 'Anthropic Sans Web Display Light', 'Anthropic Sans Web', 'Anthropic Sans Web Text', 'anthropic-sans', 'Styrene B', 'Styrene', 'Sarasa UI SC', '更纱黑体 UI SC', 'PingFang SC', 'Hiragino Sans GB', system-ui, -apple-system, BlinkMacSystemFont, 'Microsoft YaHei UI', 'Microsoft YaHei', sans-serif !important;
   --editor-font-family: 'Anthropic Mono', 'Anthropic Mono Web', 'anthropic-mono', 'Sarasa Mono Slab SC', '等距更纱黑体 Slab SC', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Monaco, Consolas, monospace !important;
   --font-sans: 'Anthropic Sans', 'Anthropic Sans Web Display Light', 'Anthropic Sans Web', 'Anthropic Sans Web Text', 'anthropic-sans', 'Styrene B', 'Styrene', 'Sarasa UI SC', '更纱黑体 UI SC', 'PingFang SC', 'Hiragino Sans GB', system-ui, -apple-system, BlinkMacSystemFont, 'Microsoft YaHei UI', 'Microsoft YaHei', sans-serif !important;
@@ -57,6 +58,9 @@ body[data-agy-font] :where(.font-sans) {
   --default-font-family: var(--font-sans) !important;
   --default-mono-font-family: var(--font-mono) !important;
   --font-family: var(--font-sans) !important;
+  --sdk-font-family: var(--font-sans) !important;
+  --sdk-font-family-mono: var(--font-mono) !important;
+  --sdk-comment-font-family: var(--font-sans) !important;
   --font-weight-light: 300 !important;
   --font-weight-normal: 400 !important;
   --font-weight-medium: 500 !important;
@@ -66,6 +70,7 @@ body[data-agy-font] :where(.font-sans) {
   --agy-gsf-h1-wght: 600 !important;
   --agy-gsf-h3-wght: 600 !important;
   --agy-gsf-bold-wght: 600 !important;
+  --agy-gsf-fvs: normal !important;
   --agy-gsf-italic: italic !important;
   --agy-gsf-slnt: 0 !important;
 }
@@ -90,6 +95,7 @@ body[data-agy-font],
 body[data-agy-font="google-sans"] {
   font-weight: 400 !important;
   font-variation-settings: normal !important;
+  font-variant-ligatures: normal !important;
   color: var(--foreground) !important;
 }
 
@@ -104,7 +110,8 @@ body[data-agy-font="google-sans"]:not([data-has-browser-hole="true"]):not([data-
   background-color: var(--sidebar) !important;
 }
 
-body[data-agy-font] :where(.font-sans, h1, h2, h3, h4, h5, h6, b, strong, i, em, .italic) {
+body[data-agy-font] :where(.font-sans, h1, h2, h3, h4, h5, h6, b, strong, i, em, .italic),
+html[data-ag-page-type="plugin"] :where(h1, h2, h3, h4, h5, h6, b, strong, .swarm-title, .o2 .o2-h, .o2-goal > b, .o2-lb b, .o2-cb b, .o2-tht b) {
   --agy-gsf-bold-wght: 600 !important;
   font-variation-settings: normal !important;
 }
@@ -150,7 +157,8 @@ html[data-ag-os="win32"] :is([data-markdown-root], [data-testid="user-message-co
 }
 
 html[data-ag-os="win32"] :is([data-markdown-root], [data-testid="user-message-content"], .agy-user-bubble, .select-text, .prose, .markdown, article) :is(strong, b, h1, h2, h3, h4, h5, h6, th, .font-semibold, .font-bold),
-html[data-ag-os="win32"] :is([data-markdown-root], [data-testid="user-message-content"], .agy-user-bubble, .select-text, .prose, .markdown, article) :is(strong, b, h1, h2, h3, h4, h5, h6, th, .font-semibold, .font-bold) :is(i, em, .italic) {
+html[data-ag-os="win32"] :is([data-markdown-root], [data-testid="user-message-content"], .agy-user-bubble, .select-text, .prose, .markdown, article) :is(strong, b, h1, h2, h3, h4, h5, h6, th, .font-semibold, .font-bold) :is(i, em, .italic),
+html[data-ag-os="win32"][data-ag-page-type="plugin"] :where(h1, h2, h3, h4, h5, h6, b, strong, .swarm-title, .o2 .o2-h, .o2-goal > b, .o2-lb b, .o2-cb b, .o2-tht b) {
   font-weight: 600 !important;
   font-variation-settings: 'wght' 600, 'opsz' 16 !important;
 }
@@ -881,6 +889,13 @@ body[data-agy-theme][data-newux-theme="onyx"].dark .agy-sidebar-row[data-selecte
   color: #9E3E22 !important;
 }
 
+#antigravity\.agentSidePanelInputBox #ag-live-metrics-pill .ag-zh-warn-dot,
+#ag-live-metrics-pill .ag-zh-warn-dot {
+  color: #B45309 !important;
+  font-size: 9px !important;
+  line-height: 1;
+}
+
 /* 黑夜模式指标胶囊配色与高可见预警色 */
 :is(html[data-ag-theme-mode="dark"] body, body.dark) #ag-live-metrics-pill {
   color: #C8CAD4 !important;
@@ -911,6 +926,11 @@ body[data-agy-theme][data-newux-theme="onyx"].dark .agy-sidebar-row[data-selecte
   background-color: rgba(47, 113, 227, 0.18);
   border-color: rgba(96, 165, 250, 0.36);
   color: #93C5FD !important;
+}
+
+:is(html[data-ag-theme-mode="dark"] body, body.dark) #antigravity\.agentSidePanelInputBox #ag-live-metrics-pill .ag-zh-warn-dot,
+:is(html[data-ag-theme-mode="dark"] body, body.dark) #ag-live-metrics-pill .ag-zh-warn-dot {
+  color: #FBBF24 !important;
 }
 
 #ag-live-metrics-tooltip {
@@ -978,6 +998,29 @@ body[data-agy-theme][data-newux-theme="onyx"].dark .agy-sidebar-row[data-selecte
   text-align: right;
 }
 
+#ag-live-metrics-tooltip .ag-tt-warn {
+  margin-top: 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background-color: rgba(180, 83, 9, 0.08);
+  border: 1px solid rgba(180, 83, 9, 0.24);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+#ag-live-metrics-tooltip .ag-tt-warn-lbl {
+  color: #92400E !important;
+  font-weight: 600 !important;
+  font-size: 10.5px !important;
+}
+
+#ag-live-metrics-tooltip .ag-tt-warn-val {
+  color: #57534E !important;
+  font-size: 10px !important;
+  line-height: 1.4 !important;
+}
+
 /* 黑夜模式悬浮指标详情卡配色 */
 :is(html[data-ag-theme-mode="dark"] body, body.dark) #ag-live-metrics-tooltip {
   background-color: var(--onyx-raised, #18181E) !important;
@@ -997,4 +1040,17 @@ body[data-agy-theme][data-newux-theme="onyx"].dark .agy-sidebar-row[data-selecte
 
 :is(html[data-ag-theme-mode="dark"] body, body.dark) #ag-live-metrics-tooltip .ag-tt-val {
   color: #FFFFFF !important;
+}
+
+:is(html[data-ag-theme-mode="dark"] body, body.dark) #ag-live-metrics-tooltip .ag-tt-warn {
+  background-color: rgba(251, 191, 36, 0.1);
+  border-color: rgba(251, 191, 36, 0.28);
+}
+
+:is(html[data-ag-theme-mode="dark"] body, body.dark) #ag-live-metrics-tooltip .ag-tt-warn-lbl {
+  color: #FCD34D !important;
+}
+
+:is(html[data-ag-theme-mode="dark"] body, body.dark) #ag-live-metrics-tooltip .ag-tt-warn-val {
+  color: #C8CAD4 !important;
 }

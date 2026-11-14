@@ -13,7 +13,7 @@
   if (window.top !== window && !IS_SWARM_PLUGIN_FRAME) return;
   if (!boot || typeof boot !== 'object') return;
 
-  const PATCH_VERSION = boot.version || '20261114-v5.2.0';
+  const PATCH_VERSION = boot.version || '20261115-v5.3.0';
   const DETECTED_OS =
     boot.platform || (/Win/i.test(navigator.platform || '') ? 'win32' : /Mac/i.test(navigator.platform || '') ? 'darwin' : 'linux');
   const ENABLED = boot.enabled !== false;
@@ -1621,10 +1621,45 @@
     const lk = kNorm.toLowerCase();
     if (!DICT_CI.has(lk)) DICT_CI.set(lk, v);
   }
+  const SWARM_FRAME_ONLY_DICT = IS_SWARM_PLUGIN_FRAME
+    ? {
+        Coordinator: '协调器',
+        Goal: '目标',
+        Threads: '工作流',
+        Now: '当前',
+        Progress: '进度',
+        Stuck: '受阻停滞',
+        Moving: '推进中',
+        Waiting: '等待中',
+        Other: '其他',
+        Tasks: '任务',
+        Task: '任务',
+        Active: '活跃中',
+        Team: '团队',
+        Retired: '已退役',
+        Error: '错误',
+        Killed: '已终止',
+        Frames: '关键帧',
+        Previous: '上一帧',
+        Next: '下一帧',
+        updating: '更新中',
+        watching: '监听中',
+        stopped: '已停止',
+        stale: '待刷新',
+        '(archived)': '（已归档）',
+        '(empty)': '（空）',
+        'tasks done': '项任务已完成'
+      }
+    : null;
+
   function dictLookup(s) {
     if (!s) return undefined;
     const exact = DICT[s];
     if (typeof exact === 'string') return exact;
+    if (SWARM_FRAME_ONLY_DICT) {
+      const swarmHit = SWARM_FRAME_ONLY_DICT[s];
+      if (typeof swarmHit === 'string') return swarmHit;
+    }
     const sNorm = s.indexOf('\u2019') !== -1 || s.indexOf('\u2018') !== -1 ? s.replace(RE_CURLY_APOS, "'") : s;
     if (sNorm !== s) {
       const exactNorm = DICT[sNorm];
@@ -1792,7 +1827,42 @@
     const RE_BROWSER_STEPS = /^(\d+)\s+browser\s+steps?$/i;
     const RE_MEDIA_ATTACHMENTS = /^(\d+)\s+(image|audio|video)\s+attachments?$/i;
     const RE_ATTACHMENTS_COUNT = /^(\d+)\s+attachments?$/i;
+    const RE_IMAGES_COUNT = /^(\d+)\s+images?$/i;
     const RE_COMMENTS_COUNT = /^(\d+)\s+comments?$/i;
+    const RE_SIDE_QUESTIONS_COUNT = /^(\d+)\s+side\s+questions?$/i;
+    const RE_RESUME_COMMENT_DRAFTS = /^Resume\s+(\d+)\s+comment\s+drafts?$/i;
+    const RE_VIEW_SIDE_QUESTIONS = /^View\s+(\d+)\s+side\s+questions?$/i;
+    const RE_SIDE_QUESTION_TITLE = /^Side\s+Question:\s*(.+)$/i;
+    const RE_OPENS_EXT_LINK = /^Opens\s+external\s+link:\s*(.+)$/i;
+    const RE_OPEN_CONV_ID = /^Open\s+conversation\s+([0-9a-f-]{8,36})$/i;
+    const RE_OPEN_PLUGIN_NAME = /^Open\s+the\s+([^\r\n]{1,80}?)\s+plugin$/i;
+    const RE_EDIT_SIDE_Q_TITLE = /^Edit\s+side\s+question\s+title:\s*(.+)$/i;
+    const RE_CONNECTED_TO_HOST = /^Connected\s+to\s+([^\r\n]{1,120})$/;
+
+    // Swarm 侧车专属动态规则（仅在 IS_SWARM_PLUGIN_FRAME 下生效，主窗口零开销零误伤）
+    const RE_SWARM_NUM_OF_NUM = /^(\d+)\s+of\s+(\d+)$/i;
+    const RE_SWARM_WAITING_ON = /^Waiting\s+on\s+(@?\S+)$/i;
+    const RE_SWARM_N_WAITING_ON = /^(\d+)\s+waiting\s+on\s+(@\S+)$/i;
+    const RE_SWARM_N_STUCK = /^(\d+)\s+stuck$/i;
+    const RE_SWARM_N_NEEDS_YOU = /^(\d+)\s+needs?\s+you$/i;
+    const RE_SWARM_N_THREADS_OPEN = /^(\d+)\s+threads?\s+open$/i;
+    const RE_SWARM_N_ACTIVE = /^(\d+)\s+active$/i;
+    const RE_SWARM_LAST_SEEN = /^last\s+seen\s+(\d+)\s*(m|h|d)\s+ago$/i;
+    const RE_SWARM_NOW_FRAC = /^Now\s*·\s*(\d+)\s*\/\s*(\d+)$/i;
+    const RE_SWARM_READ_SEQ = /^read\s+#(\d+)(?:\s*·\s*updated\s+(.+))?$/i;
+    const RE_SWARM_PAUSED_REASON = /^paused:\s*(quota|error)$/i;
+    const RE_SWARM_OV_NOTES = /^overview\s*·\s*from\s+the\s+narrator['\u2019]s\s+notes(?:\s*·\s*(.+))?$/i;
+    const RE_SWARM_YOU_SUFFIX = /^([A-Za-z0-9._-]+)\s+\(you\)$/;
+    const RE_SWARM_FROM_OPT = /^From\s+([A-Za-z0-9._-]+)$/;
+    const RE_SWARM_TO_OPT = /^To\s+(@?[A-Za-z0-9._-]+)$/;
+    const RE_SWARM_LIVE_TIP = /^(Thinking|Latest action):\s*([\s\S]+)$/;
+    const RE_SWARM_RUNS_ON = /^Runs\s+on\s+(.+)$/i;
+    const RE_SWARM_NARRATOR_READ = /^Narrator\s+read\s+up\s+to\s+#(\d+)\s+of\s+(\d+)$/i;
+    const RE_SWARM_POSTS_SINCE_UPD = /^(\d+)\s+posts?\s+since\s+the\s+view\s+was\s+updated$/i;
+    const RE_SWARM_NARRATOR_FAILED_TIP = /^The\s+narrator['\u2019]s\s+last\s+step\s+failed:\s*(.+)$/i;
+    const RE_SWARM_POSTED_IN_CH = /^Posted\s+in\s+#([^\s;]+);\s*click\s+to\s+show\s+only\s+#\1$/i;
+    const RE_SWARM_GOTO_SEQ = /^Go\s+to\s+#(\d+)(?:\s*\((.+)\))?$/i;
+    const RE_SWARM_TPROG_DONE = /^(.+?)\s+done$/i;
     const RE_INSTALLED_COUNT = /^(\d+)\s+installed$/i;
     const RE_ACCOUNTS_COUNT = /^(\d+)\s+accounts?$/i;
     const RE_UPDATES_COUNT = /^(\d+)\s+updates?$/i;
@@ -1994,8 +2064,23 @@
       return false;
     }
 
+    const MARKDOWN_UI_ATTR_SELECTOR =
+      'button[aria-label], button[title], [role="region"][aria-label], span[aria-label^="Opens external link:"]';
+
+    function isMarkdownChromeAttrTarget(el) {
+      return !!(
+        el &&
+        el.nodeType === 1 &&
+        el.matches &&
+        el.matches(MARKDOWN_UI_ATTR_SELECTOR) &&
+        el.closest('[data-markdown-root]') &&
+        !el.closest('pre, code, .monaco-editor, .monaco-diff-editor, .xterm')
+      );
+    }
+
     function canTranslateElementAttrs(el, batchSafeSet) {
       if (!el || el.nodeType !== 1) return false;
+      if (isMarkdownChromeAttrTarget(el)) return true;
       if (isFormAttrTarget(el)) {
         if (immutableContainerExclCache.get(el) === true) return false;
         if (el.closest(CONTAINER_IMMUTABLE_EXCLUDE_SELECTOR)) {
@@ -2072,7 +2157,9 @@
           return raw.replace(trimmed, () => mMediaAtt[1] + ' 个' + mediaZh + '附件');
         }
         if (RE_ATTACHMENTS_COUNT.test(trimmed)) return raw.replace(RE_ATTACHMENTS_COUNT, '$1 个附件');
+        if (RE_IMAGES_COUNT.test(trimmed)) return raw.replace(RE_IMAGES_COUNT, '$1 张图片');
         if (RE_COMMENTS_COUNT.test(trimmed)) return raw.replace(RE_COMMENTS_COUNT, '$1 条评论');
+        if (RE_SIDE_QUESTIONS_COUNT.test(trimmed)) return raw.replace(RE_SIDE_QUESTIONS_COUNT, '$1 个支线提问');
         if (RE_INSTALLED_COUNT.test(trimmed)) return raw.replace(RE_INSTALLED_COUNT, '已安装 $1 项');
         if (RE_ACCOUNTS_COUNT.test(trimmed)) return raw.replace(RE_ACCOUNTS_COUNT, '$1 个账号');
         if (RE_PROJECTS_COUNT.test(trimmed)) return raw.replace(RE_PROJECTS_COUNT, '$1 个项目');
@@ -2081,6 +2168,16 @@
         if (RE_POSTS_COUNT.test(trimmed)) return raw.replace(RE_POSTS_COUNT, '$1 条发言');
         if (RE_MEMBERS_COUNT.test(trimmed)) return raw.replace(RE_MEMBERS_COUNT, '$1 名成员');
         if (RE_MCP_FAILED_START.test(trimmed)) return raw.replace(RE_MCP_FAILED_START, '$1 个 MCP 服务器启动失败');
+        if (IS_SWARM_PLUGIN_FRAME) {
+          if (RE_SWARM_N_WAITING_ON.test(trimmed)) return raw.replace(RE_SWARM_N_WAITING_ON, '$1 项等待 $2');
+          if (RE_SWARM_N_STUCK.test(trimmed)) return raw.replace(RE_SWARM_N_STUCK, '$1 项受阻停滞');
+          if (RE_SWARM_N_NEEDS_YOU.test(trimmed)) return raw.replace(RE_SWARM_N_NEEDS_YOU, '$1 项需要您处理');
+          if (RE_SWARM_N_THREADS_OPEN.test(trimmed)) return raw.replace(RE_SWARM_N_THREADS_OPEN, '$1 个工作流进行中');
+          if (RE_SWARM_N_ACTIVE.test(trimmed)) return raw.replace(RE_SWARM_N_ACTIVE, '$1 项活跃');
+          if (contextEl && contextEl.closest && contextEl.closest('.o2-progt') && RE_SWARM_NUM_OF_NUM.test(trimmed)) {
+            return raw.replace(RE_SWARM_NUM_OF_NUM, '$1 / $2');
+          }
+        }
         return null;
       }
       if (c0 === 43) {
@@ -2094,6 +2191,51 @@
       }
 
       const firstUpper = trimmed[0].toUpperCase();
+      if (IS_SWARM_PLUGIN_FRAME) {
+        if (firstUpper === 'W' && RE_SWARM_WAITING_ON.test(trimmed)) {
+          return raw.replace(RE_SWARM_WAITING_ON, '等待 $1');
+        }
+        if (firstUpper === 'L') {
+          const mSeen = trimmed.match(RE_SWARM_LAST_SEEN);
+          if (mSeen) {
+            const u = UNIT_MAP_SHORT[mSeen[2].toLowerCase()] || mSeen[2];
+            return raw.replace(trimmed, () => '上次活跃 ' + mSeen[1] + ' ' + u + '前');
+          }
+        }
+        if (firstUpper === 'N' && RE_SWARM_NOW_FRAC.test(trimmed)) {
+          return raw.replace(RE_SWARM_NOW_FRAC, '当前 · $1 / $2');
+        }
+        if (firstUpper === 'R') {
+          const mRead = trimmed.match(RE_SWARM_READ_SEQ);
+          if (mRead) {
+            const updPart = mRead[2] ? ' · 更新于 ' + (computeTextTranslation(mRead[2].trim(), contextEl) || mRead[2].trim()) : '';
+            return raw.replace(trimmed, () => '已读 #' + mRead[1] + updPart);
+          }
+        }
+        if (firstUpper === 'P') {
+          const mPaused = trimmed.match(RE_SWARM_PAUSED_REASON);
+          if (mPaused) {
+            return raw.replace(trimmed, () => '已暂停：' + (mPaused[1].toLowerCase() === 'quota' ? '配额耗尽' : '错误'));
+          }
+        }
+        if (firstUpper === 'O') {
+          const mOvNotes = trimmed.match(RE_SWARM_OV_NOTES);
+          if (mOvNotes) {
+            const rRaw = mOvNotes[1] ? mOvNotes[1].trim() : '';
+            const rZh = rRaw ? dictLookup(rRaw) || rRaw : '';
+            return raw.replace(trimmed, () => '概览 · 来自纪要员笔记' + (rZh ? ' · ' + rZh : ''));
+          }
+        }
+        if (firstUpper === 'F' && contextEl && contextEl.tagName === 'OPTION' && RE_SWARM_FROM_OPT.test(trimmed)) {
+          return raw.replace(RE_SWARM_FROM_OPT, '来自 $1');
+        }
+        if (firstUpper === 'T' && contextEl && contextEl.tagName === 'OPTION' && RE_SWARM_TO_OPT.test(trimmed)) {
+          return raw.replace(RE_SWARM_TO_OPT, '发给 $1');
+        }
+        if (trimmed.endsWith('(you)') && RE_SWARM_YOU_SUFFIX.test(trimmed)) {
+          return raw.replace(RE_SWARM_YOU_SUFFIX, '$1（您）');
+        }
+      }
       if (firstUpper === 'S') {
         if (RE_SEE_ALL.test(trimmed)) return raw.replace(RE_SEE_ALL, '查看全部 ($1)');
         if (RE_SHOW_BREAKDOWNS.test(trimmed)) return raw.replace(RE_SHOW_BREAKDOWNS, '展开明细 ($1 项)');
@@ -2101,6 +2243,7 @@
         if (RE_SHOW_EARLIER_STEPS.test(trimmed)) return raw.replace(RE_SHOW_EARLIER_STEPS, '展开前 $1 个步骤');
         if (RE_SORT_FILTER_ACTIVE.test(trimmed)) return raw.replace(RE_SORT_FILTER_ACTIVE, '排序与筛选对话（已启用 $1 项）');
         if (RE_STILL_THINKING_SEC.test(trimmed)) return raw.replace(RE_STILL_THINKING_SEC, '仍在思考（$1 秒）');
+        if (RE_SIDE_QUESTION_TITLE.test(trimmed)) return raw.replace(RE_SIDE_QUESTION_TITLE, (_, q) => '支线提问：' + q);
         if (RE_SEARCH_GOOGLE.test(trimmed)) return raw.replace(RE_SEARCH_GOOGLE, (_, q) => '使用 Google 搜索“' + q + '”');
         if (!isInHeaderOrBreadcrumb(contextEl)) {
           const mSearch = trimmed.match(RE_EPHEMERAL_ACTIVE);
@@ -2164,6 +2307,9 @@
         }
       } else if (firstUpper === 'E' || firstUpper === 'R' || firstUpper === 'L') {
         if (firstUpper === 'R') {
+          if (RE_RESUME_COMMENT_DRAFTS.test(trimmed)) {
+            return raw.replace(RE_RESUME_COMMENT_DRAFTS, '恢复 $1 条评论草稿');
+          }
           const mResets = trimmed.match(RE_RESETS_IN);
           if (mResets) {
             return raw.replace(trimmed, () => formatCompactDurationZh(mResets[1]) + '后重置');
@@ -2218,6 +2364,9 @@
           return raw.replace(trimmed, () => formatUpdatedAtZh(mUpd[1], mUpd[2]));
         }
       } else if (firstUpper === 'V') {
+        if (RE_VIEW_SIDE_QUESTIONS.test(trimmed)) {
+          return raw.replace(RE_VIEW_SIDE_QUESTIONS, '查看 $1 个支线提问');
+        }
         const mVer = trimmed.match(RE_ARIA_VERSION);
         if (mVer) {
           return raw.replace(trimmed, () => '版本 ' + mVer[1].trim());
@@ -2240,6 +2389,15 @@
       } else if (firstUpper === 'O') {
         if (RE_ORCHESTRATOR_MODEL.test(trimmed)) {
           return raw.replace(RE_ORCHESTRATOR_MODEL, '编排器 ($1)');
+        }
+      } else if (firstUpper === 'C') {
+        if (
+          contextEl &&
+          contextEl.closest &&
+          contextEl.closest('[data-testid="ssh-machine-switcher-status"]') &&
+          RE_CONNECTED_TO_HOST.test(trimmed)
+        ) {
+          return raw.replace(RE_CONNECTED_TO_HOST, '已连接到 $1');
         }
       } else if (firstUpper === 'Y') {
         const mUsed = trimmed.match(RE_USED_LIMIT);
@@ -2503,6 +2661,58 @@
       if (mVer) {
         return '版本 ' + mVer[1].trim();
       }
+      const mExtLink = atrim.match(RE_OPENS_EXT_LINK);
+      if (mExtLink) {
+        return '打开外部链接：' + mExtLink[1].trim();
+      }
+      const mOpenConv = atrim.match(RE_OPEN_CONV_ID);
+      if (mOpenConv) {
+        return '打开对话 ' + mOpenConv[1];
+      }
+      const mOpenPlugin = atrim.match(RE_OPEN_PLUGIN_NAME);
+      if (mOpenPlugin) {
+        return '打开 ' + mOpenPlugin[1].trim() + ' 插件';
+      }
+      const mEditSq = atrim.match(RE_EDIT_SIDE_Q_TITLE);
+      if (mEditSq) {
+        return '编辑支线提问标题：' + mEditSq[1].trim();
+      }
+      if (IS_SWARM_PLUGIN_FRAME) {
+        const mLiveTip = atrim.match(RE_SWARM_LIVE_TIP);
+        if (mLiveTip) {
+          return (mLiveTip[1] === 'Thinking' ? '思考中：' : '最新动作：') + mLiveTip[2];
+        }
+        const mRunsOn = atrim.match(RE_SWARM_RUNS_ON);
+        if (mRunsOn) {
+          return '运行于 ' + mRunsOn[1].trim();
+        }
+        const mNarRead = atrim.match(RE_SWARM_NARRATOR_READ);
+        if (mNarRead) {
+          return '纪要员已读至 #' + mNarRead[1] + ' / 共 ' + mNarRead[2] + ' 条';
+        }
+        const mPostsSince = atrim.match(RE_SWARM_POSTS_SINCE_UPD);
+        if (mPostsSince) {
+          return '视图更新后新增 ' + mPostsSince[1] + ' 条发言';
+        }
+        const mNarFail = atrim.match(RE_SWARM_NARRATOR_FAILED_TIP);
+        if (mNarFail) {
+          return '纪要员上一步失败：' + mNarFail[1].trim();
+        }
+        const mPostedCh = atrim.match(RE_SWARM_POSTED_IN_CH);
+        if (mPostedCh) {
+          return '发布于 #' + mPostedCh[1] + '；点击仅看 #' + mPostedCh[1];
+        }
+        const mGotoSeq = atrim.match(RE_SWARM_GOTO_SEQ);
+        if (mGotoSeq) {
+          return '跳至 #' + mGotoSeq[1] + (mGotoSeq[2] ? '（' + mGotoSeq[2].trim() + '）' : '');
+        }
+        if (el && el.classList && el.classList.contains('o2-tprog')) {
+          const mTpDone = atrim.match(RE_SWARM_TPROG_DONE);
+          if (mTpDone) {
+            return '已完成 ' + mTpDone[1].trim();
+          }
+        }
+      }
       if (
         atrim === 'File' &&
         (IS_SWARM_PLUGIN_FRAME || (el && el.classList && el.classList.contains('segmented')))
@@ -2527,12 +2737,31 @@
       translateSingleAttr(el, 'aria-label', 'data-ag-orig-aria-label', resolveAttrTranslation);
     }
 
+    function translateMarkdownChromeSubtree(container) {
+      if (!container || container.nodeType !== 1) return;
+      if (isMarkdownChromeAttrTarget(container)) {
+        translateElementAttrs(container);
+      }
+      if (!container.querySelectorAll) return;
+      const els = container.querySelectorAll(MARKDOWN_UI_ATTR_SELECTOR);
+      for (let i = 0; i < els.length; i++) {
+        const el = els[i];
+        if (!el.closest('pre, code, .monaco-editor, .monaco-diff-editor, .xterm')) {
+          translateElementAttrs(el);
+        }
+      }
+    }
+
     const walkerFilter = {
       acceptNode(node) {
         if (node.nodeType === 1) {
           if (node.matches && node.matches(EXCLUDE_SELECTOR)) {
             if (node.isConnected && node.matches(TEXT_IMMUTABLE_EXCLUDE_SELECTOR)) {
               immutableTextExclCache.set(node, true);
+            }
+            if (node.matches('[data-markdown-root]')) {
+              translateMarkdownChromeSubtree(node);
+              return NodeFilter.FILTER_REJECT;
             }
             if (
               isFormAttrTarget(node) &&
@@ -2565,6 +2794,10 @@
       }
       if (root.nodeType !== 1) return;
       if (isExcludedElement(root)) {
+        if (root.closest && root.closest('[data-markdown-root]')) {
+          translateMarkdownChromeSubtree(root);
+          return;
+        }
         if (
           isFormAttrTarget(root) &&
           canTranslateElementAttrs(root) &&
@@ -2664,6 +2897,18 @@
           }
         } else if (m.type === 'childList' && m.addedNodes.length > 0) {
           if (m.target && m.target.nodeType === 1 && isExcludedElement(m.target, batchSafeSet)) {
+            if (m.target.closest && m.target.closest('[data-markdown-root]')) {
+              for (let j = 0; j < m.addedNodes.length; j++) {
+                const n = m.addedNodes[j];
+                if (
+                  n.nodeType === 1 &&
+                  ((n.matches && n.matches(MARKDOWN_UI_ATTR_SELECTOR)) ||
+                    (n.firstElementChild && n.querySelector && n.querySelector(MARKDOWN_UI_ATTR_SELECTOR)))
+                ) {
+                  dirtyRoots.add(n);
+                }
+              }
+            }
             continue;
           }
           for (let j = 0; j < m.addedNodes.length; j++) {

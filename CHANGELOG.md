@@ -4,6 +4,36 @@
 
 ---
 
+## [v5.3.0] - 2026-11-15
+
+> **适用版本**：Antigravity `2.32.1+` / `2.32.0`（`CL=1021296516`，向下完全兼容 `2.31.x` / `2.30.0`）  
+> **核验基线**：macOS `2.32.1`（`846` 真实会话库 / `320` 子 Agent 大树压测） × Windows 11 `2.32.1`（`850` 库 NTFS + `\\wsl.localhost` 慢路径压测 & `DirectWrite` CDP 真机验收）双端联合发版  
+> **社区致谢**：特别感谢 [@honlam996](https://github.com/honlam996)（[Issue #3](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/issues/3) · [Issue #4](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/issues/4) · [Issue #5](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/issues/5) · [PR #6](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/pull/6) · [PR #7](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/pull/7)）的深入定位与高质量代码贡献！
+
+### Added（子 Agent / 本地 `/swarm` 血缘遥测聚合、动态上下文上限与 `1,740` 条 `2.32.1` 词典）
+- **子 Agent 与本地 `/swarm` 派生会话血缘索引及消耗汇总（`core/daemon.mjs` / `core/theme.css`，合入 [#7](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/pull/7) 并追加规模化加固）**：
+  - 读取会话 `.db` 中 `trajectory_metadata_blob` 的 Protobuf `field 5 (parentId)` 与 `field 6 (rootId)` 构建全树血缘图，支持根会话及任意中间节点向下递归汇总全部后代子 Agent 的调用次数、输入/缓存/思考/回复 Token；
+  - 底部指标胶囊新增昼夜双色 `<span class="ag-sub-badge">+N sub</span>` 徽标，悬浮详情卡新增「子 Agent (`N`)」明细行并将「累计输出量」升级为 `总计 X (主 Y + 子 Z)`；
+  - **846~850 库 / 320 子 Agent 规模化加固**：将 `childMetricsCache` LRU 容量由 `256` 扩充至 `4,096`（内存 `< 600 KB`，根除 `> 256` 子 Agent 按序遍历 100% 循环驱逐，单拍热态耗时由 `105.9ms` 降至 `2.26ms`）；为冷启动目录扫描与单会话未命中缓存读取增加每拍双重预算（`<= 45 DB / 60ms`）与损坏子库负缓存，渐进排空期展示 `· 同步中` 直至精确收敛。
+- **模型真实动态上下文窗口读取与缓冲型调用速率守卫（`core/daemon.mjs`，合入 [#6](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/pull/6)）**：
+  - 从 `gen_metadata` `chat(9) -> chatStart(10) -> ctxWin(4)` 动态解析模型真实上下文上限（如 `256k` / `840k` / `1M`），新增 `user/config.json` `contextLimitOverride`（三级优先级：`contextLimitOverride > maxCtx > contextLimit`），支持 2.5 秒热重载即时生效；
+  - 引入 `streamRatio` 物理判别拦截工具批量刷出导致的虚高流式 `tok/s`，非流式调用在胶囊内联展示等宽 `Hold X.Xs`，并在悬浮卡区分「端到端（含等待）」与「等待 | 刷出 | 总计」。
+- **Antigravity `2.32.1` 双平台全量汉化覆盖，词典扩充至 `1,740` 条（`core/i18n.json` / `core/runtime.js`）**：
+  - 新增 **110 条** `2.32.1` 静态词条（`1,630 -> 1,740` 条，保持 0 原始重复键、0 大小写与弯直引号碰撞），全覆盖 Swarm 2.0 蜂群概览/时间线/纪要员视图、MCP 交互卡片、图片附件与评论草稿恢复、WSL 远程连接面板、SSH 机器切换器、Windows 终端沙盒可用性警告及设置作用域标签；
+  - 新增 **28 条**精准动态正则与 **26 条** `SWARM_FRAME_ONLY_DICT` 子帧隔离短词典（保护主窗口零误伤），以及严格限定 `[data-testid="ssh-machine-switcher-status"]` 的 `Connected to <host>` 动态规则；
+  - **Markdown 渲染区内嵌 UI 控件属性白名单穿透（`core/runtime.js`）**：在保持 `[data-markdown-root]` 正文/代码块文本节点与用户 `<a title>` 零遍历（流式输出 `O(1)` 零开销）的前提下，定向汉化表格操作菜单（`Table options` / `Scrollable table`）、外部链接提示（`Opens external link: ...`）及内嵌对话/插件跳转按钮无障碍提示。
+
+### Fixed（WSL2 UNC `0-I/O` 熔断闭环、`2.32.1` `.pdf-sdk-root` / 连字修复与 macOS 标题补丁健康提示）
+- **Windows WSL2 UNC 慢路径 `45s` 熔断器全链路 `0-I/O` 闭环（`core/daemon.mjs`）**：
+  - 闭合 `resolveConversationDbPath`、`getDbState`、`refreshLineageIndex`（含 `!backoffSkipped` 半截扫描保护，防止误删未扫血缘节点）、`parseConversationMetrics` 与 `syncMetricsForSession` 在 `\\wsl.localhost` / `\\wsl$` 挂起时的穿透漏点，拆分 `'missing'` / `'unc_deferred'` 内部哨兵消除双平台缺失子库二次 `statSync`，冷却期内实现 `0` 次底层 UNC 文件系统阻塞调用。
+- **`2.32.1` `.pdf-sdk-root` 局部字体变量穿透、全局连字恢复与 Swarm 标题字重轴保护（`core/theme.css`）**：
+  - 接管 `2.32.1` `jetbox.css` `@scope (.pdf-sdk-root)` 新增的 `--sdk-font-family`、`--sdk-font-family-mono`、`--sdk-comment-font-family` 与 `--agy-gsf-fvs`；
+  - 显式声明 `font-variant-ligatures: normal !important`，中和 `2.32.1` `compiled_tailwind.css` 与 `swarm_styles.css` 新增 `no-contextual` 对全局连字的继承误关，并重置 Swarm 插件子帧标题的 Google Sans Flex 专有可变轴（保护 `Anthropic Sans` 粗体渲染）。
+- **macOS 本地中文标题外挂脚本非侵入健康状态感知（`core/daemon.mjs` / `core/theme.css`）**：
+  - 在 `darwin` 平台且本机存在可选外挂脚本状态时，自动识别后台热更新导致的 `language_server` 内存旧 `inode` 驻留或 macOS TCC 权限拦截，在指标胶囊渲染轻量橙点并在悬浮卡底部给出单行恢复指引（Windows 与未装外挂环境零开销、零显示）。
+
+---
+
 ## [v5.2.0] - 2026-11-14
 
 > **适用版本**：Antigravity `2.32.0+` / `2.31.2`（向下完全兼容 `2.31.1` / `2.31.0` / `2.30.0`）  
