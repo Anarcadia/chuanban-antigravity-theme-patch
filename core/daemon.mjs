@@ -226,11 +226,38 @@ const BASE_VERSION = '20261114-v5.2.0';
 let cachedBundleSig = '';
 let cachedInjectScript = '';
 let cachedPatchVersion = '';
+let metricsConfigEpoch = 0;
+const metricsCache = new Map(); // dbPath -> { sig, payload }
+const incrementalMetricsMap = new Map(); // dbPath -> { rowCount, maxIdx, userStepsCount, lastUserStepIdx, items, validItems, totalIn, totalCache, totalOut, totalThink, totalResp }
+const MAX_METRICS_CACHE_SIZE = 30;
+
+function setMetricsCache(dbPath, entry) {
+  if (metricsCache.has(dbPath)) metricsCache.delete(dbPath);
+  metricsCache.set(dbPath, entry);
+  if (metricsCache.size > MAX_METRICS_CACHE_SIZE) {
+    const oldestKey = metricsCache.keys().next().value;
+    if (oldestKey) {
+      metricsCache.delete(oldestKey);
+      incrementalMetricsMap.delete(oldestKey);
+    }
+  }
+}
+
+function setIncrementalMetrics(dbPath, state) {
+  if (incrementalMetricsMap.has(dbPath)) incrementalMetricsMap.delete(dbPath);
+  incrementalMetricsMap.set(dbPath, state);
+  if (incrementalMetricsMap.size > MAX_METRICS_CACHE_SIZE) {
+    const oldestKey = incrementalMetricsMap.keys().next().value;
+    if (oldestKey) incrementalMetricsMap.delete(oldestKey);
+  }
+}
+
 let activeConfig = {
   enabled: true,
   channel: 'auto',
   preset: 'high-contrast',
   contextLimit: 256000,
+  contextLimitOverride: 0,
   modules: {
     i18n: true,
     metrics: true,
@@ -320,7 +347,17 @@ function rebuildBundleIfNeeded() {
   const enabled = SAFE_MODE ? true : userCfg.enabled !== false;
   const channel = CLI_CHANNEL || userCfg.channel || 'auto';
   const preset = userCfg.preset || 'high-contrast';
-  const contextLimit = Number(userCfg.contextLimit) > 0 ? Number(userCfg.contextLimit) : 256000;
+  const rawCtxLimit = Number(userCfg.contextLimit);
+  const contextLimit = Number.isFinite(rawCtxLimit) && rawCtxLimit > 0 ? rawCtxLimit : 256000;
+  const rawCtxOverride = Number(userCfg.contextLimitOverride);
+  const contextLimitOverride = Number.isFinite(rawCtxOverride) && rawCtxOverride > 0 ? rawCtxOverride : 0;
+  if (
+    activeConfig &&
+    (contextLimit !== activeConfig.contextLimit || contextLimitOverride !== activeConfig.contextLimitOverride)
+  ) {
+    metricsCache.clear();
+    metricsConfigEpoch += 1;
+  }
 
   const rawModules = Object.assign({}, userCfg.features || {}, userCfg.modules || {});
   if (typeof rawModules.metricsCapsule === 'boolean' && typeof rawModules.metrics !== 'boolean') {
@@ -380,6 +417,7 @@ function rebuildBundleIfNeeded() {
     channel,
     preset,
     contextLimit,
+    contextLimitOverride,
     modules,
     themeVars,
     selectors: normalizedSelectors,
@@ -432,6 +470,7 @@ function rebuildBundleIfNeeded() {
       channel,
       preset,
       contextLimit,
+      contextLimitOverride,
       modules,
       themeVars
     },
@@ -548,30 +587,6 @@ if (!RUN_ONCE) {
 // ============================================================================
 // 4. SQLite + Protobuf 实时会话指标解析器（读取 ~/.gemini/antigravity/conversations/<id>.db）
 // ============================================================================
-const metricsCache = new Map(); // dbPath -> { sig, payload }
-const incrementalMetricsMap = new Map(); // dbPath -> { rowCount, maxIdx, userStepsCount, lastUserStepIdx, items, validItems, totalIn, totalCache, totalOut, totalThink, totalResp }
-const MAX_METRICS_CACHE_SIZE = 30;
-
-function setMetricsCache(dbPath, entry) {
-  if (metricsCache.has(dbPath)) metricsCache.delete(dbPath);
-  metricsCache.set(dbPath, entry);
-  if (metricsCache.size > MAX_METRICS_CACHE_SIZE) {
-    const oldestKey = metricsCache.keys().next().value;
-    if (oldestKey) {
-      metricsCache.delete(oldestKey);
-      incrementalMetricsMap.delete(oldestKey);
-    }
-  }
-}
-
-function setIncrementalMetrics(dbPath, state) {
-  if (incrementalMetricsMap.has(dbPath)) incrementalMetricsMap.delete(dbPath);
-  incrementalMetricsMap.set(dbPath, state);
-  if (incrementalMetricsMap.size > MAX_METRICS_CACHE_SIZE) {
-    const oldestKey = incrementalMetricsMap.keys().next().value;
-    if (oldestKey) incrementalMetricsMap.delete(oldestKey);
-  }
-}
 
 function parseProto(buf) {
   let i = 0;
@@ -736,10 +751,19 @@ function getDbSignature(cascadeId, endpointOrDir) {
 
 function parseGenMetadataRow(r) {
   const top = parseProto(r.data);
-  const chat = top.has(1) ? parseProto(top.get(1)) : new Map();
-  const usage = chat.has(4) ? parseProto(chat.get(4)) : new Map();
-  const ttftMap = chat.has(11) ? parseProto(chat.get(11)) : new Map();
-  const streamMap = chat.has(12) ? parseProto(chat.get(12)) : new Map();
+  const chatRaw = top.get(1);
+  const chat = chatRaw instanceof Uint8Array ? parseProto(chatRaw) : new Map();
+  const usageRaw = chat.get(4);
+  const usage = usageRaw instanceof Uint8Array ? parseProto(usageRaw) : new Map();
+  const chatStartRaw = chat.get(9);
+  const chatStart = chatStartRaw instanceof Uint8Array ? parseProto(chatStartRaw) : new Map();
+  const ctxWinRaw = chatStart.get(10);
+  const ctxWin = ctxWinRaw instanceof Uint8Array ? parseProto(ctxWinRaw) : new Map();
+  const maxCtx = ctxWin.get(4) || 0;
+  const ttftRaw = chat.get(11);
+  const ttftMap = ttftRaw instanceof Uint8Array ? parseProto(ttftRaw) : new Map();
+  const streamRaw = chat.get(12);
+  const streamMap = streamRaw instanceof Uint8Array ? parseProto(streamRaw) : new Map();
 
   const inTok = usage.get(2) || 0;
   const outTok = usage.get(3) || 0;
@@ -755,12 +779,20 @@ function parseGenMetadataRow(r) {
     outTok,
     cacheRead,
     ctx: inTok + cacheRead,
+    maxCtx,
     thinkTok,
     respTok,
     ttft,
     stream,
     totDur: ttft + stream
   };
+}
+
+function formatContextCeiling(tokens) {
+  if (tokens >= 1000000) {
+    return `${Number((tokens / 1000000).toFixed(1))}M`;
+  }
+  return `${Math.round(tokens / 1000)}k`;
 }
 
 function parseConversationMetrics(cascadeId, endpointOrDir, precomputedState = null) {
@@ -775,7 +807,6 @@ function parseConversationMetrics(cascadeId, endpointOrDir, precomputedState = n
     return cached.payload;
   }
 
-  const contextLimitTokens = activeConfig.contextLimit || 256000;
   let db;
   try {
     db = new DatabaseSync(dbPath, { readOnly: true, timeout: 200 });
@@ -913,22 +944,35 @@ function parseConversationMetrics(cascadeId, endpointOrDir, precomputedState = n
     }
 
     const last = valid[valid.length - 1];
-    const streamTps = last.stream >= 0.25 ? last.outTok / last.stream : 0;
+    const fallbackContextLimit = activeConfig.contextLimit || 256000;
+    const contextLimitTokens =
+      activeConfig.contextLimitOverride > 0
+        ? activeConfig.contextLimitOverride
+        : last.maxCtx > 0
+          ? last.maxCtx
+          : fallbackContextLimit;
+    const limitStr = formatContextCeiling(contextLimitTokens);
+
+    const rawStreamTps = last.stream >= 0.5 ? last.outTok / last.stream : 0;
     const e2eTps = last.totDur > 0 ? last.outTok / last.totDur : 0;
-    const displayTps = streamTps > 0 && streamTps <= 600 ? streamTps : e2eTps;
+    const streamRatio = last.totDur > 0 ? last.stream / last.totDur : 0;
+    const useStream =
+      rawStreamTps > 0 &&
+      rawStreamTps <= 600 &&
+      (streamRatio >= 0.15 || (last.stream >= 2.0 && rawStreamTps <= 250));
+    const displayTps = useStream ? rawStreamTps : e2eTps;
     const ctxPct = Math.round((last.ctx / contextLimitTokens) * 100);
     const ctxClass = ctxPct >= 90 ? 'ag-ctx-crit' : ctxPct >= 75 ? 'ag-ctx-warn' : 'ag-ctx-ok';
     const lastCacheRate = last.ctx > 0 ? ((last.cacheRead / last.ctx) * 100).toFixed(1) : '0.0';
     const sessionCacheRate = totalIn + totalCache > 0 ? ((totalCache / (totalIn + totalCache)) * 100).toFixed(1) : '0.0';
     const remainCtx = Math.max(0, contextLimitTokens - last.ctx);
-    const limitKStr = Math.round(contextLimitTokens / 1000) + 'k';
 
     const inlineHtml = [
       `<span>${Math.round(displayTps)} tok/s</span>`,
       `<span class="ag-sep">·</span>`,
-      `<span>TTFT ${last.ttft.toFixed(1)}s</span>`,
+      `<span>${useStream ? 'TTFT' : 'Hold'} ${last.ttft.toFixed(1)}s</span>`,
       `<span class="ag-sep">·</span>`,
-      `<span>Ctx ${fmtTok(last.ctx)}/${limitKStr} <span class="${ctxClass}">(${ctxPct}%)</span></span>`,
+      `<span>Ctx ${fmtTok(last.ctx)}/${limitStr} <span class="${ctxClass}">(${ctxPct}%)</span></span>`,
       `<span class="ag-sep">·</span>`,
       `<span>Out ${fmtTok(last.outTok)}</span>`
     ].join('');
@@ -940,13 +984,13 @@ function parseConversationMetrics(cascadeId, endpointOrDir, precomputedState = n
 
     const tooltipHtml = [
       `<div class="ag-tt-hdr">本轮最新调用 (Gen #${last.idx + 1})</div>`,
-      `<div class="ag-tt-row"><span class="ag-tt-lbl">生成速度</span><span class="ag-tt-val">${streamTps > 0 && streamTps <= 600 ? `流式 ${streamTps.toFixed(1)} tok/s | ` : ''}端到端 ${e2eTps.toFixed(1)} tok/s</span></div>`,
-      `<div class="ag-tt-row"><span class="ag-tt-lbl">响应耗时</span><span class="ag-tt-val">TTFT ${last.ttft.toFixed(2)}s | 流式 ${last.stream.toFixed(2)}s | 总计 ${last.totDur.toFixed(2)}s</span></div>`,
+      `<div class="ag-tt-row"><span class="ag-tt-lbl">生成速度</span><span class="ag-tt-val">${useStream ? `流式 ${rawStreamTps.toFixed(1)} tok/s | ` : ''}端到端（含等待） ${e2eTps.toFixed(1)} tok/s</span></div>`,
+      `<div class="ag-tt-row"><span class="ag-tt-lbl">响应耗时</span><span class="ag-tt-val">${useStream ? `TTFT ${last.ttft.toFixed(2)}s | 流式 ${last.stream.toFixed(2)}s | 总计 ${last.totDur.toFixed(2)}s` : `等待 ${last.ttft.toFixed(2)}s | 刷出 ${last.stream.toFixed(2)}s | 总计 ${last.totDur.toFixed(2)}s`}</span></div>`,
       `<div class="ag-tt-row"><span class="ag-tt-lbl">当前上下文</span><span class="ag-tt-val">${fmtNum(last.ctx)} (新增 ${fmtNum(last.inTok)} + 缓存 ${fmtNum(last.cacheRead)}, ${lastCacheRate}%)</span></div>`,
       `<div class="ag-tt-row"><span class="ag-tt-lbl">本步输出量</span><span class="ag-tt-val">${fmtNum(last.outTok)} (思考链 ${fmtNum(last.thinkTok)} + 正文/工具 ${fmtNum(last.respTok)})</span></div>`,
       turnRowHtml,
       `<div class="ag-tt-hdr ag-tt-sec">当前会话累计 (${userStepsCount} 轮提问 / ${valid.length} 次有效调用)</div>`,
-      `<div class="ag-tt-row"><span class="ag-tt-lbl">压缩水位线</span><span class="ag-tt-val">${fmtTok(last.ctx)} / ${limitKStr} (${ctxPct}%) · 距压缩余 ${fmtTok(remainCtx)}</span></div>`,
+      `<div class="ag-tt-row"><span class="ag-tt-lbl">压缩水位线</span><span class="ag-tt-val">${fmtTok(last.ctx)} / ${limitStr} (${ctxPct}%) · 距压缩余 ${fmtTok(remainCtx)}</span></div>`,
       `<div class="ag-tt-row"><span class="ag-tt-lbl">累计输入量</span><span class="ag-tt-val">新增 ${fmtTok(totalIn)} + 缓存读取 ${fmtTok(totalCache)} (命中率 ${sessionCacheRate}%)</span></div>`,
       `<div class="ag-tt-row"><span class="ag-tt-lbl">累计输出量</span><span class="ag-tt-val">总计 ${fmtTok(totalOut)} (思考链 ${fmtTok(totalThink)} + 正文/工具 ${fmtTok(totalResp)})</span></div>`
     ].join('');
@@ -1115,7 +1159,7 @@ function attachTarget(target, endpoint) {
         const currentEndpoint = attachedTargets.get(target.id)?.endpoint || endpoint;
         const dbState = getDbState(activeCascadeId, currentEndpoint);
         const sig = dbState?.sig || 'empty';
-        const sessionKey = `${activeCascadeId}@${sig}`;
+        const sessionKey = `${activeCascadeId}@${sig}|${metricsConfigEpoch}`;
         if (!force && sessionKey === lastPushedHash) return;
 
         const payload = parseConversationMetrics(activeCascadeId, currentEndpoint, dbState);

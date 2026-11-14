@@ -9,7 +9,7 @@ description: 船板的 Antigravity 2.0 主题、字体与深度汉化全栈成�
 > - **设计目的**：以纯运行时 CDP 非侵入式注入，为 Google Antigravity 提供**白天/黑夜双模式物理隔离**：
 >   - **白天模式（`body:not(.dark)`）**：提供三套 Anthropic 暖纸护眼配色预设（默认高对比暖白）与输入框「古朴暗红蜡封」三态交互；
 >   - **黑夜模式（`body.dark`）**：当点击客户端「深色 / Dark」按钮（或跟随系统深色）切换时，**100% 保持四层字体排版与 UI 几何形状（`1.5px` 三态边框厚度、单圈搜索聚焦、指标胶囊布局）不变**，同时 `0ms` 还原 Antigravity `2.30.0 ~ 2.32.0` 原版无补丁时的官方 `onyx` Default Dark 碳黑配色方案（`#070708` 主背景 / `#111114` 侧栏 / `#15151A` 悬浮输入卡 / `#2F71E3` 官方品牌蓝），自动关闭深色下发乌的黑色润墨阴影并专项提升深色文字对比度与边界可见性；
->   - **全局共享能力**：四层中西文精密排版（`Anthropic` 官方字体族 + `Sarasa` 更纱黑体超集，完美适配 `2.32.0` `[data-markdown-root]`、`data-agy-font`、Lexical 输入框、`plugin://swarm--` 蜂群协作子帧及 Windows `DirectWrite` 可变字体 `wght/opsz` 全字重轴）、1,630 条全界面母语级去机翻汉化（内置弯引号自动归一化与 `DICT_CI` 首字母大写不敏感兜底，完整覆盖 `2.32.0` / `2.31.2` Swarm 协作面板、自动化与协调器、运行环境与 Worktree 分支、授权码登录兜底与 GitHub 远程克隆、插件市场、归档筛选、队列快捷键及 `[contenteditable="true"]` 无障碍属性）、冷启动内嵌兜底包漂移零流量安全自愈，以及基于 SQLite `O(1)` 增量游标的同行实时会话指标胶囊（原生支持本地与 Windows WSL 会话库懒探测，`tok/s · TTFT · Ctx 256k 水位 · Out`）。
+>   - **全局共享能力**：四层中西文精密排版（`Anthropic` 官方字体族 + `Sarasa` 更纱黑体超集，完美适配 `2.32.0` `[data-markdown-root]`、`data-agy-font`、Lexical 输入框、`plugin://swarm--` 蜂群协作子帧及 Windows `DirectWrite` 可变字体 `wght/opsz` 全字重轴）、1,630 条全界面母语级去机翻汉化（内置弯引号自动归一化与 `DICT_CI` 首字母大写不敏感兜底，完整覆盖 `2.32.0` / `2.31.2` Swarm 协作面板、自动化与协调器、运行环境与 Worktree 分支、授权码登录兜底与 GitHub 远程克隆、插件市场、归档筛选、队列快捷键及 `[contenteditable="true"]` 无障碍属性）、冷启动内嵌兜底包漂移零流量安全自愈，以及基于 SQLite `O(1)` 增量游标的同行实时会话指标胶囊（原生支持本地与 Windows WSL 会话库懒探测，`tok/s · TTFT/Hold · 动态模型上下文水位 256k/840k/1M+ · Out`）。
 > - **v5.2.0 核心执行铁律**：
 >   1. **Agent 一键部署，内核已预封装无需构建**：全部样式、词典、DOM 引擎与守护进程已封装在 `core/` 只读黄金内核中，**严禁 Agent 从头手写或重生成守护代码**，直接运行 `node install.mjs` 即可 3 秒完成部署；
 >   2. **个性化修改永远只在 `user/` 改装层进行（2.5 秒可逆热重载）**：`user/` 目录在升级时 100% 永不覆盖，保存后 2.5 秒自动热更新生效。
@@ -63,7 +63,7 @@ chuanban-antigravity-theme-patch/
 │   ├── theme.css               # 四段式 CSS 样式表（Part I 共享排版与几何 / Part II 白天暖纸 / Part III 独立黑夜 / Part IV 指标胶囊）
 │   └── i18n.json               # 1,630 条严格零冲突标准 JSON 基准词典（兼容 PowerShell ConvertFrom-Json，挂载至 Object.create(null)）
 └── user/                       # 【用户改装层】升级时 100% 永不覆盖，守护进程每 2.5s 自动检测 mtimeMs 热重载注入！
-    ├── config.json             # 开关配置（enabled / channel / preset / contextLimit / modules / themeVars）
+    ├── config.json             # 开关配置（enabled / channel / preset / contextLimit / contextLimitOverride / modules / themeVars）
     ├── custom.css              # 用户/对方 Agent 自定义追加 CSS（独立挂载于 #antigravity-user-custom-style）
     ├── i18n.override.json      # 用户自定义词条覆盖或新增（支持扁平键值对或 "exact": { ... }，优先级高于 core/i18n.json）
     └── custom.js               # 开放的前端自定义 JS 钩子（支持 ctx.onCleanup(fn) 热重载自动清理）
@@ -136,6 +136,7 @@ node install.mjs verify
 }
 ```
 - **`preset`（白天模式暖纸预设）**：支持 `"high-contrast"`（默认高对比暖白）、`"claude-desktop-purewhite"`（ClaudeDesktop 净白）、`"vintage-deep"`（复古深色羊皮纸），修改保存后 2.5 秒内自动热切换；当用户在客户端点击切换为深色（Dark）模式时，自动进入官方 `onyx` 独立黑夜模式。
+- **`contextLimit` / `contextLimitOverride`（上下文水位上限）**：默认自动从当前会话最新生成元数据动态识别真实模型上下文窗口（如 `256k`、`840k`、`1M+`）；仅当元数据缺失时回退至 `contextLimit`（默认 `256000`）。如需在所有会话强制锁定自定义水位上限，可在 `user/config.json` 中设置正整数 `"contextLimitOverride": 1000000`，保存后 2.5 秒热重载立即生效。
 - **`modules`**：支持单独开关任意子模块（含 `zoomShortcuts` 独立开关）；若将顶层 `"enabled": false` 保存，页面将在 2.5 秒内无损卸载全部样式并将已汉化的界面文字还原为英文原貌。
 - **`themeVars`**：由 `runtime.js` 自动编译注入到独立的 `<style id="ag-user-theme-vars">` 节点（排在 `#ag-custom-fonts` 之后、`#antigravity-user-custom-style` 之前；`--ag-dark-*` 作用于黑夜模式，`--ag-*` 全局排版变量作用于 `:root, body`，普通色彩变量如 `--sidebar` 仅作用于白天模式，绝不污染黑夜模式）。
 
