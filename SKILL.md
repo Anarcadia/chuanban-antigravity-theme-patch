@@ -9,7 +9,7 @@ description: 船板的 Antigravity 2.0 主题、字体与深度汉化全栈成�
 > - **设计目的**：以纯运行时 CDP 非侵入式注入，为 Google Antigravity 提供**白天/黑夜双模式物理隔离**：
 >   - **白天模式（`body:not(.dark)`）**：提供三套 Anthropic 暖纸护眼配色预设（默认高对比暖白）与输入框「古朴暗红蜡封」三态交互；
 >   - **黑夜模式（`body.dark`）**：当点击客户端「深色 / Dark」按钮（或跟随系统深色）切换时，**100% 保持四层字体排版与 UI 几何形状（`1.5px` 三态边框厚度、单圈搜索聚焦、指标胶囊布局）不变**，同时 `0ms` 还原 Antigravity `2.30.0 ~ 2.32.0` 原版无补丁时的官方 `onyx` Default Dark 碳黑配色方案（`#070708` 主背景 / `#111114` 侧栏 / `#15151A` 悬浮输入卡 / `#2F71E3` 官方品牌蓝），自动关闭深色下发乌的黑色润墨阴影并专项提升深色文字对比度与边界可见性；
->   - **全局共享能力**：四层中西文精密排版（`Anthropic` 官方字体族 + `Sarasa` 更纱黑体超集，完美适配 `2.32.0` `[data-markdown-root]`、`data-agy-font`、Lexical 输入框、`plugin://swarm--` 蜂群协作子帧及 Windows `DirectWrite` 可变字体 `wght/opsz` 全字重轴）、1,630 条全界面母语级去机翻汉化（内置弯引号自动归一化与 `DICT_CI` 首字母大写不敏感兜底，完整覆盖 `2.32.0` / `2.31.2` Swarm 协作面板、自动化与协调器、运行环境与 Worktree 分支、授权码登录兜底与 GitHub 远程克隆、插件市场、归档筛选、队列快捷键及 `[contenteditable="true"]` 无障碍属性）、冷启动内嵌兜底包漂移零流量安全自愈，以及基于 SQLite `O(1)` 增量游标的同行实时会话指标胶囊（原生支持本地与 Windows WSL 会话库懒探测，`tok/s · TTFT/Hold · 动态模型上下文水位 256k/840k/1M+ · Out`）。
+>   - **全局共享能力**：四层中西文精密排版（`Anthropic` 官方字体族 + `Sarasa` 更纱黑体超集，完美适配 `2.32.0` `[data-markdown-root]`、`data-agy-font`、Lexical 输入框、`plugin://swarm--` 蜂群协作子帧及 Windows `DirectWrite` 可变字体 `wght/opsz` 全字重轴）、1,630 条全界面母语级去机翻汉化（内置弯引号自动归一化与 `DICT_CI` 首字母大写不敏感兜底，完整覆盖 `2.32.0` / `2.31.2` Swarm 协作面板、自动化与协调器、运行环境与 Worktree 分支、授权码登录兜底与 GitHub 远程克隆、插件市场、归档筛选、队列快捷键及 `[contenteditable="true"]` 无障碍属性）、冷启动内嵌兜底包漂移零流量安全自愈，以及基于 SQLite `O(1)` 增量游标的同行实时会话指标胶囊（原生支持本地与 Windows WSL 会话库懒探测，`tok/s · TTFT/Hold · 动态模型上下文水位 256k/840k/1M+ · Out · +N sub` 子 Agent/蜂群聚合汇总，内置冷启动按 `mtime` 降序分片建索与 `SQLITE_BUSY` 隔离保护）。
 > - **v5.2.0 核心执行铁律**：
 >   1. **Agent 一键部署，内核已预封装无需构建**：全部样式、词典、DOM 引擎与守护进程已封装在 `core/` 只读黄金内核中，**严禁 Agent 从头手写或重生成守护代码**，直接运行 `node install.mjs` 即可 3 秒完成部署；
 >   2. **个性化修改永远只在 `user/` 改装层进行（2.5 秒可逆热重载）**：`user/` 目录在升级时 100% 永不覆盖，保存后 2.5 秒自动热更新生效。
@@ -58,7 +58,7 @@ chuanban-antigravity-theme-patch/
 ├── CHANGELOG.md                # 历次版本演进与双平台修复记录
 ├── core/                       # 【只读黄金内核】随版本升级整包原子替换，对方 Agent 严禁直接修改
 │   ├── manifest.json           # 版本号（5.2.0）、三端地址与 core/* 文件 SHA-256 校验清单
-│   ├── daemon.mjs              # Node CDP 守护进程（SQLite O(1) 增量遥测、WSL 懒探测、Swarm 跨域子帧注入、冷启动重载绑定、2.5s 热重载感知）
+│   ├── daemon.mjs              # Node CDP 守护进程（SQLite O(1) 增量遥测、子 Agent `+N sub` 聚合与冷启动分片保护、WSL 懒探测、Swarm 跨域子帧注入、冷启动重载绑定、2.5s 热重载感知）
 │   ├── runtime.js              # 浏览器端注入引擎（昼夜模式与 curtainView/标题栏底色联动、冷启动兜底包安全自愈、弯引号与 DICT_CI 兜底索引、防双倍缩放保护）
 │   ├── theme.css               # 四段式 CSS 样式表（Part I 共享排版与几何 / Part II 白天暖纸 / Part III 独立黑夜 / Part IV 指标胶囊）
 │   └── i18n.json               # 1,630 条严格零冲突标准 JSON 基准词典（兼容 PowerShell ConvertFrom-Json，挂载至 Object.create(null)）

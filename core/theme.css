@@ -866,6 +866,21 @@ body[data-agy-theme][data-newux-theme="onyx"].dark .agy-sidebar-row[data-selecte
   font-weight: 700 !important;
 }
 
+#antigravity\.agentSidePanelInputBox #ag-live-metrics-pill .ag-sub-badge,
+#ag-live-metrics-pill .ag-sub-badge {
+  display: inline-flex;
+  align-items: center;
+  height: 15px;
+  padding: 0 4px;
+  border-radius: 4px;
+  font-size: 9.5px !important;
+  font-weight: 600 !important;
+  line-height: 1;
+  background-color: rgba(217, 119, 87, 0.12);
+  border: 1px solid rgba(217, 119, 87, 0.28);
+  color: #9E3E22 !important;
+}
+
 /* 黑夜模式指标胶囊配色与高可见预警色 */
 :is(html[data-ag-theme-mode="dark"] body, body.dark) #ag-live-metrics-pill {
   color: #C8CAD4 !important;
@@ -889,6 +904,13 @@ body[data-agy-theme][data-newux-theme="onyx"].dark .agy-sidebar-row[data-selecte
 :is(html[data-ag-theme-mode="dark"] body, body.dark) #antigravity\.agentSidePanelInputBox #ag-live-metrics-pill .ag-ctx-crit,
 :is(html[data-ag-theme-mode="dark"] body, body.dark) #ag-live-metrics-pill .ag-ctx-crit {
   color: #F87171 !important;
+}
+
+:is(html[data-ag-theme-mode="dark"] body, body.dark) #antigravity\.agentSidePanelInputBox #ag-live-metrics-pill .ag-sub-badge,
+:is(html[data-ag-theme-mode="dark"] body, body.dark) #ag-live-metrics-pill .ag-sub-badge {
+  background-color: rgba(47, 113, 227, 0.18);
+  border-color: rgba(96, 165, 250, 0.36);
+  color: #93C5FD !important;
 }
 
 #ag-live-metrics-tooltip {
