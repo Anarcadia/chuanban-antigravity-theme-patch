@@ -2,9 +2,9 @@
 /**
  * chuanban-antigravity-theme-patch · CDP Theme & Live Metrics Daemon (core/daemon.mjs)
  *
- * 架构特性（v5.1.9）：
+ * 架构特性（v5.2.0）：
  * 1. 动态 Node 分级：
- *    - Node >= 22.0：完整启用昼夜双模式独立主题（暖纸浅色 + 官方 onyx 深色）、四层字体、输入框三态、1587条汉化、死锁与冷启动兜底包自愈及 2.31.2 curtainView/Swarm 适配。
+ *    - Node >= 22.0：完整启用昼夜双模式独立主题（暖纸浅色 + 官方 onyx 深色）、四层字体、输入框三态、1630条母语级汉化、死锁与冷启动兜底包自愈及 2.32.0/2.31.2 curtainView/Swarm 适配。
  *    - Node >= 22.13：动态 `await import('node:sqlite')` 解锁底部实时会话指标胶囊（O(1) 增量尾行解析）；低版本优雅降级绝不崩溃。
  * 2. 模块化与热重载：
  *    - 周期性检测 `user/config.json`、`user/custom.css`、`user/i18n.override.json`、`user/custom.js` 的 mtime，
@@ -222,7 +222,7 @@ function resolveActiveChannelEndpoints(channelMode = 'auto', userCfg = {}) {
 // ============================================================================
 // 2. 动态构建注入载荷（支持 core/ + user/ 实时合并与热更新签名）
 // ============================================================================
-const BASE_VERSION = '20261114-v5.1.9';
+const BASE_VERSION = '20261114-v5.2.0';
 let cachedBundleSig = '';
 let cachedInjectScript = '';
 let cachedPatchVersion = '';

@@ -116,7 +116,7 @@ function buildManifest(baseDir = __dirname) {
   }
   const manifest = {
     name: 'chuanban-antigravity-theme-patch',
-    version: '5.1.9',
+    version: '5.2.0',
     minNodeVersion: '22.0.0',
     fullMetricsNodeVersion: '22.13.0',
     distribution: {

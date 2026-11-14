@@ -13,7 +13,7 @@
   if (window.top !== window && !IS_SWARM_PLUGIN_FRAME) return;
   if (!boot || typeof boot !== 'object') return;
 
-  const PATCH_VERSION = boot.version || '20261114-v5.1.9';
+  const PATCH_VERSION = boot.version || '20261114-v5.2.0';
   const DETECTED_OS =
     boot.platform || (/Win/i.test(navigator.platform || '') ? 'win32' : /Mac/i.test(navigator.platform || '') ? 'darwin' : 'linux');
   const ENABLED = boot.enabled !== false;
@@ -1801,7 +1801,9 @@
     const RE_TASKS_DONE = /^(\d+)\s+of\s+(\d+)\s+tasks?\s+done$/i;
     const RE_POSTS_COUNT = /^(\d+)\s+posts?$/i;
     const RE_MEMBERS_COUNT = /^(\d+)\s+members?$/i;
+    const RE_MCP_FAILED_START = /^(\d+)\s+MCP servers?\s+failed to start$/i;
     const RE_UP_NEXT_COUNT = /^Up next\s*·\s*(\d+)$/i;
+    const RE_USES_LOCAL_CLONE = /^Uses your local clone,\s+([^\r\n]{1,100})$/;
     const RE_PLUS_ATTACHMENTS = /^\+(\d+)\s+attachments?$/i;
     const RE_PLUS_MORE = /^\+(\d+)\s+more(\s*\(Show all\))?$/i;
     const RE_SEE_ALL = /^See all\s*\((\d+)\)$/i;
@@ -1837,23 +1839,23 @@
       explored: '已探索',
       'explored file': '已探索文件',
       'explored files': '已探索文件',
-      'explored artifact': '已探索交付工件',
-      'explored artifacts': '已探索交付工件',
-      'explored file and artifact': '已探索文件与交付工件',
-      'explored files and artifact': '已探索文件与交付工件',
-      'explored file and artifacts': '已探索文件与交付工件',
-      'explored files and artifacts': '已探索文件与交付工件',
+      'explored artifact': '已探索 Artifact',
+      'explored artifacts': '已探索 Artifact',
+      'explored file and artifact': '已探索文件与 Artifact',
+      'explored files and artifact': '已探索文件与 Artifact',
+      'explored file and artifacts': '已探索文件与 Artifact',
+      'explored files and artifacts': '已探索文件与 Artifact',
       'ran command': '已运行命令',
       'ran commands': '已运行命令',
       edited: '已编辑',
       'edited file': '已编辑文件',
       'edited files': '已编辑文件',
-      'edited artifact': '已编辑交付工件',
-      'edited artifacts': '已编辑交付工件',
-      'edited file and artifact': '已编辑文件与交付工件',
-      'edited files and artifact': '已编辑文件与交付工件',
-      'edited file and artifacts': '已编辑文件与交付工件',
-      'edited files and artifacts': '已编辑文件与交付工件'
+      'edited artifact': '已编辑 Artifact',
+      'edited artifacts': '已编辑 Artifact',
+      'edited file and artifact': '已编辑文件与 Artifact',
+      'edited files and artifact': '已编辑文件与 Artifact',
+      'edited file and artifacts': '已编辑文件与 Artifact',
+      'edited files and artifacts': '已编辑文件与 Artifact'
     };
     const RE_EPHEMERAL_COUNT_CLAUSE = /^(explored|edited|ran)\s+(\d+)\s+(files?|artifacts?|commands?)$/i;
     function translateEphemeralClause(clause) {
@@ -1865,8 +1867,8 @@
         const nMap = {
           file: '个文件',
           files: '个文件',
-          artifact: '个交付工件',
-          artifacts: '个交付工件',
+          artifact: '个 Artifact',
+          artifacts: '个 Artifact',
           command: '条命令',
           commands: '条命令'
         };
@@ -1884,13 +1886,16 @@
     const EPHEMERAL_NOUN_MAP = {
       file: '文件',
       files: '文件',
-      artifact: '交付工件',
-      artifacts: '交付工件',
-      'file and artifact': '文件与交付工件',
-      'files and artifact': '文件与交付工件',
-      'file and artifacts': '文件与交付工件',
-      'files and artifacts': '文件与交付工件'
+      artifact: 'Artifact',
+      artifacts: 'Artifact',
+      'file and artifact': '文件与 Artifact',
+      'files and artifact': '文件与 Artifact',
+      'file and artifacts': '文件与 Artifact',
+      'files and artifacts': '文件与 Artifact'
     };
+    function joinZhVerbNoun(verbZh, nounZh) {
+      return /^[A-Za-z0-9]/.test(nounZh) ? verbZh + ' ' + nounZh : verbZh + nounZh;
+    }
     const RE_RUNNING_CMD = /^Running\s+(?!commands?\b|processes\b|for\b|\(Dev\b)(.+)$/;
     const RE_DELETED_RECORDINGS = /^Deleted\s+(\d+)\s+recordings?\s*\(([\d.]+\s*MB)\)$/i;
     const RE_DELETE_RECORDINGS_CONFIRM =
@@ -2055,8 +2060,8 @@
         if (RE_DEMOTED.test(trimmed)) return raw.replace(RE_DEMOTED, '$1 项已降级');
         if (RE_EXCLUDED.test(trimmed)) return raw.replace(RE_EXCLUDED, '$1 项已排除');
         if (RE_TOOLS_EXCLUDED.test(trimmed)) return raw.replace(RE_TOOLS_EXCLUDED, '$1 个工具已排除');
-        if (RE_ACTIVE_CONVS.test(trimmed)) return raw.replace(RE_ACTIVE_CONVS, '$1 个进行中的会话');
-        if (RE_ARCHIVED_CONVS.test(trimmed)) return raw.replace(RE_ARCHIVED_CONVS, '$1 个已归档会话');
+        if (RE_ACTIVE_CONVS.test(trimmed)) return raw.replace(RE_ACTIVE_CONVS, '$1 个进行中的对话');
+        if (RE_ARCHIVED_CONVS.test(trimmed)) return raw.replace(RE_ARCHIVED_CONVS, '$1 个已归档对话');
         if (RE_PINNED_COUNT.test(trimmed)) return raw.replace(RE_PINNED_COUNT, '$1 个已固定标签页');
         if (RE_MODELS_SELECTED.test(trimmed)) return raw.replace(RE_MODELS_SELECTED, '已选择 $1 个模型');
         if (RE_BROWSER_STEPS.test(trimmed)) return raw.replace(RE_BROWSER_STEPS, '$1 个浏览器步骤');
@@ -2075,6 +2080,7 @@
         if (RE_TASKS_DONE.test(trimmed)) return raw.replace(RE_TASKS_DONE, '已完成 $1 / $2 项任务');
         if (RE_POSTS_COUNT.test(trimmed)) return raw.replace(RE_POSTS_COUNT, '$1 条发言');
         if (RE_MEMBERS_COUNT.test(trimmed)) return raw.replace(RE_MEMBERS_COUNT, '$1 名成员');
+        if (RE_MCP_FAILED_START.test(trimmed)) return raw.replace(RE_MCP_FAILED_START, '$1 个 MCP 服务器启动失败');
         return null;
       }
       if (c0 === 43) {
@@ -2091,7 +2097,7 @@
       if (firstUpper === 'S') {
         if (RE_SEE_ALL.test(trimmed)) return raw.replace(RE_SEE_ALL, '查看全部 ($1)');
         if (RE_SHOW_BREAKDOWNS.test(trimmed)) return raw.replace(RE_SHOW_BREAKDOWNS, '展开明细 ($1 项)');
-        if (RE_SHOW_MORE_SUBAGENTS.test(trimmed)) return raw.replace(RE_SHOW_MORE_SUBAGENTS, '显示另外 $1 个子代理');
+        if (RE_SHOW_MORE_SUBAGENTS.test(trimmed)) return raw.replace(RE_SHOW_MORE_SUBAGENTS, '显示另外 $1 个子 Agent');
         if (RE_SHOW_EARLIER_STEPS.test(trimmed)) return raw.replace(RE_SHOW_EARLIER_STEPS, '展开前 $1 个步骤');
         if (RE_SORT_FILTER_ACTIVE.test(trimmed)) return raw.replace(RE_SORT_FILTER_ACTIVE, '排序与筛选对话（已启用 $1 项）');
         if (RE_STILL_THINKING_SEC.test(trimmed)) return raw.replace(RE_STILL_THINKING_SEC, '仍在思考（$1 秒）');
@@ -2100,13 +2106,13 @@
           const mSearch = trimmed.match(RE_EPHEMERAL_ACTIVE);
           if (mSearch) {
             const noun = EPHEMERAL_NOUN_MAP[mSearch[2].toLowerCase()];
-            const out = noun ? EPHEMERAL_VERB_MAP[mSearch[1]] + noun : EPHEMERAL_VERB_MAP[mSearch[1]] + ' ' + mSearch[2];
+            const out = noun ? joinZhVerbNoun(EPHEMERAL_VERB_MAP[mSearch[1]], noun) : EPHEMERAL_VERB_MAP[mSearch[1]] + ' ' + mSearch[2];
             return raw.replace(trimmed, () => out);
           }
         }
       } else if (firstUpper === 'P') {
         if (RE_PERM_DELETE.test(trimmed)) {
-          return raw.replace(RE_PERM_DELETE, (_, target, cnt) => '永久删除 ' + target + ' 及 ' + cnt + ' 个进行中的会话。');
+          return raw.replace(RE_PERM_DELETE, (_, target, cnt) => '永久删除 ' + target + ' 及 ' + cnt + ' 个进行中的对话。');
         }
       } else if (firstUpper === 'W' || firstUpper === 'M') {
         const mNamed = trimmed.match(RE_NAMED_LIMIT_RESETS);
@@ -2128,7 +2134,7 @@
           }
           const mWorkLocal = trimmed.match(RE_WORK_LOCALLY_ON);
           if (mWorkLocal) {
-            return raw.replace(trimmed, () => '在本地 ' + mWorkLocal[1].trim() + ' 上工作');
+            return raw.replace(trimmed, () => '在本地 ' + mWorkLocal[1].trim() + ' 中工作');
           }
           const mWorkFrom = trimmed.match(RE_WORKTREE_FROM);
           if (mWorkFrom) {
@@ -2175,7 +2181,7 @@
           const mActive = trimmed.match(RE_EPHEMERAL_ACTIVE);
           if (mActive) {
             const noun = EPHEMERAL_NOUN_MAP[mActive[2].toLowerCase()];
-            const out = noun ? EPHEMERAL_VERB_MAP[mActive[1]] + noun : EPHEMERAL_VERB_MAP[mActive[1]] + ' ' + mActive[2];
+            const out = noun ? joinZhVerbNoun(EPHEMERAL_VERB_MAP[mActive[1]], noun) : EPHEMERAL_VERB_MAP[mActive[1]] + ' ' + mActive[2];
             return raw.replace(trimmed, () => out);
           }
         }
@@ -2202,6 +2208,10 @@
         }
         if (RE_UP_NEXT_COUNT.test(trimmed)) {
           return raw.replace(RE_UP_NEXT_COUNT, '接下来 · $1');
+        }
+        const mLocalClone = trimmed.match(RE_USES_LOCAL_CLONE);
+        if (mLocalClone) {
+          return raw.replace(trimmed, () => '使用本地克隆：' + mLocalClone[1].trim());
         }
         const mUpd = trimmed.match(RE_UPDATED_AT);
         if (mUpd) {
@@ -2275,7 +2285,7 @@
       } else if (firstUpper === 'H') {
         const mHey = trimmed.match(RE_HOME_HEY_NAME);
         if (mHey) {
-          return raw.replace(trimmed, () => '嗨，' + mHey[1].trim() + '，今天想构建些什么？');
+          return raw.replace(trimmed, () => '嗨，' + mHey[1].trim() + '，今天想做点什么？');
         }
       } else if (firstUpper === 'G') {
         const mGood = trimmed.match(RE_HOME_GOOD_SEE_NAME);
@@ -2288,7 +2298,7 @@
           return raw.replace(
             trimmed,
             () =>
-              '会话开始时自动新建 ' +
+              '对话开始时自动新建 ' +
               mAutoFig[1] +
               ' 工作区' +
               (mAutoFig[2] ? '，从 ' + mAutoFig[2].trim() + ' 创建 Worktree' : '') +
@@ -2449,7 +2459,7 @@
         }
         const mappedNote =
           rawNote.toLowerCase() === 'cannot be changed mid-conversation'
-            ? '会话中途无法更改'
+            ? '对话中途无法更改'
             : dictLookup(rawNote) || computeTextTranslation(rawNote, el) || rawNote;
         return '权限模式：' + lookupPerm(pMode) + '（' + mappedNote + '）';
       }
@@ -2462,7 +2472,7 @@
         if (mTurn[3] && mTurn[4]) {
           return '第 ' + mTurn[3] + ' / ' + mTurn[4] + ' 轮对话';
         }
-        const roleZh = mTurn[2].toLowerCase() === 'user' ? '用户' : '智能体';
+        const roleZh = mTurn[2].toLowerCase() === 'user' ? '用户' : 'Agent';
         return '第 ' + mTurn[1] + ' 轮对话（' + roleZh + '）';
       }
       const mOlder = atrim.match(RE_ARIA_LOAD_OLDER);
@@ -2487,7 +2497,7 @@
         const locName = mLoc[1].trim();
         const mappedLoc =
           locName === 'This Computer' ? '本机' : locName === 'Remote' ? '远程' : dictLookup(locName) || locName;
-        return '智能体运行位置，当前：' + mappedLoc;
+        return 'Agent 运行位置，当前：' + mappedLoc;
       }
       const mVer = atrim.match(RE_ARIA_VERSION);
       if (mVer) {

@@ -1,16 +1,16 @@
 ---
 name: chuanban-antigravity-theme-patch
-description: 船板的 Antigravity 2.0 主题、字体与深度汉化全栈成品补丁包（v5.1.9 模块化架构 · 完整适配 Antigravity 2.31.2 macOS + Windows 双平台全栈演进 + 冷启动兜底包零流量安全自愈 + Swarm 协作面板跨域子帧同步 + 原生幕布与标题栏底色桥接 + WSL 会话遥测兼容 + 昼夜双模式独立解耦 + 1587条零冲突词典与弯引号/DICT_CI 兜底 + SQLite O(1) 增量遥测）。采用「core/ 只读黄金内核 + user/ 永不覆盖改装层 + install.mjs 一键生命周期 CLI」，支持对方 Agent 零代码生成一键部署、2.5 秒热重载二次定制与 --safe-mode 沙箱排障。当用户提到“安装船板 Antigravity 主题”、“升级/修复 Antigravity 汉化与字体”、“定制 Antigravity 界面样式或汉化词条”时触发。
+description: 船板的 Antigravity 2.0 主题、字体与深度汉化全栈成品补丁包（v5.2.0 模块化架构 · 适配 Antigravity 2.32.0 / 2.31.2 macOS + Windows 双平台全栈演进 + 冷启动兜底包零流量安全自愈 + Swarm 协作面板跨域子帧同步 + 原生幕布与标题栏底色桥接 + WSL 会话遥测兼容 + 昼夜双模式独立解耦 + 1630条母语级去机翻零冲突词典与弯引号/DICT_CI 兜底 + SQLite O(1) 增量遥测）。采用「core/ 只读黄金内核 + user/ 永不覆盖改装层 + install.mjs 一键生命周期 CLI」，支持对方 Agent 零代码生成一键部署、2.5 秒热重载二次定制与 --safe-mode 沙箱排障。当用户提到“安装船板 Antigravity 主题”、“升级/修复 Antigravity 汉化与字体”、“定制 Antigravity 界面样式或汉化词条”时触发。
 ---
 
-# 船板的 Antigravity 主题、字体与深度汉化全栈成品补丁（v5.1.9 · 昼夜双模式解耦 & Antigravity 2.31.2 双平台全量适配）
+# 船板的 Antigravity 主题、字体与深度汉化全栈成品补丁（v5.2.0 · 昼夜双模式解耦 & Antigravity 2.32.0 适配）
 
 > **前置概括（致用户与执行端 AI Agent）**：
 > - **设计目的**：以纯运行时 CDP 非侵入式注入，为 Google Antigravity 提供**白天/黑夜双模式物理隔离**：
 >   - **白天模式（`body:not(.dark)`）**：提供三套 Anthropic 暖纸护眼配色预设（默认高对比暖白）与输入框「古朴暗红蜡封」三态交互；
->   - **黑夜模式（`body.dark`）**：当点击客户端「深色 / Dark」按钮（或跟随系统深色）切换时，**100% 保持四层字体排版与 UI 几何形状（`1.5px` 三态边框厚度、单圈搜索聚焦、指标胶囊布局）不变**，同时 `0ms` 还原 Antigravity `2.30.0 ~ 2.31.2` 原版无补丁时的官方 `onyx` Default Dark 碳黑配色方案（`#070708` 主背景 / `#111114` 侧栏 / `#15151A` 悬浮输入卡 / `#2F71E3` 官方品牌蓝），自动关闭深色下发乌的黑色润墨阴影并专项提升深色文字对比度与边界可见性；
->   - **全局共享能力**：四层中西文精密排版（`Anthropic` 官方字体族 + `Sarasa` 更纱黑体超集，完美适配 `2.31.2` `[data-markdown-root]`、`data-agy-font`、Lexical 输入框、`plugin://swarm--` 蜂群协作子帧及 Windows `DirectWrite` 可变字体 `wght/opsz` 全字重轴）、1,587 条全界面无死角汉化（内置弯引号自动归一化与 `DICT_CI` 首字母大写不敏感兜底，完整覆盖 `2.31.2` Swarm 协作面板、自动化与协调员、运行环境与 Worktree 分支、首页动态人名问候、插件市场、归档筛选、队列快捷键及 `[contenteditable="true"]` 无障碍属性）、冷启动内嵌兜底包漂移零流量安全自愈，以及基于 SQLite `O(1)` 增量游标的同行实时会话指标胶囊（原生支持本地与 Windows WSL 会话库懒探测，`tok/s · TTFT · Ctx 256k 水位 · Out`）。
-> - **v5.1.9 核心执行铁律**：
+>   - **黑夜模式（`body.dark`）**：当点击客户端「深色 / Dark」按钮（或跟随系统深色）切换时，**100% 保持四层字体排版与 UI 几何形状（`1.5px` 三态边框厚度、单圈搜索聚焦、指标胶囊布局）不变**，同时 `0ms` 还原 Antigravity `2.30.0 ~ 2.32.0` 原版无补丁时的官方 `onyx` Default Dark 碳黑配色方案（`#070708` 主背景 / `#111114` 侧栏 / `#15151A` 悬浮输入卡 / `#2F71E3` 官方品牌蓝），自动关闭深色下发乌的黑色润墨阴影并专项提升深色文字对比度与边界可见性；
+>   - **全局共享能力**：四层中西文精密排版（`Anthropic` 官方字体族 + `Sarasa` 更纱黑体超集，完美适配 `2.32.0` `[data-markdown-root]`、`data-agy-font`、Lexical 输入框、`plugin://swarm--` 蜂群协作子帧及 Windows `DirectWrite` 可变字体 `wght/opsz` 全字重轴）、1,630 条全界面母语级去机翻汉化（内置弯引号自动归一化与 `DICT_CI` 首字母大写不敏感兜底，完整覆盖 `2.32.0` / `2.31.2` Swarm 协作面板、自动化与协调器、运行环境与 Worktree 分支、授权码登录兜底与 GitHub 远程克隆、插件市场、归档筛选、队列快捷键及 `[contenteditable="true"]` 无障碍属性）、冷启动内嵌兜底包漂移零流量安全自愈，以及基于 SQLite `O(1)` 增量游标的同行实时会话指标胶囊（原生支持本地与 Windows WSL 会话库懒探测，`tok/s · TTFT · Ctx 256k 水位 · Out`）。
+> - **v5.2.0 核心执行铁律**：
 >   1. **Agent 一键部署，内核已预封装无需构建**：全部样式、词典、DOM 引擎与守护进程已封装在 `core/` 只读黄金内核中，**严禁 Agent 从头手写或重生成守护代码**，直接运行 `node install.mjs` 即可 3 秒完成部署；
 >   2. **个性化修改永远只在 `user/` 改装层进行（2.5 秒可逆热重载）**：`user/` 目录在升级时 100% 永不覆盖，保存后 2.5 秒自动热更新生效。
 
@@ -20,7 +20,7 @@ description: 船板的 Antigravity 2.0 主题、字体与深度汉化全栈成�
 
 1. **Google Drive 完全资源包（全项目成品包 + 全套商业/开源字体库）**
    - 链接：<https://drive.google.com/drive/folders/1NX92SgVUqtSjWg6bt6sIJXy-cn7J_boC>
-   - 包含：**v5.1.9 完整项目成品包 + 全套必备字体包（Anthropic 官方字体族 `Anthropic Sans` / `Anthropic Serif` / `Anthropic Mono` + 更纱黑体 `Sarasa-SuperTTC.ttc` 超集）**。
+   - 包含：**v5.2.0 完整项目成品包 + 全套必备字体包（Anthropic 官方字体族 `Anthropic Sans` / `Anthropic Serif` / `Anthropic Mono` + 更纱黑体 `Sarasa-SuperTTC.ttc` 超集）**。
    - *备用字体获取渠道*：若大文件 `Sarasa-SuperTTC.ttc`（~791 MB）偶发触发 Google Drive 24 小时下载配额限制，macOS 可直接执行 `brew install --cask font-sarasa-gothic`，Windows / Linux 可从官方开源仓库 [`be5invis/Sarasa-Gothic` GitHub Releases](https://github.com/be5invis/Sarasa-Gothic/releases) 获取同款 `Sarasa-SuperTTC.ttc`。
 2. **GitHub 权威代码库（成品补丁仓库与 `SKILL.md` 本体）**
    - 仓库：<https://github.com/Anarcadia/chuanban-antigravity-theme-patch>
@@ -38,7 +38,7 @@ description: 船板的 Antigravity 2.0 主题、字体与深度汉化全栈成�
 
 守护进程（`core/daemon.mjs`）内置**运行时环境动态分级**，绝不因 Node 小版本差异崩溃或无限重启：
 
-| 运行时版本 | 昼夜双模式主题 / 蜡封三态 / 四层字体 | 1,587 条深度汉化 + 原型安全词典 | 死锁/冷启动自愈 + 缩放快捷键修复 | SQLite 实时会话指标胶囊 (`node:sqlite`) |
+| 运行时版本 | 昼夜双模式主题 / 蜡封三态 / 四层字体 | 1,630 条深度汉化 + 原型安全词典 | 死锁/冷启动自愈 + 缩放快捷键修复 | SQLite 实时会话指标胶囊 (`node:sqlite`) |
 | :--- | :---: | :---: | :---: | :---: |
 | **Node.js `>= 22.13.0`**（推荐完全体） | ✅ 全量启用 | ✅ 全量启用 | ✅ 全量启用 | ✅ **自动动态解锁**（精确显示生成速度、耗时、上下文窗口与缓存命中率） |
 | **Node.js `22.0.0 ~ 22.12.x`** | ✅ 全量启用 | ✅ 全量启用 | ✅ 全量启用 | ⚠️ 自动优雅降级关闭（无需 `--experimental-sqlite` 标志，后台零报错） |
@@ -57,11 +57,11 @@ chuanban-antigravity-theme-patch/
 ├── README.md                   # 面向用户的项目说明与快速上手指南
 ├── CHANGELOG.md                # 历次版本演进与双平台修复记录
 ├── core/                       # 【只读黄金内核】随版本升级整包原子替换，对方 Agent 严禁直接修改
-│   ├── manifest.json           # 版本号（5.1.9）、三端地址与 core/* 文件 SHA-256 校验清单
+│   ├── manifest.json           # 版本号（5.2.0）、三端地址与 core/* 文件 SHA-256 校验清单
 │   ├── daemon.mjs              # Node CDP 守护进程（SQLite O(1) 增量遥测、WSL 懒探测、Swarm 跨域子帧注入、冷启动重载绑定、2.5s 热重载感知）
 │   ├── runtime.js              # 浏览器端注入引擎（昼夜模式与 curtainView/标题栏底色联动、冷启动兜底包安全自愈、弯引号与 DICT_CI 兜底索引、防双倍缩放保护）
 │   ├── theme.css               # 四段式 CSS 样式表（Part I 共享排版与几何 / Part II 白天暖纸 / Part III 独立黑夜 / Part IV 指标胶囊）
-│   └── i18n.json               # 1,587 条严格零冲突标准 JSON 基准词典（兼容 PowerShell ConvertFrom-Json，挂载至 Object.create(null)）
+│   └── i18n.json               # 1,630 条严格零冲突标准 JSON 基准词典（兼容 PowerShell ConvertFrom-Json，挂载至 Object.create(null)）
 └── user/                       # 【用户改装层】升级时 100% 永不覆盖，守护进程每 2.5s 自动检测 mtimeMs 热重载注入！
     ├── config.json             # 开关配置（enabled / channel / preset / contextLimit / modules / themeVars）
     ├── custom.css              # 用户/对方 Agent 自定义追加 CSS（独立挂载于 #antigravity-user-custom-style）
@@ -103,7 +103,7 @@ node install.mjs install --sync-user
 ```bash
 node install.mjs verify
 ```
-当终端输出 `"ok": true` 且显示 `"version": "20261114-v5.1.9-..."`、`"bodyReady": true`、`"themeStyle": true`、`"themeMode": "light" | "dark"` 时，即代表昼夜双模式主题、字体、汉化与指标胶囊已 100% 注入成功。
+当终端输出 `"ok": true` 且显示 `"version": "20261114-v5.2.0-..."`、`"bodyReady": true`、`"themeStyle": true`、`"themeMode": "light" | "dark"` 时，即代表昼夜双模式主题、字体、汉化与指标胶囊已 100% 注入成功。
 
 ---
 

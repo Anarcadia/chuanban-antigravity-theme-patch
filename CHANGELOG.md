@@ -4,6 +4,30 @@
 
 ---
 
+## [v5.2.0] - 2026-11-14
+
+> **适用版本**：Antigravity `2.32.0+` / `2.31.2`（向下完全兼容 `2.31.1` / `2.31.0` / `2.30.0`）  
+> **核验基线**：macOS Antigravity `2.32.0` 二进制与实机 CDP 全栈零漂移核验 + `1,630` 条全词库系统性去机翻精校验收
+
+### Changed（全词库系统性去机翻精校与五大高频术语统一）
+- **环境选择器机翻修正与非 Git 目录说明补全（`core/i18n.json` / `core/runtime.js`）**：
+  - 将输入框底部运行环境选择器的生硬直译 `"Local Checkout"`（原译 `本地检出`）修正为简洁准确的 **`本地`**，配套将 `"Keeps your checkout untouched"` 润色为 **`不影响当前本地目录`**，动态副标题 `Work locally on <target>` 润色为 `在本地 <target> 中工作`；
+  - 补齐非 Git 普通文件夹点开环境选择器时的禁用说明与分支标签等 9 条漏翻项（`Worktrees are available for Git repositories`、`Worktrees are not available for this project`、`Worktrees are a git feature. This folder is shared as is.`、`Search past worktrees...`、`Search past workspaces...`、`Unknown Worktree`、`Base branch for new worktree`、`Worktree branch`、`Remote branch`）。
+- **全界面核心术语一致性统一（`core/i18n.json` / `core/runtime.js`）**：
+  - **`Artifact` 约定俗成原文保留**：废除工业机翻感较重的“交付工件 / 工件”，全界面（右侧栏标签、对话过程流式状态、设置与评论提示）统一保留 **`Artifact`**（如 `已编辑文件与 Artifact`、`正在编辑 Artifact`、`Artifact 审阅策略`），并在 `runtime.js` 新增 `joinZhVerbNoun()` 自动保持中英文间标准空格；
+  - **`支线提问`（`/btw`）统一**：废除电路术语“旁路提问”，全量 15 处相关文案统一为 **`支线提问`**（如 `支线提问 (/btw)`、`新建支线提问`）；
+  - **`Worktree` 统一**：消除同一菜单内“工作树”与“Worktree”半中半英混用，全量统一保留 **`Worktree`**（如 `新建 Worktree`、`在新建 Worktree 中运行`）；
+  - **`Agent / 子 Agent` 统一**：全库 104 处混用的“智能体 / 代理 / 子代理 / 子智能体”及无障碍轮次角色统一为 **`Agent` / `子 Agent`**；
+  - **按钮去冗余英文括号尾巴与细节硬伤修正**：清理 23 处日常按钮与预设选项后的冗余英文括号尾巴（如 `极速模式`、`自动判断`、`自动判断（预览）`、`始终直接执行`、`请求审阅`、`蜂群协作`、`协调器`、`错误反馈`，仅保留 `Best of N`、`Hooks` 等必要专名）；修正 `"Execute URLs"`（`执行网址` → `可操控网址`）、顶栏 `"Review"`（`代码审查` → `审阅`）、`"Review plans and walkthroughs"`（`演练报告` → `完成总结`）、首页问候 `"what should we build today?"`（`构建些什么` → `今天想做点什么？`），并统一 `Conversation → 对话`、`沙箱 → 沙盒`、Swarm `Narrator → 纪要员`。
+
+### Added（Antigravity `2.32.0` 新增 UI 静态词条与动态模板全覆盖）
+- **新增 34 条 `2.32.0` 客户端原生 UI 词条至 `1,630` 条（`core/i18n.json`）**：
+  - 覆盖 `2.32.0` 新增的提示词跳转与备用发送快捷键（`Jump to Previous/Next Prompt`、`Submit Prompt (Alternate to Enter)`、`Code Search`）、SSH 连接与切回本机（`Connect to SSH Host…`、`Stop SSH Server…`、`Switch to This Computer`）、内置浏览器下载拦截状态（`Blocked: file type not allowed`、`Canceled`、`Interrupted`）、网页登录失败手动授权码兜底与企业账号登录向导（`Trouble signing in? Enter authorization code`、`Copy sign-in link`、`Use Business Account` 等 9 条）、终端沙盒与插件 MCP 服务启动状态徽章（`1 MCP server failed to start`、`Setup required` 等 6 条）以及 `Remote` 远程 GitHub 仓库克隆至本地向导（`Only GitHub repos are included in Remote`、`Clone to a local folder` 等 8 条），保持 100% 原始 JSON 零重复键、零大小写与弯直引号冲突。
+- **新增 2 条 `2.32.0` 动态正则模板（`core/runtime.js`）**：
+  - 新增 `RE_MCP_FAILED_START`（`<N> MCP servers failed to start` → `<N> 个 MCP 服务器启动失败`）与 `RE_USES_LOCAL_CLONE`（`Uses your local clone, <project>` → `使用本地克隆：<project>`）。
+
+---
+
 ## [v5.1.9] - 2026-11-14
 
 > **适用版本**：Antigravity `2.31.2+`（`CL=1019359392`，向下完全兼容 `2.31.1` / `2.31.0` / `2.30.0`）  
