@@ -627,6 +627,8 @@ rebuildBundleIfNeeded();
 // 3. 单实例 PID 锁与协作式所有权围栏（防跨周期陈旧锁自杀、防跨完整性双实例并存）
 // ============================================================================
 const attachedTargets = new Map();
+const targetThemeModes = new Map();
+const targetMetaMap = new Map();
 const MY_PROC_START_MS = Math.round(Date.now() - process.uptime() * 1000);
 const DAEMON_LOG_FILE = path.join(os.tmpdir(), 'ag-theme-daemon.log');
 
@@ -805,6 +807,8 @@ function shutdownDaemon(reason, unlinkStopFile = false) {
     } catch {}
   }
   attachedTargets.clear();
+  targetThemeModes.clear();
+  targetMetaMap.clear();
   process.exit(0);
 }
 
@@ -2221,6 +2225,67 @@ function parseConversationMetrics(cascadeId, endpointOrDir, precomputedState = n
 // ============================================================================
 const skippedNonHostTargets = new Map(); // targetId -> { origin, skippedAt }
 
+function belongsToParentTarget(entry, parentTargetId, parentChannel) {
+  let curId = entry.parentId || null;
+  if (!curId) {
+    return !parentChannel || entry.endpoint?.channel === parentChannel;
+  }
+  const seen = new Set();
+  while (curId && !seen.has(curId)) {
+    if (curId === parentTargetId) return true;
+    seen.add(curId);
+    curId = targetMetaMap.get(curId)?.parentId || null;
+  }
+  return false;
+}
+
+function resolveParentThemeMode(target, endpoint) {
+  let curId = target?.parentId || null;
+  const seen = new Set();
+  while (curId && !seen.has(curId)) {
+    seen.add(curId);
+    if (targetThemeModes.has(curId)) {
+      return targetThemeModes.get(curId);
+    }
+    curId = targetMetaMap.get(curId)?.parentId || null;
+  }
+  const ch = endpoint?.channel || null;
+  for (const [id, entry] of attachedTargets.entries()) {
+    if (
+      entry.hostConfirmed &&
+      entry.type === 'page' &&
+      (!ch || entry.endpoint?.channel === ch) &&
+      targetThemeModes.has(id)
+    ) {
+      return targetThemeModes.get(id);
+    }
+  }
+  for (const [id, mode] of targetThemeModes.entries()) {
+    const entry = attachedTargets.get(id);
+    if (!entry || entry.hostConfirmed) return mode;
+  }
+  return null;
+}
+
+function syncThemeToChildIframes(parentTargetId, mode) {
+  if (!activeConfig.enabled || (mode !== 'dark' && mode !== 'light')) return;
+  const parentEntry = attachedTargets.get(parentTargetId);
+  const parentChannel = parentEntry?.endpoint?.channel || null;
+  for (const [, entry] of attachedTargets.entries()) {
+    if (!entry.hostConfirmed || entry.type !== 'iframe') continue;
+    if (!belongsToParentTarget(entry, parentTargetId, parentChannel)) continue;
+    entry
+      .send('Runtime.evaluate', {
+        expression: `window.__ag_set_host_theme_mode && window.__ag_set_host_theme_mode(${JSON.stringify(mode)})`,
+        returnByValue: false
+      })
+      .catch(() => {});
+    if (entry.updateNewDocScript) {
+      entry.updateNewDocScript().catch(() => {});
+    }
+  }
+}
+
 function getTargetOriginKey(urlStr) {
   const raw = String(urlStr || '').trim();
   if (!raw) return '';
@@ -2349,22 +2414,51 @@ function attachTarget(target, endpoint) {
           ws.send(JSON.stringify({ id, method, params }));
         });
 
-      const updateNewDocScript = async () => {
-        if (evalScriptId) {
-          await send('Page.removeScriptToEvaluateOnNewDocument', { identifier: evalScriptId });
-          evalScriptId = null;
+      let newDocQueue = Promise.resolve();
+      let lastNewDocSig = '';
+
+      const buildTargetInjectScript = () => {
+        if (!activeConfig.enabled || target.type !== 'iframe') {
+          return { script: cachedInjectScript, parentMode: '' };
         }
-        if (activeConfig.enabled) {
-          const addRes = await send('Page.addScriptToEvaluateOnNewDocument', { source: cachedInjectScript });
-          if (addRes?.result?.identifier) {
-            evalScriptId = addRes.result.identifier;
-          }
+        const parentMode = resolveParentThemeMode(target, endpoint) || '';
+        if (parentMode !== 'dark' && parentMode !== 'light') {
+          return { script: cachedInjectScript, parentMode: '' };
         }
+        return {
+          script: `window.__ag_host_theme_mode=${JSON.stringify(parentMode)};\n${cachedInjectScript}`,
+          parentMode
+        };
+      };
+
+      const updateNewDocScript = (force = false) => {
+        newDocQueue = newDocQueue
+          .then(async () => {
+            const { script, parentMode } = buildTargetInjectScript();
+            const nextSig = `${activeConfig.enabled}|${cachedPatchVersion}|${parentMode}`;
+            if (!force && evalScriptId && nextSig === lastNewDocSig) return;
+            if (evalScriptId) {
+              await send('Page.removeScriptToEvaluateOnNewDocument', { identifier: evalScriptId });
+              evalScriptId = null;
+            }
+            if (activeConfig.enabled) {
+              const addRes = await send('Page.addScriptToEvaluateOnNewDocument', { source: script });
+              if (addRes?.result?.identifier) {
+                evalScriptId = addRes.result.identifier;
+                lastNewDocSig = nextSig;
+              }
+            } else {
+              lastNewDocSig = nextSig;
+            }
+          })
+          .catch(() => {});
+        return newDocQueue;
       };
 
       const inject = async () => {
+        const { script } = buildTargetInjectScript();
         const res = await send('Runtime.evaluate', {
-          expression: cachedInjectScript,
+          expression: script,
           returnByValue: true
         });
         if (res?.error) {
@@ -2377,6 +2471,20 @@ function attachTarget(target, endpoint) {
           );
           return false;
         } else {
+          if (target.type === 'page') {
+            if (!activeConfig.enabled) {
+              targetThemeModes.delete(target.id);
+            } else {
+              const resolvedMode = res?.result?.result?.value;
+              if (resolvedMode === 'dark' || resolvedMode === 'light') {
+                const prevMode = targetThemeModes.get(target.id);
+                targetThemeModes.set(target.id, resolvedMode);
+                if (prevMode !== resolvedMode) {
+                  syncThemeToChildIframes(target.id, resolvedMode);
+                }
+              }
+            }
+          }
           console.log(`[Daemon] Injected (${cachedPatchVersion}) into target ${target.id} [${endpoint.channel}]`);
           return true;
         }
@@ -2454,7 +2562,10 @@ function attachTarget(target, endpoint) {
         try {
           if (!hostConfirmed || nonHostSettled || ws.readyState !== WebSocket.OPEN) return;
           if (!isAllowedOrigin(currentTargetUrl)) {
-            if (attachedTargets.get(target.id)?.ws === ws) attachedTargets.delete(target.id);
+            if (attachedTargets.get(target.id)?.ws === ws) {
+              attachedTargets.delete(target.id);
+              targetThemeModes.delete(target.id);
+            }
             try {
               ws.close();
             } catch {}
@@ -2463,16 +2574,36 @@ function attachTarget(target, endpoint) {
           if (isExemptInternalTarget({ type: target.type, url: currentTargetUrl })) {
             const checkRes = await send('Runtime.evaluate', {
               expression:
-                'window.__ag_patch_version === ' +
+                '({ ok: window.__ag_patch_version === ' +
                 JSON.stringify(cachedPatchVersion) +
                 ' && (' +
                 JSON.stringify(!activeConfig.enabled) +
-                ' || (window.__ag_body_ready === true && !!document.getElementById("ag-custom-fonts")))',
+                ' || (window.__ag_body_ready === true && !!document.getElementById("ag-custom-fonts"))), mode: ' +
+                JSON.stringify(target.type === 'iframe' ? 'iframe' : 'page') +
+                ' === "iframe" ? (window.__ag_host_theme_mode || null) : (window.__ag_resolved_theme_mode || null) })',
               returnByValue: true
             });
-            if (checkRes?.result?.result?.value !== true) {
+            const checkVal = checkRes?.result?.result?.value;
+            if (!checkVal || checkVal.ok !== true) {
               await inject();
               await syncMetricsForSession(true);
+            } else if (activeConfig.enabled && target.type === 'page') {
+              if (checkVal.mode === 'dark' || checkVal.mode === 'light') {
+                const prevMode = targetThemeModes.get(target.id);
+                targetThemeModes.set(target.id, checkVal.mode);
+                if (prevMode !== checkVal.mode) {
+                  syncThemeToChildIframes(target.id, checkVal.mode);
+                }
+              }
+            } else if (activeConfig.enabled && target.type === 'iframe') {
+              const parentMode = resolveParentThemeMode(target, endpoint);
+              if (parentMode && checkVal.mode !== parentMode) {
+                await send('Runtime.evaluate', {
+                  expression: `window.__ag_set_host_theme_mode && window.__ag_set_host_theme_mode(${JSON.stringify(parentMode)})`,
+                  returnByValue: false
+                });
+                await updateNewDocScript();
+              }
             }
             return;
           }
@@ -2480,7 +2611,8 @@ function attachTarget(target, endpoint) {
             expression: `({
               injected: window.__ag_patch_version === ${JSON.stringify(cachedPatchVersion)} && (${JSON.stringify(!activeConfig.enabled)} || (window.__ag_body_ready === true && !!document.getElementById("ag-custom-fonts"))),
               skipNonHost: window.__ag_skip_non_host === true,
-              kind: ${HOST_PROBE_EXPRESSION}
+              kind: ${HOST_PROBE_EXPRESSION},
+              mode: window.__ag_resolved_theme_mode || null
             })`,
             returnByValue: true
           });
@@ -2496,6 +2628,14 @@ function attachTarget(target, endpoint) {
           if (state.injected !== true) {
             await inject();
             await syncMetricsForSession(true);
+          } else if (activeConfig.enabled && target.type === 'page') {
+            if (state.mode === 'dark' || state.mode === 'light') {
+              const prevMode = targetThemeModes.get(target.id);
+              targetThemeModes.set(target.id, state.mode);
+              if (prevMode !== state.mode) {
+                syncThemeToChildIframes(target.id, state.mode);
+              }
+            }
           }
         } catch {}
       };
@@ -2554,6 +2694,7 @@ function attachTarget(target, endpoint) {
         }
         if (attachedTargets.get(target.id)?.ws === ws) {
           attachedTargets.delete(target.id);
+          targetThemeModes.delete(target.id);
         }
         clearTimeout(attachTimeout);
         try {
@@ -2590,13 +2731,14 @@ function attachTarget(target, endpoint) {
           if (target.type === 'page') {
             await send('Runtime.addBinding', { name: '__agRequestHardReload' });
             await send('Runtime.addBinding', { name: '__agSetDarkPreset' });
+            await send('Runtime.addBinding', { name: '__agSyncHostThemeMode' });
           }
         }
         if (ws.readyState !== WebSocket.OPEN || nonHostSettled) {
           finishAttach(false);
           return false;
         }
-        await updateNewDocScript();
+        await updateNewDocScript(true);
         const ok = await inject();
         await syncMetricsForSession(true);
         initialAttachDone = true;
@@ -2610,7 +2752,10 @@ function attachTarget(target, endpoint) {
         if (!pendingProbe || hostConfirmed || nonHostSettled || ws.readyState !== WebSocket.OPEN) return;
         if (pendingRetryCount >= 40) {
           pendingProbe = false;
-          if (attachedTargets.get(target.id)?.ws === ws) attachedTargets.delete(target.id);
+          if (attachedTargets.get(target.id)?.ws === ws) {
+            attachedTargets.delete(target.id);
+            targetThemeModes.delete(target.id);
+          }
           clearTimeout(attachTimeout);
           try {
             ws.close();
@@ -2636,7 +2781,10 @@ function attachTarget(target, endpoint) {
           if (!isAllowedOrigin(currentTargetUrl)) {
             pendingProbe = false;
             clearPendingTimer();
-            if (attachedTargets.get(target.id)?.ws === ws) attachedTargets.delete(target.id);
+            if (attachedTargets.get(target.id)?.ws === ws) {
+              attachedTargets.delete(target.id);
+              targetThemeModes.delete(target.id);
+            }
             clearTimeout(attachTimeout);
             try {
               ws.close();
@@ -2717,6 +2865,19 @@ function attachTarget(target, endpoint) {
             }
             return;
           }
+          if (msg.method === 'Runtime.bindingCalled' && msg.params?.name === '__agSyncHostThemeMode') {
+            if (hostConfirmed && target.type === 'page' && activeConfig.enabled) {
+              const mode = String(msg.params.payload || '').trim();
+              if (mode === 'dark' || mode === 'light') {
+                const prevMode = targetThemeModes.get(target.id);
+                targetThemeModes.set(target.id, mode);
+                if (prevMode !== mode) {
+                  syncThemeToChildIframes(target.id, mode);
+                }
+              }
+            }
+            return;
+          }
           if (msg.method === 'Runtime.bindingCalled' && msg.params?.name === '__agRequestHardReload') {
             if (
               !hostConfirmed ||
@@ -2784,6 +2945,7 @@ function attachTarget(target, endpoint) {
         pendingCallbacks.clear();
         if (attachedTargets.get(target.id)?.ws === ws) {
           attachedTargets.delete(target.id);
+          targetThemeModes.delete(target.id);
         }
         finishAttach(false);
       };
@@ -2792,6 +2954,8 @@ function attachTarget(target, endpoint) {
 
       attachedTargets.set(target.id, {
         ws,
+        type: target.type,
+        parentId: target.parentId || null,
         send,
         updateNewDocScript,
         inject,
@@ -2997,11 +3161,15 @@ async function sync() {
   try {
     if (syncTickCount % 12 === 1) ensureZhTitlePatchIfPresent();
     const bundleChanged = rebuildBundleIfNeeded();
+    if (!activeConfig.enabled) {
+      targetThemeModes.clear();
+    }
     const shouldHeartbeatCheck = bundleChanged || syncTickCount % 6 === 1;
 
     const activeTargetIds = new Set();
     const seenRawTargetIds = new Set();
-    const attachPromises = [];
+    const pendingPages = [];
+    const pendingIframes = [];
 
     const probedPorts = new Set();
     const nowMs = Date.now();
@@ -3032,6 +3200,7 @@ async function sync() {
       for (const t of targets) {
         if (!t?.id) continue;
         seenRawTargetIds.add(t.id);
+        targetMetaMap.set(t.id, { type: t.type, parentId: t.parentId || null, channel: endpoint.channel });
         const skipped = skippedNonHostTargets.get(t.id);
         if (skipped && (!isAllowedOrigin(t.url) || getTargetOriginKey(t.url) !== skipped.origin)) {
           skippedNonHostTargets.delete(t.id);
@@ -3050,11 +3219,23 @@ async function sync() {
 
       for (const page of pages) {
         activeTargetIds.add(page.id);
+        if (page.type === 'iframe') {
+          pendingIframes.push({ page, endpoint });
+        } else {
+          pendingPages.push({ page, endpoint });
+        }
+      }
+    }
+
+    const syncTargetBatch = async (items) => {
+      const attachPromises = [];
+      for (const { page, endpoint } of items) {
         if (!attachedTargets.has(page.id)) {
           attachPromises.push(attachTarget(page, endpoint));
         } else {
           const entry = attachedTargets.get(page.id);
           entry.endpoint = endpoint;
+          entry.parentId = page.parentId || entry.parentId || null;
           entry.updateTargetUrl?.(page.url);
           if (entry.hostConfirmed) {
             if (bundleChanged && entry.updateNewDocScript) {
@@ -3065,11 +3246,14 @@ async function sync() {
           }
         }
       }
-    }
+      if (attachPromises.length > 0) {
+        await Promise.allSettled(attachPromises);
+      }
+    };
 
-    if (attachPromises.length > 0) {
-      await Promise.allSettled(attachPromises);
-    }
+    // 先同步宿主 page 目标以获取权威深浅色状态，再同步子 Swarm iframe（确保 --once 与冷启动零闪烁）
+    await syncTargetBatch(pendingPages);
+    await syncTargetBatch(pendingIframes);
 
     // 清理已关闭的目标连接
     for (const [id, entry] of attachedTargets.entries()) {
@@ -3078,6 +3262,7 @@ async function sync() {
           entry.ws.close();
         } catch {}
         attachedTargets.delete(id);
+        targetThemeModes.delete(id);
       }
     }
     if (seenRawTargetIds.size > 0) {
@@ -3086,6 +3271,13 @@ async function sync() {
           skippedNonHostTargets.delete(id);
         }
       }
+      for (const id of targetMetaMap.keys()) {
+        if (!seenRawTargetIds.has(id)) {
+          targetMetaMap.delete(id);
+        }
+      }
+    } else if (attachedTargets.size === 0) {
+      targetMetaMap.clear();
     }
   } finally {
     isSyncing = false;

@@ -643,6 +643,23 @@ html[data-ag-preset="high-contrast"]:not([data-ag-theme-mode="dark"]) body:not(.
   background-color: rgba(0, 0, 0, 0.28) !important;
 }
 
+/* Swarm 插件子帧白天模式兜底：防止宿主曾推送过深色内联 style 变量在切换回浅色后残留 */
+html[data-ag-page-type="plugin"]:not([data-ag-theme-mode="dark"]) {
+  --primary-foreground: #FFFFFF !important;
+  --secondary: rgba(0, 0, 0, 0.06) !important;
+  --muted: rgba(0, 0, 0, 0.04) !important;
+  --placeholder: #78716C !important;
+  --error: #C23B32 !important;
+}
+
+html[data-ag-page-type="plugin"][data-ag-preset="vintage-deep"]:not([data-ag-theme-mode="dark"]) {
+  --primary-foreground: #FFFFFF !important;
+  --secondary: rgba(60, 45, 25, 0.075) !important;
+  --muted: rgba(60, 45, 25, 0.05) !important;
+  --placeholder: #8A8074 !important;
+  --error: #B8382C !important;
+}
+
 
 /* ============================================================================
  * PART III. 独立黑夜模式（Dark Mode · 切换深色按钮时自动激活）

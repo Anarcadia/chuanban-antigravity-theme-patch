@@ -552,6 +552,9 @@
     window.__ag_zoom_keydown_fn = null;
     window.__ag_zoom_resize_fn = null;
     window.__ag_settings_click_fn = null;
+    window.__ag_host_theme_mode = null;
+    window.__ag_set_host_theme_mode = null;
+    window.__ag_resolved_theme_mode = null;
     window.__ag_body_ready = false;
     applyThemeVars({}, {});
     document.documentElement.removeAttribute('data-ag-preset');
@@ -562,7 +565,12 @@
     document.documentElement.removeAttribute('data-ag-os');
     const restoreNativeSurfaces = () => {
       syncCurtainSurfaceColor(true);
-      if (!IS_SWARM_PLUGIN_FRAME) {
+      if (IS_SWARM_PLUGIN_FRAME) {
+        if (window.__ag_swarm_owned_cs && document.documentElement) {
+          document.documentElement.style.removeProperty('color-scheme');
+          window.__ag_swarm_owned_cs = false;
+        }
+      } else {
         const hEl = document.documentElement;
         const bEl = document.body;
         const sysDark = !!(
@@ -1208,6 +1216,8 @@
     return DARK_PRESETS.ONYX;
   }
 
+  let lastSyncedHostMode = null;
+
   function syncChuanbanPreset() {
     try {
       const storedLight = Storage.prototype.getItem.call(localStorage, 'theme-preset-light');
@@ -1265,26 +1275,34 @@
       );
       let isDark = false;
       if (IS_SWARM_PLUGIN_FRAME) {
-        // Swarm 插件 preload 直接向 html 内联 style 注入宿主 --background（不受样式表 !important 覆盖影响）；
-        // 若后台预热阶段尚未收到宿主 theme-change（hostLum === null），优先对齐 ~/.gemini/config/config.json 的 hostThemeMode
+        // 优先级：1) daemon 从宿主 page 实时同步的 __ag_host_theme_mode（解决系统跟随/隐藏预加载/陈旧内联样式不同步）；
+        // 2) ~/.gemini/config/config.json 的显式 dark/light；3) 宿主内联 --background 亮度；4) Swarm data-theme="dark"；5) systemPrefersDark（不采信 Swarm 初始默认 data-theme="light"）
+        const liveParentMode =
+          window.__ag_host_theme_mode === 'dark' || window.__ag_host_theme_mode === 'light'
+            ? window.__ag_host_theme_mode
+            : null;
         const inlineHostBg = htmlEl ? (htmlEl.style.getPropertyValue('--background') || '').trim() : '';
         const hostLum = computeColorLuminance(inlineHostBg);
-        if (hostLum !== null) {
-          isDark = hostLum < 0.5;
+        if (liveParentMode) {
+          isDark = liveParentMode === 'dark';
         } else if (hostThemeMode === 'dark') {
           isDark = true;
         } else if (hostThemeMode === 'light') {
           isDark = false;
+        } else if (hostLum !== null) {
+          isDark = hostLum < 0.5;
         } else if (htmlDataTheme === 'dark') {
           isDark = true;
-        } else if (htmlDataTheme === 'light') {
-          isDark = false;
         } else {
           isDark = systemPrefersDark;
         }
         const swarmMode = isDark ? 'dark' : 'light';
         if (htmlEl && htmlEl.getAttribute('data-theme') !== swarmMode) {
           htmlEl.setAttribute('data-theme', swarmMode);
+        }
+        if (htmlEl && htmlEl.style.colorScheme !== swarmMode) {
+          htmlEl.style.colorScheme = swarmMode;
+          window.__ag_swarm_owned_cs = true;
         }
       } else {
         const bodyExplicitDark = !!(
@@ -1340,6 +1358,15 @@
       if (prevMode !== targetMode || prevPreset !== targetPreset || darkPresetChanged) {
         document.documentElement.setAttribute('data-ag-theme-mode', targetMode);
       }
+      window.__ag_resolved_theme_mode = targetMode;
+      if (!IS_SWARM_PLUGIN_FRAME && lastSyncedHostMode !== targetMode) {
+        lastSyncedHostMode = targetMode;
+        if (typeof window.__agSyncHostThemeMode === 'function') {
+          try {
+            window.__agSyncHostThemeMode(targetMode);
+          } catch (e) {}
+        }
+      }
       syncWinTitleBarOverlay(isDark, darkPresetChanged);
       syncCurtainSurfaceColor(darkPresetChanged);
       if (typeof window.__ag_sync_warm_night_btn_fn === 'function') {
@@ -1349,6 +1376,13 @@
   }
 
   window.__ag_sync_preset_fn = syncChuanbanPreset;
+  window.__ag_set_host_theme_mode = (mode) => {
+    if (mode !== 'dark' && mode !== 'light') return;
+    window.__ag_host_theme_mode = mode;
+    if (typeof window.__ag_sync_preset_fn === 'function') {
+      window.__ag_sync_preset_fn();
+    }
+  };
 
   if (!window.__ag_preset_hook_installed) {
     window.__ag_preset_hook_installed = true;
@@ -3509,5 +3543,8 @@
     } catch (err) {
       console.error('[Antigravity Patch] Error in user/custom.js:', err);
     }
+  }
+  if (!IS_SWARM_PLUGIN_FRAME) {
+    return window.__ag_resolved_theme_mode || null;
   }
 })(__AG_BOOT_PAYLOAD__);
