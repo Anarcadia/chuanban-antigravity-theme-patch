@@ -1768,6 +1768,54 @@ function parseConversationMetrics(cascadeId, endpointOrDir, precomputedState = n
 // 5. CDP 目标发现、WebSocket 会话挂载与热更新推送
 // ============================================================================
 const attachedTargets = new Map();
+const skippedNonHostTargets = new Map(); // targetId -> { origin, skippedAt }
+
+function getTargetOriginKey(urlStr) {
+  const raw = String(urlStr || '').trim();
+  if (!raw) return '';
+  try {
+    const u = new URL(raw);
+    if (u.origin && u.origin !== 'null') {
+      return u.origin.toLowerCase();
+    }
+    return `${u.protocol}//${u.host || u.pathname || ''}`.toLowerCase();
+  } catch {
+    return raw.toLowerCase();
+  }
+}
+
+function isExemptInternalTarget(target) {
+  const url = String(target?.url || '');
+  if (target?.type === 'iframe' && url.startsWith('plugin://swarm--')) return true;
+  if (url.startsWith('vscode-file://')) return true;
+  return false;
+}
+
+const HOST_PROBE_EXPRESSION = `(function(){
+  try {
+    var loc = window.location;
+    var isSwarm = !!(loc && ((loc.protocol === 'plugin:' && /^swarm--/i.test(loc.hostname || '')) || /^plugin:\\/\\/swarm--/i.test(String(loc.href || ''))));
+    if (isSwarm || (loc && loc.protocol === 'vscode-file:')) return 'host';
+    if (window.__APP_CONFIG__ && window.__APP_CONFIG__.productName === 'antigravity') return 'host';
+    if (
+      window.electronNative &&
+      typeof window.electronNative.setTitleBarOverlay === 'function' &&
+      window.nativeStorage &&
+      typeof window.nativeStorage.getItems === 'function'
+    ) return 'host';
+    if (
+      typeof document !== 'undefined' &&
+      typeof document.querySelector === 'function' &&
+      document.querySelector('link[href*="/jetbox.css"], body[data-agy-theme], body[data-newux-theme], [id="antigravity.agentSidePanelInputBox"]')
+    ) return 'host';
+    if (typeof document === 'undefined' || !document.documentElement || document.readyState === 'loading') {
+      return 'pending';
+    }
+    return 'non_host';
+  } catch (e) {
+    return 'pending';
+  }
+})()`;
 
 function readPort(portFile) {
   try {
@@ -1950,33 +1998,148 @@ function attachTarget(target, endpoint) {
 
       const checkAndInject = async () => {
         try {
+          if (!hostConfirmed || nonHostSettled || ws.readyState !== WebSocket.OPEN) return;
+          if (!isAllowedOrigin(currentTargetUrl)) {
+            if (attachedTargets.get(target.id)?.ws === ws) attachedTargets.delete(target.id);
+            try {
+              ws.close();
+            } catch {}
+            return;
+          }
+          if (isExemptInternalTarget({ type: target.type, url: currentTargetUrl })) {
+            const checkRes = await send('Runtime.evaluate', {
+              expression:
+                'window.__ag_patch_version === ' +
+                JSON.stringify(cachedPatchVersion) +
+                ' && (' +
+                JSON.stringify(!activeConfig.enabled) +
+                ' || (window.__ag_body_ready === true && !!document.getElementById("ag-custom-fonts")))',
+              returnByValue: true
+            });
+            if (checkRes?.result?.result?.value !== true) {
+              await inject();
+              await syncMetricsForSession(true);
+            }
+            return;
+          }
           const checkRes = await send('Runtime.evaluate', {
-            expression:
-              'window.__ag_patch_version === ' +
-              JSON.stringify(cachedPatchVersion) +
-              ' && (' +
-              JSON.stringify(!activeConfig.enabled) +
-              ' || (window.__ag_body_ready === true && !!document.getElementById("ag-custom-fonts")))',
+            expression: `({
+              injected: window.__ag_patch_version === ${JSON.stringify(cachedPatchVersion)} && (${JSON.stringify(!activeConfig.enabled)} || (window.__ag_body_ready === true && !!document.getElementById("ag-custom-fonts"))),
+              skipNonHost: window.__ag_skip_non_host === true,
+              kind: ${HOST_PROBE_EXPRESSION}
+            })`,
             returnByValue: true
           });
-          if (checkRes?.result?.result?.value !== true) {
+          const state = checkRes?.result?.result?.value;
+          if (!state || typeof state !== 'object') return;
+          if (state.skipNonHost || state.kind === 'non_host') {
+            await markNonHostAndDetach(currentTargetUrl);
+            return;
+          }
+          if (state.kind === 'pending') {
+            return;
+          }
+          if (state.injected !== true) {
             await inject();
             await syncMetricsForSession(true);
           }
         } catch {}
       };
 
+      let currentTargetUrl = String(target.url || '');
+      let hostConfirmed = false;
+      let nonHostSettled = false;
+      let pendingProbe = false;
+      let probingPending = false;
+      let pendingRecheckQueued = false;
+      let pendingRetryCount = 0;
+      let pendingRetryTimer = null;
+      let runtimeEnabled = false;
+      let pageEnabled = false;
+      let bindingsAdded = false;
       let initialAttachDone = false;
       let navDebounceTimer = null;
       let lastHardReloadAt = 0;
 
-      ws.addEventListener('open', async () => {
+      const clearPendingTimer = () => {
+        if (pendingRetryTimer) {
+          clearTimeout(pendingRetryTimer);
+          pendingRetryTimer = null;
+        }
+      };
+
+      const probeHostKind = async () => {
+        const res = await send('Runtime.evaluate', {
+          expression: HOST_PROBE_EXPRESSION,
+          returnByValue: true
+        });
+        const val = res?.result?.result?.value;
+        return val === 'host' || val === 'non_host' || val === 'pending' ? val : 'pending';
+      };
+
+      const markNonHostAndDetach = async (reasonUrl = currentTargetUrl) => {
+        if (nonHostSettled) return;
+        nonHostSettled = true;
+        pendingProbe = false;
+        hostConfirmed = false;
+        clearPendingTimer();
+        if (navDebounceTimer) {
+          clearTimeout(navDebounceTimer);
+          navDebounceTimer = null;
+        }
+        const originKey = getTargetOriginKey(reasonUrl || target.url);
+        if (originKey) {
+          skippedNonHostTargets.set(target.id, { origin: originKey, skippedAt: Date.now() });
+        }
+        if (evalScriptId && ws.readyState === WebSocket.OPEN) {
+          const idToRemove = evalScriptId;
+          evalScriptId = null;
+          try {
+            await send('Page.removeScriptToEvaluateOnNewDocument', { identifier: idToRemove });
+          } catch {}
+        }
+        if (attachedTargets.get(target.id)?.ws === ws) {
+          attachedTargets.delete(target.id);
+        }
+        clearTimeout(attachTimeout);
+        try {
+          ws.close();
+        } catch {}
+        finishAttach(false);
+      };
+
+      const promoteToHost = async () => {
+        if (hostConfirmed || nonHostSettled || ws.readyState !== WebSocket.OPEN) return false;
+        hostConfirmed = true;
+        pendingProbe = false;
+        clearPendingTimer();
+        const entry = attachedTargets.get(target.id);
+        if (entry && entry.ws === ws) {
+          entry.hostConfirmed = true;
+        }
         console.log(`[Daemon] Attached target: ${target.id} (${target.title || 'Untitled'}) [${endpoint.channel}]`);
-        await send('Page.enable');
-        await send('Runtime.enable');
-        await send('Runtime.addBinding', { name: '__agRequestMetrics' });
-        if (target.type === 'page') {
-          await send('Runtime.addBinding', { name: '__agRequestHardReload' });
+        if (!pageEnabled) {
+          pageEnabled = true;
+          await send('Page.enable');
+        }
+        if (!runtimeEnabled) {
+          runtimeEnabled = true;
+          await send('Runtime.enable');
+        }
+        if (ws.readyState !== WebSocket.OPEN || nonHostSettled) {
+          finishAttach(false);
+          return false;
+        }
+        if (!bindingsAdded) {
+          bindingsAdded = true;
+          await send('Runtime.addBinding', { name: '__agRequestMetrics' });
+          if (target.type === 'page') {
+            await send('Runtime.addBinding', { name: '__agRequestHardReload' });
+          }
+        }
+        if (ws.readyState !== WebSocket.OPEN || nonHostSettled) {
+          finishAttach(false);
+          return false;
         }
         await updateNewDocScript();
         const ok = await inject();
@@ -1984,6 +2147,99 @@ function attachTarget(target, endpoint) {
         initialAttachDone = true;
         clearTimeout(attachTimeout);
         finishAttach(ok);
+        return ok;
+      };
+
+      const schedulePendingRetry = () => {
+        clearPendingTimer();
+        if (!pendingProbe || hostConfirmed || nonHostSettled || ws.readyState !== WebSocket.OPEN) return;
+        if (pendingRetryCount >= 40) {
+          pendingProbe = false;
+          if (attachedTargets.get(target.id)?.ws === ws) attachedTargets.delete(target.id);
+          clearTimeout(attachTimeout);
+          try {
+            ws.close();
+          } catch {}
+          finishAttach(false);
+          return;
+        }
+        pendingRetryCount += 1;
+        pendingRetryTimer = setTimeout(() => {
+          pendingRetryTimer = null;
+          void recheckPendingHost();
+        }, 200);
+      };
+
+      const recheckPendingHost = async () => {
+        if (!pendingProbe || hostConfirmed || nonHostSettled || ws.readyState !== WebSocket.OPEN) return;
+        if (probingPending) {
+          pendingRecheckQueued = true;
+          return;
+        }
+        probingPending = true;
+        try {
+          if (!isAllowedOrigin(currentTargetUrl)) {
+            pendingProbe = false;
+            clearPendingTimer();
+            if (attachedTargets.get(target.id)?.ws === ws) attachedTargets.delete(target.id);
+            clearTimeout(attachTimeout);
+            try {
+              ws.close();
+            } catch {}
+            finishAttach(false);
+            return;
+          }
+          if (isExemptInternalTarget({ type: target.type, url: currentTargetUrl })) {
+            await promoteToHost();
+            return;
+          }
+          const kind = await probeHostKind();
+          if (ws.readyState !== WebSocket.OPEN || nonHostSettled || hostConfirmed) return;
+          if (kind === 'host') {
+            await promoteToHost();
+          } else if (kind === 'non_host') {
+            await markNonHostAndDetach(currentTargetUrl);
+          } else if (!pendingRecheckQueued) {
+            schedulePendingRetry();
+          }
+        } finally {
+          probingPending = false;
+          if (pendingRecheckQueued) {
+            pendingRecheckQueued = false;
+            if (pendingProbe && !hostConfirmed && !nonHostSettled && ws.readyState === WebSocket.OPEN) {
+              void recheckPendingHost();
+            }
+          }
+        }
+      };
+
+      ws.addEventListener('open', async () => {
+        if (isExemptInternalTarget(target)) {
+          await promoteToHost();
+          return;
+        }
+        if (!runtimeEnabled) {
+          runtimeEnabled = true;
+          await send('Runtime.enable');
+        }
+        if (ws.readyState !== WebSocket.OPEN || nonHostSettled) return;
+        const kind = await probeHostKind();
+        if (ws.readyState !== WebSocket.OPEN || nonHostSettled) return;
+        if (kind === 'host') {
+          await promoteToHost();
+          return;
+        }
+        if (kind === 'non_host') {
+          await markNonHostAndDetach(currentTargetUrl);
+          return;
+        }
+        pendingProbe = true;
+        if (!pageEnabled) {
+          pageEnabled = true;
+          await send('Page.enable');
+        }
+        if (ws.readyState !== WebSocket.OPEN || nonHostSettled) return;
+        await recheckPendingHost();
       });
 
       ws.addEventListener('message', (event) => {
@@ -1996,6 +2252,7 @@ function attachTarget(target, endpoint) {
             return;
           }
           if (msg.method === 'Runtime.bindingCalled' && msg.params?.name === '__agRequestMetrics') {
+            if (!hostConfirmed) return;
             const nextId = String(msg.params.payload || '').trim();
             if (/^[0-9a-f-]{36}$/i.test(nextId)) {
               activeCascadeId = nextId;
@@ -2007,6 +2264,7 @@ function attachTarget(target, endpoint) {
           }
           if (msg.method === 'Runtime.bindingCalled' && msg.params?.name === '__agRequestHardReload') {
             if (
+              !hostConfirmed ||
               target.type !== 'page' ||
               !activeConfig.enabled ||
               activeConfig.modules.deadlockHealer === false ||
@@ -2024,13 +2282,24 @@ function attachTarget(target, endpoint) {
             send('Page.reload', { ignoreCache: true });
             return;
           }
-          if (!initialAttachDone) return;
+          if (
+            msg.method === 'Page.frameNavigated' &&
+            (!msg.params?.frame?.parentId || msg.params.frame.id === target.id) &&
+            msg.params?.frame?.url
+          ) {
+            currentTargetUrl = String(msg.params.frame.url);
+          }
           if (
             msg.method === 'Page.frameNavigated' ||
             msg.method === 'Page.loadEventFired' ||
             msg.method === 'Page.domContentEventFired'
           ) {
             if (!msg.params?.frame || !msg.params.frame.parentId || msg.params.frame.id === target.id) {
+              if (pendingProbe && !hostConfirmed && !nonHostSettled) {
+                void recheckPendingHost();
+                return;
+              }
+              if (!initialAttachDone) return;
               if (navDebounceTimer) clearTimeout(navDebounceTimer);
               navDebounceTimer = setTimeout(() => {
                 navDebounceTimer = null;
@@ -2043,13 +2312,17 @@ function attachTarget(target, endpoint) {
 
       const closeHandler = () => {
         clearTimeout(attachTimeout);
+        clearPendingTimer();
+        pendingProbe = false;
         if (navDebounceTimer) {
           clearTimeout(navDebounceTimer);
           navDebounceTimer = null;
         }
         for (const [, cb] of pendingCallbacks) cb(null);
         pendingCallbacks.clear();
-        attachedTargets.delete(target.id);
+        if (attachedTargets.get(target.id)?.ws === ws) {
+          attachedTargets.delete(target.id);
+        }
         finishAttach(false);
       };
       ws.addEventListener('close', closeHandler);
@@ -2063,6 +2336,15 @@ function attachTarget(target, endpoint) {
         checkAndInject,
         syncMetricsForSession,
         endpoint,
+        get hostConfirmed() {
+          return hostConfirmed;
+        },
+        set hostConfirmed(v) {
+          hostConfirmed = Boolean(v);
+        },
+        updateTargetUrl: (u) => {
+          if (u) currentTargetUrl = String(u);
+        },
         setActiveCascade: (cid) => {
           activeCascadeId = cid;
           lastPushedHash = '';
@@ -2255,6 +2537,7 @@ async function sync() {
     const shouldHeartbeatCheck = bundleChanged || syncTickCount % 6 === 1;
 
     const activeTargetIds = new Set();
+    const seenRawTargetIds = new Set();
     const attachPromises = [];
 
     const probedPorts = new Set();
@@ -2283,13 +2566,23 @@ async function sync() {
       }
       if (targets.length === 0) continue;
 
+      for (const t of targets) {
+        if (!t?.id) continue;
+        seenRawTargetIds.add(t.id);
+        const skipped = skippedNonHostTargets.get(t.id);
+        if (skipped && (!isAllowedOrigin(t.url) || getTargetOriginKey(t.url) !== skipped.origin)) {
+          skippedNonHostTargets.delete(t.id);
+        }
+      }
+
       const pages = targets.filter(
         (t) =>
           (t.type === 'page' || (t.type === 'iframe' && String(t.url || '').startsWith('plugin://swarm--'))) &&
           t.webSocketDebuggerUrl &&
           !String(t.url || '').startsWith('devtools://') &&
           isAllowedOrigin(t.url) &&
-          !String(t.title || '').includes('Launchpad')
+          !String(t.title || '').includes('Launchpad') &&
+          skippedNonHostTargets.get(t.id)?.origin !== getTargetOriginKey(t.url)
       );
 
       for (const page of pages) {
@@ -2299,11 +2592,14 @@ async function sync() {
         } else {
           const entry = attachedTargets.get(page.id);
           entry.endpoint = endpoint;
-          if (bundleChanged && entry.updateNewDocScript) {
-            await entry.updateNewDocScript();
+          entry.updateTargetUrl?.(page.url);
+          if (entry.hostConfirmed) {
+            if (bundleChanged && entry.updateNewDocScript) {
+              await entry.updateNewDocScript();
+            }
+            if (shouldHeartbeatCheck && entry.checkAndInject) await entry.checkAndInject();
+            if (entry.syncMetricsForSession) await entry.syncMetricsForSession(bundleChanged);
           }
-          if (shouldHeartbeatCheck && entry.checkAndInject) await entry.checkAndInject();
-          if (entry.syncMetricsForSession) await entry.syncMetricsForSession(bundleChanged);
         }
       }
     }
@@ -2319,6 +2615,13 @@ async function sync() {
           entry.ws.close();
         } catch {}
         attachedTargets.delete(id);
+      }
+    }
+    if (seenRawTargetIds.size > 0) {
+      for (const id of skippedNonHostTargets.keys()) {
+        if (!seenRawTargetIds.has(id)) {
+          skippedNonHostTargets.delete(id);
+        }
       }
     }
   } finally {

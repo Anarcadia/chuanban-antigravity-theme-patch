@@ -58,8 +58,8 @@ chuanban-antigravity-theme-patch/
 ├── CHANGELOG.md                # 历次版本演进与双平台修复记录
 ├── core/                       # 【只读黄金内核】随版本升级整包原子替换，对方 Agent 严禁直接修改
 │   ├── manifest.json           # 版本号（5.3.0）、三端地址与 core/* 文件 SHA-256 校验清单
-│   ├── daemon.mjs              # Node CDP 守护进程（SQLite O(1) 增量遥测、子 Agent `+N sub` 聚合与冷启动分片保护、WSL 懒探测与 0-I/O 熔断、Swarm 跨域子帧注入、冷启动重载绑定、2.5s 热重载感知）
-│   ├── runtime.js              # 浏览器端注入引擎（昼夜模式与 curtainView/标题栏底色联动、冷启动兜底包安全自愈、弯引号与 DICT_CI 兜底索引、防双倍缩放保护）
+│   ├── daemon.mjs              # Node CDP 守护进程（宿主独占指纹先探后注与内置浏览器零误注、SQLite O(1) 增量遥测、子 Agent `+N sub` 聚合与冷启动分片保护、WSL 懒探测与 0-I/O 熔断、Swarm 跨域子帧注入、冷启动重载绑定、2.5s 热重载感知）
+│   ├── runtime.js              # 浏览器端注入引擎（宿主指纹门禁与 DOM 空指针延迟防护、昼夜模式与 curtainView/标题栏底色联动、冷启动兜底包安全自愈、弯引号与 DICT_CI 兜底索引、防双倍缩放保护）
 │   ├── theme.css               # 四段式 CSS 样式表（Part I 共享排版与几何 / Part II 白天暖纸 / Part III 独立黑夜 / Part IV 指标胶囊）
 │   └── i18n.json               # 1,740 条严格零冲突标准 JSON 基准词典（兼容 PowerShell ConvertFrom-Json，挂载至 Object.create(null)）
 └── user/                       # 【用户改装层】升级时 100% 永不覆盖，守护进程每 2.5s 自动检测 mtimeMs 热重载注入！

@@ -3,7 +3,7 @@
  * 纯正浏览器端注入脚本（零模板字符串双重转义）。
  * 由 core/daemon.mjs 读取并将文件末尾的启动载荷占位符替换为实时配置与资源对象。
  */
-((boot) => {
+(function runBoot(boot, fromDcl) {
   // 0. 顶层窗口隔离：仅允许主窗口与官方内置 Swarm 协作侧栏插件帧（绝不注入 Artifact / HTML 预览等子 iframe）
   const IS_SWARM_PLUGIN_FRAME = !!(
     window.location &&
@@ -12,6 +12,70 @@
   );
   if (window.top !== window && !IS_SWARM_PLUGIN_FRAME) return;
   if (!boot || typeof boot !== 'object') return;
+
+  if (window.__ag_boot_dcl_handler) {
+    try {
+      window.removeEventListener('DOMContentLoaded', window.__ag_boot_dcl_handler);
+    } catch (e) {}
+    window.__ag_boot_dcl_handler = null;
+  }
+
+  const isAntigravityHost = () => {
+    if (IS_SWARM_PLUGIN_FRAME || (window.location && window.location.protocol === 'vscode-file:')) {
+      return true;
+    }
+    if (window.__APP_CONFIG__ && window.__APP_CONFIG__.productName === 'antigravity') {
+      return true;
+    }
+    if (
+      window.electronNative &&
+      typeof window.electronNative.setTitleBarOverlay === 'function' &&
+      window.nativeStorage &&
+      typeof window.nativeStorage.getItems === 'function'
+    ) {
+      return true;
+    }
+    return !!(
+      typeof document !== 'undefined' &&
+      typeof document.querySelector === 'function' &&
+      document.querySelector(
+        'link[href*="/jetbox.css"], body[data-agy-theme], body[data-newux-theme], [id="antigravity.agentSidePanelInputBox"]'
+      )
+    );
+  };
+
+  const scheduleBootOnDcl = () => {
+    if (typeof window.addEventListener !== 'function') return;
+    window.__ag_boot_dcl_handler = () => {
+      window.__ag_boot_dcl_handler = null;
+      runBoot(boot, true);
+    };
+    window.addEventListener('DOMContentLoaded', window.__ag_boot_dcl_handler, { once: true });
+  };
+
+  if (typeof document === 'undefined' || !document.documentElement) {
+    if (!fromDcl && typeof document !== 'undefined' && document.readyState === 'loading') {
+      scheduleBootOnDcl();
+    }
+    return;
+  }
+
+  if (!isAntigravityHost()) {
+    if (!fromDcl && document.readyState === 'loading') {
+      scheduleBootOnDcl();
+      return;
+    }
+    window.__ag_skip_non_host = true;
+    return;
+  }
+
+  if (window.__ag_skip_non_host) {
+    try {
+      delete window.__ag_skip_non_host;
+    } catch (e) {
+      window.__ag_skip_non_host = false;
+    }
+  }
 
   const PATCH_VERSION = boot.version || '20261115-v5.3.0';
   const DETECTED_OS =
