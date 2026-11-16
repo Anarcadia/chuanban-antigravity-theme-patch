@@ -116,7 +116,7 @@ function buildManifest(baseDir = __dirname) {
   }
   const manifest = {
     name: 'chuanban-antigravity-theme-patch',
-    version: '5.3.0',
+    version: '5.4.0',
     minNodeVersion: '22.0.0',
     fullMetricsNodeVersion: '22.13.0',
     distribution: {
@@ -648,7 +648,10 @@ async function inspectLiveWindow(portFileOrEnv, fallbackPort = 9222) {
                 __isHost: !!(
                   (window.location && window.location.protocol === 'vscode-file:') ||
                   (window.__APP_CONFIG__ && window.__APP_CONFIG__.productName === 'antigravity') ||
-                  (window.electronNative && typeof window.electronNative.setTitleBarOverlay === 'function' && window.nativeStorage && typeof window.nativeStorage.getItems === 'function') ||
+                  (window.electronNative && (
+                    (typeof window.electronNative.setTitleBarOverlay === 'function' && window.nativeStorage && typeof window.nativeStorage.getItems === 'function') ||
+                    (typeof window.electronNative.getZoomLevel === 'function' && window.electronNative.wcvBrowser && typeof window.electronNative.wcvBrowser.setThemeColor === 'function')
+                  )) ||
                   (typeof document !== 'undefined' && typeof document.querySelector === 'function' && document.querySelector('link[href*="/jetbox.css"], body[data-agy-theme], body[data-newux-theme], [id="antigravity.agentSidePanelInputBox"]'))
                 ),
                 version: window.__ag_patch_version || null,
@@ -656,6 +659,7 @@ async function inspectLiveWindow(portFileOrEnv, fallbackPort = 9222) {
                 hasStyle: !!document.getElementById('ag-custom-fonts'),
                 hasUserStyle: !!document.getElementById('antigravity-user-custom-style'),
                 preset: document.documentElement ? document.documentElement.getAttribute('data-ag-preset') : null,
+                darkPreset: document.documentElement ? document.documentElement.getAttribute('data-ag-dark-preset') : null,
                 themeMode: document.documentElement ? document.documentElement.getAttribute('data-ag-theme-mode') : null,
                 pageType: document.documentElement ? document.documentElement.getAttribute('data-ag-page-type') : null,
                 waxSeal: document.documentElement ? document.documentElement.getAttribute('data-ag-wax-seal') : null,
@@ -785,17 +789,49 @@ function copyDirRecursive(src, dest) {
   }
 }
 
-function checkDaemonPidState(pid) {
+function sleepSync(ms) {
+  try {
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+  } catch {}
+}
+
+function parsePidFile(filePath) {
+  try {
+    if (!fs.existsSync(filePath)) return { pid: 0, startMs: 0, stopRequested: false };
+    const raw = fs.readFileSync(filePath, 'utf8').trim();
+    if (!raw) return { pid: 0, startMs: 0, stopRequested: false };
+    const lines = raw.split(/\r?\n/);
+    const pid = parseInt(lines[0], 10) || 0;
+    const second = (lines[1] || '').trim();
+    if (second === 'STOP') return { pid, startMs: 0, stopRequested: true };
+    let startMs = parseInt(second, 10) || 0;
+    if (!startMs && pid > 0) {
+      try {
+        startMs = Math.round(fs.statSync(filePath).mtimeMs);
+      } catch {}
+    }
+    return { pid, startMs, stopRequested: false };
+  } catch {
+    return { pid: 0, startMs: 0, stopRequested: false };
+  }
+}
+
+function checkDaemonPidState(pid, recordedStartMs = 0) {
   if (!pid || pid <= 0 || pid === process.pid) return 'not_daemon';
+  let kill0Eperm = false;
   try {
     process.kill(pid, 0);
   } catch (err) {
-    return err && err.code === 'EPERM' ? 'uncertain' : 'not_daemon';
+    if (err && err.code === 'EPERM') {
+      kill0Eperm = true;
+    } else {
+      return 'not_daemon';
+    }
   }
   if (process.platform === 'win32') {
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
-        const res = spawnSync('tasklist', ['/FI', `PID eq ${pid}`, '/FO', 'CSV', '/NH'], {
+        const res = spawnSync('tasklist', ['/FI', `PID eq ${Number(pid)}`, '/FO', 'CSV', '/NH'], {
           windowsHide: true,
           encoding: 'utf8',
           timeout: 4000
@@ -803,47 +839,77 @@ function checkDaemonPidState(pid) {
         if (res.status === 0) {
           const out = String(res.stdout || '').toLowerCase();
           if (!out.includes('node.exe')) return 'not_daemon';
-        } else if (attempt === 0) {
-          continue;
-        } else {
-          return 'uncertain';
         }
+        const psCmd = [
+          `$gp = Get-Process -Id ${Number(pid)} -ErrorAction SilentlyContinue`,
+          `if (-not $gp) { [Console]::Out.WriteLine('STATE=GONE'); exit 0 }`,
+          `if ($gp.ProcessName -ne 'node') { [Console]::Out.WriteLine('STATE=NOT_NODE'); exit 0 }`,
+          `$ms = try { ([DateTimeOffset]$gp.StartTime).ToUnixTimeMilliseconds() } catch { 0 }`,
+          `[Console]::Out.WriteLine("STARTMS=$ms"); [Console]::Out.Flush()`,
+          `$cmd = try { (Get-CimInstance Win32_Process -Filter "ProcessId = ${Number(pid)}" -ErrorAction SilentlyContinue).CommandLine } catch { '' }`,
+          `[Console]::Out.WriteLine("CMD=$cmd")`
+        ].join('; ');
         const cimRes = spawnSync(
           'powershell',
-          [
-            '-NoProfile',
-            '-NonInteractive',
-            '-ExecutionPolicy',
-            'Bypass',
-            '-Command',
-            `$p = Get-CimInstance Win32_Process -Filter "ProcessId = ${Number(pid)}" -ErrorAction SilentlyContinue; if ($p) { $p.CommandLine }`
-          ],
+          ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', psCmd],
           {
             windowsHide: true,
             encoding: 'utf8',
-            timeout: 12000
+            timeout: 6000
           }
         );
-        if (cimRes.status === 0) {
-          const cmdLine = String(cimRes.stdout || '').trim().toLowerCase();
-          if (!cmdLine) {
-            try {
-              process.kill(pid, 0);
-              return 'uncertain';
-            } catch {
-              return 'not_daemon';
-            }
-          }
-          if (cmdLine.includes('daemon.mjs') || cmdLine.includes('antigravity-font-daemon')) {
-            return 'confirmed';
-          }
+        const rawOut = String(cimRes.stdout || '');
+        if (rawOut.includes('STATE=GONE') || rawOut.includes('STATE=NOT_NODE')) {
           return 'not_daemon';
+        }
+        const msMatch = rawOut.match(/STARTMS=(\d+)/);
+        const procStartMs = msMatch ? parseInt(msMatch[1], 10) || 0 : 0;
+        const cmdMatch = rawOut.match(/CMD=([^\r\n]*)/);
+        if (cmdMatch) {
+          const cmdLine = cmdMatch[1].trim().toLowerCase();
+          if (cmdLine) {
+            if (cmdLine.includes('daemon.mjs') || cmdLine.includes('antigravity-font-daemon')) {
+              return 'confirmed';
+            }
+            return 'not_daemon';
+          }
+        }
+        if (procStartMs > 0 && recordedStartMs > 0) {
+          return Math.abs(procStartMs - recordedStartMs) <= 5000 ? 'confirmed' : 'not_daemon';
+        }
+        if (cimRes.status === 0) {
+          try {
+            process.kill(pid, 0);
+            return 'uncertain';
+          } catch (e) {
+            return e && e.code === 'EPERM' ? 'uncertain' : 'not_daemon';
+          }
         }
       } catch {}
     }
     return 'uncertain';
   }
+  if (kill0Eperm) return 'not_daemon';
   return 'confirmed';
+}
+
+function sendCooperativeStop(pidPath, pid, waitMs = 1200) {
+  try {
+    fs.writeFileSync(pidPath, `${pid}\nSTOP`, 'utf8');
+    const steps = Math.max(1, Math.ceil(waitMs / 50));
+    for (let i = 0; i < steps; i++) {
+      sleepSync(50);
+      if (!fs.existsSync(pidPath)) return true;
+      if (pid > 0) {
+        try {
+          process.kill(pid, 0);
+        } catch (err) {
+          if (!err || err.code !== 'EPERM') return true;
+        }
+      }
+    }
+  } catch {}
+  return false;
 }
 
 function stopRunningDaemonProcesses() {
@@ -853,19 +919,36 @@ function stopRunningDaemonProcesses() {
     for (const f of fs.readdirSync(tmpDir)) {
       if (f.startsWith('ag-theme-daemon-') && f.endsWith('.pid')) {
         const pidPath = path.join(tmpDir, f);
-        const pid = parseInt(fs.readFileSync(pidPath, 'utf8').trim(), 10);
-        const pidState = checkDaemonPidState(pid);
-        if (pidState === 'confirmed') {
-          try {
-            process.kill(pid, 'SIGTERM');
-            stopped.push(pid);
-          } catch {}
-        } else if (pidState === 'uncertain') {
-          console.warn(`[Install] Skipping PID file unlink for active node.exe PID ${pid} (WMI check inconclusive).`);
-          continue;
+        const { pid, startMs, stopRequested } = parsePidFile(pidPath);
+        if (!stopRequested && pid > 0) {
+          const pidState = checkDaemonPidState(pid, startMs);
+          if (pidState === 'confirmed') {
+            let killed = false;
+            try {
+              process.kill(pid, 'SIGTERM');
+              for (let i = 0; i < 8; i++) {
+                sleepSync(50);
+                try {
+                  process.kill(pid, 0);
+                } catch (e) {
+                  if (!e || e.code !== 'EPERM') {
+                    killed = true;
+                    break;
+                  }
+                }
+              }
+            } catch {}
+            if (!killed) {
+              killed = sendCooperativeStop(pidPath, pid, 1500);
+            }
+            if (killed) stopped.push(pid);
+          } else if (pidState === 'uncertain') {
+            // 不对无法确认的进程发送 SIGTERM，但发出协作 STOP 信号等待片刻后无条件移除陈旧 .pid，防止重装自锁
+            sendCooperativeStop(pidPath, pid, 350);
+          }
         }
         try {
-          fs.unlinkSync(pidPath);
+          if (fs.existsSync(pidPath)) fs.unlinkSync(pidPath);
         } catch {}
       }
     }
@@ -1003,63 +1086,137 @@ WantedBy=default.target
       fs.writeFileSync(localVbsFile, vbsContent, 'utf16le');
     } catch {}
 
-    // 单一权威自启策略：优先使用 Windows 计划任务 (schtasks ONLOGON)，由系统 Schedule 服务拉起、
-    // 脱离沙盒 Win32 Job Object；注册成功后主动清理旧版遗留的 HKCU\...\Run 与 Startup\*.vbs，避免开机三路并发争抢！
+    // 单一权威自启策略：优先使用带当前用户 <UserId> 与 ME 完整性 SDDL 的 XML 注册 Windows 计划任务，
+    // 兼顾非提权（Medium Integrity）终端零报错创建、跨完整性覆盖与脱离沙盒 Job Object；成功后清理旧版残留避免多路争抢！
     let autostartMethod = 'none';
     let scheduledTaskStarted = false;
     let taskSettingsUpdated = false;
-    try {
-      const createRes = spawnSync(
-        'schtasks',
-        [
-          '/Create',
-          '/TN',
-          'AntigravityThemeDaemon',
-          '/SC',
-          'ONLOGON',
-          '/TR',
-          `wscript.exe //B //NoLogo "${localVbsFile}"`,
-          '/F'
-        ],
-        { stdio: 'ignore', windowsHide: true }
-      );
-      if (createRes.status === 0) {
-        autostartMethod = 'schtasks';
-        // 修正 Windows 计划任务默认策略：允许电池供电启动与持续运行、解除 72 小时超时强杀、允许重装时并发拉起新实例
-        try {
-          const settingsRes = spawnSync(
-            'powershell',
-            [
-              '-NoProfile',
-              '-NonInteractive',
-              '-ExecutionPolicy',
-              'Bypass',
-              '-Command',
-              "$s = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit ([TimeSpan]::Zero) -MultipleInstances Parallel; Set-ScheduledTask -TaskName 'AntigravityThemeDaemon' -Settings $s -ErrorAction Stop | Out-Null"
-            ],
-            { stdio: 'ignore', windowsHide: true, timeout: 12000 }
-          );
-          taskSettingsUpdated = settingsRes.status === 0;
-        } catch {}
-        // 清理旧版多重自启残留
-        try {
-          if (fs.existsSync(vbsFile)) fs.unlinkSync(vbsFile);
-        } catch {}
-        try {
-          spawnSync(
-            'reg',
-            ['delete', 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run', '/v', 'AntigravityThemeDaemon', '/f'],
-            { stdio: 'ignore', windowsHide: true }
-          );
-        } catch {}
+    const xmlEsc = (s) =>
+      String(s || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&apos;');
 
-        const runRes = spawnSync('schtasks', ['/Run', '/TN', 'AntigravityThemeDaemon'], {
-          stdio: 'ignore',
-          windowsHide: true
-        });
-        scheduledTaskStarted = runRes.status === 0;
+    let userAuthor = (process.env.USERDOMAIN ? `${process.env.USERDOMAIN}\\` : '') + (process.env.USERNAME || os.userInfo().username);
+    let userSid = '';
+    try {
+      const whoRes = spawnSync('whoami', ['/user', '/fo', 'csv', '/nh'], { encoding: 'utf8', windowsHide: true, timeout: 3000 });
+      if (whoRes.status === 0) {
+        const m = String(whoRes.stdout || '').trim().match(/^"([^"]+)","(S-1-[^"]+)"/);
+        if (m) {
+          userAuthor = m[1];
+          userSid = m[2];
+        }
       }
     } catch {}
+    const principalId = userSid || userAuthor;
+    const sddl = `D:(A;;FA;;;BA)(A;;FA;;;SY)(A;;FA;;;IU)${userSid ? `(A;;FA;;;${userSid})` : ''}S:(ML;;NW;;;ME)`;
+    const taskXml = [
+      '\uFEFF<?xml version="1.0" encoding="UTF-16"?>',
+      '<Task version="1.3" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">',
+      '  <RegistrationInfo>',
+      `    <Author>${xmlEsc(userAuthor)}</Author>`,
+      '    <URI>\\AntigravityThemeDaemon</URI>',
+      `    <SecurityDescriptor>${xmlEsc(sddl)}</SecurityDescriptor>`,
+      '  </RegistrationInfo>',
+      '  <Principals>',
+      '    <Principal id="Author">',
+      `      <UserId>${xmlEsc(principalId)}</UserId>`,
+      '      <LogonType>InteractiveToken</LogonType>',
+      '      <RunLevel>LeastPrivilege</RunLevel>',
+      '    </Principal>',
+      '  </Principals>',
+      '  <Settings>',
+      '    <MultipleInstancesPolicy>Parallel</MultipleInstancesPolicy>',
+      '    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>',
+      '    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>',
+      '    <ExecutionTimeLimit>PT0S</ExecutionTimeLimit>',
+      '    <Enabled>true</Enabled>',
+      '    <UseUnifiedSchedulingEngine>true</UseUnifiedSchedulingEngine>',
+      '  </Settings>',
+      '  <Triggers>',
+      '    <LogonTrigger>',
+      '      <Enabled>true</Enabled>',
+      `      <UserId>${xmlEsc(principalId)}</UserId>`,
+      '    </LogonTrigger>',
+      '  </Triggers>',
+      '  <Actions Context="Author">',
+      '    <Exec>',
+      '      <Command>wscript.exe</Command>',
+      `      <Arguments>//B //NoLogo &quot;${xmlEsc(localVbsFile)}&quot;</Arguments>`,
+      '    </Exec>',
+      '  </Actions>',
+      '</Task>',
+      ''
+    ].join('\r\n');
+
+    const tmpXmlPath = path.join(os.tmpdir(), `ag-theme-task-${process.pid}.xml`);
+    try {
+      fs.writeFileSync(tmpXmlPath, taskXml, 'utf16le');
+      const createRes = spawnSync('schtasks', ['/Create', '/TN', 'AntigravityThemeDaemon', '/XML', tmpXmlPath, '/F'], {
+        stdio: 'ignore',
+        windowsHide: true,
+        timeout: 6000
+      });
+      if (createRes.status === 0) {
+        autostartMethod = 'schtasks';
+        taskSettingsUpdated = true;
+      } else {
+        // 兼容旧版高完整性创建的无 SDDL 计划任务：若同名任务已存在且指向当前 VBS，直接复用而不降级写 HKCU\Run 制造双路并发
+        const queryRes = spawnSync('schtasks', ['/Query', '/TN', 'AntigravityThemeDaemon', '/XML'], {
+          encoding: 'utf8',
+          windowsHide: true,
+          timeout: 4000
+        });
+        if (queryRes.status === 0 && String(queryRes.stdout || '').toLowerCase().includes('antigravitythemedaemon.vbs')) {
+          autostartMethod = 'schtasks';
+        }
+      }
+    } catch {
+    } finally {
+      try {
+        if (fs.existsSync(tmpXmlPath)) fs.unlinkSync(tmpXmlPath);
+      } catch {}
+    }
+
+    if (autostartMethod === 'schtasks') {
+      // 清理旧版多重自启残留
+      try {
+        if (fs.existsSync(vbsFile)) fs.unlinkSync(vbsFile);
+      } catch {}
+      try {
+        spawnSync(
+          'reg',
+          ['delete', 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run', '/v', 'AntigravityThemeDaemon', '/f'],
+          { stdio: 'ignore', windowsHide: true }
+        );
+      } catch {}
+
+      try {
+        const runRes = spawnSync('schtasks', ['/Run', '/TN', 'AntigravityThemeDaemon'], {
+          stdio: 'ignore',
+          windowsHide: true,
+          timeout: 5000
+        });
+        if (runRes.status === 0) {
+          const tmpDir = os.tmpdir();
+          for (let i = 0; i < 15; i++) {
+            sleepSync(100);
+            const hasLivePid = fs.readdirSync(tmpDir).some((f) => {
+              if (!f.startsWith('ag-theme-daemon-') || !f.endsWith('.pid')) return false;
+              const parsed = parsePidFile(path.join(tmpDir, f));
+              return !parsed.stopRequested && parsed.pid > 0;
+            });
+            if (hasLivePid) {
+              scheduledTaskStarted = true;
+              break;
+            }
+          }
+        }
+      } catch {}
+    }
 
     // 仅当组策略等禁用了 schtasks 时，按 HKCU\Run -> Startup 目录顺序单路降级自启
     if (autostartMethod === 'none') {
@@ -1128,6 +1285,7 @@ async function runInstall() {
   const cliChannel = getArg('--channel', null);
   const channel = cliChannel || 'auto';
   const preset = getArg('--preset', null);
+  const darkPreset = getArg('--dark-preset', null);
   const syncUser = hasFlag('--sync-user');
   const defaultTarget = resolveGlobalInstallDir();
   const targetDir = path.resolve(getArg('--target-dir', defaultTarget));
@@ -1217,6 +1375,11 @@ async function runInstall() {
     currentCfg.preset = preset;
   } else if (!currentCfg.preset) {
     currentCfg.preset = 'high-contrast';
+  }
+  if (darkPreset) {
+    currentCfg.darkPreset = darkPreset;
+  } else if (!currentCfg.darkPreset) {
+    currentCfg.darkPreset = 'onyx';
   }
   // 自动清理早期版本遗留在 user/config.json 中的出厂默认 selectors，确保后续升级由 core/runtime.js 统一托管
   if (currentCfg.selectors && typeof currentCfg.selectors === 'object') {

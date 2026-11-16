@@ -4,6 +4,30 @@
 
 ---
 
+## [v5.4.0] - 2026-11-17
+
+> **适用版本**：Antigravity `2.32.1+` / `2.32.0`（向下完全兼容 `2.31.x` / `2.30.0`）  
+> **核验基线**：macOS `2.32.1` × Windows 11 `2.32.1`（`winsqlite3.dll` 四斜杠 VFS 实证、内置浏览器 `127.0.0.1` 零误注、`claude-warm` 原生标题栏联动与真·中完整性 `S-1-16-8192` 全链路验收）双端联合发版  
+> **社区致谢**：特别感谢 [@CaramelizedCUDA](https://github.com/CaramelizedCUDA)（[Issue #11](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/issues/11) · [PR #12](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/pull/12) · [Issue #13](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/issues/13)）、[@lkw0831](https://github.com/lkw0831)（[Issue #10](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/issues/10)）、[@suiahae](https://github.com/suiahae)（[Issue #8](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/issues/8)）、[@peterhon168](https://github.com/peterhon168)（[Issue #9](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/issues/9)）及 [@Misaka1ooo6](https://github.com/Misaka1ooo6) 的详尽复现、源码级根因定位与高质量代码贡献！
+
+### Added（可选同族深色预设 `darkPreset: "claude-warm"` 与 `darkThemeVars` 定制）
+- **新增可选深色模式预设 `darkPreset`（默认保持 `"onyx"` 零变化，新增 `"claude-warm"` 暖纸深夜，合入 [#13](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/issues/13)）**：
+  - 在 `user/config.json`（及 `install.mjs install --dark-preset <onyx|claude-warm>`）新增可选字段 `"darkPreset"`：缺省或设为 `"onyx"` 时 100% 保持原版冷碳黑 + `#2F71E3` 品牌蓝；设为 `"claude-warm"` 时启用与白天暖纸预设同族的 **「Claude 暖纸深夜」**（`#242320` 暖炭棕画布 + `#1B1A18` 侧栏外框 + `#2B2A26` 抬升卡片 + `#F3F0E4` 柔和象牙白文字 + `#D97757` 陶土暖橙按钮/蜡封聚焦框 `--ag-dark-wax-seal-hover`/暖陶 `+N sub` 徽标），2.5 秒热重载即时联动 Windows 原生标题栏、`curtainView` 幕布底色与 `plugin://swarm--` 蜂群子帧；
+  - `user/config.json` 同步支持可选 `"darkThemeVars"` 对象（注入深色作用域 `#ag-user-theme-vars`），无需手写数百行 `custom.css` 即可按需微调任意深色核心表面变量。
+
+### Fixed（宿主独占指纹门禁、WSL2 默认发行版与双轨 WAL 读取、Windows 跨完整性 `.pid` 围栏与 `ME` SDDL 自启）
+- **守护进程宿主独占指纹先探后注与 `NewDocument` 0ms 防闪白空指针修复（`core/daemon.mjs` / `core/runtime.js` / `install.mjs`，合入 [#12](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/pull/12) 修复 [#11](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/issues/11)）**：
+  - `daemon.mjs` 对 `127.0.0.1` / `localhost` 目标先执行无副作用三态探针 `HOST_PROBE_EXPRESSION`（校验 `window.__APP_CONFIG__.productName === 'antigravity'`、跨平台 `electronNative` Preload 桥接及 `/jetbox.css` / `data-agy-theme` 独占特征，显式放行 `plugin://swarm--*` 与 `vscode-file://`），确认非宿主的内置浏览器本地网页零注入、零绑定并按 `(targetId, origin)` 缓存跳过；
+  - `runtime.js` 修复 `Page.addScriptToEvaluateOnNewDocument` 极早期 `document.documentElement === null` 导致的 `line 502` 空指针异常，并在 Preload 宿主命中时通过 `MutationObserver` 微秒级瞬时挂载样式消除冷启动/强刷闪白；`install.mjs` `inspectLiveWindow()` 同步跳过内置浏览器标签页。
+- **Windows WSL2 默认发行版 `Lxss` 注册表兜底与 SQLite WAL 双轨只读读取（`core/daemon.mjs`，修复 [#10](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/issues/10)）**：
+  - 修复默认 WSL 发行版下 `%APPDATA%\Antigravity\wsl_state.json` 写入 `{"distro":""}` 导致跳过探测的问题：自动从 `HKCU\Software\Microsoft\Windows\CurrentVersion\Lxss` 精确读取 `DefaultDistribution`（命中后立即终止探测，0 休眠非默认 VM 误唤醒，无 `wsl_state.json` 的纯本地用户 0 调用）；
+  - 新增 `withReadOnlyDb()` 与 `canUseSqliteFileUri()` 惰性探测根治 Windows `node:sqlite` 直连 `\\wsl.localhost` 9P 文件系统必报 `database is locked (5)` 的缺陷：对无非空 `-wal` 的历史/完结子库在 `Node >= 22.15 / 24` 下走四斜杠 `file:////...?immutable=1` 零锁零拷贝按需读页（`Node 22.13 ~ 22.14` 零异常平滑走本地快照），对存在活跃 `-wal` 的实时会话库自动快照 `.db` + `-wal` 至本地 NTFS `os.tmpdir()` 读取并即时清理。
+- **Windows 登录自启跨周期 `.pid` 协作围栏与非提权 `schtasks /XML` `ME` SDDL 原生创建（`core/daemon.mjs` / `install.mjs`，修复 [#8](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/issues/8)）**：
+  - 根治 Windows 重启或快速启动（`HiberbootEnabled=1`）后遗留 `.pid` 撞上系统/跨完整性进程抛 `EPERM -> 'uncertain'` 导致守护进程静默 `exit(0)` 及 `install.mjs` 重装跳过删锁的死锁：穿透 `EPERM` 执行 `tasklist` 与 Win32 `Get-Process.StartTime` 出生时间戳比对，引入 `${pid}\nSTOP` 协作式所有权围栏（`45ms` 优雅让位、`80ms` 误删自愈、启动绝不自杀）与 `128KB` 滚动诊断日志 `%TEMP%\ag-theme-daemon.log`；
+  - 将 Windows 计划任务升级为携带当前用户 `<UserId>` 与中完整性 `S:(ML;;NW;;;ME)` SDDL 的单次 UTF-16LE `schtasks /Create /XML`（非提权终端 `35ms` 零报错创建并支持跨完整性双向覆盖，彻底告别降级 `HKCU\Run`）。
+
+---
+
 ## [v5.3.0] - 2026-11-15
 
 > **适用版本**：Antigravity `2.32.1+` / `2.32.0`（`CL=1021296516`，向下完全兼容 `2.31.x` / `2.30.0`）  

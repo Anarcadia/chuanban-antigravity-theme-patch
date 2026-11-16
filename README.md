@@ -1,6 +1,6 @@
-# 船板的 Antigravity 书卷暖纸 × 官方碳黑昼夜双模式主题、字体优化与深度汉化全栈补丁 (v5.3.0 · 适配 Antigravity 2.32.1)
+# 船板的 Antigravity 书卷暖纸 × 昼夜双预设主题、字体优化与深度汉化全栈补丁 (v5.4.0 · 适配 Antigravity 2.32.1)
 
-[![Version](https://img.shields.io/badge/version-5.3.0-7A1F1A.svg)](https://github.com/Anarcadia/chuanban-antigravity-theme-patch)
+[![Version](https://img.shields.io/badge/version-5.4.0-7A1F1A.svg)](https://github.com/Anarcadia/chuanban-antigravity-theme-patch)
 [![Antigravity](https://img.shields.io/badge/Antigravity-2.32.1%2B-D97757.svg)](https://github.com/Anarcadia/chuanban-antigravity-theme-patch)
 [![Node](https://img.shields.io/badge/node-%3E%3D22.0.0%20(22.13%2B%20Full)-339933.svg)](https://nodejs.org/)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey.svg)](https://github.com/Anarcadia/chuanban-antigravity-theme-patch)
@@ -30,23 +30,23 @@
 
 ---
 
-## ✨ 补丁简介：核心定位与五大亮点（v5.3.0）
+## ✨ 补丁简介：核心定位与五大亮点（v5.4.0）
 
 ### 1. 设计目的
-Google Antigravity 原生浅色界面偏冷刺眼、全局仅使用单一无衬线字体，长时间高强度阅读与编码容易视觉疲劳。本补丁以**纯运行时非侵入注入**的方式，将 Antigravity 重塑为兼具 **Anthropic 暖纸学术质感、官方原版高可读深色模式、四层中西文精密排版、全界面母语级汉化与实时模型遥测** 的主力工作台：
+Google Antigravity 原生浅色界面偏冷刺眼、全局仅使用单一无衬线字体，长时间高强度阅读与编码容易视觉疲劳。本补丁以**纯运行时非侵入注入**的方式，将 Antigravity 重塑为兼具 **Anthropic 暖纸学术质感、官方碳黑与 Claude 暖炭橙可选深色模式、四层中西文精密排版、全界面母语级汉化与实时模型遥测** 的主力工作台：
 
-- **🌓 昼夜双模式独立解耦（暖纸白天 + 官方碳黑黑夜）**：
-  - **白天模式（Light）**：内置 **高对比暖白**（默认，暖燕麦侧栏 `#F7F5F0` + 微暖亮白主区 `#FCFCFB` + 深墨文字 `#0A0A0A`）、**ClaudeDesktop 净白** 与 **复古深色羊皮纸** 三套护眼预设；
-  - **黑夜模式（Dark）**：当你点击设置中的「深色 / Dark」按钮（或跟随系统深色）时，**100% 保持四层字体与 UI 形状要素不变**，同时 `0ms` 自动还原 **Antigravity `2.30.0 ~ 2.32.1` 官方无补丁时的 `onyx` Default Dark 碳黑配色方案**（`#070708` 主背景 / `#111114` 侧栏 / `#15151A` 悬浮输入卡 / `#2F71E3` 官方品牌蓝），并专项提升深色下的文字对比度、卡片边界与指标可读性。
+- **🌓 昼夜双模式独立解耦（白天暖纸三预设 + 黑夜官方碳黑 / Claude 暖纸深夜双预设）**：
+  - **白天模式（Light · `preset`）**：内置 **高对比暖白**（默认，暖燕麦侧栏 `#F7F5F0` + 微暖亮白主区 `#FCFCFB` + 深墨文字 `#0A0A0A`）、**ClaudeDesktop 净白** 与 **复古深色羊皮纸** 三套护眼预设；
+  - **黑夜模式（Dark · `darkPreset`）**：当你点击设置中的「深色 / Dark」按钮（或跟随系统深色）时，**100% 保持四层字体与 UI 形状要素不变**；默认 `"darkPreset": "onyx"` `0ms` 还原 **官方 `onyx` Default Dark 碳黑配色**（`#070708` 主背景 / `#111114` 侧栏 / `#2F71E3` 官方品牌蓝），亦可将 `"darkPreset"` 设为 `"claude-warm"` 一键切换至同族 **Claude 暖纸深夜**（`#242320` 暖炭底 / `#1B1A18` 侧栏 / `#F3F0E4` 柔和象牙白字 / `#D97757` 陶土暖橙点缀）。
 - **🔤 四层字体排版（昼夜完全共用 · 原生适配 `2.32.1` `[data-markdown-root]`、`.pdf-sdk-root`、`data-agy-font`、Lexical 编辑器、`plugin://swarm--` 子帧与 Windows `DirectWrite` 可变字重轴）**：UI 控件采用 `Anthropic Sans` + `Sarasa UI SC`，阅读正文采用 `Anthropic Serif` 古典衬线 + `Sarasa Mono Slab SC`，代码与终端采用严格 1:2 等宽，主输入框独立配置 Codex 同款打字机板状粗衬线。
-- **🕯️ 输入框三态 `1.5px` 交互结构**：区分「新建对话首页」与「日常聊天会话」自动切换外框呼吸感与聚焦反馈（白天为古朴暗红蜡封，黑夜为官方微亮边与 `#2F71E3` 品牌蓝聚焦光环）。
-- **🇨🇳 1,740 条零冲突母语级汉化 + 弯引号自动归一与 `DICT_CI` 兜底索引 + ⚡ `O(1)` 增量实时指标胶囊（原生兼容本地与 Windows WSL 会话库 `0-I/O` 熔断保护）**：全覆盖 `2.32.1` / `2.32.0` 的蜂群协作面板（Swarm 概览与纪要员视图）、MCP 工具调用卡片、Markdown 表格工具栏与内嵌跳转胶囊、自动化与协调器（Automations / Coordinators）、运行环境与 Worktree/WSL/SSH 切换器、授权码登录兜底与 GitHub 远程克隆向导、插件市场与 MCP 启动状态、新建对话动态人名问候语及 Lexical `[contenteditable="true"]` 无障碍属性（基于 `WeakMap` `O(1)` 隔离保护代码块、Monaco 编辑器、终端、Swarm 原始消息与对话正文不误伤），并在输入框底部同行实时展示生成速度（`tok/s`）、首字/缓冲等待耗时（`TTFT` / `Hold`）、模型动态上下文水位（`256k` / `840k` / `1M+`，支持 `contextLimitOverride` 手动强制覆盖）、子 Agent/本地 `/swarm` 聚合徽标（`+N sub` 及合计输出，内置 `4,096` 节点缓存、冷启动每周期 `<= 45 DB / 60ms` 双重分片预算与 `SQLITE_BUSY` 隔离）及缓存命中率详情面板。
+- **🕯️ 输入框三态 `1.5px` 交互结构**：区分「新建对话首页」与「日常聊天会话」自动切换外框呼吸感与聚焦反馈（白天为古朴暗红蜡封，黑夜随 `darkPreset` 自动匹配 `#2F71E3` 品牌蓝或 `#D97757` 陶土橙聚焦光环）。
+- **🇨🇳 1,740 条零冲突母语级汉化 + 弯引号自动归一与 `DICT_CI` 兜底索引 + ⚡ `O(1)` 增量实时指标胶囊（原生兼容本地与 Windows WSL2 默认发行版及双轨 WAL 读取）**：全覆盖 `2.32.1` / `2.32.0` 的蜂群协作面板（Swarm 概览与纪要员视图）、MCP 工具调用卡片、Markdown 表格工具栏与内嵌跳转胶囊、自动化与协调器（Automations / Coordinators）、运行环境与 Worktree/WSL/SSH 切换器、授权码登录兜底与 GitHub 远程克隆向导、插件市场与 MCP 启动状态、新建对话动态人名问候语及 Lexical `[contenteditable="true"]` 无障碍属性（基于 `WeakMap` `O(1)` 隔离保护代码块、Monaco 编辑器、终端、Swarm 原始消息与对话正文不误伤），并在输入框底部同行实时展示生成速度（`tok/s`）、首字/缓冲等待耗时（`TTFT` / `Hold`）、模型动态上下文水位（`256k` / `512k` / `840k` / `1M+`，支持 `contextLimitOverride` 手动强制覆盖）、子 Agent/本地 `/swarm` 聚合徽标（`+N sub` 及合计输出，内置 `4,096` 节点缓存、冷启动分片预算与 `SQLITE_BUSY` 隔离）及缓存命中率详情面板。
 
 ### 2. 五大工程亮点
 1. **🤖 Agent 3 秒一键部署，零构建零依赖**：所有 CSS、词典、DOM 引擎与守护进程已预封装在 `core/` 只读内核中，无需任何 npm 依赖或编译构建，交给你的 Agent 即可 3 秒一键安装。
-2. **🛠️ 开放 `user/` 独立改装层，2.5 秒热重载**：内置升级永不覆盖的 `user/` 改装层（`config.json` / `custom.css` / `i18n.override.json` / `custom.js`）。想换配色、改字号、微调颜色或增改汉化词条，只需直接跟 Agent 对话，保存后 2.5 秒内自动热生效。
-3. **🛡️ 纯运行时 CDP 注入、宿主指纹门禁与冷启动自愈，绝不改动客户端本体**：仅通过本地 `127.0.0.1` Chrome DevTools Protocol 在渲染层动态注入，不拆包 `.asar`、不破坏系统签名；守护进程与注入引擎双重校验 Antigravity 独占宿主指纹并豁免内置浏览器本地预览页（零样式/汉化误注入），自动拦截修复官方设置弹窗路由死锁，并内置基于 `HEAD /main.js` `ETag` 零流量比对与空输入框门禁的**冷启动内嵌兜底包漂移无感自愈**（解决官方冷启动竞态偶发丢失 `Remote` 远程项目入口的问题）。
-4. **🔄 客户端日常小版本更新后自动延续**：配合系统常驻守护服务（macOS `LaunchAgent` / Windows 计划任务自启 / Linux `systemd`）自动探测窗口与重连注入，单守护进程同时兼容 **Stable 正式版** 与 **Insiders 预览版**。
+2. **🛠️ 开放 `user/` 独立改装层，2.5 秒热重载**：内置升级永不覆盖的 `user/` 改装层（`config.json` / `custom.css` / `i18n.override.json` / `custom.js`）。想换昼夜配色预设、改字号、微调颜色或增改汉化词条，只需直接跟 Agent 对话，保存后 2.5 秒内自动热生效。
+3. **🛡️ 纯运行时 CDP 注入、宿主独占指纹门禁与冷启动自愈，绝不改动客户端本体**：仅通过本地 `127.0.0.1` Chrome DevTools Protocol 在渲染层动态注入，不拆包 `.asar`、不破坏系统签名；守护进程与注入引擎双重校验 Antigravity 独占宿主指纹并豁免内置浏览器本地预览页（零样式/汉化误注入），自动拦截修复官方设置弹窗路由死锁，并内置基于 `HEAD /main.js` `ETag` 零流量比对与空输入框门禁的**冷启动内嵌兜底包漂移无感自愈**（解决官方冷启动竞态偶发丢失 `Remote` 远程项目入口的问题）。
+4. **🔄 客户端日常小版本更新后自动延续**：配合系统常驻守护服务（macOS `LaunchAgent` / Windows 带中完整性 SDDL 的 `schtasks` 计划任务与跨周期 `.pid` 协作围栏 / Linux `systemd`）自动探测窗口与重连注入，单守护进程同时兼容 **Stable 正式版** 与 **Insiders 预览版**。
 5. **💻 macOS 与 Windows 双平台原生统一体验**：内置 Windows 字体一键注册表写入命令 `install-fonts`、ClearType 抗锯齿自动适配、SQLite `O(1)` 增量只读游标缓存与 `Cmd/Ctrl + -/=/0` 缩放快捷键修复（兼容 `2.31.0` `resetZoom`）。
 
 ---
@@ -60,15 +60,15 @@ Google Antigravity 原生浅色界面偏冷刺眼、全局仅使用单一无衬�
 > **💬 复制发给 Agent（新用户一键安装）**：  
 > 请帮我克隆 `https://github.com/Anarcadia/chuanban-antigravity-theme-patch.git`（或读取我已下载解压的补丁目录），严格按照仓库内的 `SKILL.md` 依次执行 `node install.mjs doctor`（Windows 下若未装字体请先用 `node install.mjs install-fonts` 注册字体）、`node install.mjs install` 和 `node install.mjs verify`，帮我一键部署好船板的 Antigravity 主题补丁并验证实机生效。
 
-### 二、老版本用户无缝升级至 v5.3.0
+### 二、老版本用户无缝升级至 v5.4.0
 `node install.mjs install` 会自动备份旧内核、接管旧版常驻服务，并无损保留你在 `~/.gemini/antigravity/theme-patch/user/` 中的个人配置：
 
 > **💬 复制发给 Agent（老用户无缝升级）**：  
-> 请帮我拉取最新的 `https://github.com/Anarcadia/chuanban-antigravity-theme-patch.git`，阅读其中的 `SKILL.md`，直接运行 `node install.mjs install` 和 `node install.mjs verify` 将我的环境升级至最新 `v5.3.0` 版本（若我旧脚本里有自定义的配色预设或字号修改，请迁移保留到 `~/.gemini/antigravity/theme-patch/user/` 改装层中）。
+> 请帮我拉取最新的 `https://github.com/Anarcadia/chuanban-antigravity-theme-patch.git`，阅读其中的 `SKILL.md`，直接运行 `node install.mjs install` 和 `node install.mjs verify` 将我的环境升级至最新 `v5.4.0` 版本（若我旧脚本里有自定义的配色预设或字号修改，请迁移保留到 `~/.gemini/antigravity/theme-patch/user/` 改装层中）。
 
 ### 三、后续与 Agent 对话定制风格或排障
-- **🎨 切换白天预设、调整字号或微调外观**：
-  > 请参考 `~/.gemini/antigravity/theme-patch/SKILL.md` 的 `user/` 改装规范，只修改 `user/` 目录下的配置文件：帮我把白天配色预设切换为「ClaudeDesktop 净白」（或「复古深色」） / 把对话正文字号调为 `16.5px` / 在 `user/custom.css` 里微调某处样式。
+- **🎨 切换白天/黑夜预设、调整字号或微调外观**：
+  > 请参考 `~/.gemini/antigravity/theme-patch/SKILL.md` 的 `user/` 改装规范，只修改 `user/` 目录下的配置文件：帮我把白天配色预设切换为「ClaudeDesktop 净白」（或「复古深色」） / 把黑夜配色预设 `"darkPreset"` 切换为 `"claude-warm"`（Claude 暖炭 + 陶土橙夜间风格） / 把对话正文字号调为 `16.5px`。
 - **🇨🇳 自定义修改或新增某条汉化词条**：
   > 请在 `~/.gemini/antigravity/theme-patch/user/i18n.override.json` 中添加或修改词条，把界面上的 `"某英文原词"` 改成 `"我想要的中文"`，确认 2.5 秒内页面实时热更新生效。
 - **🔍 自我 Debug 或一键回滚**：
@@ -79,7 +79,9 @@ Google Antigravity 原生浅色界面偏冷刺眼、全局仅使用单一无衬�
 
 ## 🕒 版本演进简史（完整变更日志见 [`CHANGELOG.md`](CHANGELOG.md)）
 
-- **2026-11-15（v5.3.0 现行版 · Antigravity `2.32.1` 双平台全量适配、子 Agent `+N sub` 血缘遥测聚合、动态上下文水位与 `1,740` 条零冲突词典）**：
+- **2026-11-16（v5.4.0 现行版 · 可选 `claude-warm` 暖纸深夜预设、内置浏览器宿主指纹门禁、WSL2 默认发行版与双轨 WAL 读取、Windows 跨完整性 `.pid` 协作围栏与 `ME` SDDL 自启）**：
+  深度融合社区共建（特别感谢 [@CaramelizedCUDA](https://github.com/CaramelizedCUDA) [#11](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/issues/11)/[#12](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/pull/12)/[#13](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/issues/13)、[@lkw0831](https://github.com/lkw0831) [#10](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/issues/10)、[@suiahae](https://github.com/suiahae) [#8](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/issues/8)、[@peterhon168](https://github.com/peterhon168) [#9](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/issues/9) 与 [@Misaka1ooo6](https://github.com/Misaka1ooo6)）：① **可选深色预设 `darkPreset`**（默认保持官方碳黑 `"onyx"` 零变化，新增同族 `"claude-warm"` 暖炭棕 `#242320` + 象牙白 `#F3F0E4` + 陶土暖橙 `#D97757` 夜间主题及可选 `darkThemeVars`）；② **宿主独占指纹门禁与 `NewDocument` 0ms 防闪白空指针保护**（内置浏览器打开本地 `127.0.0.1` / `localhost` 网页零误注，消除 `runtime.js:502` 空指针且 `doctor`/`verify` 自动跳过非宿主标签页）；③ **WSL2 实时指标胶囊全链路打通**（`wsl_state.json` 为 `{"distro":""}` 时自动通过 `HKCU\...\Lxss` 注册表解析默认发行版且不唤醒休眠 VM；`withReadOnlyDb` 对无活跃 `-wal` 历史库采用 `file:////...?immutable=1` 零拷贝直读、对含活跃 `-wal` 会话库采用 `%TEMP%` 快照拷贝，根治 9P 文件系统 `database is locked (5)`）；④ **Windows 自启单实例锁与跨完整性 SDDL 根治**（穿透 `EPERM` 校验 `tasklist` 与 `Get-Process.StartTime`、引入 `.pid` `STOP` 协作围栏与 `128KB` 滚动日志、消除重装死锁，并以带 `<UserId>` 与 `ME` SDDL 的 `schtasks /XML` 实现非提权终端 `35ms` 原生注册）。
+- **2026-11-15（v5.3.0 · Antigravity `2.32.1` 双平台全量适配、子 Agent `+N sub` 血缘遥测聚合、动态上下文水位与 `1,740` 条零冲突词典）**：
   融合社区共建（特别感谢 [@honlam996](https://github.com/honlam996) [#3](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/issues/3)/[#4](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/issues/4)/[#5](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/issues/5)/[#6](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/pull/6)/[#7](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/pull/7)）与 macOS × Windows 11 双端 `2.32.1` 真机压测加固：新增子 Agent 与本地 `/swarm` 全树血缘汇总（`+N sub` 胶囊徽标与悬浮明细，`4,096` 缓存容量 + `<= 45 DB / 60ms` 渐进分片预算 + WSL2 UNC `45s` `0-I/O` 熔断闭环）；支持动态读取模型真实上下文窗口（`256k` / `840k` / `1M+` 及 `contextLimitOverride`）与缓冲型调用 `streamRatio` 守卫（`Hold X.Xs`）；全量适配 `2.32.1` `.pdf-sdk-root` 局部字体变量、恢复被 `no-contextual` 误关的全局连字、支持 `[data-markdown-root]` 内嵌表格/外链/胶囊按钮无障碍属性定向汉化与 Swarm 2.0 子帧隔离词典，静态词条扩充至 **1,740 条**。
 - **2026-11-14（v5.2.0 · Antigravity `2.32.0` 适配、全词库系统性去机翻精校与 1,630 条统一母语词典）**：
   完成 Antigravity `2.32.0` 客户端实机零漂移核验与新增 UI 全覆盖（34 条 `2.32.0` 新增快捷键/SSH/授权码登录兜底/MCP 状态/GitHub 远程克隆词条 + 2 条动态正则），并对全量词库与动态模板实施系统性去机翻重构：将生硬直译的 `"Local Checkout"`（`本地检出`）修正为 **`本地`** 并补齐非 Git 目录下的 9 条环境选择器说明；统一全界面五大高频术语规范（保留约定俗成英文 **`Artifact`** 与 **`Worktree`**，统一 **`Agent / 子 Agent`**、**`支线提问`**、**`对话`**、**`沙盒`** 与 Swarm **`纪要员`**），清理 23 处按钮与菜单冗余英文括号尾巴（如 `极速模式`、`自动判断`、`始终直接执行`），修正 `可操控网址`、顶栏 `审阅`、`今天想做点什么？` 等直译硬伤，静态词条总计达 **1,630 条**。

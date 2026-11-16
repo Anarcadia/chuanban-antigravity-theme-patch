@@ -2,6 +2,7 @@
   "enabled": true,
   "channel": "auto",
   "preset": "high-contrast",
+  "darkPreset": "onyx",
   "contextLimit": 256000,
   "modules": {
     "i18n": true,

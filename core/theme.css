@@ -776,6 +776,136 @@ body[data-agy-theme][data-newux-theme="onyx"].dark .agy-sidebar-row[data-selecte
   color: #EAEBF1 !important;
 }
 
+/* 黑夜预设 2（可选同族暖调）：Claude 暖纸深夜 (claude-warm · 暖炭底 #242320 + 象牙字 #F3F0E4 + 陶土暖橙 #D97757) */
+html[data-ag-dark-preset="claude-warm"][data-ag-theme-mode="dark"],
+html[data-ag-dark-preset="claude-warm"][data-ag-theme-mode="dark"] body,
+html[data-ag-dark-preset="claude-warm"]:has(> body.dark),
+html[data-ag-dark-preset="claude-warm"] body.dark,
+html[data-ag-dark-preset="claude-warm"] body.theme-dark,
+html[data-ag-dark-preset="claude-warm"] body[data-agy-theme].dark,
+html[data-ag-dark-preset="claude-warm"][data-ag-preset] body.dark,
+html[data-ag-dark-preset="claude-warm"][data-ag-preset] body[data-agy-theme].dark {
+  --background: #242320 !important;
+  --body-background: #242320 !important;
+  --content: #242320 !important;
+  --foreground: #F3F0E4 !important;
+  --primary: #D97757 !important;
+  --primary-foreground: #FFFBF2 !important;
+  --editor-selection-background: rgba(217, 119, 87, 0.32) !important;
+  --editor-comment-selection-background: rgba(217, 119, 87, 0.20) !important;
+  --shell: #1B1A18 !important;
+  --sidebar: #1B1A18 !important;
+  --vscode-sideBar-background: #1B1A18 !important;
+  --sidebar-secondary: rgba(243, 240, 228, 0.08) !important;
+  --sidebar-muted: rgba(243, 240, 228, 0.05) !important;
+  --sidebar-border: rgba(243, 240, 228, 0.10) !important;
+  --secondary: rgba(243, 240, 228, 0.07) !important;
+  --secondary-foreground: #DAD5C5 !important;
+  --muted: rgba(243, 240, 228, 0.05) !important;
+  --muted-foreground: #A39E8D !important;
+  --placeholder: #7E7A6B !important;
+  --card: #2B2A26 !important;
+  --card-border: rgba(243, 240, 228, 0.10) !important;
+  --card-edge: rgba(243, 240, 228, 0.10) !important;
+  --sash-line: rgba(243, 240, 228, 0.12) !important;
+  --border: rgba(243, 240, 228, 0.09) !important;
+  --glass: #282724 !important;
+  --glass-border: rgba(243, 240, 228, 0.10) !important;
+  --glass-highlight: rgba(243, 240, 228, 0.07) !important;
+  --scrim: rgba(14, 13, 11, 0.70) !important;
+  --onyx-frame: #1B1A18 !important;
+  --onyx-well: #201F1C !important;
+  --onyx-raised: #2B2A26 !important;
+  --onyx-selected: #37342E !important;
+  --onyx-key: #403D36 !important;
+  --home-glow: rgba(217, 119, 87, 0.10) !important;
+  --error: #E0735C !important;
+  --warning: #DFAF5F !important;
+  --link: #DFA07E !important;
+  --success: #93AE78 !important;
+  --ag-composer-tray-bg: #1B1A18;
+  --ag-composer-card-bg: #2B2A26;
+  --ag-composer-card-border: rgba(243, 240, 228, 0.08);
+  --ag-composer-card-shadow: inset 0 1px 0 rgba(243, 240, 228, 0.06), 0 3px 10px -2px rgba(0, 0, 0, 0.40);
+  --ag-composer-card-focus-border: rgba(217, 119, 87, 0.45);
+  --ag-composer-card-focus-shadow: inset 0 1px 0 rgba(243, 240, 228, 0.08), 0 6px 18px -3px rgba(0, 0, 0, 0.50);
+  --ag-seal-home-border: rgba(243, 240, 228, 0.09);
+  --ag-seal-home-shadow: 0 14px 34px -10px rgba(0, 0, 0, 0.50);
+  --ag-seal-home-focus-border: rgba(217, 119, 87, 0.55);
+  --ag-seal-home-focus-shadow: 0 16px 36px -10px rgba(0, 0, 0, 0.60);
+  --ag-seal-chat-border: rgba(243, 240, 228, 0.13);
+  --ag-seal-chat-shadow: 0 16px 36px -10px rgba(0, 0, 0, 0.55);
+  --ag-dark-wax-seal-hover: rgba(217, 119, 87, 0.72);
+  --ag-seal-chat-focus-border: var(--ag-dark-wax-seal-hover, rgba(217, 119, 87, 0.72));
+  --ag-seal-chat-focus-shadow: 0 0 0 1px rgba(217, 119, 87, 0.20), 0 18px 40px -12px rgba(0, 0, 0, 0.60);
+  --ag-seal-off-border: rgba(243, 240, 228, 0.11);
+  --ag-composer-top-fg: #DAD5C5;
+  --ag-composer-top-hover-bg: rgba(243, 240, 228, 0.08);
+  --ag-composer-top-hover-fg: #F8F5EA;
+  --ag-composer-ctrl-fg: #DAD5C5;
+  --ag-send-btn-bg: var(--primary, #D97757);
+  --ag-send-btn-hover-bg: #E08A6B;
+  --ag-send-btn-border: rgba(255, 244, 230, 0.24);
+  --ag-send-btn-shadow: inset 0 1px 0 rgba(255, 244, 230, 0.25), inset 0 -1.5px 0 rgba(0, 0, 0, 0.18), 0 2px 6px rgba(0, 0, 0, 0.32);
+  --ag-sidebar-fg: #E7E3D4;
+  --ag-sidebar-row-fg: #D8D4C4;
+  --ag-sidebar-header-fg: #C4BFAE;
+  --ag-sidebar-header-title-fg: #EEEADA;
+  --ag-sidebar-selected-fg: #FCF9EF;
+  --ag-sidebar-muted-fg: #948F80;
+  --ag-menu-item-fg: #EEEADA;
+  --ag-menu-header-fg: #A39E8D;
+  --ag-dialog-title-fg: #FCF9EF;
+  --ag-dialog-item-fg: #EEEADA;
+  --code-foreground: #EDE9D9 !important;
+}
+
+html[data-ag-dark-preset="claude-warm"] body[data-agy-theme][data-newux-theme="onyx"].dark .agy-sidebar-row[data-selected="true"],
+:is(html[data-ag-dark-preset="claude-warm"][data-ag-theme-mode="dark"] body, html[data-ag-dark-preset="claude-warm"] body.dark) .agy-sidebar-row[data-selected="true"] {
+  box-shadow: inset 0 1px 0 rgba(243, 240, 228, 0.08), inset 0 0 0 1px rgba(243, 240, 228, 0.07) !important;
+}
+
+:is(html[data-ag-dark-preset="claude-warm"][data-ag-theme-mode="dark"] body, html[data-ag-dark-preset="claude-warm"] body.dark) #antigravity\.agentSidePanelInputBox button:not([data-testid="send-button"]):not([data-testid="voice-start-button"]):not([data-testid="input-cancel-button"]):hover,
+:is(html[data-ag-dark-preset="claude-warm"][data-ag-theme-mode="dark"] body, html[data-ag-dark-preset="claude-warm"] body.dark) #antigravity\.agentSidePanelInputBox button:not([data-testid="send-button"]):not([data-testid="voice-start-button"]):not([data-testid="input-cancel-button"]):hover :is(span, svg) {
+  color: #F8F5EA !important;
+}
+
+:is(html[data-ag-dark-preset="claude-warm"][data-ag-theme-mode="dark"] body, html[data-ag-dark-preset="claude-warm"] body.dark) :is([data-testid="conversation-row-sidebar"], .agy-sidebar-row):not([data-selected="true"]):hover span.truncate {
+  color: #F8F5EA !important;
+}
+
+:is(html[data-ag-dark-preset="claude-warm"][data-ag-theme-mode="dark"] body, html[data-ag-dark-preset="claude-warm"] body.dark) :is(.bg-sidebar a[class*="border"], .bg-sidebar button[class*="border"], a[class*="inline-flex items-center"][class*="border"]) {
+  border-color: rgba(243, 240, 228, 0.12) !important;
+}
+
+:is(html[data-ag-dark-preset="claude-warm"][data-ag-theme-mode="dark"] body, html[data-ag-dark-preset="claude-warm"] body.dark) .bg-border {
+  background-color: rgba(243, 240, 228, 0.10) !important;
+}
+
+:is(html[data-ag-dark-preset="claude-warm"][data-ag-theme-mode="dark"] body, html[data-ag-dark-preset="claude-warm"] body.dark, html[data-ag-dark-preset="claude-warm"] body.theme-dark) :is([data-markdown-root], [data-testid="user-message-content"], .prose, .markdown) {
+  color: #EDE9DA;
+}
+
+:is(html[data-ag-dark-preset="claude-warm"][data-ag-theme-mode="dark"] body, html[data-ag-dark-preset="claude-warm"] body.dark, html[data-ag-dark-preset="claude-warm"] body.theme-dark) :is([data-markdown-root], [data-testid="user-message-content"], .select-text, .prose, .markdown) :is(h1, h2, h3, h4, h5, h6, strong, b) {
+  color: #F8F5EA;
+}
+
+:is(html[data-ag-dark-preset="claude-warm"][data-ag-theme-mode="dark"] body, html[data-ag-dark-preset="claude-warm"] body.dark, html[data-ag-dark-preset="claude-warm"] body.theme-dark) :is([data-markdown-root], .select-text, .prose, .markdown) :not(pre) > code {
+  background-color: rgba(243, 240, 228, 0.09);
+  border: 1px solid rgba(243, 240, 228, 0.11);
+  color: #EFEADB !important;
+}
+
+:is(html[data-ag-dark-preset="claude-warm"][data-ag-theme-mode="dark"] body, html[data-ag-dark-preset="claude-warm"] body.dark, html[data-ag-dark-preset="claude-warm"] body.theme-dark) #antigravity\.agentSidePanelInputBox button[data-testid="input-cancel-button"] {
+  background-color: rgba(243, 240, 228, 0.11) !important;
+  color: #F3F0E4 !important;
+}
+
+:is(html[data-ag-dark-preset="claude-warm"][data-ag-theme-mode="dark"] body, html[data-ag-dark-preset="claude-warm"] body.dark, html[data-ag-dark-preset="claude-warm"] body.theme-dark) #antigravity\.agentSidePanelInputBox button[data-testid="input-cancel-button"]:hover {
+  background-color: rgba(217, 119, 87, 0.22) !important;
+  color: #FFFBF2 !important;
+}
+
 
 /* ============================================================================
  * PART IV. 模型名称同行实时指标胶囊与悬浮详情卡（结构共用 + 白天/黑夜色彩自适应）
@@ -933,6 +1063,40 @@ body[data-agy-theme][data-newux-theme="onyx"].dark .agy-sidebar-row[data-selecte
   color: #FBBF24 !important;
 }
 
+/* 黑夜预设 2 (claude-warm) 指标胶囊暖炭与暖陶徽标配色 */
+:is(html[data-ag-dark-preset="claude-warm"][data-ag-theme-mode="dark"] body, html[data-ag-dark-preset="claude-warm"] body.dark) #ag-live-metrics-pill {
+  color: #D8D4C4 !important;
+  border-left-color: rgba(243, 240, 228, 0.16) !important;
+}
+
+:is(html[data-ag-dark-preset="claude-warm"][data-ag-theme-mode="dark"] body, html[data-ag-dark-preset="claude-warm"] body.dark) #ag-live-metrics-pill:hover,
+:is(html[data-ag-dark-preset="claude-warm"][data-ag-theme-mode="dark"] body, html[data-ag-dark-preset="claude-warm"] body.dark) #ag-live-metrics-pill:hover #ag-live-metrics-text {
+  color: #F8F5EA !important;
+}
+
+:is(html[data-ag-dark-preset="claude-warm"][data-ag-theme-mode="dark"] body, html[data-ag-dark-preset="claude-warm"] body.dark) #ag-live-metrics-pill[data-ag-row-mode="bottom"] {
+  border-top-color: rgba(243, 240, 228, 0.13) !important;
+}
+
+:is(html[data-ag-dark-preset="claude-warm"][data-ag-theme-mode="dark"] body, html[data-ag-dark-preset="claude-warm"] body.dark) #antigravity\.agentSidePanelInputBox #ag-live-metrics-pill .ag-ctx-warn,
+:is(html[data-ag-dark-preset="claude-warm"][data-ag-theme-mode="dark"] body, html[data-ag-dark-preset="claude-warm"] body.dark) #ag-live-metrics-pill .ag-ctx-warn,
+:is(html[data-ag-dark-preset="claude-warm"][data-ag-theme-mode="dark"] body, html[data-ag-dark-preset="claude-warm"] body.dark) #antigravity\.agentSidePanelInputBox #ag-live-metrics-pill .ag-zh-warn-dot,
+:is(html[data-ag-dark-preset="claude-warm"][data-ag-theme-mode="dark"] body, html[data-ag-dark-preset="claude-warm"] body.dark) #ag-live-metrics-pill .ag-zh-warn-dot {
+  color: #DFAF5F !important;
+}
+
+:is(html[data-ag-dark-preset="claude-warm"][data-ag-theme-mode="dark"] body, html[data-ag-dark-preset="claude-warm"] body.dark) #antigravity\.agentSidePanelInputBox #ag-live-metrics-pill .ag-ctx-crit,
+:is(html[data-ag-dark-preset="claude-warm"][data-ag-theme-mode="dark"] body, html[data-ag-dark-preset="claude-warm"] body.dark) #ag-live-metrics-pill .ag-ctx-crit {
+  color: #E0735C !important;
+}
+
+:is(html[data-ag-dark-preset="claude-warm"][data-ag-theme-mode="dark"] body, html[data-ag-dark-preset="claude-warm"] body.dark) #antigravity\.agentSidePanelInputBox #ag-live-metrics-pill .ag-sub-badge,
+:is(html[data-ag-dark-preset="claude-warm"][data-ag-theme-mode="dark"] body, html[data-ag-dark-preset="claude-warm"] body.dark) #ag-live-metrics-pill .ag-sub-badge {
+  background-color: rgba(217, 119, 87, 0.16) !important;
+  border-color: rgba(217, 119, 87, 0.34) !important;
+  color: #F0B29A !important;
+}
+
 #ag-live-metrics-tooltip {
   position: fixed;
   z-index: 2147483647;
@@ -1053,4 +1217,38 @@ body[data-agy-theme][data-newux-theme="onyx"].dark .agy-sidebar-row[data-selecte
 
 :is(html[data-ag-theme-mode="dark"] body, body.dark) #ag-live-metrics-tooltip .ag-tt-warn-val {
   color: #C8CAD4 !important;
+}
+
+/* 黑夜预设 2 (claude-warm) 指标悬浮详情卡暖炭纸配色 */
+:is(html[data-ag-dark-preset="claude-warm"][data-ag-theme-mode="dark"] body, html[data-ag-dark-preset="claude-warm"] body.dark) #ag-live-metrics-tooltip {
+  background-color: var(--onyx-raised, #2B2A26) !important;
+  border-color: rgba(243, 240, 228, 0.14) !important;
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.58), 0 2px 8px rgba(0, 0, 0, 0.36) !important;
+  color: #EEEADA !important;
+}
+
+:is(html[data-ag-dark-preset="claude-warm"][data-ag-theme-mode="dark"] body, html[data-ag-dark-preset="claude-warm"] body.dark) #ag-live-metrics-tooltip .ag-tt-hdr {
+  color: #FCF9EF !important;
+  border-bottom-color: rgba(243, 240, 228, 0.12) !important;
+}
+
+:is(html[data-ag-dark-preset="claude-warm"][data-ag-theme-mode="dark"] body, html[data-ag-dark-preset="claude-warm"] body.dark) #ag-live-metrics-tooltip .ag-tt-lbl {
+  color: #A39E8D !important;
+}
+
+:is(html[data-ag-dark-preset="claude-warm"][data-ag-theme-mode="dark"] body, html[data-ag-dark-preset="claude-warm"] body.dark) #ag-live-metrics-tooltip .ag-tt-val {
+  color: #FCF9EF !important;
+}
+
+:is(html[data-ag-dark-preset="claude-warm"][data-ag-theme-mode="dark"] body, html[data-ag-dark-preset="claude-warm"] body.dark) #ag-live-metrics-tooltip .ag-tt-warn {
+  background-color: rgba(223, 175, 95, 0.10) !important;
+  border-color: rgba(223, 175, 95, 0.28) !important;
+}
+
+:is(html[data-ag-dark-preset="claude-warm"][data-ag-theme-mode="dark"] body, html[data-ag-dark-preset="claude-warm"] body.dark) #ag-live-metrics-tooltip .ag-tt-warn-lbl {
+  color: #DFAF5F !important;
+}
+
+:is(html[data-ag-dark-preset="claude-warm"][data-ag-theme-mode="dark"] body, html[data-ag-dark-preset="claude-warm"] body.dark) #ag-live-metrics-tooltip .ag-tt-warn-val {
+  color: #DAD5C5 !important;
 }

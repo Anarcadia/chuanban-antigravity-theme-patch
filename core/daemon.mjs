@@ -2,10 +2,10 @@
 /**
  * chuanban-antigravity-theme-patch · CDP Theme & Live Metrics Daemon (core/daemon.mjs)
  *
- * 架构特性（v5.3.0）：
+ * 架构特性（v5.4.0）：
  * 1. 动态 Node 分级：
- *    - Node >= 22.0：完整启用昼夜双模式独立主题（暖纸浅色 + 官方 onyx 深色）、四层字体、输入框三态、1740条母语级汉化、死锁与冷启动兜底包自愈及 2.32.1/2.32.0 curtainView/Swarm 适配。
- *    - Node >= 22.13：动态 `await import('node:sqlite')` 解锁底部实时会话指标胶囊（O(1) 增量尾行解析）；低版本优雅降级绝不崩溃。
+ *    - Node >= 22.0：完整启用昼夜双模式独立主题（暖纸浅色三预设 + 深色 onyx / claude-warm 双预设）、四层字体、输入框三态、1740条母语级汉化、宿主独占指纹门禁、死锁与冷启动兜底包自愈及 2.32.1/2.32.0 curtainView/Swarm 适配。
+ *    - Node >= 22.13：动态 `await import('node:sqlite')` 解锁底部实时会话指标胶囊（O(1) 增量尾行解析 + WSL2 双轨只读读取）；低版本优雅降级绝不崩溃。
  * 2. 模块化与热重载：
  *    - 周期性检测 `user/config.json`、`user/custom.css`、`user/i18n.override.json`、`user/custom.js` 的 mtime，
  *      用户或对方 Agent 修改 `user/` 层后 2.5 秒内自动重新构建签名并热更新至所有打开的 Antigravity 窗口。
@@ -87,7 +87,54 @@ function getFileMtimeSig(filePath) {
 }
 
 const wslDirsCache = new Map(); // cacheKey -> { sig, distro, dirs, probedAt }
+let cachedRegWslDistros = { distros: [], probedAt: 0 };
 let wslUncBackoffUntil = 0;
+
+function resolveWslDistrosFromRegistry() {
+  if (process.platform !== 'win32') return [];
+  const now = Date.now();
+  if (now - cachedRegWslDistros.probedAt < 60000) {
+    return cachedRegWslDistros.distros;
+  }
+  const distros = [];
+  try {
+    // 仅读取 Windows 注册表 Lxss 项获取默认及已注册 WSL 发行版名，0 虚拟机唤醒开销（不调用 wsl.exe）
+    const res = spawnSync('reg', ['query', 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Lxss', '/s'], {
+      windowsHide: true,
+      encoding: 'utf8',
+      timeout: 1500
+    });
+    if (res.status === 0 && res.stdout) {
+      const out = String(res.stdout);
+      const defMatch = out.match(/^\s*DefaultDistribution\s+REG_SZ\s+(\{[^\r\n]+\})/im);
+      const defaultGuid = defMatch ? defMatch[1].trim().toLowerCase() : '';
+      const byGuid = new Map();
+      const blocks = out.split(/\r?\n(?=\s*HKEY_CURRENT_USER\\)/i);
+      for (const blk of blocks) {
+        const hdrMatch = blk.match(/\\Lxss\\(\{[^\\\r\n]+\})\s*$/im);
+        if (!hdrMatch) continue;
+        const guid = hdrMatch[1].trim().toLowerCase();
+        const nameMatch = blk.match(/^\s*DistributionName\s+REG_SZ\s+([^\r\n]+)/im);
+        if (!nameMatch) continue;
+        const name = nameMatch[1].trim();
+        if (!name || /^docker-desktop/i.test(name) || !/^[A-Za-z0-9._-]+$/.test(name)) continue;
+        byGuid.set(guid, name);
+      }
+      if (defaultGuid && byGuid.has(defaultGuid)) {
+        // wsl_state.json {"distro":""} 特指连接默认发行版；仅返回默认发行版，杜绝触碰其它已停止发行版触发 P9 冷启动唤醒
+        distros.push(byGuid.get(defaultGuid));
+      } else {
+        for (const [, name] of byGuid.entries()) {
+          if (!distros.includes(name)) {
+            distros.push(name);
+          }
+        }
+      }
+    }
+  } catch {}
+  cachedRegWslDistros = { distros, probedAt: now };
+  return distros;
+}
 
 function resolveWin32WslConversationsDirs(portFile, geminiSubDir) {
   if (process.platform !== 'win32' || !portFile || !geminiSubDir) return [];
@@ -106,9 +153,7 @@ function resolveWin32WslConversationsDirs(portFile, geminiSubDir) {
     if (
       cached &&
       cached.sig === compositeSig &&
-      (!cached.distro ||
-        (cached.dirs.length > 0 && now - cached.probedAt < 60000) ||
-        now - cached.probedAt < 15000)
+      ((cached.dirs.length > 0 && now - cached.probedAt < 60000) || now - cached.probedAt < 15000)
     ) {
       return cached.dirs;
     }
@@ -116,7 +161,16 @@ function resolveWin32WslConversationsDirs(portFile, geminiSubDir) {
     const wslState = fileSig !== '0:0' ? readJsonSafe(wslStatePath, {}) : {};
     const persistedDistro = String(wslState?.distro || wslState?.distroName || wslState?.defaultDistro || '').trim();
     const rawDistro = persistedDistro || envDistro;
-    if (!rawDistro || !/^[A-Za-z0-9._-]+$/.test(rawDistro)) {
+    let candidateDistros = [];
+    if (rawDistro) {
+      if (/^[A-Za-z0-9._-]+$/.test(rawDistro)) {
+        candidateDistros = [rawDistro];
+      }
+    } else if (fileSig !== '0:0') {
+      // 默认 WSL 发行版下 Antigravity 写入 {"distro":""}，从 HKCU\...\Lxss 注册表兜底解析默认发行版
+      candidateDistros = resolveWslDistrosFromRegistry();
+    }
+    if (candidateDistros.length === 0) {
       wslDirsCache.set(wslStatePath, { sig: compositeSig, distro: '', dirs: [], probedAt: now });
       return [];
     }
@@ -124,30 +178,40 @@ function resolveWin32WslConversationsDirs(portFile, geminiSubDir) {
     const t0 = Date.now();
     const subParts = geminiSubDir.split('/');
     const found = [];
-    for (const uncHost of ['wsl.localhost', 'wsl$']) {
-      const distroRoot = `\\\\${uncHost}\\${rawDistro}`;
-      if (!fs.existsSync(distroRoot)) {
-        if (Date.now() - t0 > 400) break;
-        continue;
+    outer: for (const distro of candidateDistros) {
+      for (const uncHost of ['wsl.localhost', 'wsl$']) {
+        const distroRoot = `\\\\${uncHost}\\${distro}`;
+        if (!fs.existsSync(distroRoot)) {
+          if (Date.now() - t0 > 400) break outer;
+          continue;
+        }
+        const homeRoot = path.join(distroRoot, 'home');
+        if (fs.existsSync(homeRoot)) {
+          try {
+            for (const userEntry of fs.readdirSync(homeRoot)) {
+              const convDir = path.join(homeRoot, userEntry, ...subParts, 'conversations');
+              if (fs.existsSync(convDir)) found.push(convDir);
+            }
+          } catch {}
+        }
+        const rootConvDir = path.join(distroRoot, 'root', ...subParts, 'conversations');
+        if (fs.existsSync(rootConvDir)) found.push(rootConvDir);
+        if (Date.now() - t0 > 400) break outer;
+        // 首个发行版命中会话目录后立即终止内外层探测，杜绝继续访问其它已停止发行版触发虚拟机唤醒
+        if (found.length > 0) break outer;
       }
-      const homeRoot = path.join(distroRoot, 'home');
-      if (fs.existsSync(homeRoot)) {
-        try {
-          for (const userEntry of fs.readdirSync(homeRoot)) {
-            const convDir = path.join(homeRoot, userEntry, ...subParts, 'conversations');
-            if (fs.existsSync(convDir)) found.push(convDir);
-          }
-        } catch {}
-      }
-      const rootConvDir = path.join(distroRoot, 'root', ...subParts, 'conversations');
-      if (fs.existsSync(rootConvDir)) found.push(rootConvDir);
-      if (found.length > 0 || Date.now() - t0 > 400) break;
+      if (Date.now() - t0 > 400) break;
     }
     if (Date.now() - t0 > 400) {
       wslUncBackoffUntil = Date.now() + 45000;
     }
     const uniqueDirs = Array.from(new Set(found));
-    wslDirsCache.set(wslStatePath, { sig: compositeSig, distro: rawDistro, dirs: uniqueDirs, probedAt: Date.now() });
+    wslDirsCache.set(wslStatePath, {
+      sig: compositeSig,
+      distro: candidateDistros.join(','),
+      dirs: uniqueDirs,
+      probedAt: Date.now()
+    });
     return uniqueDirs;
   } catch {
     wslUncBackoffUntil = Date.now() + 45000;
@@ -222,7 +286,7 @@ function resolveActiveChannelEndpoints(channelMode = 'auto', userCfg = {}) {
 // ============================================================================
 // 2. 动态构建注入载荷（支持 core/ + user/ 实时合并与热更新签名）
 // ============================================================================
-const BASE_VERSION = '20261115-v5.3.0';
+const BASE_VERSION = '20261116-v5.4.0';
 let cachedBundleSig = '';
 let cachedInjectScript = '';
 let cachedPatchVersion = '';
@@ -256,6 +320,7 @@ let activeConfig = {
   enabled: true,
   channel: 'auto',
   preset: 'high-contrast',
+  darkPreset: 'onyx',
   contextLimit: 256000,
   contextLimitOverride: 0,
   modules: {
@@ -269,6 +334,7 @@ let activeConfig = {
     customJs: true
   },
   themeVars: {},
+  darkThemeVars: {},
   allowedOrigins: [
     'http://127.0.0.1',
     'https://127.0.0.1',
@@ -347,6 +413,14 @@ function rebuildBundleIfNeeded() {
   const enabled = SAFE_MODE ? true : userCfg.enabled !== false;
   const channel = CLI_CHANNEL || userCfg.channel || 'auto';
   const preset = userCfg.preset || 'high-contrast';
+  const rawDarkPreset = String(userCfg.darkPreset || 'onyx').trim().toLowerCase();
+  const darkPreset =
+    rawDarkPreset === 'claude-warm' ||
+    rawDarkPreset === 'warm-paper-night' ||
+    rawDarkPreset === 'claude-night' ||
+    rawDarkPreset === '暖炭'
+      ? 'claude-warm'
+      : 'onyx';
   const rawCtxLimit = Number(userCfg.contextLimit);
   const contextLimit = Number.isFinite(rawCtxLimit) && rawCtxLimit > 0 ? rawCtxLimit : 256000;
   const rawCtxOverride = Number(userCfg.contextLimitOverride);
@@ -383,6 +457,8 @@ function rebuildBundleIfNeeded() {
   modules.metricsCapsule = modules.metrics;
 
   const themeVars = !SAFE_MODE && userCfg.themeVars && typeof userCfg.themeVars === 'object' ? userCfg.themeVars : {};
+  const darkThemeVars =
+    !SAFE_MODE && userCfg.darkThemeVars && typeof userCfg.darkThemeVars === 'object' ? userCfg.darkThemeVars : {};
   const endpoints = resolveActiveChannelEndpoints(channel, userCfg);
 
   const normalizedSelectors = Object.assign({}, userCfg.selectors || {});
@@ -417,10 +493,12 @@ function rebuildBundleIfNeeded() {
     enabled,
     channel,
     preset,
+    darkPreset,
     contextLimit,
     contextLimitOverride,
     modules,
     themeVars,
+    darkThemeVars,
     selectors: normalizedSelectors,
     allowedOrigins: Array.isArray(userCfg.allowedOrigins)
       ? Array.from(new Set([...DEFAULT_ALLOWED_ORIGINS, ...userCfg.allowedOrigins]))
@@ -447,7 +525,17 @@ function rebuildBundleIfNeeded() {
     .update(customCss)
     .update(JSON.stringify(mergedDict))
     .update(customJs)
-    .update(JSON.stringify({ preset, modules, themeVars, selectors: activeConfig.selectors, hostThemeMode }))
+    .update(
+      JSON.stringify({
+        preset,
+        darkPreset,
+        modules,
+        themeVars,
+        darkThemeVars,
+        selectors: activeConfig.selectors,
+        hostThemeMode
+      })
+    )
     .digest('hex')
     .slice(0, 8);
 
@@ -460,9 +548,11 @@ function rebuildBundleIfNeeded() {
     hostThemeMode,
     enabled,
     preset,
+    darkPreset,
     cssText: baseCss,
     customCss,
     themeVars,
+    darkThemeVars,
     i18nDict: mergedDict,
     modules,
     selectors: activeConfig.selectors,
@@ -470,10 +560,12 @@ function rebuildBundleIfNeeded() {
       enabled,
       channel,
       preset,
+      darkPreset,
       contextLimit,
       contextLimitOverride,
       modules,
-      themeVars
+      themeVars,
+      darkThemeVars
     },
     customJs
   };
@@ -486,19 +578,71 @@ function rebuildBundleIfNeeded() {
 rebuildBundleIfNeeded();
 
 // ============================================================================
-// 3. 单实例 PID 锁（防止重复启动守护进程，Windows 校验 node.exe 防止 PID 复用误杀）
+// 3. 单实例 PID 锁与协作式所有权围栏（防跨周期陈旧锁自杀、防跨完整性双实例并存）
 // ============================================================================
-function checkDaemonPidState(pid) {
+const attachedTargets = new Map();
+const MY_PROC_START_MS = Math.round(Date.now() - process.uptime() * 1000);
+const DAEMON_LOG_FILE = path.join(os.tmpdir(), 'ag-theme-daemon.log');
+
+function logDaemonEvent(msg) {
+  try {
+    const line = `[${new Date().toISOString()}] [PID ${process.pid}] ${msg}\n`;
+    if (fs.existsSync(DAEMON_LOG_FILE)) {
+      const st = fs.statSync(DAEMON_LOG_FILE);
+      if (st.size > 131072) {
+        const buf = fs.readFileSync(DAEMON_LOG_FILE);
+        const tail = buf.subarray(Math.max(0, buf.length - 32768));
+        fs.writeFileSync(DAEMON_LOG_FILE, Buffer.concat([tail, Buffer.from(line, 'utf8')]));
+        return;
+      }
+    }
+    fs.appendFileSync(DAEMON_LOG_FILE, line, 'utf8');
+  } catch {}
+}
+
+function sleepSync(ms) {
+  try {
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+  } catch {}
+}
+
+function parsePidFile(filePath) {
+  try {
+    if (!fs.existsSync(filePath)) return { pid: 0, startMs: 0, stopRequested: false };
+    const raw = fs.readFileSync(filePath, 'utf8').trim();
+    if (!raw) return { pid: 0, startMs: 0, stopRequested: false };
+    const lines = raw.split(/\r?\n/);
+    const pid = parseInt(lines[0], 10) || 0;
+    const second = (lines[1] || '').trim();
+    if (second === 'STOP') return { pid, startMs: 0, stopRequested: true };
+    let startMs = parseInt(second, 10) || 0;
+    if (!startMs && pid > 0) {
+      try {
+        startMs = Math.round(fs.statSync(filePath).mtimeMs);
+      } catch {}
+    }
+    return { pid, startMs, stopRequested: false };
+  } catch {
+    return { pid: 0, startMs: 0, stopRequested: false };
+  }
+}
+
+function checkDaemonPidState(pid, recordedStartMs = 0) {
   if (!pid || pid <= 0 || pid === process.pid) return 'not_daemon';
+  let kill0Eperm = false;
   try {
     process.kill(pid, 0);
   } catch (err) {
-    return err && err.code === 'EPERM' ? 'uncertain' : 'not_daemon';
+    if (err && err.code === 'EPERM') {
+      kill0Eperm = true;
+    } else {
+      return 'not_daemon';
+    }
   }
   if (process.platform === 'win32') {
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
-        const res = spawnSync('tasklist', ['/FI', `PID eq ${pid}`, '/FO', 'CSV', '/NH'], {
+        const res = spawnSync('tasklist', ['/FI', `PID eq ${Number(pid)}`, '/FO', 'CSV', '/NH'], {
           windowsHide: true,
           encoding: 'utf8',
           timeout: 4000
@@ -506,69 +650,230 @@ function checkDaemonPidState(pid) {
         if (res.status === 0) {
           const out = String(res.stdout || '').toLowerCase();
           if (!out.includes('node.exe')) return 'not_daemon';
-        } else if (attempt === 0) {
-          continue;
-        } else {
-          return 'uncertain';
         }
+        const psCmd = [
+          `$gp = Get-Process -Id ${Number(pid)} -ErrorAction SilentlyContinue`,
+          `if (-not $gp) { [Console]::Out.WriteLine('STATE=GONE'); exit 0 }`,
+          `if ($gp.ProcessName -ne 'node') { [Console]::Out.WriteLine('STATE=NOT_NODE'); exit 0 }`,
+          `$ms = try { ([DateTimeOffset]$gp.StartTime).ToUnixTimeMilliseconds() } catch { 0 }`,
+          `[Console]::Out.WriteLine("STARTMS=$ms"); [Console]::Out.Flush()`,
+          `$cmd = try { (Get-CimInstance Win32_Process -Filter "ProcessId = ${Number(pid)}" -ErrorAction SilentlyContinue).CommandLine } catch { '' }`,
+          `[Console]::Out.WriteLine("CMD=$cmd")`
+        ].join('; ');
         const cimRes = spawnSync(
           'powershell',
-          [
-            '-NoProfile',
-            '-NonInteractive',
-            '-ExecutionPolicy',
-            'Bypass',
-            '-Command',
-            `$p = Get-CimInstance Win32_Process -Filter "ProcessId = ${Number(pid)}" -ErrorAction SilentlyContinue; if ($p) { $p.CommandLine }`
-          ],
+          ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', psCmd],
           {
             windowsHide: true,
             encoding: 'utf8',
-            timeout: 12000
+            timeout: 6000
           }
         );
-        if (cimRes.status === 0) {
-          const cmdLine = String(cimRes.stdout || '').trim().toLowerCase();
-          if (!cmdLine) {
-            try {
-              process.kill(pid, 0);
-              return 'uncertain';
-            } catch {
-              return 'not_daemon';
-            }
-          }
-          if (cmdLine.includes('daemon.mjs') || cmdLine.includes('antigravity-font-daemon')) {
-            return 'confirmed';
-          }
+        const rawOut = String(cimRes.stdout || '');
+        if (rawOut.includes('STATE=GONE') || rawOut.includes('STATE=NOT_NODE')) {
           return 'not_daemon';
+        }
+        const msMatch = rawOut.match(/STARTMS=(\d+)/);
+        const procStartMs = msMatch ? parseInt(msMatch[1], 10) || 0 : 0;
+        const cmdMatch = rawOut.match(/CMD=([^\r\n]*)/);
+        if (cmdMatch) {
+          const cmdLine = cmdMatch[1].trim().toLowerCase();
+          if (cmdLine) {
+            if (cmdLine.includes('daemon.mjs') || cmdLine.includes('antigravity-font-daemon')) {
+              return 'confirmed';
+            }
+            return 'not_daemon';
+          }
+        }
+        // cmdLine 为空（如中完整性探测高完整性 node.exe 或登录风暴期 WMI 超时）：用 Win32 GetProcessTimes 内核创建时间精准比对
+        if (procStartMs > 0 && recordedStartMs > 0) {
+          return Math.abs(procStartMs - recordedStartMs) <= 5000 ? 'confirmed' : 'not_daemon';
+        }
+        if (cimRes.status === 0) {
+          try {
+            process.kill(pid, 0);
+            return 'uncertain';
+          } catch (e) {
+            return e && e.code === 'EPERM' ? 'uncertain' : 'not_daemon';
+          }
         }
       } catch {}
     }
     return 'uncertain';
   }
+  if (kill0Eperm) return 'not_daemon';
   return 'confirmed';
 }
 
 const pidKey = CLI_CHANNEL || 'default';
 const PID_FILE = path.join(os.tmpdir(), `ag-theme-daemon-${pidKey}.pid`);
+const MY_PID_PAYLOAD = `${process.pid}\n${MY_PROC_START_MS}`;
+let daemonExiting = false;
+let pidHealTimer = null;
+let pidWatcher = null;
+
+function requestCooperativeStop(targetPid, waitMs = 800) {
+  try {
+    fs.writeFileSync(PID_FILE, `${targetPid}\nSTOP`, 'utf8');
+    const steps = Math.max(1, Math.ceil(waitMs / 50));
+    for (let i = 0; i < steps; i++) {
+      sleepSync(50);
+      if (!fs.existsSync(PID_FILE)) return true;
+      if (targetPid > 0) {
+        try {
+          process.kill(targetPid, 0);
+        } catch (err) {
+          if (!err || err.code !== 'EPERM') return true;
+        }
+      }
+    }
+  } catch {}
+  return false;
+}
+
+function shutdownDaemon(reason, unlinkStopFile = false) {
+  if (daemonExiting) return;
+  daemonExiting = true;
+  if (pidHealTimer) {
+    clearTimeout(pidHealTimer);
+    pidHealTimer = null;
+  }
+  if (pidWatcher) {
+    try {
+      pidWatcher.close();
+    } catch {}
+    pidWatcher = null;
+  }
+  if (unlinkStopFile) {
+    try {
+      const cur = parsePidFile(PID_FILE);
+      if (cur.stopRequested && (cur.pid === 0 || cur.pid === process.pid)) {
+        fs.unlinkSync(PID_FILE);
+      }
+    } catch {}
+  }
+  logDaemonEvent(reason);
+  for (const [, entry] of attachedTargets.entries()) {
+    try {
+      entry.ws.close();
+    } catch {}
+  }
+  attachedTargets.clear();
+  process.exit(0);
+}
+
+function armPidWatcher() {
+  if (RUN_ONCE || daemonExiting || pidWatcher) return;
+  try {
+    if (!fs.existsSync(PID_FILE)) return;
+    pidWatcher = fs.watch(PID_FILE, { persistent: false }, () => {
+      checkPidFileOwnership();
+    });
+    pidWatcher.on('error', () => {
+      try {
+        pidWatcher?.close();
+      } catch {}
+      pidWatcher = null;
+    });
+  } catch {
+    pidWatcher = null;
+  }
+}
+
+function checkPidFileOwnership() {
+  if (RUN_ONCE || daemonExiting) return;
+  try {
+    if (!fs.existsSync(PID_FILE)) {
+      if (pidWatcher) {
+        try {
+          pidWatcher.close();
+        } catch {}
+        pidWatcher = null;
+      }
+      if (!pidHealTimer) {
+        pidHealTimer = setTimeout(() => {
+          pidHealTimer = null;
+          if (daemonExiting) return;
+          try {
+            if (!fs.existsSync(PID_FILE)) {
+              fs.writeFileSync(PID_FILE, MY_PID_PAYLOAD, 'utf8');
+              armPidWatcher();
+            } else {
+              checkPidFileOwnership();
+            }
+          } catch {}
+        }, 80);
+        pidHealTimer.unref?.();
+      }
+      return;
+    }
+    const cur = parsePidFile(PID_FILE);
+    if (cur.stopRequested && (cur.pid === 0 || cur.pid === process.pid)) {
+      shutdownDaemon('Received cooperative STOP signal via PID file; exiting cleanly.', true);
+      return;
+    }
+    if (!cur.stopRequested && cur.pid > 0 && cur.pid !== process.pid) {
+      let otherAlive = false;
+      try {
+        process.kill(cur.pid, 0);
+        otherAlive = true;
+      } catch (err) {
+        if (err && err.code === 'EPERM') otherAlive = true;
+      }
+      if (otherAlive) {
+        shutdownDaemon(`PID lock superseded by newer daemon PID ${cur.pid}; yielding cleanly.`, false);
+        return;
+      }
+      fs.writeFileSync(PID_FILE, MY_PID_PAYLOAD, 'utf8');
+      armPidWatcher();
+    }
+  } catch {}
+}
+
 if (!RUN_ONCE) {
   try {
     if (fs.existsSync(PID_FILE)) {
-      const oldPid = parseInt(fs.readFileSync(PID_FILE, 'utf8').trim(), 10);
-      const pidState = checkDaemonPidState(oldPid);
-      if (pidState === 'confirmed') {
-        try {
-          process.kill(oldPid, 'SIGTERM');
-        } catch {}
-      } else if (pidState === 'uncertain') {
-        console.warn(`[Daemon] Existing node.exe PID ${oldPid} still active while WMI busy; skipping duplicate startup.`);
-        process.exit(0);
+      const { pid: oldPid, startMs: oldStartMs, stopRequested } = parsePidFile(PID_FILE);
+      if (!stopRequested && oldPid > 0 && oldPid !== process.pid) {
+        const pidState = checkDaemonPidState(oldPid, oldStartMs);
+        if (pidState === 'confirmed') {
+          let killed = false;
+          try {
+            process.kill(oldPid, 'SIGTERM');
+            for (let i = 0; i < 8; i++) {
+              sleepSync(50);
+              try {
+                process.kill(oldPid, 0);
+              } catch (e) {
+                if (!e || e.code !== 'EPERM') {
+                  killed = true;
+                  break;
+                }
+              }
+            }
+          } catch {}
+          if (!killed) {
+            requestCooperativeStop(oldPid, 1200);
+          }
+          logDaemonEvent(`Replaced existing daemon PID ${oldPid}.`);
+        } else if (pidState === 'uncertain') {
+          requestCooperativeStop(oldPid, 350);
+          logDaemonEvent(`PID state uncertain for PID ${oldPid}; taking over lock instead of exiting.`);
+        }
       }
     }
-    fs.writeFileSync(PID_FILE, String(process.pid), 'utf8');
+    fs.writeFileSync(PID_FILE, MY_PID_PAYLOAD, 'utf8');
+    armPidWatcher();
     const cleanPid = () => {
+      if (pidWatcher) {
+        try {
+          pidWatcher.close();
+        } catch {}
+        pidWatcher = null;
+      }
       try {
-        if (fs.existsSync(PID_FILE) && fs.readFileSync(PID_FILE, 'utf8').trim() === String(process.pid)) {
+        const cur = parsePidFile(PID_FILE);
+        if (cur.pid === process.pid && !cur.stopRequested) {
           fs.unlinkSync(PID_FILE);
         }
       } catch {}
@@ -582,7 +887,9 @@ if (!RUN_ONCE) {
       cleanPid();
       process.exit(0);
     });
-  } catch {}
+  } catch (err) {
+    logDaemonEvent(`PID lock init warning: ${err?.message || err}`);
+  }
 }
 
 // ============================================================================
@@ -663,6 +970,7 @@ const textDecoder = new TextDecoder('utf-8', { fatal: false });
 const MAX_CHILD_METRICS_CACHE_SIZE = 4096;
 const MAX_NO_META_PENDING_IDS = 64;
 const LINEAGE_TICK_MAX_OPENS = 45;
+const LINEAGE_TICK_MAX_OPENS_UNC = 8;
 const LINEAGE_TICK_MAX_MS = 60;
 const NO_META_RESCAN_LOCAL_MS = 2500;
 const NO_META_RESCAN_UNC_MS = 15000;
@@ -861,31 +1169,128 @@ function getDbSignature(cascadeId, endpointOrDir) {
   return getDbState(cascadeId, endpointOrDir)?.sig || null;
 }
 
-function readTrajectoryLineage(dbPath) {
-  let db;
+let wslSqliteTmpSeq = 0;
+let sqliteUriSupported = null;
+
+function canUseSqliteFileUri() {
+  if (sqliteUriSupported !== null) return sqliteUriSupported;
+  if (!DatabaseSync) return false;
+  let probeDb = null;
   try {
-    db = new DatabaseSync(dbPath, { readOnly: true, timeout: 20 });
-    const row = db.prepare('SELECT data FROM trajectory_metadata_blob LIMIT 1').get();
-    if (!row || !row.data) {
-      return { ok: true, hasMeta: false, parentId: '', rootId: '' };
+    // Node >= 22.15 / 24 启用 SQLITE_OPEN_URI 时 file::memory: 零磁盘 I/O 秒开；Node 22.13~22.14 未启用时立即失败且 readOnly 绝不落盘建文件
+    probeDb = new DatabaseSync('file::memory:', { readOnly: true });
+    sqliteUriSupported = true;
+  } catch {
+    sqliteUriSupported = false;
+  } finally {
+    try {
+      probeDb?.close();
+    } catch {}
+  }
+  return sqliteUriSupported;
+}
+
+function buildSqliteImmutableUncUri(uncDbPath) {
+  let normalized = String(uncDbPath || '').replace(/\\/g, '/');
+  if (normalized.startsWith('//?/UNC/')) {
+    normalized = '//' + normalized.slice(8);
+  }
+  const encoded = normalized
+    .split('/')
+    .map((seg) => encodeURIComponent(seg))
+    .join('/');
+  return `file://${encoded}?immutable=1`;
+}
+
+function withReadOnlyDb(dbPath, timeoutMs, fn) {
+  if (!isUncPath(dbPath)) {
+    const db = new DatabaseSync(dbPath, { readOnly: true, timeout: timeoutMs });
+    try {
+      return fn(db);
+    } finally {
+      try {
+        db.close();
+      } catch {}
     }
-    const meta = parseProto(row.data);
-    const parentId = readUtf8(meta.get(5)).trim();
-    const rootId = readUtf8(meta.get(6)).trim();
-    return { ok: true, hasMeta: true, parentId, rootId };
+  }
+
+  const walPath = `${dbPath}-wal`;
+  let hasActiveWal = false;
+  try {
+    const wst = fs.statSync(walPath, { throwIfNoEntry: false });
+    hasActiveWal = Boolean(wst && wst.size > 0);
+  } catch {}
+
+  if (!hasActiveWal && canUseSqliteFileUri()) {
+    let immDb = null;
+    try {
+      immDb = new DatabaseSync(buildSqliteImmutableUncUri(dbPath), { readOnly: true, timeout: timeoutMs });
+      const out = fn(immDb);
+      immDb.close();
+      immDb = null;
+      return out;
+    } catch (immErr) {
+      try {
+        immDb?.close();
+      } catch {}
+      const msg = String(immErr?.message || '');
+      if (/no such table/i.test(msg)) {
+        throw immErr;
+      }
+    }
+  }
+
+  wslSqliteTmpSeq = (wslSqliteTmpSeq + 1) % 1000000;
+  const tmpBase = path.join(
+    os.tmpdir(),
+    `ag-wsl-sqlite-${process.pid}-${Date.now()}-${wslSqliteTmpSeq}.db`
+  );
+  let tmpDb = null;
+  try {
+    fs.copyFileSync(dbPath, tmpBase);
+    if (hasActiveWal) {
+      try {
+        fs.copyFileSync(walPath, `${tmpBase}-wal`);
+      } catch {}
+    }
+    tmpDb = new DatabaseSync(tmpBase, { readOnly: true, timeout: timeoutMs });
+    return fn(tmpDb);
+  } finally {
+    try {
+      tmpDb?.close();
+    } catch {}
+    for (const suffix of ['', '-wal', '-shm']) {
+      try {
+        fs.rmSync(`${tmpBase}${suffix}`, { force: true });
+      } catch {}
+    }
+  }
+}
+
+function readTrajectoryLineage(dbPath) {
+  try {
+    return withReadOnlyDb(dbPath, 20, (db) => {
+      const row = db.prepare('SELECT data FROM trajectory_metadata_blob LIMIT 1').get();
+      if (!row || !row.data) {
+        return { ok: true, hasMeta: false, parentId: '', rootId: '' };
+      }
+      const meta = parseProto(row.data);
+      const parentId = readUtf8(meta.get(5)).trim();
+      const rootId = readUtf8(meta.get(6)).trim();
+      return { ok: true, hasMeta: true, parentId, rootId };
+    });
   } catch (err) {
     const msg = String(err?.message || '');
     if (/no such table/i.test(msg)) {
       return { ok: true, hasMeta: false, parentId: '', rootId: '' };
     }
+    if (isUncPath(dbPath) && /locked|busy|malformed|disk i\/o|ebusy|eacces|enoent/i.test(msg)) {
+      return { ok: false, error: err };
+    }
     if (!/locked|busy/i.test(msg)) {
       return { ok: true, hasMeta: false, permanentInvalid: true, parentId: '', rootId: '' };
     }
     return { ok: false, error: err };
-  } finally {
-    try {
-      db?.close();
-    } catch {}
   }
 }
 
@@ -1096,12 +1501,13 @@ function refreshLineageIndex(conversationsDir) {
   }
 
   const tPerfStart = performance.now();
+  const maxTickOpens = unc ? LINEAGE_TICK_MAX_OPENS_UNC : LINEAGE_TICK_MAX_OPENS;
   let opens = 0;
   let qIdx = 0;
   const busyRetry = [];
 
   while (qIdx < dirState.unindexedQueue.length) {
-    if (opens > 0 && (opens >= LINEAGE_TICK_MAX_OPENS || performance.now() - tPerfStart >= LINEAGE_TICK_MAX_MS)) {
+    if (opens > 0 && (opens >= maxTickOpens || performance.now() - tPerfStart >= LINEAGE_TICK_MAX_MS)) {
       break;
     }
     if (unc && Date.now() - tWallStart > 400) {
@@ -1292,42 +1698,45 @@ function loadChildScalarMetrics(childId, conversationsDir, knownStatSig = null, 
     return { exists: true, deferred: true, staleMetrics: cached || null };
   }
 
-  let db;
   try {
-    db = new DatabaseSync(dbPath, { readOnly: true, timeout: 20 });
-    const rows = db.prepare('SELECT idx, data FROM gen_metadata ORDER BY idx ASC').all();
-    let calls = 0;
-    let totalIn = 0;
-    let totalCache = 0;
-    let totalOut = 0;
-    let totalThink = 0;
-    let totalResp = 0;
-    for (let i = 0; i < rows.length; i++) {
-      const p = parseGenMetadataRow(rows[i]);
-      if (p.ctx > 0 || p.outTok > 0) {
-        calls += 1;
-        totalIn += p.inTok;
-        totalCache += p.cacheRead;
-        totalOut += p.outTok;
-        totalThink += p.thinkTok;
-        totalResp += p.respTok;
+    return withReadOnlyDb(dbPath, 20, (db) => {
+      const rows = db.prepare('SELECT idx, data FROM gen_metadata ORDER BY idx ASC').all();
+      let calls = 0;
+      let totalIn = 0;
+      let totalCache = 0;
+      let totalOut = 0;
+      let totalThink = 0;
+      let totalResp = 0;
+      for (let i = 0; i < rows.length; i++) {
+        const p = parseGenMetadataRow(rows[i]);
+        if (p.ctx > 0 || p.outTok > 0) {
+          calls += 1;
+          totalIn += p.inTok;
+          totalCache += p.cacheRead;
+          totalOut += p.outTok;
+          totalThink += p.thinkTok;
+          totalResp += p.respTok;
+        }
       }
-    }
-    const entry = {
-      sig,
-      hasData: calls > 0,
-      calls,
-      totalIn,
-      totalCache,
-      totalOut,
-      totalThink,
-      totalResp
-    };
-    setChildMetricsCache(dbPath, entry);
-    return { exists: true, fromCache: false, metrics: entry };
+      const entry = {
+        sig,
+        hasData: calls > 0,
+        calls,
+        totalIn,
+        totalCache,
+        totalOut,
+        totalThink,
+        totalResp
+      };
+      setChildMetricsCache(dbPath, entry);
+      return { exists: true, fromCache: false, metrics: entry };
+    });
   } catch (err) {
     const msg = String(err?.message || '');
-    if (/locked|busy/i.test(msg)) {
+    if (
+      /locked|busy/i.test(msg) ||
+      (isUncPath(dbPath) && /malformed|disk i\/o|ebusy|eacces|enoent/i.test(msg))
+    ) {
       return { exists: true, fromCache: false, transientError: true, staleMetrics: cached || null };
     }
     const emptyEntry = {
@@ -1342,10 +1751,6 @@ function loadChildScalarMetrics(childId, conversationsDir, knownStatSig = null, 
     };
     setChildMetricsCache(dbPath, emptyEntry);
     return { exists: true, fromCache: false, metrics: emptyEntry };
-  } finally {
-    try {
-      db?.close();
-    } catch {}
   }
 }
 
@@ -1429,16 +1834,116 @@ function parseConversationMetrics(cascadeId, endpointOrDir, precomputedState = n
     };
   }
 
-  let db;
   const tParentWallStart = Date.now();
   try {
-    db = new DatabaseSync(dbPath, { readOnly: true, timeout: 200 });
-    const metaStat = db.prepare('SELECT COUNT(*) AS cnt, COALESCE(MAX(idx), -1) AS maxIdx FROM gen_metadata').get();
-    const rowCount = metaStat?.cnt ?? 0;
-    const maxIdx = metaStat?.maxIdx ?? -1;
-    if (rowCount === 0 || maxIdx < 0) {
-      db.close();
-      db = null;
+    const parentDbRes = withReadOnlyDb(dbPath, 200, (db) => {
+      const metaStat = db.prepare('SELECT COUNT(*) AS cnt, COALESCE(MAX(idx), -1) AS maxIdx FROM gen_metadata').get();
+      const rowCount = metaStat?.cnt ?? 0;
+      const maxIdx = metaStat?.maxIdx ?? -1;
+      if (rowCount === 0 || maxIdx < 0) {
+        return { empty: true };
+      }
+
+      // 利用 idx_steps_step_type 覆盖索引直接在 SQLite C 引擎内完成聚合计数，0 数组分配
+      // 注意：gen_metadata.idx 与 steps.idx 属于两套独立递增坐标系，绝不可混用！
+      const userStat = db
+        .prepare('SELECT COUNT(*) AS cnt, COALESCE(MAX(idx), -1) AS lastIdx FROM steps WHERE step_type = 14')
+        .get();
+      const lastUserStepIdx = userStat?.lastIdx ?? -1;
+      const userStepsCount = userStat?.cnt ?? 0;
+      const turnStat = db
+        .prepare('SELECT COUNT(*) AS cnt FROM steps WHERE step_type = 15 AND idx > ?')
+        .get(lastUserStepIdx);
+      const rawTurnSteps = turnStat?.cnt ?? 0;
+
+      let inc = incrementalMetricsMap.get(dbPath);
+      if (
+        inc &&
+        (rowCount < inc.rowCount ||
+          maxIdx < inc.maxIdx ||
+          userStepsCount < inc.userStepsCount ||
+          lastUserStepIdx < inc.lastUserStepIdx ||
+          (lastUserStepIdx !== inc.lastUserStepIdx && userStepsCount <= inc.userStepsCount))
+      ) {
+        inc = null;
+      }
+
+      if (inc) {
+        const startIdx = inc.maxIdx;
+        const deltaRows = db.prepare('SELECT idx, data FROM gen_metadata WHERE idx >= ? ORDER BY idx ASC').all(startIdx);
+        while (inc.items.length > 0 && inc.items[inc.items.length - 1].idx >= startIdx) {
+          const popped = inc.items.pop();
+          inc.totalIn -= popped.inTok;
+          inc.totalCache -= popped.cacheRead;
+          inc.totalOut -= popped.outTok;
+          inc.totalThink -= popped.thinkTok;
+          inc.totalResp -= popped.respTok;
+        }
+        while (inc.validItems.length > 0 && inc.validItems[inc.validItems.length - 1].idx >= startIdx) {
+          inc.validItems.pop();
+        }
+        if (inc.items.length + deltaRows.length === rowCount) {
+          for (let i = 0; i < deltaRows.length; i++) {
+            const p = parseGenMetadataRow(deltaRows[i]);
+            inc.items.push(p);
+            inc.totalIn += p.inTok;
+            inc.totalCache += p.cacheRead;
+            inc.totalOut += p.outTok;
+            inc.totalThink += p.thinkTok;
+            inc.totalResp += p.respTok;
+            if (p.ctx > 0 || p.outTok > 0) {
+              inc.validItems.push(p);
+            }
+          }
+          inc.rowCount = rowCount;
+          inc.maxIdx = maxIdx;
+          inc.userStepsCount = userStepsCount;
+          inc.lastUserStepIdx = lastUserStepIdx;
+        } else {
+          inc = null;
+        }
+      }
+
+      if (!inc) {
+        const rows = db.prepare('SELECT idx, data FROM gen_metadata ORDER BY idx ASC').all();
+        const items = [];
+        const validItems = [];
+        let totalIn = 0;
+        let totalCache = 0;
+        let totalOut = 0;
+        let totalThink = 0;
+        let totalResp = 0;
+        for (let i = 0; i < rows.length; i++) {
+          const p = parseGenMetadataRow(rows[i]);
+          items.push(p);
+          totalIn += p.inTok;
+          totalCache += p.cacheRead;
+          totalOut += p.outTok;
+          totalThink += p.thinkTok;
+          totalResp += p.respTok;
+          if (p.ctx > 0 || p.outTok > 0) {
+            validItems.push(p);
+          }
+        }
+        inc = {
+          rowCount: rows.length,
+          maxIdx: rows.length > 0 ? rows[rows.length - 1].idx : -1,
+          userStepsCount,
+          lastUserStepIdx,
+          items,
+          validItems,
+          totalIn,
+          totalCache,
+          totalOut,
+          totalThink,
+          totalResp
+        };
+      }
+
+      return { empty: false, inc, userStepsCount, rawTurnSteps };
+    });
+
+    if (parentDbRes.empty) {
       incrementalMetricsMap.delete(dbPath);
       const emptyPayload = {
         cascadeId,
@@ -1453,104 +1958,7 @@ function parseConversationMetrics(cascadeId, endpointOrDir, precomputedState = n
       return emptyPayload;
     }
 
-    // 利用 idx_steps_step_type 覆盖索引直接在 SQLite C 引擎内完成聚合计数，0 数组分配
-    // 注意：gen_metadata.idx 与 steps.idx 属于两套独立递增坐标系，绝不可混用！
-    const userStat = db
-      .prepare('SELECT COUNT(*) AS cnt, COALESCE(MAX(idx), -1) AS lastIdx FROM steps WHERE step_type = 14')
-      .get();
-    const lastUserStepIdx = userStat?.lastIdx ?? -1;
-    const userStepsCount = userStat?.cnt ?? 0;
-    const turnStat = db
-      .prepare('SELECT COUNT(*) AS cnt FROM steps WHERE step_type = 15 AND idx > ?')
-      .get(lastUserStepIdx);
-    const rawTurnSteps = turnStat?.cnt ?? 0;
-
-    let inc = incrementalMetricsMap.get(dbPath);
-    if (
-      inc &&
-      (rowCount < inc.rowCount ||
-        maxIdx < inc.maxIdx ||
-        userStepsCount < inc.userStepsCount ||
-        lastUserStepIdx < inc.lastUserStepIdx ||
-        (lastUserStepIdx !== inc.lastUserStepIdx && userStepsCount <= inc.userStepsCount))
-    ) {
-      inc = null;
-    }
-
-    if (inc) {
-      const startIdx = inc.maxIdx;
-      const deltaRows = db.prepare('SELECT idx, data FROM gen_metadata WHERE idx >= ? ORDER BY idx ASC').all(startIdx);
-      while (inc.items.length > 0 && inc.items[inc.items.length - 1].idx >= startIdx) {
-        const popped = inc.items.pop();
-        inc.totalIn -= popped.inTok;
-        inc.totalCache -= popped.cacheRead;
-        inc.totalOut -= popped.outTok;
-        inc.totalThink -= popped.thinkTok;
-        inc.totalResp -= popped.respTok;
-      }
-      while (inc.validItems.length > 0 && inc.validItems[inc.validItems.length - 1].idx >= startIdx) {
-        inc.validItems.pop();
-      }
-      if (inc.items.length + deltaRows.length === rowCount) {
-        for (let i = 0; i < deltaRows.length; i++) {
-          const p = parseGenMetadataRow(deltaRows[i]);
-          inc.items.push(p);
-          inc.totalIn += p.inTok;
-          inc.totalCache += p.cacheRead;
-          inc.totalOut += p.outTok;
-          inc.totalThink += p.thinkTok;
-          inc.totalResp += p.respTok;
-          if (p.ctx > 0 || p.outTok > 0) {
-            inc.validItems.push(p);
-          }
-        }
-        inc.rowCount = rowCount;
-        inc.maxIdx = maxIdx;
-        inc.userStepsCount = userStepsCount;
-        inc.lastUserStepIdx = lastUserStepIdx;
-      } else {
-        inc = null;
-      }
-    }
-
-    if (!inc) {
-      const rows = db.prepare('SELECT idx, data FROM gen_metadata ORDER BY idx ASC').all();
-      const items = [];
-      const validItems = [];
-      let totalIn = 0;
-      let totalCache = 0;
-      let totalOut = 0;
-      let totalThink = 0;
-      let totalResp = 0;
-      for (let i = 0; i < rows.length; i++) {
-        const p = parseGenMetadataRow(rows[i]);
-        items.push(p);
-        totalIn += p.inTok;
-        totalCache += p.cacheRead;
-        totalOut += p.outTok;
-        totalThink += p.thinkTok;
-        totalResp += p.respTok;
-        if (p.ctx > 0 || p.outTok > 0) {
-          validItems.push(p);
-        }
-      }
-      inc = {
-        rowCount: rows.length,
-        maxIdx: rows.length > 0 ? rows[rows.length - 1].idx : -1,
-        userStepsCount,
-        lastUserStepIdx,
-        items,
-        validItems,
-        totalIn,
-        totalCache,
-        totalOut,
-        totalThink,
-        totalResp
-      };
-    }
-
-    db.close();
-    db = null;
+    const { inc, userStepsCount, rawTurnSteps } = parentDbRes;
     if (uncParent && Date.now() - tParentWallStart > 400) {
       wslUncBackoffUntil = Date.now() + 45000;
     }
@@ -1586,6 +1994,8 @@ function parseConversationMetrics(cascadeId, endpointOrDir, precomputedState = n
     const tChildWallStart = Date.now();
     const uncChildren = isUncPath(conversationsDir);
 
+    const maxChildOpens = uncChildren ? LINEAGE_TICK_MAX_OPENS_UNC : LINEAGE_TICK_MAX_OPENS;
+
     for (let i = 0; i < descendantIds.length; i++) {
       const childId = descendantIds[i];
       if (childId === cascadeId) continue;
@@ -1599,7 +2009,7 @@ function parseConversationMetrics(cascadeId, endpointOrDir, precomputedState = n
       const allowUncachedOpen =
         !uncNowBlocked &&
         (childSqlOpens === 0 ||
-          (childSqlOpens < LINEAGE_TICK_MAX_OPENS &&
+          (childSqlOpens < maxChildOpens &&
             performance.now() - tChildPerfStart < LINEAGE_TICK_MAX_MS));
       const childRes = loadChildScalarMetrics(
         childId,
@@ -1757,17 +2167,12 @@ function parseConversationMetrics(cascadeId, endpointOrDir, precomputedState = n
       transientError: true,
       cachedPayload: cached?.payload || null
     };
-  } finally {
-    try {
-      db?.close();
-    } catch {}
   }
 }
 
 // ============================================================================
 // 5. CDP 目标发现、WebSocket 会话挂载与热更新推送
 // ============================================================================
-const attachedTargets = new Map();
 const skippedNonHostTargets = new Map(); // targetId -> { origin, skippedAt }
 
 function getTargetOriginKey(urlStr) {
@@ -1799,9 +2204,12 @@ const HOST_PROBE_EXPRESSION = `(function(){
     if (window.__APP_CONFIG__ && window.__APP_CONFIG__.productName === 'antigravity') return 'host';
     if (
       window.electronNative &&
-      typeof window.electronNative.setTitleBarOverlay === 'function' &&
-      window.nativeStorage &&
-      typeof window.nativeStorage.getItems === 'function'
+      ((typeof window.electronNative.setTitleBarOverlay === 'function' &&
+        window.nativeStorage &&
+        typeof window.nativeStorage.getItems === 'function') ||
+        (typeof window.electronNative.getZoomLevel === 'function' &&
+          window.electronNative.wcvBrowser &&
+          typeof window.electronNative.wcvBrowser.setThemeColor === 'function'))
     ) return 'host';
     if (
       typeof document !== 'undefined' &&
@@ -2528,6 +2936,7 @@ function ensureZhTitlePatchIfPresent() {
 const fallbackBackoffUntil = new Map();
 
 async function sync() {
+  checkPidFileOwnership();
   if (isSyncing) return;
   isSyncing = true;
   syncTickCount = (syncTickCount + 1) % 6000;

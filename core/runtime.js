@@ -19,22 +19,33 @@
     } catch (e) {}
     window.__ag_boot_dcl_handler = null;
   }
+  if (window.__ag_boot_doc_observer) {
+    try {
+      window.__ag_boot_doc_observer.disconnect();
+    } catch (e) {}
+    window.__ag_boot_doc_observer = null;
+  }
 
-  const isAntigravityHost = () => {
+  const isPreloadHost = () => {
     if (IS_SWARM_PLUGIN_FRAME || (window.location && window.location.protocol === 'vscode-file:')) {
       return true;
     }
     if (window.__APP_CONFIG__ && window.__APP_CONFIG__.productName === 'antigravity') {
       return true;
     }
-    if (
+    return !!(
       window.electronNative &&
-      typeof window.electronNative.setTitleBarOverlay === 'function' &&
-      window.nativeStorage &&
-      typeof window.nativeStorage.getItems === 'function'
-    ) {
-      return true;
-    }
+      ((typeof window.electronNative.setTitleBarOverlay === 'function' &&
+        window.nativeStorage &&
+        typeof window.nativeStorage.getItems === 'function') ||
+        (typeof window.electronNative.getZoomLevel === 'function' &&
+          window.electronNative.wcvBrowser &&
+          typeof window.electronNative.wcvBrowser.setThemeColor === 'function'))
+    );
+  };
+
+  const isAntigravityHost = () => {
+    if (isPreloadHost()) return true;
     return !!(
       typeof document !== 'undefined' &&
       typeof document.querySelector === 'function' &&
@@ -54,8 +65,26 @@
   };
 
   if (typeof document === 'undefined' || !document.documentElement) {
-    if (!fromDcl && typeof document !== 'undefined' && document.readyState === 'loading') {
-      scheduleBootOnDcl();
+    if (typeof document !== 'undefined') {
+      // 主窗口 Preload 桥接已就绪但 <html> 尚未创建（NewDocument 0ms）：监听节点诞生微秒级瞬时挂载防闪白
+      if (isPreloadHost() && typeof MutationObserver === 'function') {
+        try {
+          const obs = new MutationObserver(() => {
+            if (document.documentElement) {
+              try {
+                obs.disconnect();
+              } catch (e) {}
+              window.__ag_boot_doc_observer = null;
+              runBoot(boot, false);
+            }
+          });
+          window.__ag_boot_doc_observer = obs;
+          obs.observe(document, { childList: true });
+        } catch (e) {}
+      }
+      if (!fromDcl && document.readyState === 'loading') {
+        scheduleBootOnDcl();
+      }
     }
     return;
   }
@@ -77,13 +106,14 @@
     }
   }
 
-  const PATCH_VERSION = boot.version || '20261115-v5.3.0';
+  const PATCH_VERSION = boot.version || '20261116-v5.4.0';
   const DETECTED_OS =
     boot.platform || (/Win/i.test(navigator.platform || '') ? 'win32' : /Mac/i.test(navigator.platform || '') ? 'darwin' : 'linux');
   const ENABLED = boot.enabled !== false;
   const CSS_TEXT = boot.cssText || '';
   const CUSTOM_CSS_TEXT = boot.customCss || '';
   const THEME_VARS = boot.themeVars && typeof boot.themeVars === 'object' ? boot.themeVars : {};
+  const DARK_THEME_VARS = boot.darkThemeVars && typeof boot.darkThemeVars === 'object' ? boot.darkThemeVars : {};
   const MODULES = Object.assign(
     {
       i18n: true,
@@ -99,6 +129,7 @@
   );
 
   const DEFAULT_PRESET = boot.preset || 'high-contrast';
+  const DEFAULT_DARK_PRESET = boot.darkPreset || 'onyx';
   const DEFAULT_EXCLUDE_I18N =
     'code, pre, kbd, samp, textarea, input, style, script, noscript, [contenteditable="true"], [data-markdown-root], [data-testid="user-message-content"], .agy-user-bubble, .monaco-editor, .monaco-diff-editor, .xterm, [class*="onyx-key"], .prose, .markdown, [class*="chat-message"], [class*="group/file-title"], [data-testid="conversation-row-sidebar"] a[href^="/c/"], [data-testid="conversation-row-sidebar"] span.truncate, [data-testid="conversation-navigator-turn"], .msg-body, #raw, [data-testid="swarm-raw"], #swarm-title, #ag-live-metrics-pill, #ag-live-metrics-tooltip';
 
@@ -191,7 +222,7 @@
     } catch (e) {}
   }
 
-  function applyThemeVars(varsObj) {
+  function applyThemeVars(varsObj, darkVarsObj = {}) {
     // 清理早期版本遗留的内联 style 属性，避免压制 body.dark 或被原生 iY() 冲掉
     const prevKeys = Array.isArray(window.__ag_applied_theme_vars) ? window.__ag_applied_theme_vars : [];
     for (let i = 0; i < prevKeys.length; i++) {
@@ -218,6 +249,15 @@
       } else {
         lightDecls.push(`${k}: ${cleanVal} !important;`);
       }
+    }
+
+    const darkKeys = Object.keys(darkVarsObj || {});
+    for (let i = 0; i < darkKeys.length; i++) {
+      const k = darkKeys[i];
+      const v = darkVarsObj[k];
+      if (!k.startsWith('--') || v === null || v === undefined || String(v).trim() === '') continue;
+      const cleanVal = String(v).trim().replace(/[;{}]/g, '');
+      darkDecls.push(`${k}: ${cleanVal} !important;`);
     }
 
     let varStyle = document.getElementById('ag-user-theme-vars');
@@ -480,8 +520,9 @@
     window.__ag_zoom_resize_fn = null;
     window.__ag_settings_click_fn = null;
     window.__ag_body_ready = false;
-    applyThemeVars({});
+    applyThemeVars({}, {});
     document.documentElement.removeAttribute('data-ag-preset');
+    document.documentElement.removeAttribute('data-ag-dark-preset');
     document.documentElement.removeAttribute('data-ag-theme-mode');
     document.documentElement.removeAttribute('data-ag-page-type');
     document.documentElement.removeAttribute('data-ag-wax-seal');
@@ -566,7 +607,7 @@
   document.documentElement.setAttribute('data-ag-wax-seal', MODULES.composerWaxSeal === false ? 'off' : 'on');
   const detectedOs = DETECTED_OS;
   document.documentElement.setAttribute('data-ag-os', detectedOs);
-  applyThemeVars(THEME_VARS);
+  applyThemeVars(THEME_VARS, DARK_THEME_VARS);
 
   let userStyle = document.getElementById('antigravity-user-custom-style');
   if (MODULES.customCss && CUSTOM_CSS_TEXT.trim()) {
@@ -1099,14 +1140,38 @@
     LEGACY_CHUANBAN: 'absoulutely-chuanban'
   };
 
+  const DARK_PRESETS = {
+    ONYX: 'onyx',
+    CLAUDE_WARM: 'claude-warm'
+  };
+
   const ALL_CUSTOM_PRESET_NAMES = new Set(Object.values(PRESETS));
 
-  // 当用户在 user/config.json 中修改了 preset 时，同步刷新 localStorage 中的 theme-color-flavor
+  // 当用户在 user/config.json 中修改了 preset / darkPreset 时，同步刷新 localStorage 中的预设标记
   if (DEFAULT_PRESET && window.__ag_last_boot_preset !== DEFAULT_PRESET) {
     window.__ag_last_boot_preset = DEFAULT_PRESET;
     try {
       Storage.prototype.setItem.call(localStorage, 'theme-color-flavor', DEFAULT_PRESET);
     } catch (e) {}
+  }
+  if (DEFAULT_DARK_PRESET && window.__ag_last_boot_dark_preset !== DEFAULT_DARK_PRESET) {
+    window.__ag_last_boot_dark_preset = DEFAULT_DARK_PRESET;
+    try {
+      Storage.prototype.setItem.call(localStorage, 'theme-dark-flavor', DEFAULT_DARK_PRESET);
+    } catch (e) {}
+  }
+
+  function resolveNormalizedDarkPreset(rawVal) {
+    const s = String(rawVal || '').trim().toLowerCase();
+    if (
+      s === DARK_PRESETS.CLAUDE_WARM ||
+      s === 'warm-paper-night' ||
+      s === 'claude-night' ||
+      s === '暖炭'
+    ) {
+      return DARK_PRESETS.CLAUDE_WARM;
+    }
+    return DARK_PRESETS.ONYX;
   }
 
   function syncChuanbanPreset() {
@@ -1143,6 +1208,16 @@
       const prevPreset = document.documentElement.getAttribute('data-ag-preset');
       if (prevPreset !== targetPreset) {
         document.documentElement.setAttribute('data-ag-preset', targetPreset);
+      }
+
+      let storedDarkFlavor = null;
+      try {
+        storedDarkFlavor = Storage.prototype.getItem.call(localStorage, 'theme-dark-flavor');
+      } catch (e) {}
+      const targetDarkPreset = resolveNormalizedDarkPreset(DEFAULT_DARK_PRESET || storedDarkFlavor);
+      const prevDarkPreset = document.documentElement.getAttribute('data-ag-dark-preset');
+      if (prevDarkPreset !== targetDarkPreset) {
+        document.documentElement.setAttribute('data-ag-dark-preset', targetDarkPreset);
       }
 
       const htmlEl = document.documentElement;
@@ -1225,11 +1300,12 @@
       }
       const targetMode = isDark ? 'dark' : 'light';
       const prevMode = document.documentElement.getAttribute('data-ag-theme-mode');
-      if (prevMode !== targetMode || prevPreset !== targetPreset) {
+      const darkPresetChanged = prevDarkPreset !== targetDarkPreset;
+      if (prevMode !== targetMode || prevPreset !== targetPreset || darkPresetChanged) {
         document.documentElement.setAttribute('data-ag-theme-mode', targetMode);
       }
-      syncWinTitleBarOverlay(isDark);
-      syncCurtainSurfaceColor();
+      syncWinTitleBarOverlay(isDark, darkPresetChanged);
+      syncCurtainSurfaceColor(darkPresetChanged);
     } catch (e) {}
   }
 
@@ -3059,10 +3135,12 @@
   window.__AG_PATCH_CTX__ = {
     version: PATCH_VERSION,
     preset: DEFAULT_PRESET,
+    darkPreset: DEFAULT_DARK_PRESET,
     config: boot.config || {},
     modules: MODULES,
     features: MODULES,
     themeVars: THEME_VARS,
+    darkThemeVars: DARK_THEME_VARS,
     dict: DICT,
     get metrics() {
       return window.__ag_last_metrics || null;
