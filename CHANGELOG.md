@@ -4,6 +4,18 @@
 
 ---
 
+## [v5.4.1] - 2026-11-17
+
+> **适用版本**：Antigravity `2.32.1+` / `2.32.0`（向下完全兼容 `2.31.x` / `2.30.0`）  
+> **致谢跟进**：围绕 [@CaramelizedCUDA](https://github.com/CaramelizedCUDA)（[Issue #13](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/issues/13)）共创的 `claude-warm` 暖纸深夜预设补充客户端原生 UI 一键切换闭环！
+
+### Added（「系统设置 → 外观界面」原生四段式胶囊 📖 书卷一键切换钮与自动持久化记忆）
+- **新增客户端原生外观面板「暖纸深色 (📖)」可视化切换按钮（`core/daemon.mjs` / `core/runtime.js` / `core/theme.css`）**：
+  - 在「系统设置 → 外观界面 → 主题模式」右侧的 `[data-slot="toggle-group"]` 胶囊中，采用末尾物理追加 + CSS Flexbox `order` 排序（100% 保护 React Fiber 前序兄弟节点指针），在 **☀️ 浅色** 与 **🌙 深色** 正中间无损嵌入同规格官方 `MenuBookIcon` **📖 书卷按钮**，形成四段式胶囊 **`[ 🖥️ | ☀️ | 📖 | 🌙 ]`**（悬停浮现不受 `.agy-card` 裁切的「暖纸深色」气泡）；
+  - **0ms 瞬切与自动落盘永久记忆**：点击 **📖 书卷** 即刻切换至 `"darkPreset": "claude-warm"`（若当前在浅色或跟随系统模式，自动联动客户端切入底层真 `Dark` 模式，圆底高亮单独亮在 **📖** 上），并通过新增 CDP 绑定 `__agSetDarkPreset` 原子写回 `user/config.json` 并广播同步所有窗口与 `plugin://swarm--` 子帧；点击 **🌙 月亮** 即刻切回原版冷碳黑 `"onyx"` 并落盘；当 `enabled: false` 时完整清理还原原生三键胶囊。
+
+---
+
 ## [v5.4.0] - 2026-11-17
 
 > **适用版本**：Antigravity `2.32.1+` / `2.32.0`（向下完全兼容 `2.31.x` / `2.30.0`）  

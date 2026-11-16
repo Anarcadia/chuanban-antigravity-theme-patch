@@ -2,7 +2,7 @@
 /**
  * chuanban-antigravity-theme-patch · CDP Theme & Live Metrics Daemon (core/daemon.mjs)
  *
- * 架构特性（v5.4.0）：
+ * 架构特性（v5.4.1）：
  * 1. 动态 Node 分级：
  *    - Node >= 22.0：完整启用昼夜双模式独立主题（暖纸浅色三预设 + 深色 onyx / claude-warm 双预设）、四层字体、输入框三态、1740条母语级汉化、宿主独占指纹门禁、死锁与冷启动兜底包自愈及 2.32.1/2.32.0 curtainView/Swarm 适配。
  *    - Node >= 22.13：动态 `await import('node:sqlite')` 解锁底部实时会话指标胶囊（O(1) 增量尾行解析 + WSL2 双轨只读读取）；低版本优雅降级绝不崩溃。
@@ -286,7 +286,7 @@ function resolveActiveChannelEndpoints(channelMode = 'auto', userCfg = {}) {
 // ============================================================================
 // 2. 动态构建注入载荷（支持 core/ + user/ 实时合并与热更新签名）
 // ============================================================================
-const BASE_VERSION = '20261116-v5.4.0';
+const BASE_VERSION = '20261117-v5.4.1';
 let cachedBundleSig = '';
 let cachedInjectScript = '';
 let cachedPatchVersion = '';
@@ -362,6 +362,52 @@ function normalizeOverrideDict(rawObj) {
 const HOST_CONFIG_PATH = path.join(os.homedir(), '.gemini', 'config', 'config.json');
 let cachedHostCfgFileSig = '';
 let cachedHostThemeMode = null;
+
+function persistDarkPresetToUserConfig(rawDarkPreset) {
+  if (SAFE_MODE) return false;
+  const nextDarkPreset = String(rawDarkPreset || '').trim().toLowerCase() === 'claude-warm' ? 'claude-warm' : 'onyx';
+  const cfgPath = path.join(USER_DIR, 'config.json');
+  try {
+    fs.mkdirSync(USER_DIR, { recursive: true });
+    const currentObj = readJsonSafe(cfgPath, {});
+    const prevNorm =
+      String(currentObj.darkPreset || 'onyx').trim().toLowerCase() === 'claude-warm' ? 'claude-warm' : 'onyx';
+    if (prevNorm === nextDarkPreset && currentObj.darkPreset === nextDarkPreset) {
+      return false;
+    }
+    const updatedObj = {};
+    let inserted = false;
+    for (const [k, v] of Object.entries(currentObj)) {
+      if (k === 'darkPreset') {
+        updatedObj.darkPreset = nextDarkPreset;
+        inserted = true;
+      } else {
+        updatedObj[k] = v;
+        if (k === 'preset' && !('darkPreset' in currentObj)) {
+          updatedObj.darkPreset = nextDarkPreset;
+          inserted = true;
+        }
+      }
+    }
+    if (!inserted) {
+      updatedObj.darkPreset = nextDarkPreset;
+    }
+    const tmpPath = `${cfgPath}.tmp-${process.pid}`;
+    fs.writeFileSync(tmpPath, `${JSON.stringify(updatedObj, null, 2)}\n`, 'utf8');
+    fs.renameSync(tmpPath, cfgPath);
+    if (rebuildBundleIfNeeded()) {
+      for (const [, entry] of attachedTargets.entries()) {
+        if (!entry?.hostConfirmed) continue;
+        void entry.updateNewDocScript?.();
+        void entry.inject?.();
+      }
+    }
+    return true;
+  } catch (err) {
+    logDaemonEvent(`persistDarkPreset error: ${err?.message || err}`);
+    return false;
+  }
+}
 
 function readHostThemeMode() {
   const fileSig = getFileMtimeSig(HOST_CONFIG_PATH);
@@ -2543,6 +2589,7 @@ function attachTarget(target, endpoint) {
           await send('Runtime.addBinding', { name: '__agRequestMetrics' });
           if (target.type === 'page') {
             await send('Runtime.addBinding', { name: '__agRequestHardReload' });
+            await send('Runtime.addBinding', { name: '__agSetDarkPreset' });
           }
         }
         if (ws.readyState !== WebSocket.OPEN || nonHostSettled) {
@@ -2688,6 +2735,13 @@ function attachTarget(target, endpoint) {
               `[Daemon] Cold-boot embedded UI drift detected on target ${target.id} (${reason}), triggering ignoreCache reload`
             );
             send('Page.reload', { ignoreCache: true });
+            return;
+          }
+          if (msg.method === 'Runtime.bindingCalled' && msg.params?.name === '__agSetDarkPreset') {
+            if (!hostConfirmed || target.type !== 'page' || SAFE_MODE || !activeConfig.enabled) {
+              return;
+            }
+            persistDarkPresetToUserConfig(msg.params.payload);
             return;
           }
           if (

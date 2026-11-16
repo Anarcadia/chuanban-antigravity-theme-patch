@@ -906,6 +906,69 @@ html[data-ag-dark-preset="claude-warm"] body[data-agy-theme][data-newux-theme="o
   color: #FFFBF2 !important;
 }
 
+/* 外观界面「主题模式」四段式胶囊：在浅色(☀️)与深色(🌙)之间无损插入「暖纸深色(📖)」切换钮 */
+[data-slot="toggle-group"][data-ag-theme-toggle-group="1"] > button[data-ag-native-theme-slot="system"] {
+  order: 1;
+}
+
+[data-slot="toggle-group"][data-ag-theme-toggle-group="1"] > button[data-ag-native-theme-slot="light"] {
+  order: 2;
+}
+
+[data-slot="toggle-group"][data-ag-theme-toggle-group="1"] > button[data-ag-warm-night-btn="1"] {
+  order: 3;
+}
+
+[data-slot="toggle-group"][data-ag-theme-toggle-group="1"] > button[data-ag-native-theme-slot="dark"] {
+  order: 4;
+}
+
+[data-slot="toggle-group"][data-ag-theme-toggle-group="1"] > :not(button) {
+  order: 99;
+}
+
+body[data-agy-theme] [data-slot="toggle-group"][data-ag-theme-toggle-group="1"][data-ag-active-night="claude-warm"] > button[data-ag-native-theme-slot="dark"][data-pressed],
+[data-slot="toggle-group"][data-ag-theme-toggle-group="1"][data-ag-active-night="claude-warm"] > button[data-ag-native-theme-slot="dark"][data-pressed] {
+  background-color: transparent !important;
+  box-shadow: none !important;
+  color: var(--secondary-foreground) !important;
+}
+
+body[data-agy-theme] [data-slot="toggle-group"][data-ag-theme-toggle-group="1"][data-ag-active-night="claude-warm"] > button[data-ag-native-theme-slot="dark"][data-pressed]:hover,
+[data-slot="toggle-group"][data-ag-theme-toggle-group="1"][data-ag-active-night="claude-warm"] > button[data-ag-native-theme-slot="dark"][data-pressed]:hover {
+  color: var(--foreground) !important;
+}
+
+#ag-theme-btn-tooltip {
+  position: fixed;
+  z-index: 2147483647;
+  pointer-events: none;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1.35;
+  font-weight: 400;
+  white-space: nowrap;
+  background-color: #1F1E1D;
+  color: #F8F6F1;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.24), 0 0 0 0.5px rgba(255, 255, 255, 0.10);
+  opacity: 0;
+  transform: translate(-50%, -100%) translateY(2px);
+  transition: opacity 140ms ease, transform 140ms ease;
+}
+
+body.dark #ag-theme-btn-tooltip,
+html[data-ag-theme-mode="dark"] #ag-theme-btn-tooltip {
+  background-color: var(--popover, #2B2A26);
+  color: var(--popover-foreground, #F3F0E4);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.48), 0 0 0 1px rgba(255, 255, 255, 0.10);
+}
+
+#ag-theme-btn-tooltip[data-visible="1"] {
+  opacity: 1;
+  transform: translate(-50%, -100%) translateY(0);
+}
+
 
 /* ============================================================================
  * PART IV. 模型名称同行实时指标胶囊与悬浮详情卡（结构共用 + 白天/黑夜色彩自适应）
