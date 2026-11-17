@@ -2409,6 +2409,55 @@ function isAllowedOrigin(urlStr) {
   return activeConfig.allowedOrigins.some((prefix) => urlStr.startsWith(prefix));
 }
 
+const CASCADE_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const MAX_WATCHED_CASCADES = 12;
+
+function normalizeCascadeIdList(raw) {
+  const candidates = [];
+  if (Array.isArray(raw)) {
+    for (const item of raw) {
+      if (typeof item === 'string') candidates.push(item);
+    }
+  } else if (typeof raw === 'string') {
+    const trimmed = raw.trim();
+    if (trimmed) {
+      let decoded = trimmed;
+      try {
+        decoded = decodeURIComponent(trimmed);
+      } catch {}
+      for (const part of decoded.split(/[+,]/)) {
+        candidates.push(part);
+      }
+    }
+  }
+  const seen = new Set();
+  const out = [];
+  for (const item of candidates) {
+    const clean = String(item || '').trim().toLowerCase();
+    if (!CASCADE_UUID_RE.test(clean) || seen.has(clean)) continue;
+    seen.add(clean);
+    out.push(clean);
+    if (out.length >= MAX_WATCHED_CASCADES) break;
+  }
+  return out;
+}
+
+function parseMetricsSubscriptionPayload(rawPayload) {
+  const raw = String(rawPayload ?? '').trim();
+  if (!raw) return { valid: false, ids: [] };
+  if (raw.startsWith('[')) {
+    try {
+      const arr = JSON.parse(raw);
+      if (Array.isArray(arr)) {
+        return { valid: true, ids: normalizeCascadeIdList(arr) };
+      }
+    } catch {}
+    return { valid: false, ids: [] };
+  }
+  const ids = normalizeCascadeIdList(raw);
+  return { valid: ids.length > 0, ids };
+}
+
 function attachTarget(target, endpoint) {
   const wsUrl = target.webSocketDebuggerUrl;
   if (!wsUrl) return Promise.resolve(false);
@@ -2426,9 +2475,9 @@ function attachTarget(target, endpoint) {
     try {
       const ws = new WebSocket(wsUrl);
       let msgId = 1;
-      let activeCascadeId = '';
-      let lastPushedHash = '';
-      let lastRenderedSig = '';
+      let watchedCascadeIds = [];
+      let hasExplicitSubscription = false;
+      const perCascadeState = new Map(); // cascadeId -> { lastPushedHash, lastRenderedSig }
       let evalScriptId = null;
       const pendingCallbacks = new Map();
 
@@ -2492,6 +2541,9 @@ function attachTarget(target, endpoint) {
       };
 
       const inject = async () => {
+        if (target.type === 'page') {
+          hasExplicitSubscription = false;
+        }
         const { script } = buildTargetInjectScript();
         const res = await send('Runtime.evaluate', {
           expression: script,
@@ -2510,6 +2562,8 @@ function attachTarget(target, endpoint) {
           if (target.type === 'page') {
             if (!activeConfig.enabled) {
               targetThemeModes.delete(target.id);
+              watchedCascadeIds = [];
+              perCascadeState.clear();
             } else {
               const resolvedMode = res?.result?.result?.value;
               if (resolvedMode === 'dark' || resolvedMode === 'light') {
@@ -2526,71 +2580,127 @@ function attachTarget(target, endpoint) {
         }
       };
 
-      const syncMetricsForSession = async (force = false) => {
+      const syncMetricsForSession = async (force = false, skipDomEval = false) => {
         if (target.type === 'iframe' || !DatabaseSync || !activeConfig.modules.metrics || !activeConfig.enabled) return;
 
-        // 仅在尚未获知 activeCascadeId 或强制重同步时向前端发起 Runtime.evaluate，日常靠 __agRequestMetrics 绑定事件实时驱动
-        if (!activeCascadeId || force) {
+        // 仅在尚未获知前端订阅或强制重同步时向前端发起 Runtime.evaluate，日常靠 __agRequestMetrics 绑定事件实时驱动
+        if (!skipDomEval && (!hasExplicitSubscription || force)) {
           const evalRes = await send('Runtime.evaluate', {
             expression: `(function(){
-              if (window.__ag_watched_cascade_id) return window.__ag_watched_cascade_id;
-              const m = window.location.pathname.match(/\\/c\\/([0-9a-f-]{36})/i);
-              if (m) return m[1];
-              const el = document.querySelector('[data-testid=conversation-row-sidebar][data-selected=true]');
-              return el ? (el.getAttribute('data-cascade-id') || '') : '';
+              if (Array.isArray(window.__ag_watched_cascade_ids) && typeof window.__ag_watched_cascade_sig === 'string') {
+                return window.__ag_watched_cascade_ids;
+              }
+              var out = [];
+              var seen = {};
+              var add = function(v) {
+                var s = String(v || '').trim().toLowerCase();
+                if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s) && !seen[s]) {
+                  seen[s] = true;
+                  out.push(s);
+                }
+              };
+              var views = document.querySelectorAll('[data-testid="conversation-view"][data-cascade-id]');
+              for (var i = 0; i < views.length; i++) add(views[i].getAttribute('data-cascade-id'));
+              try {
+                var dec = decodeURIComponent(window.location.pathname || '');
+                var m = dec.match(/\\/c\\/([^/?#]+)/i);
+                if (m) {
+                  var parts = m[1].split(/[+%]/);
+                  for (var j = 0; j < parts.length; j++) add(parts[j]);
+                }
+                var sp = new URLSearchParams(window.location.search || '');
+                add(sp.get('focused'));
+                add(sp.get('cascadeId'));
+              } catch (e) {}
+              if (out.length === 0) {
+                var sel = document.querySelectorAll('[data-testid=conversation-row-sidebar][data-selected=true]');
+                for (var k = 0; k < sel.length; k++) add(sel[k].getAttribute('data-cascade-id'));
+              }
+              return out;
             })()`,
             returnByValue: true
           });
-          const detected = evalRes?.result?.result?.value;
-          if (detected && /^[0-9a-f-]{36}$/i.test(detected)) {
-            activeCascadeId = detected;
+          const rawDetected = evalRes?.result?.result?.value;
+          if (Array.isArray(rawDetected)) {
+            const detectedIds = normalizeCascadeIdList(rawDetected);
+            if (!hasExplicitSubscription || detectedIds.length > 0 || rawDetected.length === 0) {
+              watchedCascadeIds = detectedIds;
+              const keep = new Set(watchedCascadeIds);
+              for (const k of perCascadeState.keys()) {
+                if (!keep.has(k)) perCascadeState.delete(k);
+              }
+            }
           }
         }
-        if (!activeCascadeId) return;
+        if (watchedCascadeIds.length === 0) return;
 
-        // 先在 Node 本地通过 statSync 检查 .db/.db-wal 与子 Agent 复合签名（兼容 Windows WSL 按需懒探测），未变化则 0 WebSocket 通信直接返回
         const currentEndpoint = attachedTargets.get(target.id)?.endpoint || endpoint;
-        const dbState = getDbState(activeCascadeId, currentEndpoint);
-        const conversationsDir = dbState?.dbPath ? path.dirname(dbState.dbPath) : '';
-        const childSnap = conversationsDir
-          ? getCompositeChildSnapshot(activeCascadeId, conversationsDir, dbState.rawSig || dbState.sig)
-          : null;
-        const sig = childSnap?.sig || dbState?.sig || 'empty';
-        const sessionKey = `${activeCascadeId}@${sig}|${metricsConfigEpoch}`;
-        const uncCoolingDown = Boolean(
-          (dbState?.uncDeferred || childSnap?.uncBackoffActive) && Date.now() < wslUncBackoffUntil
-        );
-        if (
-          !force &&
-          ((!childSnap?.isDraining && !childSnap?.partialStale && sessionKey === lastPushedHash) ||
-            (uncCoolingDown && lastRenderedSig !== ''))
-        ) {
-          return;
-        }
+        const pendingUpdates = [];
 
-        const payload = parseConversationMetrics(activeCascadeId, currentEndpoint, dbState, childSnap);
-        if (!payload || payload.transientError) {
-          if (force && payload?.cachedPayload) {
-            await send('Runtime.evaluate', {
-              expression: `window.__ag_render_metrics && window.__ag_render_metrics(${JSON.stringify(payload.cachedPayload)})`,
-              returnByValue: false
-            });
+        for (const cid of watchedCascadeIds) {
+          let cState = perCascadeState.get(cid);
+          if (!cState) {
+            cState = { lastPushedHash: '', lastRenderedSig: '' };
+            perCascadeState.set(cid, cState);
           }
-          return;
+
+          // 先在 Node 本地通过 statSync 检查 .db/.db-wal 与子 Agent 复合签名（兼容 Windows WSL 按需懒探测），未变化则 0 WebSocket 通信直接跳过
+          const dbState = getDbState(cid, currentEndpoint);
+          const conversationsDir = dbState?.dbPath ? path.dirname(dbState.dbPath) : '';
+          const childSnap = conversationsDir
+            ? getCompositeChildSnapshot(cid, conversationsDir, dbState.rawSig || dbState.sig)
+            : null;
+          const sig = childSnap?.sig || dbState?.sig || 'empty';
+          const sessionKey = `${cid}@${sig}|${metricsConfigEpoch}`;
+          const uncCoolingDown = Boolean(
+            (dbState?.uncDeferred || childSnap?.uncBackoffActive) && Date.now() < wslUncBackoffUntil
+          );
+          if (
+            !force &&
+            ((!childSnap?.isDraining && !childSnap?.partialStale && sessionKey === cState.lastPushedHash) ||
+              (uncCoolingDown && cState.lastRenderedSig !== ''))
+          ) {
+            continue;
+          }
+
+          const payload = parseConversationMetrics(cid, currentEndpoint, dbState, childSnap);
+          if (!payload || payload.transientError) {
+            if (force && payload?.cachedPayload) {
+              pendingUpdates.push({ payload: payload.cachedPayload, isTransientFallback: true });
+            }
+            continue;
+          }
+
+          const renderedSig = `${payload.hasData ? '1' : '0'}\n${payload.inlineHtml || ''}\n${payload.tooltipHtml || ''}`;
+          if (force || renderedSig !== cState.lastRenderedSig) {
+            pendingUpdates.push({
+              payload,
+              state: cState,
+              renderedSig,
+              sessionKey,
+              canCommitHash: !payload.isDraining && !payload.partialStale
+            });
+          } else if (!payload.isDraining && !payload.partialStale) {
+            cState.lastPushedHash = sessionKey;
+          } else {
+            cState.lastPushedHash = '';
+          }
         }
 
-        const renderedSig = `${payload.hasData ? '1' : '0'}\n${payload.inlineHtml || ''}\n${payload.tooltipHtml || ''}`;
-        if (force || renderedSig !== lastRenderedSig) {
-          await send('Runtime.evaluate', {
-            expression: `window.__ag_render_metrics && window.__ag_render_metrics(${JSON.stringify(payload)})`,
+        if (pendingUpdates.length > 0) {
+          const pushPayloads = pendingUpdates.map((u) => u.payload);
+          const pushRes = await send('Runtime.evaluate', {
+            expression: `if (typeof window.__ag_render_metrics === 'function') { for (const p of ${JSON.stringify(pushPayloads)}) { window.__ag_render_metrics(p); } }`,
             returnByValue: false
           });
-          lastRenderedSig = renderedSig;
-        }
-        if (!payload.isDraining && !payload.partialStale) {
-          lastPushedHash = sessionKey;
-        } else {
-          lastPushedHash = '';
+          const pushOk = Boolean(pushRes && !pushRes.error && !pushRes.result?.exceptionDetails);
+          if (pushOk) {
+            for (const u of pendingUpdates) {
+              if (u.isTransientFallback || !u.state) continue;
+              u.state.lastRenderedSig = u.renderedSig;
+              u.state.lastPushedHash = u.canCommitHash ? u.sessionKey : '';
+            }
+          }
         }
       };
 
@@ -2897,12 +3007,24 @@ function attachTarget(target, endpoint) {
           }
           if (msg.method === 'Runtime.bindingCalled' && msg.params?.name === '__agRequestMetrics') {
             if (!hostConfirmed) return;
-            const nextId = String(msg.params.payload || '').trim();
-            if (/^[0-9a-f-]{36}$/i.test(nextId)) {
-              activeCascadeId = nextId;
-              lastPushedHash = '';
-              lastRenderedSig = '';
-              syncMetricsForSession(true);
+            const parsedSub = parseMetricsSubscriptionPayload(msg.params.payload);
+            if (parsedSub.valid) {
+              watchedCascadeIds = parsedSub.ids;
+              hasExplicitSubscription = true;
+              const keep = new Set(watchedCascadeIds);
+              for (const k of perCascadeState.keys()) {
+                if (!keep.has(k)) perCascadeState.delete(k);
+              }
+              for (const cid of watchedCascadeIds) {
+                const st = perCascadeState.get(cid);
+                if (st) {
+                  st.lastPushedHash = '';
+                  st.lastRenderedSig = '';
+                }
+              }
+              if (watchedCascadeIds.length > 0) {
+                syncMetricsForSession(true, true);
+              }
             }
             return;
           }
@@ -2952,6 +3074,7 @@ function attachTarget(target, endpoint) {
             msg.params?.frame?.url
           ) {
             currentTargetUrl = String(msg.params.frame.url);
+            hasExplicitSubscription = false;
           }
           if (
             msg.method === 'Page.frameNavigated' ||
@@ -3013,9 +3136,10 @@ function attachTarget(target, endpoint) {
           if (u) currentTargetUrl = String(u);
         },
         setActiveCascade: (cid) => {
-          activeCascadeId = cid;
-          lastPushedHash = '';
-          lastRenderedSig = '';
+          const ids = normalizeCascadeIdList(cid);
+          watchedCascadeIds = ids;
+          hasExplicitSubscription = ids.length > 0;
+          perCascadeState.clear();
         }
       });
     } catch {
