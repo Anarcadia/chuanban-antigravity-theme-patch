@@ -1,6 +1,6 @@
-# 船板的 Antigravity 书卷暖纸 × 昼夜双预设主题、字体优化与深度汉化全栈补丁 (v5.4.1 · 适配 Antigravity 2.32.1)
+# 船板的 Antigravity 书卷暖纸 × 昼夜双预设主题、字体优化与深度汉化全栈补丁 (v5.4.2 · 适配 Antigravity 2.32.1)
 
-[![Version](https://img.shields.io/badge/version-5.4.1-7A1F1A.svg)](https://github.com/Anarcadia/chuanban-antigravity-theme-patch)
+[![Version](https://img.shields.io/badge/version-5.4.2-7A1F1A.svg)](https://github.com/Anarcadia/chuanban-antigravity-theme-patch)
 [![Antigravity](https://img.shields.io/badge/Antigravity-2.32.1%2B-D97757.svg)](https://github.com/Anarcadia/chuanban-antigravity-theme-patch)
 [![Node](https://img.shields.io/badge/node-%3E%3D22.0.0%20(22.13%2B%20Full)-339933.svg)](https://nodejs.org/)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey.svg)](https://github.com/Anarcadia/chuanban-antigravity-theme-patch)
@@ -30,7 +30,7 @@
 
 ---
 
-## ✨ 补丁简介：核心定位与五大亮点（v5.4.1）
+## ✨ 补丁简介：核心定位与五大亮点（v5.4.2）
 
 ### 1. 设计目的
 Google Antigravity 原生浅色界面偏冷刺眼、全局仅使用单一无衬线字体，长时间高强度阅读与编码容易视觉疲劳。本补丁以**纯运行时非侵入注入**的方式，将 Antigravity 重塑为兼具 **Anthropic 暖纸学术质感、官方碳黑与 Claude 暖炭橙可选深色模式、四层中西文精密排版、全界面母语级汉化与实时模型遥测** 的主力工作台：
@@ -60,11 +60,11 @@ Google Antigravity 原生浅色界面偏冷刺眼、全局仅使用单一无衬�
 > **💬 复制发给 Agent（新用户一键安装）**：  
 > 请帮我克隆 `https://github.com/Anarcadia/chuanban-antigravity-theme-patch.git`（或读取我已下载解压的补丁目录），严格按照仓库内的 `SKILL.md` 依次执行 `node install.mjs doctor`（Windows 下若未装字体请先用 `node install.mjs install-fonts` 注册字体）、`node install.mjs install` 和 `node install.mjs verify`，帮我一键部署好船板的 Antigravity 主题补丁并验证实机生效。
 
-### 二、老版本用户无缝升级至 v5.4.1
+### 二、老版本用户无缝升级至 v5.4.2
 `node install.mjs install` 会自动备份旧内核、接管旧版常驻服务，并无损保留你在 `~/.gemini/antigravity/theme-patch/user/` 中的个人配置：
 
 > **💬 复制发给 Agent（老用户无缝升级）**：  
-> 请帮我拉取最新的 `https://github.com/Anarcadia/chuanban-antigravity-theme-patch.git`，阅读其中的 `SKILL.md`，直接运行 `node install.mjs install` 和 `node install.mjs verify` 将我的环境升级至最新 `v5.4.1` 版本（若我旧脚本里有自定义的配色预设或字号修改，请迁移保留到 `~/.gemini/antigravity/theme-patch/user/` 改装层中）。
+> 请帮我拉取最新的 `https://github.com/Anarcadia/chuanban-antigravity-theme-patch.git`，阅读其中的 `SKILL.md`，直接运行 `node install.mjs install` 和 `node install.mjs verify` 将我的环境升级至最新 `v5.4.2` 版本（若我旧脚本里有自定义的配色预设或字号修改，请迁移保留到 `~/.gemini/antigravity/theme-patch/user/` 改装层中）。
 
 ### 三、后续与 Agent 对话定制风格或排障
 - **🎨 切换白天/黑夜预设、调整字号或微调外观**：
@@ -80,7 +80,9 @@ Google Antigravity 原生浅色界面偏冷刺眼、全局仅使用单一无衬�
 ## 🕒 近期更新与关键演进（完整记录见 [`CHANGELOG.md`](CHANGELOG.md)）
 
 ### 近期更新
-- **v5.4.1（2026-11-17 · 现行版）**
+- **v5.4.2（2026-11-17 · 现行版）**
+  - 新增宿主主窗口 → `plugin://swarm--` 蜂群子帧实时深浅色中继、零闪白预置与浅色次级变量兜底，根治 `THEME_MODE_INHERIT` 及双向切换下的子帧主题失步（合入 [@honlam996](https://github.com/honlam996) [#15](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/pull/15) 修复 [#14](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/issues/14)）。
+- **v5.4.1（2026-11-17）**
   - 在「系统设置 → 外观界面 → 主题模式」胶囊中新增原生 **📖 书卷按钮**，支持一键切换「Claude 暖纸深夜」并自动持久化记忆。
 - **v5.4.0（2026-11-16）**
   - 新增可选深色预设 `"darkPreset": "claude-warm"`（暖炭底 + 象牙字 + 陶土暖橙），默认保持官方冷碳黑 `"onyx"` 不变（致谢 [@CaramelizedCUDA](https://github.com/CaramelizedCUDA) [#13](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/issues/13)）。

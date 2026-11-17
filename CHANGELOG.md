@@ -4,6 +4,23 @@
 
 ---
 
+## [v5.4.2] - 2026-11-17
+
+> **适用版本**：Antigravity `2.32.1+` / `2.32.0`（向下完全兼容 `2.31.x` / `2.30.0`）  
+> **核验基线**：macOS `2.32.1` × Windows 11 `2.32.1`（`W542-Check 1 ~ 4` 真机验收 + `Claude Sonnet 5.5 High` 对抗性代码审查闭环）双端联合发版  
+> **社区致谢**：特别感谢 [@honlam996](https://github.com/honlam996)（[Issue #14](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/issues/14) · [PR #15](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/pull/15)）对 `plugin://swarm--` 跨进程子帧双向主题失步的精准根因定位与高质量实况中继实现！
+
+### Fixed（`plugin://swarm--` 跨进程子帧实时主题中继、判据重排、浅色内联变量兜底与配置防覆写加固）
+- **宿主主窗口 → `plugin://swarm--*` OOPIF 子帧实时主题同步与零闪白预置（`core/daemon.mjs` / `core/runtime.js`，合入 [#15](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/pull/15) 修复 [#14](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/issues/14)）**：
+  - `daemon.mjs` 将 `sync()` 与 `__agSetDarkPreset` 热重注编排为「先同步父级 `page`、后同步子级 `iframe`」，按 `parentId` 链路与所属通道（`stable` / `insiders` 严格隔离，支持同通道多窗口精确归属与断链同通道自愈）将主窗口真实解析主题通过新增 CDP 绑定 `__agSyncHostThemeMode` 即时中继至下属 Swarm 子帧（`<300ms`），同步串行预置子帧 `NewDocument` 脚本消除 `THEME_MODE_INHERIT` 下新开/重载子帧闪白，并在 `~15s` 心跳对账中补齐 `NewDocument` 脚本超时自愈；
+  - `runtime.js` 修正 `IS_SWARM_PLUGIN_FRAME` 判据优先级（守护进程实况中继 `__ag_host_theme_mode` > `config.json` 显式 `dark/light` > 内联 `--background` 亮度 > `data-theme="dark"` > `systemPrefersDark`），剔除对 Swarm 前端初始默认 `<html data-theme="light">` 的误信，同步维护子帧 `colorScheme` 与原始 `data-theme` 快照并在 `enabled: false` 无损卸载时完整清理还原。
+- **Swarm 插件子帧白天模式次级表面变量兜底（`core/theme.css`）**：
+  - 在 `html[data-ag-page-type="plugin"]:not([data-ag-theme-mode="dark"])`（及 `vintage-deep` 复古暖棕变体）下补齐 `--primary-foreground`、`--secondary`、`--muted`、`--placeholder`、`--error` 覆盖，零侵入主窗口样式，彻底消除深切浅后残留深色半透明内联变量透出问题。
+- **`user/config.json` UTF-8 BOM 兼容与异常 JSON 防覆写保护（`core/daemon.mjs` / `install.mjs`）**：
+  - `readJsonSafe`、`persistDarkPresetToUserConfig` 与 `install.mjs` 自动剥离 Windows 记事本写入的 UTF-8 BOM（`\uFEFF`）；当用户正在手动编辑 `user/config.json` 导致临时语法不完整或文件被锁定时，外观面板点击 📖 / 🌙 按钮自动跳过落盘并清理 `.tmp-*` 临时文件，100% 保护已有 `themeVars` / `modules` 自定义配置零丢失。
+
+---
+
 ## [v5.4.1] - 2026-11-17
 
 > **适用版本**：Antigravity `2.32.1+` / `2.32.0`（向下完全兼容 `2.31.x` / `2.30.0`）  

@@ -2,7 +2,7 @@
 /**
  * chuanban-antigravity-theme-patch · CDP Theme & Live Metrics Daemon (core/daemon.mjs)
  *
- * 架构特性（v5.4.1）：
+ * 架构特性（v5.4.2）：
  * 1. 动态 Node 分级：
  *    - Node >= 22.0：完整启用昼夜双模式独立主题（暖纸浅色三预设 + 深色 onyx / claude-warm 双预设）、四层字体、输入框三态、1740条母语级汉化、宿主独占指纹门禁、死锁与冷启动兜底包自愈及 2.32.1/2.32.0 curtainView/Swarm 适配。
  *    - Node >= 22.13：动态 `await import('node:sqlite')` 解锁底部实时会话指标胶囊（O(1) 增量尾行解析 + WSL2 双轨只读读取）；低版本优雅降级绝不崩溃。
@@ -62,7 +62,9 @@ const CLI_CHANNEL = getArg('--channel', null);
 function readJsonSafe(filePath, fallback = {}) {
   try {
     if (!fs.existsSync(filePath)) return fallback;
-    return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+    const raw = fs.readFileSync(filePath, 'utf8').replace(/^\uFEFF/, '');
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : fallback;
   } catch {
     return fallback;
   }
@@ -286,7 +288,7 @@ function resolveActiveChannelEndpoints(channelMode = 'auto', userCfg = {}) {
 // ============================================================================
 // 2. 动态构建注入载荷（支持 core/ + user/ 实时合并与热更新签名）
 // ============================================================================
-const BASE_VERSION = '20261117-v5.4.1';
+const BASE_VERSION = '20261117-v5.4.2';
 let cachedBundleSig = '';
 let cachedInjectScript = '';
 let cachedPatchVersion = '';
@@ -367,9 +369,25 @@ function persistDarkPresetToUserConfig(rawDarkPreset) {
   if (SAFE_MODE) return false;
   const nextDarkPreset = String(rawDarkPreset || '').trim().toLowerCase() === 'claude-warm' ? 'claude-warm' : 'onyx';
   const cfgPath = path.join(USER_DIR, 'config.json');
+  const tmpPath = `${cfgPath}.tmp-${process.pid}`;
   try {
     fs.mkdirSync(USER_DIR, { recursive: true });
-    const currentObj = readJsonSafe(cfgPath, {});
+    let currentObj = {};
+    if (fs.existsSync(cfgPath)) {
+      let parsed = null;
+      try {
+        const rawText = fs.readFileSync(cfgPath, 'utf8').replace(/^\uFEFF/, '');
+        parsed = JSON.parse(rawText);
+      } catch (parseErr) {
+        logDaemonEvent(`persistDarkPreset skipped: user/config.json unreadable (${parseErr?.message || parseErr})`);
+        return false;
+      }
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        logDaemonEvent('persistDarkPreset skipped: user/config.json root is not a plain object');
+        return false;
+      }
+      currentObj = parsed;
+    }
     const prevNorm =
       String(currentObj.darkPreset || 'onyx').trim().toLowerCase() === 'claude-warm' ? 'claude-warm' : 'onyx';
     if (prevNorm === nextDarkPreset && currentObj.darkPreset === nextDarkPreset) {
@@ -392,18 +410,35 @@ function persistDarkPresetToUserConfig(rawDarkPreset) {
     if (!inserted) {
       updatedObj.darkPreset = nextDarkPreset;
     }
-    const tmpPath = `${cfgPath}.tmp-${process.pid}`;
     fs.writeFileSync(tmpPath, `${JSON.stringify(updatedObj, null, 2)}\n`, 'utf8');
     fs.renameSync(tmpPath, cfgPath);
     if (rebuildBundleIfNeeded()) {
-      for (const [, entry] of attachedTargets.entries()) {
-        if (!entry?.hostConfirmed) continue;
-        void entry.updateNewDocScript?.();
-        void entry.inject?.();
-      }
+      void (async () => {
+        const pageEntries = [];
+        const iframeEntries = [];
+        for (const [, entry] of attachedTargets.entries()) {
+          if (!entry?.hostConfirmed) continue;
+          if (entry.type === 'iframe') iframeEntries.push(entry);
+          else pageEntries.push(entry);
+        }
+        for (const batch of [pageEntries, iframeEntries]) {
+          await Promise.allSettled(
+            batch.map(async (entry) => {
+              await entry.updateNewDocScript?.();
+              await entry.inject?.();
+              if (entry.type === 'page') {
+                await entry.syncMetricsForSession?.(true);
+              }
+            })
+          );
+        }
+      })();
     }
     return true;
   } catch (err) {
+    try {
+      if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath);
+    } catch {}
     logDaemonEvent(`persistDarkPreset error: ${err?.message || err}`);
     return false;
   }
@@ -2233,10 +2268,12 @@ function belongsToParentTarget(entry, parentTargetId, parentChannel) {
   const seen = new Set();
   while (curId && !seen.has(curId)) {
     if (curId === parentTargetId) return true;
+    const known = attachedTargets.get(curId);
+    if (known && known.type === 'page') return false;
     seen.add(curId);
     curId = targetMetaMap.get(curId)?.parentId || null;
   }
-  return false;
+  return !parentChannel || entry.endpoint?.channel === parentChannel;
 }
 
 function resolveParentThemeMode(target, endpoint) {
@@ -2259,10 +2296,6 @@ function resolveParentThemeMode(target, endpoint) {
     ) {
       return targetThemeModes.get(id);
     }
-  }
-  for (const [id, mode] of targetThemeModes.entries()) {
-    const entry = attachedTargets.get(id);
-    if (!entry || entry.hostConfirmed) return mode;
   }
   return null;
 }
@@ -2423,7 +2456,10 @@ function attachTarget(target, endpoint) {
         }
         const parentMode = resolveParentThemeMode(target, endpoint) || '';
         if (parentMode !== 'dark' && parentMode !== 'light') {
-          return { script: cachedInjectScript, parentMode: '' };
+          return {
+            script: `window.__ag_host_theme_mode=null;\n${cachedInjectScript}`,
+            parentMode: ''
+          };
         }
         return {
           script: `window.__ag_host_theme_mode=${JSON.stringify(parentMode)};\n${cachedInjectScript}`,
@@ -2603,6 +2639,8 @@ function attachTarget(target, endpoint) {
                   returnByValue: false
                 });
                 await updateNewDocScript();
+              } else if (!evalScriptId) {
+                await updateNewDocScript();
               }
             }
             return;
@@ -2629,6 +2667,9 @@ function attachTarget(target, endpoint) {
             await inject();
             await syncMetricsForSession(true);
           } else if (activeConfig.enabled && target.type === 'page') {
+            if (!evalScriptId) {
+              await updateNewDocScript();
+            }
             if (state.mode === 'dark' || state.mode === 'light') {
               const prevMode = targetThemeModes.get(target.id);
               targetThemeModes.set(target.id, state.mode);

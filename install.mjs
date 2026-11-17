@@ -116,7 +116,7 @@ function buildManifest(baseDir = __dirname) {
   }
   const manifest = {
     name: 'chuanban-antigravity-theme-patch',
-    version: '5.4.1',
+    version: '5.4.2',
     minNodeVersion: '22.0.0',
     fullMetricsNodeVersion: '22.13.0',
     distribution: {
@@ -1360,11 +1360,23 @@ async function runInstall() {
     }
   }
 
-  // 更新 user/config.json（仅在显式传入 CLI 参数或首次初始化时更新对应字段，保留用户自定义）
+  // 更新 user/config.json（仅在显式传入 CLI 参数或首次初始化时更新对应字段，保留用户自定义；兼容 Windows 记事本 UTF-8 BOM）
   const userConfigPath = path.join(targetUser, 'config.json');
-  const currentCfg = fs.existsSync(userConfigPath)
-    ? JSON.parse(fs.readFileSync(userConfigPath, 'utf8'))
-    : {};
+  let currentCfg = {};
+  let canWriteUserCfg = true;
+  if (fs.existsSync(userConfigPath)) {
+    try {
+      const parsed = JSON.parse(fs.readFileSync(userConfigPath, 'utf8').replace(/^\uFEFF/, ''));
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        currentCfg = parsed;
+      } else {
+        canWriteUserCfg = false;
+      }
+    } catch {
+      canWriteUserCfg = false;
+      console.warn('[Install] Warning: existing user/config.json is invalid JSON; leaving it untouched to prevent data loss.');
+    }
+  }
   if (typeof currentCfg.enabled !== 'boolean') currentCfg.enabled = true;
   if (cliChannel) {
     currentCfg.channel = cliChannel;
@@ -1397,7 +1409,9 @@ async function runInstall() {
       }
     }
   }
-  fs.writeFileSync(userConfigPath, JSON.stringify(currentCfg, null, 2) + '\n', 'utf8');
+  if (canWriteUserCfg) {
+    fs.writeFileSync(userConfigPath, JSON.stringify(currentCfg, null, 2) + '\n', 'utf8');
+  }
 
   const realDaemon = path.join(targetCore, 'daemon.mjs');
   let argvStatus = { skipped: true, reason: 'custom-target-dir' };
@@ -1779,7 +1793,7 @@ async function runUninstall() {
   if (fs.existsSync(userConfigPath) && fs.existsSync(realDaemon)) {
     try {
       const origRaw = fs.readFileSync(userConfigPath, 'utf8');
-      const cfg = JSON.parse(origRaw);
+      const cfg = JSON.parse(origRaw.replace(/^\uFEFF/, ''));
       cfg.enabled = false;
       fs.writeFileSync(userConfigPath, JSON.stringify(cfg, null, 2) + '\n', 'utf8');
       spawnSync(process.execPath, ['--disable-warning=ExperimentalWarning', realDaemon, '--once'], {

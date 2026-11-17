@@ -106,7 +106,7 @@
     }
   }
 
-  const PATCH_VERSION = boot.version || '20261117-v5.4.1';
+  const PATCH_VERSION = boot.version || '20261117-v5.4.2';
   const DETECTED_OS =
     boot.platform || (/Win/i.test(navigator.platform || '') ? 'win32' : /Mac/i.test(navigator.platform || '') ? 'darwin' : 'linux');
   const ENABLED = boot.enabled !== false;
@@ -552,6 +552,7 @@
     window.__ag_zoom_keydown_fn = null;
     window.__ag_zoom_resize_fn = null;
     window.__ag_settings_click_fn = null;
+    window.__ag_sync_preset_fn = null;
     window.__ag_host_theme_mode = null;
     window.__ag_set_host_theme_mode = null;
     window.__ag_resolved_theme_mode = null;
@@ -569,6 +570,14 @@
         if (window.__ag_swarm_owned_cs && document.documentElement) {
           document.documentElement.style.removeProperty('color-scheme');
           window.__ag_swarm_owned_cs = false;
+        }
+        if (window.__ag_swarm_orig_data_theme !== undefined && document.documentElement) {
+          if (window.__ag_swarm_orig_data_theme === null) {
+            document.documentElement.removeAttribute('data-theme');
+          } else {
+            document.documentElement.setAttribute('data-theme', window.__ag_swarm_orig_data_theme);
+          }
+          delete window.__ag_swarm_orig_data_theme;
         }
       } else {
         const hEl = document.documentElement;
@@ -1298,6 +1307,11 @@
         }
         const swarmMode = isDark ? 'dark' : 'light';
         if (htmlEl && htmlEl.getAttribute('data-theme') !== swarmMode) {
+          if (window.__ag_swarm_orig_data_theme === undefined) {
+            window.__ag_swarm_orig_data_theme = htmlEl.hasAttribute('data-theme')
+              ? htmlEl.getAttribute('data-theme')
+              : null;
+          }
           htmlEl.setAttribute('data-theme', swarmMode);
         }
         if (htmlEl && htmlEl.style.colorScheme !== swarmMode) {
