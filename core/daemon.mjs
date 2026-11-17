@@ -2599,8 +2599,14 @@ function attachTarget(target, endpoint) {
                   out.push(s);
                 }
               };
-              var views = document.querySelectorAll('[data-testid="conversation-view"][data-cascade-id]');
+              var addTab = function(v) {
+                var m = String(v || '').trim().match(/^side_question__([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i);
+                if (m) add(m[1]);
+              };
+              var views = document.querySelectorAll('[data-testid="conversation-view"][data-cascade-id], [data-testid="side-question-tab-conversation"][data-cascade-id]');
               for (var i = 0; i < views.length; i++) add(views[i].getAttribute('data-cascade-id'));
+              var activeTabs = document.querySelectorAll('[data-active-tab-id^="side_question__"]');
+              for (var t = 0; t < activeTabs.length; t++) addTab(activeTabs[t].getAttribute('data-active-tab-id'));
               try {
                 var dec = decodeURIComponent(window.location.pathname || '');
                 var m = dec.match(/\\/c\\/([^/?#]+)/i);
@@ -2611,6 +2617,8 @@ function attachTarget(target, endpoint) {
                 var sp = new URLSearchParams(window.location.search || '');
                 add(sp.get('focused'));
                 add(sp.get('cascadeId'));
+                var tabs = sp.getAll('tab');
+                for (var u = 0; u < tabs.length; u++) addTab(tabs[u]);
               } catch (e) {}
               if (out.length === 0) {
                 var sel = document.querySelectorAll('[data-testid=conversation-row-sidebar][data-selected=true]');

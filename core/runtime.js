@@ -492,6 +492,7 @@
     window.__ag_active_tooltip_pill = null;
     window.__ag_pill_tooltip_map = null;
     window.__ag_metrics_focusin_fn = null;
+    window.__ag_metrics_click_fn = null;
     window.__ag_metrics_by_id = null;
     window.__ag_watched_cascade_ids = null;
     window.__ag_watched_cascade_id = '';
@@ -1818,6 +1819,11 @@
   const MIDDLE_ENTER_BOTTOM_PX = 165;
   const MIDDLE_EXIT_BOTTOM_PX = 180;
   const CASCADE_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const SIDE_QUESTION_TAB_RE = /^side_question__([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
+  function extractSideQuestionTabUuid(raw) {
+    const m = String(raw || '').trim().match(SIDE_QUESTION_TAB_RE);
+    return m ? m[1].toLowerCase() : '';
+  }
   function isWeakMapInstance(v) {
     return (
       v instanceof WeakMap ||
@@ -1877,6 +1883,7 @@
     }
     metricsRouteTimers.clear();
     window.__ag_metrics_focusin_fn = null;
+    window.__ag_metrics_click_fn = null;
     window.__ag_trigger_route_check_fn = null;
   });
 
@@ -1925,6 +1932,15 @@
           }
         }
       }
+      const sp = new URLSearchParams(window.location.search || '');
+      const tabs = sp.getAll('tab');
+      for (let i = 0; i < tabs.length; i++) {
+        const sideCid = extractSideQuestionTabUuid(tabs[i]);
+        if (sideCid && !seen.has(sideCid)) {
+          seen.add(sideCid);
+          out.push(sideCid);
+        }
+      }
     } catch (e) {}
     return out;
   }
@@ -1954,6 +1970,34 @@
   function resolveBoxCascadeId(box, totalBoxes) {
     if (!box) return '';
     try {
+      const sideContainer =
+        box.closest &&
+        box.closest('[data-testid="side-question-tab-content"], [data-testid="side-question-tab-composer"], [data-side-panel-composer]');
+      if (sideContainer) {
+        const tabContent =
+          (sideContainer.matches && sideContainer.matches('[data-testid="side-question-tab-content"]')
+            ? sideContainer
+            : sideContainer.closest && sideContainer.closest('[data-testid="side-question-tab-content"]')) || sideContainer;
+        const sideConv =
+          tabContent && tabContent.querySelector
+            ? tabContent.querySelector('[data-testid="side-question-tab-conversation"][data-cascade-id], [data-cascade-id]')
+            : null;
+        if (sideConv) {
+          const sideCid = String(sideConv.getAttribute('data-cascade-id') || '').trim().toLowerCase();
+          if (CASCADE_UUID_RE.test(sideCid)) return sideCid;
+        }
+        const auxRoot =
+          (box.closest && box.closest('[data-testid="aux-pane-split"], [data-pane-id]')) || document;
+        const strip =
+          auxRoot && auxRoot.querySelector
+            ? auxRoot.querySelector('[data-active-tab-id^="side_question__"]')
+            : null;
+        if (strip) {
+          const stripCid = extractSideQuestionTabUuid(strip.getAttribute('data-active-tab-id'));
+          if (stripCid) return stripCid;
+        }
+        return '';
+      }
       const view =
         box.closest && box.closest('[data-testid="conversation-view"][data-cascade-id], [data-cascade-id]');
       if (view) {
@@ -2515,10 +2559,17 @@
     const t = e && e.target;
     if (!t || !t.closest) return;
     const rawId = String(SELECTORS.inputBoxId || '').trim().replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-    const matchSel = rawId
-      ? `[data-pane-id], [data-testid="conversation-view"], [id="${rawId}"]`
-      : '[data-pane-id], [data-testid="conversation-view"]';
+    const baseSel =
+      '[data-pane-id], [data-testid="conversation-view"], [data-testid="side-question-tab-content"], [data-side-panel-strip]';
+    const matchSel = rawId ? `${baseSel}, [id="${rawId}"]` : baseSel;
     if (t.closest(matchSel)) {
+      scheduleRouteCheck();
+    }
+  };
+  window.__ag_metrics_click_fn = (e) => {
+    const t = e && e.target;
+    if (!t || !t.closest) return;
+    if (t.closest('[data-tab-id], [data-side-panel-strip]')) {
       scheduleRouteCheck();
     }
   };
@@ -2530,6 +2581,18 @@
       (e) => {
         if (typeof window.__ag_metrics_focusin_fn === 'function') {
           window.__ag_metrics_focusin_fn(e);
+        }
+      },
+      true
+    );
+  }
+  if (!IS_SWARM_PLUGIN_FRAME && !window.__ag_metrics_click_installed) {
+    window.__ag_metrics_click_installed = true;
+    document.addEventListener(
+      'click',
+      (e) => {
+        if (typeof window.__ag_metrics_click_fn === 'function') {
+          window.__ag_metrics_click_fn(e);
         }
       },
       true
