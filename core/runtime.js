@@ -496,6 +496,8 @@
     if (s2) s2.remove();
     const sSwarmFont = document.getElementById('ag-swarm-google-fonts');
     if (sSwarmFont) sSwarmFont.remove();
+    const sGsfFont = document.getElementById('ag-google-sans-flex-fonts');
+    if (sGsfFont) sGsfFont.remove();
     try {
       document.querySelectorAll('#ag-live-metrics-pill, .ag-live-metrics-pill, [data-ag-metrics-pill]').forEach((el) => el.remove());
       document.querySelectorAll('[data-ag-row-mode]').forEach((el) => el.removeAttribute('data-ag-row-mode'));
@@ -695,22 +697,23 @@
   }
 
   // ============================================================================
-  // 1. 注入 Google Sans Flex（Swarm 帧缓存复用）、更纱黑体与主题样式（#ag-custom-fonts -> #ag-user-theme-vars -> #antigravity-user-custom-style）
+  // 1. 注入 Google Sans Flex 防脱靶保底样式表（兼容 settings.json font.family / hasEditor / Swarm 子帧）、更纱黑体与主题样式
   // ============================================================================
   const headTarget = document.head || document.getElementsByTagName('head')[0] || document.documentElement;
 
+  const legacySwarmFont = document.getElementById('ag-swarm-google-fonts');
+  if (legacySwarmFont) legacySwarmFont.remove();
   if (
-    IS_SWARM_PLUGIN_FRAME &&
     headTarget &&
     !document.getElementById('agy-new-themes-fonts') &&
-    !document.getElementById('ag-swarm-google-fonts')
+    !document.getElementById('ag-google-sans-flex-fonts')
   ) {
     try {
       const gfLink = document.createElement('link');
-      gfLink.id = 'ag-swarm-google-fonts';
+      gfLink.id = 'ag-google-sans-flex-fonts';
       gfLink.rel = 'stylesheet';
       gfLink.href =
-        'https://fonts.googleapis.com/css2?family=Google+Sans:ital,wght@0,400..700;1,400..700&family=Google+Sans+Flex:ROND,opsz,slnt,wdth,wght@0..100,6..144,-10..0,92..100,100..1000&display=swap';
+        'https://fonts.googleapis.com/css2?family=Google+Sans:ital,wght@0,400..700;1,400..700&family=Google+Sans+Code:ital,wght@0,300..800;1,300..800&family=Google+Sans+Flex:ROND,opsz,slnt,wdth,wght@0..100,6..144,-10..0,92..100,100..1000&family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap';
       gfLink.onerror = () => {
         try {
           gfLink.remove();

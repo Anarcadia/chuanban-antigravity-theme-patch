@@ -116,12 +116,79 @@ body[data-agy-font="inter"] :where(.font-sans) {
   --ag-ink-shadow-xs: 0 0 0.15px rgba(38, 36, 34, 0.25);
   --ag-ink-shadow-sm: 0 0 0.2px rgba(38, 36, 34, 0.35);
   --ag-ink-shadow-md: 0 0 0.25px rgba(10, 10, 10, 0.4);
+  --ag-ink-shadow-prose: none;
+  --ag-ink-shadow-prose-bold: none;
+  --ag-ui-w-row: 400;
+  --ag-ui-w-mid: 450;
+  --ag-ui-w-ctrl: 500;
+  --ag-ui-w-sel: 520;
+}
+
+/* macOS 专属全域活字润墨与 UI 字重微平衡（正文与 Markdown 保持饱满墨感；UI 标准字重极轻微收细 -10~-12、UI 加粗字重适度收细抵消墨感发粗；Windows 保持 100% 零改动） */
+html[data-ag-os="darwin"]:not([data-ag-theme-mode="dark"]):not(:has(> body.dark)):not(:has(> body.theme-dark)) {
+  --ag-ink-shadow-xs: 0 0 0.38px color-mix(in srgb, currentColor 48%, transparent);
+  --ag-ink-shadow-sm: 0 0 0.44px color-mix(in srgb, currentColor 54%, transparent);
+  --ag-ink-shadow-md: 0 0 0.48px color-mix(in srgb, currentColor 58%, transparent);
+  --ag-ink-shadow-prose: 0 0 0.48px color-mix(in srgb, currentColor 58%, transparent);
+  --ag-ink-shadow-prose-bold: 0 0 0.55px color-mix(in srgb, currentColor 64%, transparent);
+  --ag-ui-w-row: 388;
+  --ag-ui-w-mid: 430;
+  --ag-ui-w-ctrl: 455;
+  --ag-ui-w-sel: 488;
+}
+
+html[data-ag-os="darwin"]:not([data-ag-theme-mode="dark"]) body:not(.dark):not(.theme-dark):not([data-agy-font="inter"]),
+html[data-ag-os="darwin"]:not([data-ag-theme-mode="dark"]) body:not(.dark):not(.theme-dark):not([data-agy-font="inter"]) :where(.font-sans:not([data-markdown-root]):not([data-markdown-root] *)) {
+  --font-weight-light: 245;
+  --font-weight-normal: 340;
+  --font-weight-medium: 430;
+  --font-weight-semibold: 495;
+  --font-weight-bold: 560;
+  --agy-gsf-bold-wght: 455;
+}
+
+html[data-ag-os="darwin"]:not([data-ag-theme-mode="dark"]) body:not(.dark):not(.theme-dark) :is(b, strong, .font-semibold, .font-bold, .swarm-title, .o2 .o2-h):not([data-markdown-root] *):not([data-testid="user-message-content"] *):not(.agy-user-bubble *):not(.prose *):not(.markdown *):not(article *):not(pre *):not(code *) {
+  --agy-gsf-bold-wght: 545;
+  font-weight: 545;
 }
 
 html[data-ag-os="win32"] {
   --ag-ink-shadow-xs: none;
   --ag-ink-shadow-sm: none;
   --ag-ink-shadow-md: none;
+  --ag-ink-shadow-prose: none;
+  --ag-ink-shadow-prose-bold: none;
+}
+
+/* 防脱靶加固：即使宿主因 System UI 旧存档 / settings.json font.family / hasEditor 拔掉 data-agy-font，只要未显式选 Inter，始终保底补齐官方 Google Sans Flex 字重阶梯与 wdth:92 窄轴 */
+body:not([data-agy-font="inter"]),
+body:not([data-agy-font="inter"]) :where(.font-sans) {
+  --font-weight-light: 250;
+  --font-weight-normal: 350;
+  --font-weight-medium: 450;
+  --font-weight-semibold: 550;
+  --font-weight-bold: 650;
+  --font-weight-black: 850;
+  --agy-gsf-rond: 0;
+  --agy-gsf-slnt: 0;
+  --agy-gsf-wdth: 92;
+  --agy-gsf-bold-wght: 490;
+  font-weight: var(--font-weight-normal, 350);
+  font-variation-settings: "ROND" var(--agy-gsf-rond, 0), "slnt" var(--agy-gsf-slnt, 0), "wdth" var(--agy-gsf-wdth, 92);
+  font-variant-ligatures: no-contextual;
+}
+
+body:not([data-agy-font="inter"]) :is(code, pre, kbd, samp, .font-mono, .code-block, .xterm, .monaco-editor, .katex, .google-symbols, .codicon):not(.font-sans) {
+  --font-weight-light: 300;
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+  --font-weight-black: 900;
+  --agy-gsf-bold-wght: 600;
+  --agy-gsf-fvs: normal;
+  --agy-gsf-italic: italic;
+  font-variation-settings: normal;
 }
 
 body,
@@ -164,6 +231,16 @@ html, body, body[data-agy-font], button, select, nav, header, aside {
   -webkit-font-smoothing: antialiased;
 }
 
+/* macOS 专属 UI 全域基底润墨（覆盖顶栏面包屑、工具执行流、菜单、弹窗与标签页；严格隔离 win32） */
+html[data-ag-os="darwin"]:not([data-ag-theme-mode="dark"]) body:not(.dark):not(.theme-dark),
+html[data-ag-os="darwin"]:not([data-ag-theme-mode="dark"]) body:not(.dark):not(.theme-dark) :is(header, nav, [role="menu"], [role="menuitem"], [role="listbox"], [role="option"], [role="dialog"], .agy-overlay, .agy-overlay-item) {
+  text-shadow: var(--ag-ink-shadow-xs);
+}
+
+html[data-ag-os="darwin"]:not([data-ag-theme-mode="dark"]) body:not(.dark):not(.theme-dark) :is([role="dialog"] :is(h1, h2, h3, .font-medium, .font-semibold), [role="menu"] :is(h2, h3, h4, .font-medium)) {
+  text-shadow: var(--ag-ink-shadow-sm);
+}
+
 /* 2. 对话正文与 Markdown 内容：Anthropic Serif + 更纱粗衬线/黑体，并局部隔离外层 Google Sans Flex 可变轴污染 */
 [data-markdown-root],
 [data-testid="user-message-content"],
@@ -188,6 +265,20 @@ article,
   font-variant-ligatures: normal;
   font-variant-numeric: lining-nums;
   letter-spacing: -0.003em;
+}
+
+/* macOS 专属对话正文、用户消息气泡与 Markdown 全元素（段落/列表/引用/表格/标题/加粗/行内代码）活字墨感增浓（Windows 保持零改动） */
+html[data-ag-os="darwin"]:not([data-ag-theme-mode="dark"]) body:not(.dark):not(.theme-dark) :is([data-markdown-root], [data-testid="user-message-content"], .agy-user-bubble, .select-text:not([role="dialog"] *):not(.monaco-editor *):not(.xterm *), .prose, .markdown, article),
+html[data-ag-os="darwin"]:not([data-ag-theme-mode="dark"]) body:not(.dark):not(.theme-dark) :is([data-markdown-root], [data-testid="user-message-content"], .agy-user-bubble, .prose, .markdown, article) :is(p, li, blockquote, td, a, em, i, span:not(.monaco-editor *):not(.xterm *):not(pre *)) {
+  text-shadow: var(--ag-ink-shadow-prose);
+}
+
+html[data-ag-os="darwin"]:not([data-ag-theme-mode="dark"]) body:not(.dark):not(.theme-dark) :is([data-markdown-root], [data-testid="user-message-content"], .agy-user-bubble, .select-text:not([role="dialog"] *), .prose, .markdown, article) :is(strong, b, h1, h2, h3, h4, h5, h6, th, .font-semibold, .font-bold) {
+  text-shadow: var(--ag-ink-shadow-prose-bold);
+}
+
+html[data-ag-os="darwin"]:not([data-ag-theme-mode="dark"]) body:not(.dark):not(.theme-dark) :is([data-markdown-root], .select-text, .prose, .markdown) :not(pre) > code {
+  text-shadow: var(--ag-ink-shadow-xs);
 }
 
 :is([data-markdown-root], [data-testid="user-message-content"], .agy-user-bubble, .select-text:not([role="dialog"] *), .prose, .markdown, article) :is(strong, b, h1, h2, h3, h4, h5, h6, th, .font-semibold, .font-bold) {
@@ -256,6 +347,15 @@ div[contenteditable="true"] :is(p, span, div),
 #antigravity\.agentSidePanelInputBox [data-lexical-editor="true"] span[data-lexical-text="true"] {
   font-weight: 400 !important;
   letter-spacing: normal !important;
+}
+
+html[data-ag-os="darwin"]:not([data-ag-theme-mode="dark"]) body:not(.dark):not(.theme-dark) :is(#antigravity\.agentSidePanelInputBox [data-lexical-editor="true"], #antigravity\.agentSidePanelInputBox [data-lexical-editor="true"] span[data-lexical-text="true"], div[contenteditable="true"], textarea, .ProseMirror) {
+  text-shadow: var(--ag-ink-shadow-xs);
+}
+
+/* 保持代码块高亮、Monaco 编辑器、终端与微字号指标胶囊零阴影锐利边缘 */
+:is(.monaco-editor, .monaco-diff-editor, .xterm, pre, pre *, #ag-live-metrics-pill, .ag-live-metrics-pill, #ag-live-metrics-pill *, .ag-live-metrics-pill *) {
+  text-shadow: none !important;
 }
 
 /* 5. 共享 UI 几何形状、输入框三态 1.5px 过渡与 GPU 性能优化 */
@@ -350,8 +450,8 @@ body[data-agy-theme][data-newux-theme="onyx"] .surface-composer:focus-within > .
 }
 
 :is(#antigravity\.agentSidePanelInputBox, [id="antigravity.agentSidePanelInputBox"]) :is([class*="text-secondary-foreground"]:not(#ag-live-metrics-pill *):not(.ag-live-metrics-pill *):not([data-ag-metrics-pill] *), button, span:not(#ag-live-metrics-pill):not(#ag-live-metrics-pill *):not(.ag-live-metrics-pill):not(.ag-live-metrics-pill *):not([data-ag-metrics-pill]):not([data-ag-metrics-pill] *)):not([data-lexical-editor="true"]):not([data-lexical-editor="true"] *) {
-  font-weight: 500 !important;
-  text-shadow: var(--ag-ink-shadow-md);
+  font-weight: var(--ag-ui-w-ctrl, 500) !important;
+  text-shadow: var(--ag-ink-shadow-sm);
 }
 
 :is(#antigravity\.agentSidePanelInputBox, [id="antigravity.agentSidePanelInputBox"]) :is([class*="text-secondary-foreground"]:not(#ag-live-metrics-pill *):not(.ag-live-metrics-pill *):not([data-ag-metrics-pill] *), button:not([data-testid="send-button"]):not(.agy-send-button):not([data-testid="voice-start-button"]):not([data-testid="input-cancel-button"]), span:not([data-testid="voice-live-pill"]):not([data-testid="voice-live-pill"] *):not(.agy-send-button):not(.agy-send-button *):not([data-testid="input-cancel-button"] *):not(#ag-live-metrics-pill):not(#ag-live-metrics-pill *):not(.ag-live-metrics-pill):not(.ag-live-metrics-pill *):not([data-ag-metrics-pill]):not([data-ag-metrics-pill] *), svg:not([data-testid="voice-live-pill"] *):not([data-testid="send-button"] *):not(.agy-send-button *):not([data-testid="input-cancel-button"] *)):not([data-lexical-editor="true"]):not([data-lexical-editor="true"] *) {
@@ -385,6 +485,7 @@ html:not([data-ag-theme-mode="dark"]) body:not(.dark):not(.theme-dark) #antigrav
   color: #FFFFFF !important;
   border: 1px solid var(--ag-send-btn-border, #C45F40) !important;
   box-shadow: var(--ag-send-btn-shadow, 0 1px 2px rgba(217, 119, 87, 0.25)) !important;
+  text-shadow: none !important;
 }
 
 #antigravity\.agentSidePanelInputBox :is([data-testid="voice-live-pill"], button[data-testid="send-button"], .agy-send-button):hover,
@@ -396,6 +497,7 @@ html:not([data-ag-theme-mode="dark"]) body:not(.dark):not(.theme-dark) #antigrav
 #antigravity\.agentSidePanelInputBox :is([data-testid="voice-live-pill"], button[data-testid="send-button"], .agy-send-button) * {
   color: #FFFFFF !important;
   fill: #FFFFFF !important;
+  text-shadow: none !important;
 }
 
 /* 搜索栏聚焦单圈几何（显式排除 checkbox/radio/range，兼容已汉化 placeholder，保护无障碍键盘焦点可见性） */
@@ -436,7 +538,7 @@ html[data-ag-preset] #antigravity\.agentSidePanelInputBox [data-testid="voice-li
 /* 6. 侧边栏、对话列表、下拉菜单与设置弹窗统一排版与色彩变量绑定（交还原生 Google Sans Flex 字距，避免与 wdth:92 叠加过紧） */
 .bg-sidebar :is(a, button, [class*="truncate"], [class*="text-sm"], [class*="text-xs"]),
 aside :is(a, button) {
-  font-weight: 450 !important;
+  font-weight: var(--ag-ui-w-mid, 450) !important;
   color: var(--ag-sidebar-fg, #262422) !important;
   text-shadow: var(--ag-ink-shadow-sm);
 }
@@ -446,9 +548,13 @@ aside :is(a, button) {
 .bg-sidebar [data-testid="conversation-row-sidebar"]:not([data-selected="true"]) [class*="truncate"],
 .agy-sidebar-row:not([data-selected="true"]) span.truncate,
 aside [data-testid="conversation-row-sidebar"]:not([data-selected="true"]) span {
-  font-weight: 400 !important;
+  font-weight: var(--ag-ui-w-row, 400) !important;
   color: var(--ag-sidebar-row-fg, #262422) !important;
   text-shadow: none !important;
+}
+
+html[data-ag-os="darwin"]:not([data-ag-theme-mode="dark"]) body:not(.dark):not(.theme-dark) :is([data-testid="conversation-row-sidebar"], [data-testid="conversation-row-history"], .agy-sidebar-row):not([data-selected="true"]) :is(span, [class*="truncate"]) {
+  text-shadow: var(--ag-ink-shadow-xs) !important;
 }
 
 button[data-testid="project-header"],
@@ -456,14 +562,14 @@ button[data-project-card="true"],
 [data-project-label],
 [data-subtext] span[class*="text-muted"],
 .bg-sidebar span:has(> svg) + span {
-  font-weight: 450 !important;
+  font-weight: var(--ag-ui-w-mid, 450) !important;
   color: var(--ag-sidebar-header-fg, #383533) !important;
   text-shadow: var(--ag-ink-shadow-xs) !important;
 }
 
 button[data-testid="project-header"] span,
 button[data-project-card="true"] span {
-  font-weight: 450 !important;
+  font-weight: var(--ag-ui-w-mid, 450) !important;
   color: var(--ag-sidebar-header-title-fg, #2C2B29) !important;
   text-shadow: var(--ag-ink-shadow-xs) !important;
 }
@@ -476,13 +582,13 @@ button[data-project-card="true"] span {
 .bg-sidebar :is([data-active="true"], [data-active=""]),
 .bg-sidebar :is([data-active="true"], [data-active=""]) span,
 .bg-sidebar [aria-selected="true"] {
-  font-weight: 520 !important;
+  font-weight: var(--ag-ui-w-sel, 520) !important;
   color: var(--ag-sidebar-selected-fg, #0A0A0A) !important;
   text-shadow: var(--ag-ink-shadow-md) !important;
 }
 
 .bg-sidebar :is([class*="text-muted"], [class*="text-[11px]"], [class*="uppercase"]) {
-  font-weight: 500 !important;
+  font-weight: var(--ag-ui-w-ctrl, 500) !important;
   color: var(--ag-sidebar-muted-fg, #7A7670) !important;
 }
 
@@ -492,13 +598,13 @@ button[data-project-card="true"] span {
 
 [role="option"]:not([data-disabled]),
 [data-testid="title-menu-bar-option"] {
-  font-weight: 450 !important;
+  font-weight: var(--ag-ui-w-mid, 450) !important;
   color: var(--ag-menu-item-fg, #1F1E1D) !important;
 }
 
 [role="menu"] :is([role="menuitem"], .agy-overlay-item, [class*="truncate"], [class*="text-xs"], [class*="text-[13px]"], span),
 .agy-overlay .agy-overlay-item {
-  font-weight: 400 !important;
+  font-weight: var(--ag-ui-w-row, 400) !important;
   color: var(--ag-menu-item-fg, #1F1E1D) !important;
 }
 
@@ -506,13 +612,13 @@ button[data-project-card="true"] span {
 [role="menu"] :is([role="menuitem"], .agy-overlay-item) :is(span[class*="flex-1"], span.truncate),
 .agy-overlay .agy-overlay-item > span,
 .agy-overlay .agy-overlay-item :is(span[class*="flex-1"], span.truncate) {
-  font-weight: 450 !important;
+  font-weight: var(--ag-ui-w-mid, 450) !important;
   color: var(--ag-menu-item-fg, #1F1E1D) !important;
 }
 
 [role="menu"] :is([class*="font-medium"], [class*="text-muted-foreground"], h2, h3, h4),
 .agy-overlay :is([class*="font-medium"], [class*="text-muted-foreground"]) {
-  font-weight: 500 !important;
+  font-weight: var(--ag-ui-w-ctrl, 500) !important;
   color: var(--ag-menu-header-fg, #1A1A1A) !important;
 }
 
@@ -521,12 +627,12 @@ button[data-project-card="true"] span {
 }
 
 [role="dialog"] :is(h2, h3) {
-  font-weight: 500 !important;
+  font-weight: var(--ag-ui-w-sel, 500) !important;
   color: var(--ag-dialog-title-fg, #1F1E1D) !important;
 }
 
 [role="dialog"] :is(.agy-card, [class*="agy-card"], [class*="divide-border"]) span.text-sm {
-  font-weight: 450 !important;
+  font-weight: var(--ag-ui-w-mid, 450) !important;
   color: var(--ag-dialog-item-fg, #1F1E1D) !important;
   text-shadow: var(--ag-ink-shadow-xs) !important;
 }
@@ -765,6 +871,8 @@ html[data-ag-preset] body[data-agy-theme].dark {
   --ag-ink-shadow-xs: none !important;
   --ag-ink-shadow-sm: none !important;
   --ag-ink-shadow-md: none !important;
+  --ag-ink-shadow-prose: none !important;
+  --ag-ink-shadow-prose-bold: none !important;
   /* 黑夜模式组件级色彩变量绑定 */
   --ag-composer-tray-bg: #0D0D11;
   --ag-composer-card-bg: #15151A;
