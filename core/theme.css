@@ -121,6 +121,7 @@ body[data-agy-font="inter"] :where(.font-sans) {
   --ag-ui-w-row: 400;
   --ag-ui-w-mid: 450;
   --ag-ui-w-ctrl: 500;
+  --ag-ui-w-dlg: 500;
   --ag-ui-w-sel: 520;
 }
 
@@ -134,6 +135,7 @@ html[data-ag-os="darwin"]:not([data-ag-theme-mode="dark"]):not(:has(> body.dark)
   --ag-ui-w-row: 388;
   --ag-ui-w-mid: 430;
   --ag-ui-w-ctrl: 455;
+  --ag-ui-w-dlg: 488;
   --ag-ui-w-sel: 488;
 }
 
@@ -295,20 +297,20 @@ html[data-ag-os="darwin"]:not([data-ag-theme-mode="dark"]) body:not(.dark):not(.
   line-height: 1.62;
 }
 
-/* Windows DirectWrite 可变字体命名实例修正：Windows 版 AnthropicSerif TTF 仅暴露 TextLight (wght=300) 实例名，显式驱动 wght 轴还原 400 正文/斜体、500 中黑与 600 粗体/粗斜体 */
+/* Windows DirectWrite 可变字体命名实例修正：Windows 版 AnthropicSerif TTF 仅暴露 TextLight (wght=300) 实例名，显式驱动 wght 轴还原 400 正文/斜体、500 中黑与 600 粗体/粗斜体（覆盖 p/li/blockquote/td 子节点以防被上方 font-variation-settings: normal 截断回落 300 Display Light） */
 html[data-ag-os="win32"] :is([data-markdown-root], [data-testid="user-message-content"], .agy-user-bubble, .select-text:not([role="dialog"] *), .prose, .markdown, article),
-html[data-ag-os="win32"] :is([data-markdown-root], [data-testid="user-message-content"], .agy-user-bubble, .select-text:not([role="dialog"] *), .prose, .markdown, article) :is(i, em, .italic) {
+html[data-ag-os="win32"] :is([data-markdown-root], [data-testid="user-message-content"], .agy-user-bubble, .select-text:not([role="dialog"] *), .prose, .markdown, article) :is(p, li, blockquote, td, i, em, .italic) {
   font-variation-settings: 'wght' 400, 'opsz' 16 !important;
 }
 
 html[data-ag-os="win32"] :is([data-markdown-root], [data-testid="user-message-content"], .agy-user-bubble, .select-text:not([role="dialog"] *), .prose, .markdown, article) .font-medium,
-html[data-ag-os="win32"] :is([data-markdown-root], [data-testid="user-message-content"], .agy-user-bubble, .select-text:not([role="dialog"] *), .prose, .markdown, article) .font-medium :is(i, em, .italic) {
+html[data-ag-os="win32"] :is([data-markdown-root], [data-testid="user-message-content"], .agy-user-bubble, .select-text:not([role="dialog"] *), .prose, .markdown, article) .font-medium :is(p, li, blockquote, td, i, em, .italic) {
   font-weight: 500 !important;
   font-variation-settings: 'wght' 500, 'opsz' 16 !important;
 }
 
 html[data-ag-os="win32"] :is([data-markdown-root], [data-testid="user-message-content"], .agy-user-bubble, .select-text:not([role="dialog"] *), .prose, .markdown, article) :is(strong, b, h1, h2, h3, h4, h5, h6, th, .font-semibold, .font-bold),
-html[data-ag-os="win32"] :is([data-markdown-root], [data-testid="user-message-content"], .agy-user-bubble, .select-text:not([role="dialog"] *), .prose, .markdown, article) :is(strong, b, h1, h2, h3, h4, h5, h6, th, .font-semibold, .font-bold) :is(i, em, .italic) {
+html[data-ag-os="win32"] :is([data-markdown-root], [data-testid="user-message-content"], .agy-user-bubble, .select-text:not([role="dialog"] *), .prose, .markdown, article) :is(strong, b, h1, h2, h3, h4, h5, h6, th, .font-semibold, .font-bold) :is(p, li, blockquote, td, i, em, .italic) {
   font-weight: 600 !important;
   font-variation-settings: 'wght' 600, 'opsz' 16 !important;
 }
@@ -324,32 +326,35 @@ html[data-ag-custom-font-size="true"] :is([data-markdown-root], [data-testid="us
   font-size: var(--ag-chat-font-size) !important;
 }
 
-/* 3. 代码、终端、diff 查看器、文件名、文件路径：Anthropic Mono + Sarasa Mono（移除 .tabular-nums 避免误劫持 UI 控件） */
+/* 3. 代码、终端、diff 查看器、文件名、文件路径：Anthropic Mono + Sarasa Mono（移除 .tabular-nums 避免误劫持 UI 控件，隔离 wdth:92） */
 code, pre, kbd, samp, .font-mono, [class*="language-"], .monaco-editor, .xterm, pre *, [class*="group/file-title"], [class*="group/file-title"] *, [class*="file-title"], [class*="file-path"], [data-path], [data-file-path], :is([data-markdown-root], .select-text) :is(code, pre, kbd, samp, .font-mono) {
   font-family: var(--font-mono) !important;
+  font-variation-settings: normal !important;
 }
 
-/* 4. 输入框编辑区与 Lexical 占位符：Codex 同款等距更纱黑体 SLAB (未装更纱时中文字形优雅回退至苹方/雅黑，防 Windows 新宋体点阵退化) */
+/* 4. 输入框编辑区与 Lexical 占位符：Codex 同款等距更纱黑体 SLAB (未装更纱时中文字形优雅回退至苹方/雅黑，防 Windows 新宋体点阵退化，隔离外层 wdth:92) */
 div[contenteditable="true"],
 textarea,
 div[contenteditable="true"] :is(p, span, div),
 [data-lexical-editor="true"],
 [data-lexical-editor="true"] :is(p, span, div),
 [data-lexical-editor="true"] ~ p.pointer-events-none,
-#antigravity\.agentSidePanelInputBox div:has(> [data-lexical-editor="true"]) > p.pointer-events-none,
+:is(#antigravity\.agentSidePanelInputBox, [id="antigravity.agentSidePanelInputBox"]) div:has(> [data-lexical-editor="true"]) > p.pointer-events-none,
 [data-composer],
 .ProseMirror,
 .ProseMirror :is(p, span) {
   font-family: 'Sarasa Mono Slab SC', '等距更纱黑体 Slab SC', 'Anthropic Mono', 'Anthropic Mono Web', ui-monospace, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei UI', 'Microsoft YaHei', monospace !important;
+  font-variation-settings: normal !important;
 }
 
-#antigravity\.agentSidePanelInputBox [data-lexical-editor="true"],
-#antigravity\.agentSidePanelInputBox [data-lexical-editor="true"] span[data-lexical-text="true"] {
+:is(#antigravity\.agentSidePanelInputBox, [id="antigravity.agentSidePanelInputBox"]) [data-lexical-editor="true"],
+:is(#antigravity\.agentSidePanelInputBox, [id="antigravity.agentSidePanelInputBox"]) [data-lexical-editor="true"] span[data-lexical-text="true"] {
   font-weight: 400 !important;
   letter-spacing: normal !important;
+  font-variation-settings: normal !important;
 }
 
-html[data-ag-os="darwin"]:not([data-ag-theme-mode="dark"]) body:not(.dark):not(.theme-dark) :is(#antigravity\.agentSidePanelInputBox [data-lexical-editor="true"], #antigravity\.agentSidePanelInputBox [data-lexical-editor="true"] span[data-lexical-text="true"], div[contenteditable="true"], textarea, .ProseMirror) {
+html[data-ag-os="darwin"]:not([data-ag-theme-mode="dark"]) body:not(.dark):not(.theme-dark) :is(#antigravity\.agentSidePanelInputBox [data-lexical-editor="true"], [id="antigravity.agentSidePanelInputBox"] [data-lexical-editor="true"], #antigravity\.agentSidePanelInputBox [data-lexical-editor="true"] span[data-lexical-text="true"], [id="antigravity.agentSidePanelInputBox"] [data-lexical-editor="true"] span[data-lexical-text="true"], div[contenteditable="true"], textarea, .ProseMirror) {
   text-shadow: var(--ag-ink-shadow-xs);
 }
 
@@ -627,7 +632,7 @@ button[data-project-card="true"] span {
 }
 
 [role="dialog"] :is(h2, h3) {
-  font-weight: var(--ag-ui-w-sel, 500) !important;
+  font-weight: var(--ag-ui-w-dlg, 500) !important;
   color: var(--ag-dialog-title-fg, #1F1E1D) !important;
 }
 

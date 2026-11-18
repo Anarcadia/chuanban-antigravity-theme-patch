@@ -351,7 +351,13 @@ function readHostVersionAndProcesses(channel = 'auto') {
         if (!m) continue;
         const pid = parseInt(m[1], 10);
         const cmd = m[2];
-        if (!pid || /\s--type=/.test(cmd) || /Helper(?:\s|\.|\/)/i.test(cmd)) continue;
+        if (
+          !pid ||
+          /--type=|--crashpad|--utility-sub-type=|--import=|sidecar_sdk|--ms-enable-electron-run-as-node/i.test(cmd) ||
+          /Helper(?:\s|\.|\/)/i.test(cmd)
+        ) {
+          continue;
+        }
         const appMatch = cmd.match(/^(\S.*?\/Antigravity(?:\s-\sInsiders)?\.app)\/Contents\/MacOS\/(Antigravity(?:\s-\sInsiders)?)(?:\s|$)/);
         if (!appMatch) continue;
         const ch = /Insiders/i.test(appMatch[2]) ? 'insiders' : 'stable';
@@ -381,18 +387,21 @@ function readHostVersionAndProcesses(channel = 'auto') {
           ];
     const existingExe = exeCandidates.find((p) => fs.existsSync(p)) || '';
     const psProbe = [
+      `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8`,
       `$ErrorActionPreference = 'SilentlyContinue'`,
+      `$allowStable = $${allowStable ? 'true' : 'false'}`,
+      `$allowInsiders = $${allowInsiders ? 'true' : 'false'}`,
       `$ver = $null`,
       existingExe ? `$ver = (Get-Item -LiteralPath '${existingExe.replace(/'/g, "''")}').VersionInfo.ProductVersion` : '',
-      `$procs = @(Get-CimInstance Win32_Process -Filter "Name = 'Antigravity.exe' OR Name = 'Antigravity - Insiders.exe'" | Where-Object { $_.CommandLine -notmatch '--type=|--crashpad-handler|--utility-sub-type=' } | ForEach-Object { @{ pid = [int]$_.ProcessId; name = [string]$_.Name; exe = [string]$_.ExecutablePath; cmd = [string]$_.CommandLine } })`,
+      `$procs = @(Get-CimInstance Win32_Process -Filter "Name = 'Antigravity.exe' OR Name = 'Antigravity - Insiders.exe'" | Where-Object { $_.CommandLine -notmatch '--type=|--crashpad|--utility-sub-type=|--import=|sidecar_sdk|--ms-enable-electron-run-as-node' } | ForEach-Object { @{ pid = [int]$_.ProcessId; name = [string]$_.Name; exe = [string]$_.ExecutablePath; cmd = [string]$_.CommandLine } })`,
       `$lnkOk = $false`,
       `$wsh = New-Object -ComObject WScript.Shell`,
-      `$lnkDirs = @([Environment]::GetFolderPath('Desktop'), (Join-Path $env:APPDATA 'Microsoft\\Windows\\Start Menu\\Programs'))`,
-      `foreach ($d in $lnkDirs) { if (Test-Path -LiteralPath $d) { Get-ChildItem -LiteralPath $d -Filter '*Antigravity*.lnk' -Recurse -ErrorAction SilentlyContinue | ForEach-Object { $s = $wsh.CreateShortcut($_.FullName); if ($s.Arguments -match '--remote-debugging-port') { $lnkOk = $true } } } }`,
+      `$lnkDirs = if ($env:AG_WIN32_LNK_DIRS) { $env:AG_WIN32_LNK_DIRS -split ';' } else { @([Environment]::GetFolderPath('Desktop'), [Environment]::GetFolderPath('CommonDesktopDirectory'), (Join-Path $env:APPDATA 'Microsoft\\Windows\\Start Menu\\Programs'), (Join-Path $env:ProgramData 'Microsoft\\Windows\\Start Menu\\Programs'), (Join-Path $env:APPDATA 'Microsoft\\Internet Explorer\\Quick Launch\\User Pinned\\TaskBar')) }`,
+      `foreach ($d in $lnkDirs) { if ($d -and (Test-Path -LiteralPath $d)) { Get-ChildItem -LiteralPath $d -Filter '*.lnk' -Recurse -ErrorAction SilentlyContinue | ForEach-Object { try { $s = $wsh.CreateShortcut($_.FullName); $leaf = [IO.Path]::GetFileName([string]$s.TargetPath); $matchTarget = (($leaf -ieq 'Antigravity.exe' -and $allowStable) -or ($leaf -ieq 'Antigravity - Insiders.exe' -and $allowInsiders)); if ($matchTarget -and ($s.Arguments -match '--remote-debugging-port')) { $lnkOk = $true } } catch {} } } }`,
       `@{ appVersion = $ver; launcherInstalled = $lnkOk; procs = $procs } | ConvertTo-Json -Compress -Depth 4`
     ]
       .filter(Boolean)
-      .join('; ');
+      .join('\n');
     const r = spawnSync('powershell', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', psProbe], {
       windowsHide: true,
       encoding: 'utf8',
@@ -426,7 +435,7 @@ function readHostVersionAndProcesses(channel = 'auto') {
               '-NoProfile',
               '-NonInteractive',
               '-Command',
-              `(Get-Item -LiteralPath '${runningProcesses[0].exePath.replace(/'/g, "''")}').VersionInfo.ProductVersion`
+              `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; (Get-Item -LiteralPath '${runningProcesses[0].exePath.replace(/'/g, "''")}').VersionInfo.ProductVersion`
             ],
             { windowsHide: true, encoding: 'utf8', timeout: 3000 }
           );
@@ -457,7 +466,14 @@ function readHostVersionAndProcesses(channel = 'auto') {
         if (!m) continue;
         const pid = parseInt(m[1], 10);
         const cmd = m[2];
-        if (!pid || /\s--type=|--crashpad|daemon\.mjs|install\.mjs/.test(cmd)) continue;
+        if (
+          !pid ||
+          /--type=|--crashpad|--utility-sub-type=|--import=|sidecar_sdk|--ms-enable-electron-run-as-node|daemon\.mjs|install\.mjs/i.test(
+            cmd
+          )
+        ) {
+          continue;
+        }
         const binMatch = cmd.match(/^(\/\S*\/antigravity(?:-insiders)?)(?:\s|$)/i);
         if (!binMatch) continue;
         const ch = /insiders/i.test(binMatch[1]) ? 'insiders' : 'stable';
@@ -1063,17 +1079,19 @@ function ensureCdpLaunchers(channel = 'auto', options = {}) {
 
   if (process.platform === 'win32') {
     const psPatch = [
+      `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8`,
       `$ErrorActionPreference = 'SilentlyContinue'`,
       `$allowStable = $${allowStable ? 'true' : 'false'}`,
       `$allowInsiders = $${allowInsiders ? 'true' : 'false'}`,
       `$wsh = New-Object -ComObject WScript.Shell`,
-      `$dirs = @(`,
+      `$rawDirs = if ($env:AG_WIN32_LNK_DIRS) { $env:AG_WIN32_LNK_DIRS -split ';' } else { @(`,
       `  [Environment]::GetFolderPath('Desktop'),`,
       `  [Environment]::GetFolderPath('CommonDesktopDirectory'),`,
       `  (Join-Path $env:APPDATA 'Microsoft\\Windows\\Start Menu\\Programs'),`,
       `  (Join-Path $env:ProgramData 'Microsoft\\Windows\\Start Menu\\Programs'),`,
       `  (Join-Path $env:APPDATA 'Microsoft\\Internet Explorer\\Quick Launch\\User Pinned\\TaskBar')`,
-      `) | Where-Object { $_ -and (Test-Path -LiteralPath $_) }`,
+      `) }`,
+      `$dirs = @($rawDirs | Where-Object { $_ -and (Test-Path -LiteralPath $_) })`,
       `$patched = @(); $already = @(); $skipped = @()`,
       `foreach ($d in $dirs) {`,
       `  Get-ChildItem -LiteralPath $d -Filter '*.lnk' -Recurse -ErrorAction SilentlyContinue | ForEach-Object {`,
@@ -1093,7 +1111,7 @@ function ensureCdpLaunchers(channel = 'auto', options = {}) {
       `  }`,
       `}`,
       `@{ patched = $patched; already = $already; skipped = $skipped } | ConvertTo-Json -Compress -Depth 3`
-    ].join('; ');
+    ].join('\n');
     const r = spawnSync('powershell', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', psPatch], {
       windowsHide: true,
       encoding: 'utf8',
@@ -1101,7 +1119,13 @@ function ensureCdpLaunchers(channel = 'auto', options = {}) {
     });
     try {
       const parsed = JSON.parse(String(r.stdout || '').trim() || '{}');
-      return { platform: 'win32', ...parsed };
+      const normArr = (v) => (Array.isArray(v) ? v : v ? [v] : []);
+      return {
+        platform: 'win32',
+        patched: normArr(parsed.patched),
+        already: normArr(parsed.already),
+        skipped: normArr(parsed.skipped)
+      };
     } catch {
       return { platform: 'win32', patched: [], already: [], skipped: [] };
     }
@@ -1170,15 +1194,17 @@ function removeCdpLaunchers() {
 
   if (process.platform === 'win32') {
     const psClean = [
+      `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8`,
       `$ErrorActionPreference = 'SilentlyContinue'`,
       `$wsh = New-Object -ComObject WScript.Shell`,
-      `$dirs = @(`,
+      `$rawDirs = if ($env:AG_WIN32_LNK_DIRS) { $env:AG_WIN32_LNK_DIRS -split ';' } else { @(`,
       `  [Environment]::GetFolderPath('Desktop'),`,
       `  [Environment]::GetFolderPath('CommonDesktopDirectory'),`,
       `  (Join-Path $env:APPDATA 'Microsoft\\Windows\\Start Menu\\Programs'),`,
       `  (Join-Path $env:ProgramData 'Microsoft\\Windows\\Start Menu\\Programs'),`,
       `  (Join-Path $env:APPDATA 'Microsoft\\Internet Explorer\\Quick Launch\\User Pinned\\TaskBar')`,
-      `) | Where-Object { $_ -and (Test-Path -LiteralPath $_) }`,
+      `) }`,
+      `$dirs = @($rawDirs | Where-Object { $_ -and (Test-Path -LiteralPath $_) })`,
       `foreach ($d in $dirs) {`,
       `  Get-ChildItem -LiteralPath $d -Filter '*.lnk' -Recurse -ErrorAction SilentlyContinue | ForEach-Object {`,
       `    try {`,
@@ -1192,7 +1218,7 @@ function removeCdpLaunchers() {
       `    } catch {}`,
       `  }`,
       `}`
-    ].join('; ');
+    ].join('\n');
     spawnSync('powershell', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', psClean], {
       windowsHide: true,
       stdio: 'ignore',
@@ -2090,7 +2116,7 @@ async function runRelaunch() {
       spawnSync('osascript', ['-e', `tell application "${p.appPath}" to quit`], { stdio: 'ignore', timeout: 3000 });
       for (let i = 0; i < 25 && isPidRunning(p.pid); i++) sleepSync(100);
     } else if (process.platform === 'win32') {
-      const stopPs = `$gp = Get-Process -Id ${p.pid} -ErrorAction SilentlyContinue; if ($gp) { [void]$gp.CloseMainWindow(); Start-Sleep -Milliseconds 600; Stop-Process -Id ${p.pid} -Force -ErrorAction SilentlyContinue }`;
+      const stopPs = `$gp = Get-Process -Id ${p.pid} -ErrorAction SilentlyContinue; if ($gp) { [void]$gp.CloseMainWindow(); if (-not $gp.WaitForExit(1800)) { Stop-Process -Id ${p.pid} -Force -ErrorAction SilentlyContinue } }`;
       spawnSync('powershell', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', stopPs], {
         windowsHide: true,
         stdio: 'ignore',

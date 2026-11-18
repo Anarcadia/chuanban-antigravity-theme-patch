@@ -3444,6 +3444,9 @@ function ensureZhTitlePatchIfPresent() {
 const fallbackBackoffUntil = new Map();
 const CDP_RELAUNCH_GUARD_FILE = path.join(os.tmpdir(), 'ag-cdp-relaunch-guard.json');
 const ignoredUnflaggedHostPids = new Set();
+const exemptedHostPidByChannel = new Map();
+const knownNonHostPids = new Set();
+const NON_HOST_CMD_RE = /--type=|--crashpad|--utility-sub-type=|--import=|sidecar_sdk|--ms-enable-electron-run-as-node/i;
 let isCdpRelaunching = false;
 
 function parsePosixEtimeSeconds(raw) {
@@ -3481,6 +3484,18 @@ function pruneIgnoredHostPids() {
       ignoredUnflaggedHostPids.delete(pid);
     }
   }
+  for (const [ch, pid] of Array.from(exemptedHostPidByChannel.entries())) {
+    if (!isPidAlive(pid)) {
+      exemptedHostPidByChannel.delete(ch);
+    }
+  }
+  if (knownNonHostPids.size > 0) {
+    for (const pid of Array.from(knownNonHostPids)) {
+      if (!isPidAlive(pid)) {
+        knownNonHostPids.delete(pid);
+      }
+    }
+  }
 }
 
 function probeRunningHostProcesses(channelMode = 'auto', endpoints = []) {
@@ -3500,7 +3515,7 @@ function probeRunningHostProcesses(channelMode = 'auto', endpoints = []) {
       const pid = parseInt(m[1], 10);
       const etimeRaw = m[2];
       const cmd = m[3];
-      if (!pid || /\s--type=/.test(cmd) || /Helper(?:\s|\.|\/)/i.test(cmd)) continue;
+      if (!pid || NON_HOST_CMD_RE.test(cmd) || /Helper(?:\s|\.|\/)/i.test(cmd)) continue;
       const appMatch = cmd.match(/^(\S.*?\/Antigravity(?:\s-\sInsiders)?\.app)\/Contents\/MacOS\/(Antigravity(?:\s-\sInsiders)?)(?:\s|$)/);
       if (!appMatch) continue;
       const appPath = appMatch[1];
@@ -3522,14 +3537,30 @@ function probeRunningHostProcesses(channelMode = 'auto', endpoints = []) {
   }
 
   if (process.platform === 'win32') {
-    // 零开销预筛：先用原生 C++ tasklist (<18ms) 检查是否存在尚未评估过的 Antigravity 主映像 PID，杜绝空闲态周期性拉起 PowerShell
-    const imageNames = [];
-    if (allowStable) imageNames.push('Antigravity.exe');
-    if (allowInsiders && endpoints.some((ep) => ep.channel === 'insiders' && ep.channelInstalled)) {
-      imageNames.push('Antigravity - Insiders.exe');
+    // 双层零开销预筛：
+    // 1) 若某通道已存在活跃 DevToolsActivePort，或该通道已豁免的无参宿主主进程 PID 仍存活（SingletonLock 保证单通道唯一主进程），直接 O(1) 内存级跳过（0 tasklist + 0 PowerShell）；
+    // 2) 仅对尚未锁定的通道调用原生 C++ tasklist 检查是否存在未见过的 PID，并对渲染/GPU/Utility/sidecar_sdk 同名子进程记入 knownNonHostPids 防止重复唤醒 PowerShell。
+    const imageSpecs = [];
+    const stableEp = endpoints.find((ep) => ep.channel === 'stable');
+    const insidersEp = endpoints.find((ep) => ep.channel === 'insiders');
+    const stableExemptPid = exemptedHostPidByChannel.get('stable');
+    const insidersExemptPid = exemptedHostPidByChannel.get('insiders');
+    if (allowStable && !(stableEp && readPort(stableEp.portFile)) && !(stableExemptPid && isPidAlive(stableExemptPid))) {
+      imageSpecs.push({ channel: 'stable', img: 'Antigravity.exe' });
     }
+    if (
+      allowInsiders &&
+      insidersEp &&
+      insidersEp.channelInstalled &&
+      !readPort(insidersEp.portFile) &&
+      !(insidersExemptPid && isPidAlive(insidersExemptPid))
+    ) {
+      imageSpecs.push({ channel: 'insiders', img: 'Antigravity - Insiders.exe' });
+    }
+    if (imageSpecs.length === 0) return [];
+
     const candidatePids = [];
-    for (const img of imageNames) {
+    for (const { img } of imageSpecs) {
       const tl = spawnSync('tasklist', ['/FI', `IMAGENAME eq ${img}`, '/FO', 'CSV', '/NH'], {
         windowsHide: true,
         encoding: 'utf8',
@@ -3540,7 +3571,7 @@ function probeRunningHostProcesses(channelMode = 'auto', endpoints = []) {
           const cm = row.trim().match(/^"([^"]+)","(\d+)"/);
           if (cm && cm[1].toLowerCase() === img.toLowerCase()) {
             const p = parseInt(cm[2], 10);
-            if (p > 0 && !ignoredUnflaggedHostPids.has(p)) {
+            if (p > 0 && !ignoredUnflaggedHostPids.has(p) && !knownNonHostPids.has(p)) {
               candidatePids.push(p);
             }
           }
@@ -3550,43 +3581,60 @@ function probeRunningHostProcesses(channelMode = 'auto', endpoints = []) {
     if (candidatePids.length === 0) return [];
 
     const psCmd = [
+      `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8`,
       `$ErrorActionPreference = 'SilentlyContinue'`,
       `$now = [DateTime]::UtcNow`,
       `$procs = Get-CimInstance Win32_Process -Filter "Name = 'Antigravity.exe' OR Name = 'Antigravity - Insiders.exe'"`,
-      `$out = @()`,
+      `$hostOut = @(); $nonHostPids = @()`,
       `foreach ($p in $procs) {`,
+      `  $pidVal = [int]$p.ProcessId`,
       `  $cmd = [string]$p.CommandLine`,
-      `  if ($cmd -match '--type=|--crashpad-handler|--utility-sub-type=') { continue }`,
+      `  if ($cmd -match '--type=|--crashpad|--utility-sub-type=|--import=|sidecar_sdk|--ms-enable-electron-run-as-node') { $nonHostPids += $pidVal; continue }`,
       `  $age = if ($p.CreationDate) { [Math]::Max(0, [int][Math]::Round(($now - ([DateTime]$p.CreationDate).ToUniversalTime()).TotalSeconds)) } else { 999999 }`,
-      `  $out += @{ pid = [int]$p.ProcessId; name = [string]$p.Name; exe = [string]$p.ExecutablePath; cmd = $cmd; elapsedSec = $age }`,
+      `  $hostOut += @{ pid = $pidVal; name = [string]$p.Name; exe = [string]$p.ExecutablePath; cmd = $cmd; elapsedSec = $age }`,
       `}`,
-      `$out | ConvertTo-Json -Compress`
-    ].join('; ');
+      `@{ hosts = $hostOut; nonHostPids = $nonHostPids } | ConvertTo-Json -Compress -Depth 4`
+    ].join('\n');
     const cim = spawnSync('powershell', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', psCmd], {
       windowsHide: true,
       encoding: 'utf8',
       timeout: 5000
     });
     if (cim.status !== 0 || !cim.stdout || !cim.stdout.trim()) return [];
-    let parsed = [];
+    let parsedHosts = [];
     try {
-      const rawJson = JSON.parse(cim.stdout.trim());
-      parsed = Array.isArray(rawJson) ? rawJson : rawJson ? [rawJson] : [];
+      const payload = JSON.parse(cim.stdout.trim());
+      const nonHosts = Array.isArray(payload?.nonHostPids)
+        ? payload.nonHostPids
+        : payload?.nonHostPids
+        ? [payload.nonHostPids]
+        : [];
+      for (const np of nonHosts) {
+        const n = Number(np);
+        if (n > 0) knownNonHostPids.add(n);
+      }
+      const rawHosts = payload?.hosts;
+      parsedHosts = Array.isArray(rawHosts) ? rawHosts : rawHosts ? [rawHosts] : [];
     } catch {
       return [];
     }
-    return parsed
+    return parsedHosts
       .map((item) => {
         const ch = /insiders/i.test(item.name || item.exe || '') ? 'insiders' : 'stable';
         const cmd = String(item.cmd || '');
+        const hasCdpFlag = /--remote-debugging-port(?:=|\s|$)/i.test(cmd);
+        const pidNum = Number(item.pid) || 0;
+        if (hasCdpFlag && pidNum > 0) {
+          knownNonHostPids.add(pidNum);
+        }
         return {
-          pid: Number(item.pid) || 0,
+          pid: pidNum,
           channel: ch,
           elapsedSec: Number.isFinite(Number(item.elapsedSec)) ? Number(item.elapsedSec) : Infinity,
           appPath: '',
           exePath: String(item.exe || ''),
           cmd,
-          hasCdpFlag: /--remote-debugging-port(?:=|\s|$)/i.test(cmd),
+          hasCdpFlag,
           hasUpdatedFlag: /--updated(?:\s|$)/i.test(cmd)
         };
       })
@@ -3611,7 +3659,7 @@ function probeRunningHostProcesses(channelMode = 'auto', endpoints = []) {
       const pid = parseInt(m[1], 10);
       const etimeRaw = m[2];
       const cmd = m[3];
-      if (!pid || /\s--type=|--crashpad|daemon\.mjs|install\.mjs/.test(cmd)) continue;
+      if (!pid || NON_HOST_CMD_RE.test(cmd) || /daemon\.mjs|install\.mjs/.test(cmd)) continue;
       const binMatch = cmd.match(/^(\/\S*\/antigravity(?:-insiders)?)(?:\s|$)/i);
       if (!binMatch) continue;
       const exePath = binMatch[1];
@@ -3685,6 +3733,7 @@ function maybeAutoRelaunchColdStartWithoutCdp() {
     const maxWindowSec = proc.hasUpdatedFlag ? 25 : 12;
     if (proc.elapsedSec > maxWindowSec) {
       ignoredUnflaggedHostPids.add(proc.pid);
+      exemptedHostPidByChannel.set(proc.channel, proc.pid);
       const msg = `[Daemon] Detected running Antigravity (${proc.channel}, PID ${proc.pid}, uptime ${proc.elapsedSec}s) started without --remote-debugging-port; skipping auto-relaunch to protect active session. Run \`node ${path.join(ROOT_DIR, 'install.mjs')} relaunch\` when idle.`;
       console.log(msg);
       logDaemonEvent(msg);
@@ -3693,6 +3742,7 @@ function maybeAutoRelaunchColdStartWithoutCdp() {
 
     if (hasActiveConversationWalWrite(ep, 15)) {
       ignoredUnflaggedHostPids.add(proc.pid);
+      exemptedHostPidByChannel.set(proc.channel, proc.pid);
       const msg = `[Daemon] Skipped cold-start auto-relaunch for PID ${proc.pid}: active conversation WAL write detected within 15s.`;
       console.log(msg);
       logDaemonEvent(msg);
@@ -3704,6 +3754,7 @@ function maybeAutoRelaunchColdStartWithoutCdp() {
     const lastAt = Number(guard.lastRelaunchAtMs) || 0;
     if (handledPids.includes(proc.pid) || Date.now() - lastAt < 60000) {
       ignoredUnflaggedHostPids.add(proc.pid);
+      exemptedHostPidByChannel.set(proc.channel, proc.pid);
       logDaemonEvent(
         `Skipped cold-start auto-relaunch for PID ${proc.pid}: guard cooldown active (lastRelaunchDeltaMs=${Date.now() - lastAt}).`
       );
@@ -3724,16 +3775,16 @@ function maybeAutoRelaunchColdStartWithoutCdp() {
         fs.writeFileSync(CDP_RELAUNCH_GUARD_FILE, `${JSON.stringify(nextGuard, null, 2)}\n`, 'utf8');
       } catch {}
 
-      // 终止刚冷启动的无标记主进程，并严格等待其释放 SingletonLock 后再拉起带 --remote-debugging-port=0 的新进程
+      // 终止刚冷启动的无标记主进程，并严格等待其优雅刷盘释放 SingletonLock 后再拉起带 --remote-debugging-port=0 的新进程
       if (process.platform === 'win32') {
         const stopPs = [
           `$gp = Get-Process -Id ${proc.pid} -ErrorAction SilentlyContinue`,
-          `if ($gp) { [void]$gp.CloseMainWindow(); Start-Sleep -Milliseconds 300; Stop-Process -Id ${proc.pid} -Force -ErrorAction SilentlyContinue }`
+          `if ($gp) { [void]$gp.CloseMainWindow(); if (-not $gp.WaitForExit(1800)) { Stop-Process -Id ${proc.pid} -Force -ErrorAction SilentlyContinue } }`
         ].join('; ');
         spawnSync('powershell', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', stopPs], {
           windowsHide: true,
           stdio: 'ignore',
-          timeout: 4000
+          timeout: 4500
         });
       } else {
         try {

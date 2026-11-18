@@ -63,8 +63,8 @@ chuanban-antigravity-theme-patch/
 ├── core/                       # 【只读黄金内核】随版本升级整包原子替换，对方 Agent 严禁直接修改
 │   ├── manifest.json           # 版本号（5.5.0）、三端地址与 core/* 文件 SHA-256 校验清单
 │   ├── daemon.mjs              # Node CDP 守护进程（宿主独占指纹门禁、2.33.0+ M2 冷启动无标记自动接力重启、跨完整性 PID 协作围栏、SQLite O(1) 增量与子 Agent `+N sub` 聚合、WSL2 双轨只读读取、Swarm 子帧注入、2.5s 热重载感知）
-│   ├── runtime.js              # 浏览器端注入引擎（宿主指纹门禁与 0ms 防闪白空指针防护、昼夜双预设 `preset`/`darkPreset` 与 curtainView/标题栏联动、Swarm Google Sans Flex 字体挂载、冷启动兜底包自愈、弯引号与 DICT_CI 索引）
-│   ├── theme.css               # 四段式 CSS 样式表（Part I Google Sans Flex × AgSarasaUI 字重桥接与 Anthropic Serif 正文 / Part II 白天暖纸三预设 / Part III 独立黑夜双预设 / Part IV 指标胶囊）
+│   ├── runtime.js              # 浏览器端注入引擎（宿主指纹门禁与 0ms 防闪白空指针防护、昼夜双预设 `preset`/`darkPreset` 与 curtainView/标题栏联动、Google Sans Flex 防脱靶保底挂载 `#ag-google-sans-flex-fonts`、冷启动兜底包自愈、弯引号与 DICT_CI 索引）
+│   ├── theme.css               # 四段式 CSS 样式表（Part I Google Sans Flex × AgSarasaUI 字重桥接、Anthropic Serif 正文与 macOS 浅色全域活字润墨平衡 / Part II 白天暖纸三预设 / Part III 独立黑夜双预设 / Part IV 指标胶囊）
 │   └── i18n.json               # 1,860 条严格零冲突标准 JSON 基准词典（兼容 PowerShell ConvertFrom-Json，挂载至 Object.create(null)）
 └── user/                       # 【用户改装层】升级时 100% 永不覆盖，守护进程每 2.5s 自动检测 mtimeMs 热重载注入！
     ├── config.json             # 开关配置（enabled / channel / preset / darkPreset / contextLimit / contextLimitOverride / modules / themeVars / darkThemeVars）

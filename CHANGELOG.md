@@ -7,20 +7,25 @@
 ## [v5.5.0] - 2026-11-19
 
 > **适用版本**：Antigravity `2.33.0+`（macOS `CL=1023160026` / Windows `CL=1028566590`，向下完全兼容 `2.32.x` / `2.31.x` / `2.30.0`）  
-> **核心定位**：`2.33.0` `cdpPipe` 迁移后的 **`M1 + M2` 零侵入双保险 CDP Opt-in 启动架构** + **UI 西文原生切换 `Google Sans Flex` 可变字体引擎 × 中文更纱黑体精密字重桥接** + **`data-newux-theme` 移除兼容** + **`1,860` 条零冲突词典**
+> **核验基线**：macOS `2.33.0` × Windows 11 `2.33.0`（`2.4x HiDPI DirectWrite` `W550-Check 1 ~ 5` 真机 CDP 全绿联合定版）  
+> **核心定位**：`2.33.0` `cdpPipe` 迁移后的**单图标纯净模式 + `M1 + M2` 零侵入双保险 CDP Opt-in 启动架构** + **UI 西文原生切换 `Google Sans Flex` 可变字体引擎 × 中文更纱黑体精密字重桥接（含防脱靶保底）** + **macOS 浅色全域活字润墨与 UI 视觉字重微平衡** + **Windows `DirectWrite` 正文字重轴与多进程零开销短路加固** + **`1,860` 条零冲突词典**
 
-### Changed & Added（`2.33.0+` `M1 + M2` 启动接力架构、UI `Google Sans Flex` 原生引擎迁移与 `1,860` 条词典）
-- **落地 `M1 + M2` 双保险零侵入 CDP Opt-in 启动接力机制，根治 `2.33.0` 默认移除 `DevToolsActivePort` 导致的注入断联（`install.mjs` / `core/daemon.mjs` / `user/config.json`）**：
+### Changed & Added（`2.33.0+` 单图标 `M1 + M2` 启动接力、UI `Google Sans Flex` 迁移与防脱靶保底、macOS 全域润墨平衡与 `1,860` 条词典）
+- **落地单图标纯净模式 + `M1 + M2` 双保险零侵入 CDP Opt-in 启动接力机制，根治 `2.33.0` 默认移除 `DevToolsActivePort` 导致的注入断联（`install.mjs` / `core/daemon.mjs` / `user/config.json`）**：
   - **根因背景**：Antigravity `2.33.0` 将内置浏览器操控通道切换至匿名管道 `cdpPipe.js`，主进程移除无条件 `appendSwitch('remote-debugging-port', '0')` 并在未传参启动时调用 `removeStaleActivePortFile()` 清理 `DevToolsActivePort`（显式传入 `--remote-debugging-port=0` 时则原生保留 `0o600` 端口文件）；同时 Windows `electron-updater` `quitAndInstall()` 更新重启会以 `--updated --force-run` 吞掉快捷方式参数；
-  - **M1（单图标原地打标与一键平滑接力 `relaunch`）**：Windows 端自动幂等扫描并原地修补桌面、公共桌面、开始菜单与任务栏 `Antigravity.lnk` 快捷方式参数，Linux 端写入 `~/.local/share/applications/antigravity.desktop`；macOS 端默认采用**单图标纯净模式**（不生成第二个应用图标，仅在显式传 `--with-launcher` 时才按需生成带 `LSUIElement` 的启动器，默认安装时自动注销并回收历史 `(Theme).app`）；新增 `node install.mjs relaunch [--channel ...] [--force]` 子命令（默认内置 15s `.db-wal` 活跃对话防误杀门禁、SingletonLock 释放等待与重注验收）；
-  - **M2（后台守护进程早期冷启动无感自动接力 `cdpAutoRelaunch`）**：当 `daemon.mjs` 处于 0 活跃 CDP 目标时（Windows 端前置 `<18ms` 原生 `tasklist` 零 PowerShell 空闲开销预筛），若探测到无 `--remote-debugging-port` 启动的客户端处于严苛冷启动窗口内（常规启动 `<= 12s`、更新重启 `--updated <= 25s`）、近 15s 无活跃会话 `.db-wal` 写入且未触发 60s 冷却防死锁，自动优雅终止并补挂 `--remote-debugging-port=0` 接力拉起；对运行已超窗口期的存量会话严格豁免（每 PID 仅输出单行提醒，绝不刷屏、绝不误杀）。
-- **UI 西文排版全面切换至官方原生 `Google Sans Flex` 可变字体引擎，保留更纱黑体与对话正文 `Anthropic Serif`（`core/theme.css` / `core/runtime.js` / `install.mjs`）**：
-  - 移除 `Anthropic Sans` `@font-face` 与 UI 负字距覆盖，完整放行官方 `<body data-agy-font="google-sans">` 的可变字重阶梯（`350 / 450 / 550 / 650`）、`wdth: 92`、`ROND: 0/20` 与 `slnt: -10` 光学斜体轴（同时保留用户切换官方 `Inter` 偏好的分支）；
+  - **M1（单图标原地打标与一键平滑接力 `relaunch`）**：Windows 端自动幂等扫描并原地修补桌面、公共桌面、开始菜单与任务栏 5 处 `Antigravity.lnk` 快捷方式参数（支持 UTF-8 中文用户名/桌面目录与 `CloseMainWindow() + WaitForExit(1800)` 优雅刷盘退出），Linux 端写入 `~/.local/share/applications/antigravity.desktop`；macOS 端默认采用**单图标纯净模式**（不生成第二个应用图标，仅在显式传 `--with-launcher` 时才按需生成带 `LSUIElement` 的启动器，默认安装时自动注销并回收历史 `(Theme).app`）；新增 `node install.mjs relaunch [--channel ...] [--force]` 子命令（默认内置 15s `.db-wal` 活跃对话防误杀门禁、SingletonLock 释放等待与重注验收）；
+  - **M2（后台守护进程早期冷启动无感自动接力 `cdpAutoRelaunch` + Windows 双层零开销短路 + `sidecar_sdk` 伴生进程过滤）**：当 `daemon.mjs` 处于 0 活跃 CDP 目标时（Windows 端内置 `exemptedHostPidByChannel` 内存级 `0.02ms` 短路 + `knownNonHostPids` 同名渲染子进程缓存，实现空闲态 **0 次 `tasklist`、0 次 PowerShell**，并在全平台精准过滤 `--import=|sidecar_sdk|--ms-enable-electron-run-as-node` 插件伴生进程防误判），若探测到无 `--remote-debugging-port` 启动的客户端处于严苛冷启动窗口内（常规启动 `<= 12s`、更新重启 `--updated <= 25s`）、近 15s 无活跃会话 `.db-wal` 写入且未触发 60s 冷却防死锁，自动优雅终止并补挂 `--remote-debugging-port=0` 接力拉起；对运行已超窗口期的存量会话严格豁免（每 PID 仅输出单行提醒，绝不刷屏、绝不误杀）。
+- **UI 西文排版全面切换至官方原生 `Google Sans Flex` 可变字体引擎，内置防脱靶加固并保留更纱黑体与对话正文 `Anthropic Serif`（`core/theme.css` / `core/runtime.js` / `install.mjs`）**：
+  - 移除 `Anthropic Sans` `@font-face` 与 UI 负字距覆盖，完整放行官方 `Google Sans Flex` 的可变字重阶梯（`350 / 450 / 550 / 650`）、`wdth: 92`、`ROND: 0/20` 与 `slnt: -10` 光学斜体轴（同时保留用户切换官方 `Inter` 偏好的分支）；
+  - **防脱靶保底设施（`#ag-google-sans-flex-fonts`）**：无论宿主因历史 `System UI` 旧存档、VS Code `settings.json` 自定义 `font.family`、`hasEditor` 编辑器标签页还是 `Swarm` 独立子帧而漏挂 `#agy-new-themes-fonts` 或拔掉 `data-agy-font`，运行时均自动补挂 `Google Sans Flex` 字体表并保底驱动 `body:not([data-agy-font="inter"])` 字宽/字重轴（同时严格隔离 Monaco、Xterm、KaTeX 与图标字体）；
   - 新增内部桥接族 `AgSarasaUI` `@font-face`（`100..299 -> Light`、`300..499 -> Regular`、`500..639 -> SemiBold`、`640..900 -> Bold` 及其斜体），紧随 `'Google Sans Flex', 'Google Sans'` 之后、排在 `system-ui / Segoe UI` 之前，彻底解决官方 `350` 字重导致 `Sarasa-SuperTTC` 向下误落 `Light (300)` 发虚及 Windows `FontLink` 微软雅黑截胡两大隐患；
-  - 对话正文与 Markdown/Artifact（`[data-markdown-root]` 等）100% 保持 `Anthropic Serif` + `Sarasa Mono Slab SC` 经典书卷衬线，并在正文容器局部重置 `--agy-gsf-fvs: normal` / `--agy-gsf-italic: italic` / `400-700` 标准字重阶梯，严密隔离外层 `wdth: 92` 窄轴污染；`Swarm` 独立子帧同步挂载 `Google Sans Flex` 缓存字体表。
+  - 对话正文与 Markdown/Artifact（`[data-markdown-root]` 等）100% 保持 `Anthropic Serif` + `Sarasa Mono Slab SC` 经典书卷衬线，局部隔离外层 `wdth: 92` 窄轴污染，并在 Windows `DirectWrite`（`html[data-ag-os="win32"]`）下为 `<p> / <li> / <blockquote> / <td>` 全量补齐 `'wght' 400/500/600, 'opsz' 16` 轴驱动，防止子节点回落 `300 Display Light`。
+- **macOS 浅色模式全域活字润墨与 UI 视觉字重微平衡（严格限定 `html[data-ag-os="darwin"]`，Windows 保持零改动）（`core/theme.css`）**：
+  - 采用自适配文字本身颜色的 `color-mix(in srgb, currentColor ..., transparent)` 微光晕，为 macOS `CoreText` 暖纸浅色模式下的 UI 全局、对话正文与 Markdown 标题/加粗赋予温润活字纸面压印感（代码块、Monaco 编辑器、终端与微字号指标胶囊保持零阴影锐利边缘）；
+  - 针对润墨带来的笔画光学扩张，精细微调 macOS 浅色 UI 初始字重（UI 标准字重极轻微下调 `350 -> 340` / 侧栏行 `400 -> 388`，UI 中黑与加粗字重适度收细 `450 -> 430` / 控件 `500 -> 455` / 选中项 `520 -> 488` / UI 粗体 `650 -> 545~560`），兼顾纸墨温度与笔画呼吸感。
 - **修复 `2.33.0` 移除 `data-newux-theme="onyx"` 后的选择器失配与 `doctor` 假绿盲区（`core/theme.css` / `install.mjs`）**：
   - 为浅色/深色/暖炭深色侧栏选中项 `.agy-sidebar-row[data-selected="true"]` 与 `.surface-composer-card` 补齐无 `data-newux-theme` 的 `body[data-agy-theme]` 并列选择器，防止 `2.33.0` 新增原生内阴影微框穿透暖纸侧栏；
-  - `node install.mjs doctor` 新增客户端版本、运行主进程参数与 `cdpStatus`（`ready` / `missing_opt_in_flag` / `app_not_running`）探测，未带端口运行时明确返回 `ok: false` 与 `remediation` 引导，消除静默假绿。
+  - `node install.mjs doctor` 按通道精确核对运行中主进程参数与 `cdpStatus`（`ready` / `missing_opt_in_flag` / `app_not_running`），未带端口运行时明确返回 `ok: false` 与 `remediation` 引导，消除静默假绿。
 - **扩充静态汉化词典 70 条至 `1,860` 条（`core/i18n.json`）**：
   - 覆盖 `2.33.0` 新增插件组合包（`Bundles`）、内置浏览器数据与按站点管理 Cookie、快捷键方案（`Keybinding Scheme`）、外观字体 `System UI` / `Appears larger on mobile`、支线提问插入主对话、语音听写麦克风状态、虚拟机初始化流程（`Setup Script`）与蜂群回放对比文案，严格保持 0 大小写与弯直引号碰撞。
 
