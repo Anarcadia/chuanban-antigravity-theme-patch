@@ -2,9 +2,9 @@
 /**
  * chuanban-antigravity-theme-patch · CDP Theme & Live Metrics Daemon (core/daemon.mjs)
  *
- * 架构特性（v5.4.2）：
+ * 架构特性（v5.4.3）：
  * 1. 动态 Node 分级：
- *    - Node >= 22.0：完整启用昼夜双模式独立主题（暖纸浅色三预设 + 深色 onyx / claude-warm 双预设）、四层字体、输入框三态、1740条母语级汉化、宿主独占指纹门禁、死锁与冷启动兜底包自愈及 2.32.1/2.32.0 curtainView/Swarm 适配。
+ *    - Node >= 22.0：完整启用昼夜双模式独立主题（暖纸浅色三预设 + 深色 onyx / claude-warm 双预设）、四层字体、输入框三态、1790条母语级汉化、宿主独占指纹门禁、死锁与冷启动兜底包自愈及 2.32.2/2.32.1 curtainView/Swarm 适配。
  *    - Node >= 22.13：动态 `await import('node:sqlite')` 解锁底部实时会话指标胶囊（O(1) 增量尾行解析 + WSL2 双轨只读读取）；低版本优雅降级绝不崩溃。
  * 2. 模块化与热重载：
  *    - 周期性检测 `user/config.json`、`user/custom.css`、`user/i18n.override.json`、`user/custom.js` 的 mtime，
@@ -288,7 +288,7 @@ function resolveActiveChannelEndpoints(channelMode = 'auto', userCfg = {}) {
 // ============================================================================
 // 2. 动态构建注入载荷（支持 core/ + user/ 实时合并与热更新签名）
 // ============================================================================
-const BASE_VERSION = '20261117-v5.4.2';
+const BASE_VERSION = '20261118-v5.4.3';
 let cachedBundleSig = '';
 let cachedInjectScript = '';
 let cachedPatchVersion = '';
@@ -559,6 +559,14 @@ function rebuildBundleIfNeeded() {
   ) {
     normalizedSelectors.excludeI18n +=
       ', .monaco-editor, .monaco-diff-editor, .xterm, [data-markdown-root], [data-testid="user-message-content"], .agy-user-bubble, [class*="onyx-key"]';
+  }
+  if (
+    typeof normalizedSelectors.excludeI18n === 'string' &&
+    normalizedSelectors.excludeI18n.trim() &&
+    !normalizedSelectors.excludeI18n.includes('conversation-row-history')
+  ) {
+    normalizedSelectors.excludeI18n +=
+      ', [data-testid="conversation-row-history"] a[href^="/c/"], [data-testid="conversation-row-history"] span.truncate';
   }
 
   const DEFAULT_ALLOWED_ORIGINS = [
@@ -1061,17 +1069,26 @@ const NO_META_RESCAN_LOCAL_MS = 2500;
 const NO_META_RESCAN_UNC_MS = 15000;
 const childMetricsCache = new Map(); // dbPath -> { sig, hasData, calls, totalIn, totalCache, totalOut, totalThink, totalResp }
 const lineageStateByDir = new Map(); // conversationsDir -> dirState
-let zhTitleStatus = { state: 'ok', label: '', detail: '' };
+let zhTitleStatus = { state: 'ok', label: '', detail: '', cmd: '' };
 
-function setZhTitleStatus(nextState, label = '', detail = '') {
+function escapeHtmlSafe(str) {
+  return String(str || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function setZhTitleStatus(nextState, label = '', detail = '', cmd = '') {
   if (
     zhTitleStatus.state === nextState &&
     zhTitleStatus.label === label &&
-    zhTitleStatus.detail === detail
+    zhTitleStatus.detail === detail &&
+    zhTitleStatus.cmd === cmd
   ) {
     return;
   }
-  zhTitleStatus = { state: nextState, label, detail };
+  zhTitleStatus = { state: nextState, label, detail, cmd };
   metricsCache.clear();
   lastBestEffortPayloadCache.clear();
   metricsConfigEpoch += 1;
@@ -2174,7 +2191,7 @@ function parseConversationMetrics(cascadeId, endpointOrDir, precomputedState = n
       process.platform === 'darwin' &&
       (zhTitleStatus.state === 'tcc_blocked' || zhTitleStatus.state === 'stale_inode');
     const zhWarnInlineHtml = zhWarnActive
-      ? `<span class="ag-sep">·</span><span class="ag-zh-warn-dot" title="${zhTitleStatus.label}">●</span>`
+      ? `<span class="ag-sep">·</span><span class="ag-zh-warn-dot" title="${escapeHtmlSafe(zhTitleStatus.label)}">●</span>`
       : '';
     const subSyncing = isDraining || partialStale;
     const subInlineHtml =
@@ -2207,8 +2224,12 @@ function parseConversationMetrics(cascadeId, endpointOrDir, precomputedState = n
       childCount > 0
         ? `<div class="ag-tt-row"><span class="ag-tt-lbl">累计输出量</span><span class="ag-tt-val">总计 ${fmtTok(combinedOut)} (主 ${fmtTok(totalOut)} + 子 ${fmtTok(childOut)})</span></div>`
         : `<div class="ag-tt-row"><span class="ag-tt-lbl">累计输出量</span><span class="ag-tt-val">总计 ${fmtTok(totalOut)} (思考链 ${fmtTok(totalThink)} + 正文/工具 ${fmtTok(totalResp)})</span></div>`;
+    const zhCmdEsc = zhWarnActive && zhTitleStatus.cmd ? escapeHtmlSafe(zhTitleStatus.cmd) : '';
+    const zhCmdRowHtml = zhCmdEsc
+      ? `<div class="ag-tt-warn-cmd-row"><code class="ag-tt-warn-cmd">${zhCmdEsc}</code><button type="button" class="ag-tt-copy-btn" data-ag-copy-cmd="${zhCmdEsc}">复制命令</button></div>`
+      : '';
     const zhWarnRowHtml = zhWarnActive
-      ? `<div class="ag-tt-warn"><span class="ag-tt-warn-lbl">⚠ ${zhTitleStatus.label}</span><span class="ag-tt-warn-val">${zhTitleStatus.detail}</span></div>`
+      ? `<div class="ag-tt-warn"><div class="ag-tt-warn-hdr"><span class="ag-tt-warn-lbl">⚠ ${escapeHtmlSafe(zhTitleStatus.label)}</span></div><span class="ag-tt-warn-val">${escapeHtmlSafe(zhTitleStatus.detail)}</span>${zhCmdRowHtml}</div>`
       : '';
 
     const tooltipRows = [
@@ -3053,8 +3074,9 @@ function probeZhTitleLiveState(pyBin, scriptPath) {
       if (activeRecs.some((r) => r.diskState === 'PATCHED' && r.liveState === 'STALE_RUNNING_INODE')) {
         setZhTitleStatus(
           'stale_inode',
-          '标题补丁待内存重载',
-          '磁盘已修补但运行中服务仍挂载旧镜像，运行 reload-hub 或重启生效'
+          '中文标题补丁待重载生效',
+          '磁盘补丁已自动修补完毕，但运行中服务仍挂载更新前旧镜像。可在对话空闲时重启客户端，或在终端执行下方命令热重载（热重载会刷新窗口）：',
+          'python3 ~/.gemini/antigravity/scripts/antigravity-zh-title-patch.py reload-hub'
         );
         return;
       }
@@ -3156,8 +3178,9 @@ function ensureZhTitlePatchIfPresent() {
         zhPatchFailCount = 3;
         setZhTitleStatus(
           'tcc_blocked',
-          '标题补丁待终端授权',
-          '客户端更新后后台补丁受 macOS 权限拦截，请终端运行 patch --reload-hub'
+          '中文标题补丁待终端授权',
+          '客户端更新后，macOS「App 管理」权限拦截了后台自动修补。请在已授权该权限的终端执行下方命令（可在「系统设置 → 隐私与安全性 → App 管理」为终端开启权限）：',
+          'python3 ~/.gemini/antigravity/scripts/antigravity-zh-title-patch.py patch --reload-hub'
         );
         console.log(
           '[Daemon] zh-title auto-patch skipped (macOS App Management TCC blocks background LaunchAgent write; run `python3 ~/.gemini/antigravity/scripts/antigravity-zh-title-patch.py patch --reload-hub` in an authorized terminal).'
@@ -3178,7 +3201,7 @@ function ensureZhTitlePatchIfPresent() {
     zhPatchFailedSig = '';
     zhPatchFailCount = 0;
     lastZhPatchSig = computeZhSig();
-    if (outStr.includes('中文标题补丁注入成功')) {
+    if (outStr.includes('中文标题补丁写入磁盘成功') || outStr.includes('中文标题补丁注入成功')) {
       console.log('[Daemon] Auto-applied zh-title patch:', outStr.split('\n')[0]);
     } else if (outStr.includes('DISABLED')) {
       console.log('[Daemon] zh-title auto-patch skipped (DISABLED marker present).');
@@ -3194,6 +3217,26 @@ function ensureZhTitlePatchIfPresent() {
 
 const fallbackBackoffUntil = new Map();
 
+function trimPosixDaemonLogsIfNeeded() {
+  if (process.platform === 'win32') return;
+  const maxBytes = 262144; // 256 KB
+  const keepBytes = 65536; // 64 KB
+  for (const logPath of ['/tmp/antigravity-font-daemon.log', '/tmp/antigravity-font-daemon.err']) {
+    try {
+      const st = fs.statSync(logPath, { throwIfNoEntry: false });
+      if (!st || st.size <= maxBytes) continue;
+      const buf = fs.readFileSync(logPath);
+      let sliceStart = Math.max(0, buf.length - keepBytes);
+      const nlIdx = buf.indexOf(10, sliceStart);
+      if (nlIdx !== -1 && nlIdx + 1 < buf.length) {
+        sliceStart = nlIdx + 1;
+      }
+      // 原位截断覆写以保留相同 inode，兼容 LaunchAgent O_APPEND 重定向句柄
+      fs.writeFileSync(logPath, buf.subarray(sliceStart));
+    } catch {}
+  }
+}
+
 async function sync() {
   checkPidFileOwnership();
   if (isSyncing) return;
@@ -3201,6 +3244,7 @@ async function sync() {
   syncTickCount = (syncTickCount + 1) % 6000;
   try {
     if (syncTickCount % 12 === 1) ensureZhTitlePatchIfPresent();
+    if (syncTickCount % 24 === 1) trimPosixDaemonLogsIfNeeded();
     const bundleChanged = rebuildBundleIfNeeded();
     if (!activeConfig.enabled) {
       targetThemeModes.clear();

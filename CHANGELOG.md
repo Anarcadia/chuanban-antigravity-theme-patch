@@ -4,6 +4,30 @@
 
 ---
 
+## [v5.4.3] - 2026-11-18
+
+> **适用版本**：Antigravity `2.32.2+` / `2.32.1`（`CL=1022991777`，向下完全兼容 `2.32.0` / `2.31.x` / `2.30.0`）  
+> **核验基线**：macOS `2.32.2`（Electron `44.9.1` `wcv` 三层堆栈与 `catcherView` 透明层兼容核验 + `Gemini 4 Carbon` 512k 动态上下文与全链路 CDP 断言验收）
+
+### Fixed（冷启动自愈二次复检自锁修复、历史对话标题隔离、标题补丁交互复制闭环与后台日志自截断）
+- **修复 `coldBootHealer` 二次复检（`attempt === 2`）被自身 `HEAD /main.js` 探测条目污染导致自锁 `no-perf-entry` 的缺陷（`core/runtime.js`）**：
+  - 根治第 1 轮 `fetch('/main.js', { method: 'HEAD' })` 向 `PerformanceResourceTiming` 写入 `initiatorType: "fetch"`（`decodedBodySize: 0`）后，第 2 轮复检 `entries[entries.length - 1]` 误取 0 字节 `HEAD` 条目而提前退出（`skippedReason: "no-perf-entry"`）的隐藏缺陷；
+  - 新增 `resolveInitialMainBundleSize()` 优先筛选 `initiatorType === 'script'` 非零条目并在模块初始化时持久化快照 `window.__ag_coldboot_initial_main_size`，同时免疫长会话 250 条 `ResourceTiming` 环形缓冲淘汰。
+- **升级中文标题外挂状态提示与悬浮详情卡「一键复制修复命令」闭环（`core/daemon.mjs` / `core/runtime.js` / `core/theme.css`）**：
+  - 修正 `daemon.mjs` 对 `antigravity-zh-title-patch.py` v2.1 输出 `中文标题补丁写入磁盘成功` 的自动修补日志识别；
+  - 针对客户端自动升级（如 `2.32.2`）后的 `tcc_blocked`（macOS「App 管理」权限拦截）与 `stale_inode`（磁盘已修补但后台 `language_server` 仍驻留旧镜像）两类状态，重构 `#ag-live-metrics-tooltip .ag-tt-warn` 告警卡片：支持完整自动换行防截断、清晰说明拦截/重载原因、展示完整可执行终端命令，并新增 `160ms` 悬停桥接与 `.ag-tt-copy-btn` **「复制命令」一键交互按钮**（无告警时继续保持 `pointer-events: none` 零遮挡）。
+- **补齐历史对话列表 `[data-testid="conversation-row-history"]` 汉化隔离保护与排版对称（`core/runtime.js` / `core/daemon.mjs` / `core/theme.css`）**：
+  - 同步排除 `[data-testid="conversation-row-history"]` 下的会话链接 `aria-label` 与 `.truncate` 标题节点，防止用户在历史对话列表中的英文会话标题（如 `Settings` / `Overview` / `Tasks`）被词典误翻。
+- **新增 macOS / Linux `LaunchAgent` 后台日志体积原位自截断保护（`core/daemon.mjs`）**：
+  - 针对 `2.32.2` 切换会话重建 `plugin://swarm--*` OOPIF 子帧产生的挂载日志，每 ~60s 巡检 `/tmp/antigravity-font-daemon.log`（及 `.err`），超过 `256 KB` 时保留最新 `64 KB` 完整行原位覆写（保持相同 `inode`，兼容 `O_APPEND` 句柄），杜绝长周期常驻日志无限膨胀。
+
+### Added（Antigravity `2.32.2` 与 `Gemini 4 Carbon` 模型矩阵汉化扩充至 `1,790` 条）
+- **新增 50 条 `2.32.2` 静态 UI 词条至 `1,790` 条（`core/i18n.json`）与 5 组精准动态规则（`core/runtime.js`）**：
+  - 补齐账号与订阅页后端动态下发文案（`Your Plan`、`Your Plan: <Tier>` → `当前套餐：<Tier>`、`You are subscribed to the best Google AI plan.`、`Available AI Credits: <N>`、`Invite a Friend`、`Authenticated via / Managed by Enterprise Gateway`）、模型低配额告警（`Your quota for this model is running low.`）、Best-of-N 退出反馈问卷全套 8 条、MCP 参数重启说明、Google Drive `@drive:` 指引、远程会话手机扫码接续及校验超时提示，保持 100% 原始 JSON 零重复键、零大小写与弯直引号碰撞；
+  - 新增 `RE_MODEL_EFFORT_LABEL`（在 `Best of N` 多选、单档位模型行与配额弹窗中自动将 `Gemini 4 Carbon (Medium)` / `GPT-OSS 120B (Medium)` / `Gemini 4 Hydrogen (XHigh)` 译为 `(中)` / `(超高)`）及 `RE_SUMMARY_EXITED_CODE` / `RE_EXITED_CODE_ONLY`（将聊天流失败命令状态尾巴 `· Exited with code <N>` 实时译为 `· 退出码 <N>`）。
+
+---
+
 ## [v5.4.2] - 2026-11-17
 
 > **适用版本**：Antigravity `2.32.1+` / `2.32.0`（向下完全兼容 `2.31.x` / `2.30.0`）  

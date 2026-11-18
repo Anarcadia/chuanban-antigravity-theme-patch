@@ -106,7 +106,7 @@
     }
   }
 
-  const PATCH_VERSION = boot.version || '20261117-v5.4.2';
+  const PATCH_VERSION = boot.version || '20261118-v5.4.3';
   const DETECTED_OS =
     boot.platform || (/Win/i.test(navigator.platform || '') ? 'win32' : /Mac/i.test(navigator.platform || '') ? 'darwin' : 'linux');
   const ENABLED = boot.enabled !== false;
@@ -131,7 +131,7 @@
   const DEFAULT_PRESET = boot.preset || 'high-contrast';
   const DEFAULT_DARK_PRESET = boot.darkPreset || 'onyx';
   const DEFAULT_EXCLUDE_I18N =
-    'code, pre, kbd, samp, textarea, input, style, script, noscript, [contenteditable="true"], [data-markdown-root], [data-testid="user-message-content"], .agy-user-bubble, .monaco-editor, .monaco-diff-editor, .xterm, [class*="onyx-key"], .prose, .markdown, [class*="chat-message"], [class*="group/file-title"], [data-testid="conversation-row-sidebar"] a[href^="/c/"], [data-testid="conversation-row-sidebar"] span.truncate, [data-testid="conversation-navigator-turn"], .msg-body, #raw, [data-testid="swarm-raw"], #swarm-title, #ag-live-metrics-pill, #ag-live-metrics-tooltip';
+    'code, pre, kbd, samp, textarea, input, style, script, noscript, [contenteditable="true"], [data-markdown-root], [data-testid="user-message-content"], .agy-user-bubble, .monaco-editor, .monaco-diff-editor, .xterm, [class*="onyx-key"], .prose, .markdown, [class*="chat-message"], [class*="group/file-title"], [data-testid="conversation-row-sidebar"] a[href^="/c/"], [data-testid="conversation-row-sidebar"] span.truncate, [data-testid="conversation-row-history"] a[href^="/c/"], [data-testid="conversation-row-history"] span.truncate, [data-testid="conversation-navigator-turn"], .msg-body, #raw, [data-testid="swarm-raw"], #swarm-title, #ag-live-metrics-pill, #ag-live-metrics-tooltip';
 
   const SELECTORS = Object.assign(
     {
@@ -171,6 +171,12 @@
       clearTimeout(window.__ag_coldboot_timer);
     } catch (e) {}
     window.__ag_coldboot_timer = null;
+  }
+  if (window.__ag_metrics_tt_hide_timer) {
+    try {
+      clearTimeout(window.__ag_metrics_tt_hide_timer);
+    } catch (e) {}
+    window.__ag_metrics_tt_hide_timer = null;
   }
 
   // 全局持久化的原始英文文本映射表（支持 i18n.override.json 热重载增删改与一键还原）
@@ -464,6 +470,12 @@
     if (pill) pill.remove();
     const tt = document.getElementById('ag-live-metrics-tooltip');
     if (tt) tt.remove();
+    if (window.__ag_metrics_tt_hide_timer) {
+      try {
+        clearTimeout(window.__ag_metrics_tt_hide_timer);
+      } catch (e) {}
+      window.__ag_metrics_tt_hide_timer = null;
+    }
     const themeBtnTt = document.getElementById('ag-theme-btn-tooltip');
     if (themeBtnTt) themeBtnTt.remove();
     if (window.__ag_theme_btn_tt_timer) {
@@ -825,6 +837,49 @@
       return true;
     };
 
+    const resolveInitialMainBundleSize = () => {
+      try {
+        if (typeof performance.getEntriesByType === 'function') {
+          const allMain = performance
+            .getEntriesByType('resource')
+            .filter((e) => /\/main\.js(?:\?|$)/.test(String(e.name || '')));
+          // 优先读取 <script src="/main.js"> 条目，排除本自愈器发起的 0 字节 HEAD fetch 条目防止二次复检自锁
+          const scriptEntries = allMain.filter(
+            (e) =>
+              e.initiatorType === 'script' &&
+              ((Number(e.decodedBodySize) || 0) > 0 || (Number(e.encodedBodySize) || 0) > 0)
+          );
+          const nonZeroEntries =
+            scriptEntries.length > 0
+              ? scriptEntries
+              : allMain.filter(
+                  (e) =>
+                    e.initiatorType !== 'fetch' &&
+                    ((Number(e.decodedBodySize) || 0) > 0 || (Number(e.encodedBodySize) || 0) > 0)
+                );
+          if (nonZeroEntries.length > 0) {
+            const picked = nonZeroEntries[nonZeroEntries.length - 1];
+            const sizeObj = {
+              decoded: Number(picked.decodedBodySize) || 0,
+              encoded: Number(picked.encodedBodySize) || 0
+            };
+            window.__ag_coldboot_initial_main_size = sizeObj;
+            return sizeObj;
+          }
+        }
+      } catch (e) {}
+      if (
+        window.__ag_coldboot_initial_main_size &&
+        (window.__ag_coldboot_initial_main_size.decoded > 0 || window.__ag_coldboot_initial_main_size.encoded > 0)
+      ) {
+        return window.__ag_coldboot_initial_main_size;
+      }
+      return { decoded: 0, encoded: 0 };
+    };
+
+    // 模块初始化时即捕获初始 script 体积快照，免疫后续 ResourceTiming 250 条环形缓冲淘汰与 HEAD 探测干扰
+    resolveInitialMainBundleSize();
+
     const probeColdBootBundleDrift = async (attempt) => {
       window.__ag_coldboot_timer = null;
       if (!isWindowUntouchedAndIdleForColdHeal()) {
@@ -833,13 +888,9 @@
         return;
       }
       try {
-        const entries =
-          typeof performance.getEntriesByType === 'function'
-            ? performance.getEntriesByType('resource').filter((e) => /\/main\.js(?:\?|$)/.test(String(e.name || '')))
-            : [];
-        const mainEntry = entries.length > 0 ? entries[entries.length - 1] : null;
-        const loadedDecoded = Number(mainEntry && mainEntry.decodedBodySize) || 0;
-        const loadedEncoded = Number(mainEntry && mainEntry.encodedBodySize) || 0;
+        const initSize = resolveInitialMainBundleSize();
+        const loadedDecoded = initSize.decoded;
+        const loadedEncoded = initSize.encoded;
         if (loadedDecoded <= 0 && loadedEncoded <= 0) {
           window.__ag_coldboot_probe_done = true;
           window.__ag_coldboot_healer_state = { probeDone: true, drifted: false, skippedReason: 'no-perf-entry' };
@@ -1800,6 +1851,51 @@
     return '';
   }
 
+  function clearMetricsTooltipHideTimer() {
+    if (window.__ag_metrics_tt_hide_timer) {
+      try {
+        clearTimeout(window.__ag_metrics_tt_hide_timer);
+      } catch (e) {}
+      window.__ag_metrics_tt_hide_timer = null;
+    }
+  }
+
+  function scheduleMetricsTooltipHide(delayMs = 160) {
+    clearMetricsTooltipHideTimer();
+    window.__ag_metrics_tt_hide_timer = setTimeout(() => {
+      window.__ag_metrics_tt_hide_timer = null;
+      const tt = document.getElementById('ag-live-metrics-tooltip');
+      if (tt) tt.removeAttribute('data-visible');
+    }, delayMs);
+  }
+
+  function copyTextWithFallback(text) {
+    if (!text) return Promise.resolve(false);
+    if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+      return navigator.clipboard
+        .writeText(text)
+        .then(() => true)
+        .catch(() => fallbackExecCopy(text));
+    }
+    return Promise.resolve(fallbackExecCopy(text));
+  }
+
+  function fallbackExecCopy(text) {
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.setAttribute('readonly', '');
+      ta.style.cssText = 'position:fixed;left:-9999px;top:-9999px;opacity:0;pointer-events:none;';
+      document.body.appendChild(ta);
+      ta.select();
+      const ok = document.execCommand('copy');
+      ta.remove();
+      return !!ok;
+    } catch (e) {
+      return false;
+    }
+  }
+
   function ensureMetricsTooltip() {
     let tt = document.getElementById('ag-live-metrics-tooltip');
     if (!tt && document.body) {
@@ -1808,6 +1904,32 @@
       document.body.appendChild(tt);
     } else if (tt && tt.parentElement !== document.body && document.body) {
       document.body.appendChild(tt);
+    }
+    if (tt && !tt.__ag_tt_interactive_bound) {
+      tt.__ag_tt_interactive_bound = true;
+      tt.addEventListener('mouseenter', () => {
+        clearMetricsTooltipHideTimer();
+      });
+      tt.addEventListener('mouseleave', () => {
+        scheduleMetricsTooltipHide(120);
+      });
+      tt.addEventListener('click', (ev) => {
+        const btn = ev.target && ev.target.closest && ev.target.closest('.ag-tt-copy-btn');
+        if (!btn) return;
+        ev.preventDefault();
+        ev.stopPropagation();
+        const cmd = String(btn.getAttribute('data-ag-copy-cmd') || '').trim();
+        if (!cmd) return;
+        copyTextWithFallback(cmd).then((ok) => {
+          if (!btn.isConnected) return;
+          btn.textContent = ok ? '✓ 已复制' : '复制失败';
+          if (btn.__ag_copy_reset_timer) clearTimeout(btn.__ag_copy_reset_timer);
+          btn.__ag_copy_reset_timer = setTimeout(() => {
+            btn.__ag_copy_reset_timer = null;
+            if (btn.isConnected) btn.textContent = '复制命令';
+          }, 1800);
+        });
+      });
     }
     return tt;
   }
@@ -1929,10 +2051,11 @@
       pill.id = 'ag-live-metrics-pill';
       pill.innerHTML = '<span id="ag-live-metrics-text"></span>';
       pill.addEventListener('mouseenter', () => {
+        clearMetricsTooltipHideTimer();
         const tt = ensureMetricsTooltip();
         if (!tt || !tt.innerHTML) return;
         const r = pill.getBoundingClientRect();
-        const ttWidth = Math.min(440, Math.max(370, tt.offsetWidth || 400));
+        const ttWidth = Math.min(450, Math.max(370, tt.offsetWidth || 400));
         const left = Math.max(12, Math.min(r.left, window.innerWidth - ttWidth - 16));
         const bottomPx = Math.min(window.innerHeight - r.top + 8, window.innerHeight - (tt.offsetHeight || 220) - 12);
         tt.style.left = left + 'px';
@@ -1941,7 +2064,12 @@
       });
       pill.addEventListener('mouseleave', () => {
         const tt = document.getElementById('ag-live-metrics-tooltip');
-        if (tt) tt.removeAttribute('data-visible');
+        if (tt && tt.querySelector('.ag-tt-copy-btn')) {
+          scheduleMetricsTooltipHide(160);
+        } else if (tt) {
+          clearMetricsTooltipHideTimer();
+          tt.removeAttribute('data-visible');
+        }
       });
     }
 
@@ -2505,6 +2633,12 @@
     const RE_MODEL_REMOVED_ON = /^(.+?)\s+will be removed from Antigravity on\s+(.+?)\.?$/i;
     const RE_MODEL_PERIOD_LIMIT =
       /^(Gemini\b[\w .+-]*|Claude\b[\w .+-]*|GPT\b[\w .+-]*|Orchestrator\b[\w .+()-]*)\s+(Weekly|Daily|Monthly)\s+Limit$/i;
+    const RE_MODEL_EFFORT_LABEL =
+      /^(Gemini\b[\w .+-]*|Claude\b[\w .+-]*|GPT\b[\w .+-]*)\s+\((Extra\s+High|Low|Medium|High|Extra|XHigh|Max)\)$/i;
+    const RE_YOUR_PLAN = /^Your Plan:\s*([^\r\n]{1,80})$/;
+    const RE_AVAILABLE_AI_CREDITS = /^Available AI Credits:\s*([^\r\n]{1,40})$/i;
+    const RE_EXITED_CODE_ONLY = /^Exited with code\s+(-?\d+)(\.)?$/i;
+    const RE_SUMMARY_EXITED_CODE = /^([^\r\n]{1,220}?)\s*·\s*Exited with code\s+(-?\d+)$/;
     const RE_QUOTA_RESET_SWITCH =
       /^Your quota for\s+(.+?)\s+will reset on\s+(.+?)\.\s*Switch to another available model to continue\.?$/i;
     const RE_QUOTA_REACHED_SWITCH =
@@ -2833,6 +2967,12 @@
           );
         }
       } else if (firstUpper === 'E' || firstUpper === 'R' || firstUpper === 'L') {
+        if (firstUpper === 'E') {
+          const mExitOnly = trimmed.match(RE_EXITED_CODE_ONLY);
+          if (mExitOnly) {
+            return raw.replace(trimmed, () => '已退出，退出码 ' + mExitOnly[1] + (mExitOnly[2] ? '。' : ''));
+          }
+        }
         if (firstUpper === 'R') {
           if (RE_RESUME_COMMENT_DRAFTS.test(trimmed)) {
             return raw.replace(RE_RESUME_COMMENT_DRAFTS, '恢复 $1 条评论草稿');
@@ -2927,6 +3067,10 @@
           return raw.replace(RE_CONNECTED_TO_HOST, '已连接到 $1');
         }
       } else if (firstUpper === 'Y') {
+        const mYourPlan = trimmed.match(RE_YOUR_PLAN);
+        if (mYourPlan) {
+          return raw.replace(trimmed, () => '当前套餐：' + mYourPlan[1].trim());
+        }
         const mUsed = trimmed.match(RE_USED_LIMIT);
         if (mUsed) {
           const degreeMap = { some: '部分', all: '全部', most: '大部分' };
@@ -2950,15 +3094,32 @@
           return '您尚未消耗任何' + type + '额度。';
         }
         if (RE_QUOTA_RESET_SWITCH.test(trimmed)) {
-          return raw.replace(RE_QUOTA_RESET_SWITCH, (_, m, dt) => '您的 ' + (dictLookup(m.trim()) || m.trim()) + ' 配额将于 ' + dt + ' 重置，请切换至其他可用模型以继续。');
+          return raw.replace(
+            RE_QUOTA_RESET_SWITCH,
+            (_, m, dt) =>
+              '您的 ' +
+              (dictLookup(m.trim()) || computeTextTranslation(m.trim(), contextEl) || m.trim()) +
+              ' 配额将于 ' +
+              dt +
+              ' 重置，请切换至其他可用模型以继续。'
+          );
         }
         if (RE_QUOTA_REACHED_SWITCH.test(trimmed)) {
-          return raw.replace(RE_QUOTA_REACHED_SWITCH, (_, m) => '您的 ' + (dictLookup(m.trim()) || m.trim()) + ' 配额已用尽，请切换至其他可用模型以继续。');
+          return raw.replace(
+            RE_QUOTA_REACHED_SWITCH,
+            (_, m) =>
+              '您的 ' +
+              (dictLookup(m.trim()) || computeTextTranslation(m.trim(), contextEl) || m.trim()) +
+              ' 配额已用尽，请切换至其他可用模型以继续。'
+          );
         }
         const mNeedCred = trimmed.match(RE_NEED_CREDITS_MODEL);
         if (mNeedCred) {
           const amtPart = mNeedCred[1] ? '至少 ' + mNeedCred[1] + ' 点' : '更多';
-          const modName = mNeedCred[2].trim() === 'this model' ? '该模型' : dictLookup(mNeedCred[2].trim()) || mNeedCred[2].trim();
+          const modName =
+            mNeedCred[2].trim() === 'this model'
+              ? '该模型'
+              : dictLookup(mNeedCred[2].trim()) || computeTextTranslation(mNeedCred[2].trim(), contextEl) || mNeedCred[2].trim();
           let out = '发送消息需要' + amtPart + ' AI 点数。若需立即继续使用 ' + modName + '，请购买更多 AI 点数。';
           if (mNeedCred[3]) out += ' 您套餐的基础配额将于 ' + mNeedCred[3] + ' 刷新。';
           if (/enable AI Credit overages/i.test(trimmed)) out += ' 若需立即继续使用该模型，请开启 AI 点数超额使用。';
@@ -2978,6 +3139,10 @@
           return raw.replace(trimmed, () => '很高兴见到你，' + mGood[1].trim() + '。接下来做什么？');
         }
       } else if (firstUpper === 'A') {
+        const mAvailCred = trimmed.match(RE_AVAILABLE_AI_CREDITS);
+        if (mAvailCred) {
+          return raw.replace(trimmed, () => '可用 AI 点数：' + mAvailCred[1].trim());
+        }
         const mAutoFig = trimmed.match(RE_AUTO_FIG_WORKSPACE);
         if (mAutoFig) {
           return raw.replace(
@@ -3023,6 +3188,17 @@
         if (mPeriodLim) {
           const pZh = NAMED_PERIOD_MAP[mPeriodLim[2].toLowerCase()] || mPeriodLim[2];
           return raw.replace(trimmed, () => mPeriodLim[1].trim() + ' ' + pZh + '限额');
+        }
+        const mModEff = trimmed.match(RE_MODEL_EFFORT_LABEL);
+        if (mModEff) {
+          const effZh = EFFORT_MAP[mModEff[2].replace(/\s+/g, ' ').toLowerCase()] || mModEff[2];
+          return raw.replace(trimmed, () => mModEff[1].trim() + ' (' + effZh + ')');
+        }
+      }
+      if (trimmed.length < 240 && trimmed.includes('Exited with code')) {
+        const mSumExit = trimmed.match(RE_SUMMARY_EXITED_CODE);
+        if (mSumExit) {
+          return raw.replace(trimmed, () => mSumExit[1].trim() + ' · 退出码 ' + mSumExit[2]);
         }
       }
 
