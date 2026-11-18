@@ -11,6 +11,7 @@
     "deadlockHealer": true,
     "coldBootHealer": true,
     "zoomShortcuts": true,
+    "cdpAutoRelaunch": true,
     "customCss": true,
     "customJs": true
   },

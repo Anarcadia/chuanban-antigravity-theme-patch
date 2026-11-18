@@ -15,22 +15,6 @@
 }
 
 @font-face {
-  font-family: 'Anthropic Sans';
-  src: local('AnthropicSansWebVariable-TextRegular'), local('Anthropic Sans Web Text Regular'), local('AnthropicSansWebVariable-TextLight'), local('Anthropic Sans Web'), local('Anthropic Sans Web Text'), local('Anthropic Sans Web Display Light'), local('Anthropic Sans'), local('Anthropic Sans Text'), local('Anthropic Sans Text Regular'), local('AnthropicSansText-Regular');
-  font-weight: 300 599;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: 'Anthropic Sans';
-  src: local('AnthropicSansWebVariable-TextSemibold'), local('AnthropicSansWebVariable-TextBold'), local('Anthropic Sans Bold'), local('Anthropic Sans Web Bold'), local('Anthropic Sans Text Bold'), local('AnthropicSansText-Bold'), local('Anthropic Sans Web Display Light'), local('Anthropic Sans Web Text Regular'), local('AnthropicSansWebVariable-TextRegular');
-  font-weight: 600 900;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
   font-family: 'Anthropic Mono';
   src: local('AnthropicMonoWebWeb-Regular'), local('Anthropic Mono Web Regular'), local('Anthropic Mono Web'), local('Anthropic Mono');
   font-weight: 400 700;
@@ -38,8 +22,65 @@
   font-display: swap;
 }
 
+/* Google Sans Flex (350/450/550/650) × 更纱黑体 UI SC 精密字重桥接：避免 350 字重向下误落入 SuperTTC Light (300) 发虚 */
+@font-face {
+  font-family: 'AgSarasaUI';
+  src: local('Sarasa-UI-SC-Light'), local('Sarasa UI SC Light'), local('更纱黑体 UI SC Light'), local('Sarasa-UI-SC-Regular'), local('Sarasa UI SC'), local('更纱黑体 UI SC');
+  font-weight: 100 299;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'AgSarasaUI';
+  src: local('Sarasa-UI-SC-Regular'), local('Sarasa UI SC'), local('更纱黑体 UI SC');
+  font-weight: 300 499;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'AgSarasaUI';
+  src: local('Sarasa-UI-SC-Italic'), local('Sarasa UI SC Italic'), local('更纱黑体 UI SC Italic'), local('Sarasa-UI-SC-Regular'), local('Sarasa UI SC'), local('更纱黑体 UI SC');
+  font-weight: 300 499;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'AgSarasaUI';
+  src: local('Sarasa-UI-SC-SemiBold'), local('Sarasa UI SC SemiBold'), local('更纱黑体 UI SC SemiBold'), local('Sarasa-UI-SC-Bold'), local('Sarasa UI SC Bold'), local('更纱黑体 UI SC Bold');
+  font-weight: 500 639;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'AgSarasaUI';
+  src: local('Sarasa-UI-SC-SemiBold-Italic'), local('Sarasa UI SC SemiBold Italic'), local('更纱黑体 UI SC SemiBold Italic'), local('Sarasa-UI-SC-Bold-Italic'), local('Sarasa-UI-SC-SemiBold'), local('Sarasa-UI-SC-Bold');
+  font-weight: 500 639;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'AgSarasaUI';
+  src: local('Sarasa-UI-SC-Bold'), local('Sarasa UI SC Bold'), local('更纱黑体 UI SC Bold');
+  font-weight: 640 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'AgSarasaUI';
+  src: local('Sarasa-UI-SC-Bold-Italic'), local('Sarasa UI SC Bold Italic'), local('更纱黑体 UI SC Bold Italic'), local('Sarasa-UI-SC-Bold'), local('Sarasa UI SC Bold');
+  font-weight: 640 900;
+  font-style: italic;
+  font-display: swap;
+}
+
 /* ============================================================================
- * PART I. 全局共享层：四层字体栈、字重级阶与 UI 几何形状（白天与黑夜模式 100% 共用）
+ * PART I. 全局共享层：Google Sans Flex 西文原生引擎 + 更纱黑体 UI + Anthropic Serif 正文（昼夜 100% 共用）
  * ============================================================================ */
 :root,
 html,
@@ -48,31 +89,24 @@ body[data-agy-theme],
 body[data-agy-theme] :where(.font-sans),
 body[data-agy-font],
 body[data-agy-font="google-sans"],
-body[data-agy-font="inter"],
 body[data-agy-font] :where(.font-sans),
 .pdf-sdk-root {
-  --vscode-font-family: 'Anthropic Sans', 'Anthropic Sans Web Display Light', 'Anthropic Sans Web', 'Anthropic Sans Web Text', 'anthropic-sans', 'Styrene B', 'Styrene', 'Sarasa UI SC', '更纱黑体 UI SC', 'PingFang SC', 'Hiragino Sans GB', system-ui, -apple-system, BlinkMacSystemFont, 'Microsoft YaHei UI', 'Microsoft YaHei', sans-serif !important;
+  --font-sans: 'Google Sans Flex', 'Google Sans', 'AgSarasaUI', 'Sarasa UI SC', '更纱黑体 UI SC', 'PingFang SC', 'Hiragino Sans GB', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Microsoft YaHei UI', 'Microsoft YaHei', sans-serif !important;
+  --vscode-font-family: var(--font-sans) !important;
   --editor-font-family: 'Anthropic Mono', 'Anthropic Mono Web', 'anthropic-mono', 'Sarasa Mono Slab SC', '等距更纱黑体 Slab SC', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Monaco, Consolas, monospace !important;
-  --font-sans: 'Anthropic Sans', 'Anthropic Sans Web Display Light', 'Anthropic Sans Web', 'Anthropic Sans Web Text', 'anthropic-sans', 'Styrene B', 'Styrene', 'Sarasa UI SC', '更纱黑体 UI SC', 'PingFang SC', 'Hiragino Sans GB', system-ui, -apple-system, BlinkMacSystemFont, 'Microsoft YaHei UI', 'Microsoft YaHei', sans-serif !important;
-  --font-mono: 'Anthropic Mono', 'Anthropic Mono Web', 'anthropic-mono', 'Sarasa Mono Slab SC', '等距更纱黑体 Slab SC', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Monaco, Consolas, monospace !important;
+  --font-mono: var(--editor-font-family) !important;
   --default-font-family: var(--font-sans) !important;
   --default-mono-font-family: var(--font-mono) !important;
   --font-family: var(--font-sans) !important;
   --sdk-font-family: var(--font-sans) !important;
   --sdk-font-family-mono: var(--font-mono) !important;
   --sdk-comment-font-family: var(--font-sans) !important;
-  --font-weight-light: 300 !important;
-  --font-weight-normal: 400 !important;
-  --font-weight-medium: 500 !important;
-  --font-weight-semibold: 600 !important;
-  --font-weight-bold: 700 !important;
-  --font-weight-black: 900 !important;
-  --agy-gsf-h1-wght: 600 !important;
-  --agy-gsf-h3-wght: 600 !important;
-  --agy-gsf-bold-wght: 600 !important;
-  --agy-gsf-fvs: normal !important;
-  --agy-gsf-italic: italic !important;
-  --agy-gsf-slnt: 0 !important;
+}
+
+body[data-agy-font="inter"],
+body[data-agy-font="inter"] :where(.font-sans) {
+  --font-sans: 'Inter', 'AgSarasaUI', 'Sarasa UI SC', '更纱黑体 UI SC', 'PingFang SC', 'Hiragino Sans GB', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Microsoft YaHei UI', 'Microsoft YaHei', sans-serif !important;
+  --vscode-font-family: var(--font-sans) !important;
 }
 
 :root {
@@ -93,13 +127,10 @@ html[data-ag-os="win32"] {
 body,
 body[data-agy-font],
 body[data-agy-font="google-sans"] {
-  font-weight: 400 !important;
-  font-variation-settings: normal !important;
-  font-variant-ligatures: normal !important;
   color: var(--foreground) !important;
 }
 
-/* Antigravity 2.31.0+ / 2.31.2 兼容：放行内置浏览器 WebContentsView 透明打孔与抽屉打孔，保留 .agy-titlebar 与 .surface-opaque 原生底色语义 */
+/* Antigravity 2.31.0+ / 2.33.0+ 兼容：放行内置浏览器 WebContentsView 透明打孔与抽屉打孔，保留 .agy-titlebar 与 .surface-opaque 原生底色语义 */
 body:not([data-has-browser-hole="true"]):not([data-has-drawer-browser-hole="true"]),
 body[data-agy-font]:not([data-has-browser-hole="true"]):not([data-has-drawer-browser-hole="true"]),
 body[data-agy-font="google-sans"]:not([data-has-browser-hole="true"]):not([data-has-drawer-browser-hole="true"]) {
@@ -110,63 +141,91 @@ body[data-agy-font="google-sans"]:not([data-has-browser-hole="true"]):not([data-
   background-color: var(--sidebar) !important;
 }
 
-body[data-agy-font] :where(.font-sans, h1, h2, h3, h4, h5, h6, b, strong, i, em, .italic),
+/* Swarm 蜂群协作子帧同步启用 Google Sans Flex 可变字宽与字重阶梯 */
+html[data-ag-page-type="plugin"] body {
+  --font-weight-light: 250;
+  --font-weight-normal: 350;
+  --font-weight-medium: 450;
+  --font-weight-semibold: 550;
+  --font-weight-bold: 650;
+  font-weight: 350;
+  font-variation-settings: "ROND" 0, "slnt" 0, "wdth" 92;
+  font-variant-ligatures: no-contextual;
+}
+
 html[data-ag-page-type="plugin"] :where(h1, h2, h3, h4, h5, h6, b, strong, .swarm-title, .o2 .o2-h, .o2-goal > b, .o2-lb b, .o2-cb b, .o2-tht b) {
-  --agy-gsf-bold-wght: 600 !important;
-  font-variation-settings: normal !important;
+  font-weight: 600;
+  font-variation-settings: "ROND" 10, "slnt" 0, "wdth" 96, "wght" 600;
 }
 
-body[data-agy-font] :where(i, em, .italic):not(.codicon, .google-symbols) {
-  font-style: italic !important;
-}
-
-/* 1. UI 控件与全局界面：Anthropic Sans + 更纱 UI */
+/* 1. UI 控件与全局界面：西文直走官方 Google Sans Flex 引擎，中文经 AgSarasaUI 对齐更纱黑体 UI */
 html, body, body[data-agy-font], button, select, nav, header, aside {
   font-family: var(--font-sans) !important;
   -webkit-font-smoothing: antialiased;
 }
 
-/* 2. 对话正文与 Markdown 内容：Anthropic Serif + 更纱粗衬线/黑体（容器继承，不强绑泛化 span/div 以保护代码与公式继承） */
+/* 2. 对话正文与 Markdown 内容：Anthropic Serif + 更纱粗衬线/黑体，并局部隔离外层 Google Sans Flex 可变轴污染 */
 [data-markdown-root],
 [data-testid="user-message-content"],
 .agy-user-bubble,
-.select-text,
+.select-text:not([role="dialog"] *),
 .prose,
 .markdown,
 article,
-:is([data-markdown-root], .select-text, .prose, .markdown, article) :is(p, li, blockquote, h1, h2, h3, h4, h5, h6, td, th) {
+:is([data-markdown-root], .select-text:not([role="dialog"] *), .prose, .markdown, article) :is(p, li, blockquote, h1, h2, h3, h4, h5, h6, td, th) {
+  --font-weight-light: 300;
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+  --font-weight-black: 900;
+  --agy-gsf-bold-wght: 600;
+  --agy-gsf-fvs: normal;
+  --agy-gsf-italic: italic;
   font-family: 'Anthropic Serif', 'Anthropic Serif Web Display Light', 'Anthropic Serif Web', 'Anthropic Serif Web Text Light', 'anthropic-serif', 'Tiempos Text', 'Tiempos', 'Sarasa Mono Slab SC', '等距更纱黑体 Slab SC', 'Sarasa Gothic SC', '更纱黑体 SC', 'PingFang SC', Georgia, Cambria, 'Times New Roman', serif;
+  font-weight: 400;
+  font-variation-settings: normal;
+  font-variant-ligatures: normal;
   font-variant-numeric: lining-nums;
   letter-spacing: -0.003em;
 }
 
-:is([data-markdown-root], .select-text, .prose, .markdown) :is(p, li, blockquote) {
+:is([data-markdown-root], [data-testid="user-message-content"], .agy-user-bubble, .select-text:not([role="dialog"] *), .prose, .markdown, article) :is(strong, b, h1, h2, h3, h4, h5, h6, th, .font-semibold, .font-bold) {
+  font-weight: 600;
+  font-variation-settings: normal;
+}
+
+:is([data-markdown-root], [data-testid="user-message-content"], .agy-user-bubble, .select-text:not([role="dialog"] *), .prose, .markdown, article) :is(i, em, .italic):not(.codicon, .google-symbols) {
+  font-style: italic !important;
+  font-variation-settings: normal;
+}
+
+:is([data-markdown-root], .select-text:not([role="dialog"] *), .prose, .markdown) :is(p, li, blockquote) {
   line-height: 1.62;
 }
 
 /* Windows DirectWrite 可变字体命名实例修正：Windows 版 AnthropicSerif TTF 仅暴露 TextLight (wght=300) 实例名，显式驱动 wght 轴还原 400 正文/斜体、500 中黑与 600 粗体/粗斜体 */
-html[data-ag-os="win32"] :is([data-markdown-root], [data-testid="user-message-content"], .agy-user-bubble, .select-text, .prose, .markdown, article),
-html[data-ag-os="win32"] :is([data-markdown-root], [data-testid="user-message-content"], .agy-user-bubble, .select-text, .prose, .markdown, article) :is(i, em, .italic) {
+html[data-ag-os="win32"] :is([data-markdown-root], [data-testid="user-message-content"], .agy-user-bubble, .select-text:not([role="dialog"] *), .prose, .markdown, article),
+html[data-ag-os="win32"] :is([data-markdown-root], [data-testid="user-message-content"], .agy-user-bubble, .select-text:not([role="dialog"] *), .prose, .markdown, article) :is(i, em, .italic) {
   font-variation-settings: 'wght' 400, 'opsz' 16 !important;
 }
 
-html[data-ag-os="win32"] :is([data-markdown-root], [data-testid="user-message-content"], .agy-user-bubble, .select-text, .prose, .markdown, article) .font-medium,
-html[data-ag-os="win32"] :is([data-markdown-root], [data-testid="user-message-content"], .agy-user-bubble, .select-text, .prose, .markdown, article) .font-medium :is(i, em, .italic) {
+html[data-ag-os="win32"] :is([data-markdown-root], [data-testid="user-message-content"], .agy-user-bubble, .select-text:not([role="dialog"] *), .prose, .markdown, article) .font-medium,
+html[data-ag-os="win32"] :is([data-markdown-root], [data-testid="user-message-content"], .agy-user-bubble, .select-text:not([role="dialog"] *), .prose, .markdown, article) .font-medium :is(i, em, .italic) {
   font-weight: 500 !important;
   font-variation-settings: 'wght' 500, 'opsz' 16 !important;
 }
 
-html[data-ag-os="win32"] :is([data-markdown-root], [data-testid="user-message-content"], .agy-user-bubble, .select-text, .prose, .markdown, article) :is(strong, b, h1, h2, h3, h4, h5, h6, th, .font-semibold, .font-bold),
-html[data-ag-os="win32"] :is([data-markdown-root], [data-testid="user-message-content"], .agy-user-bubble, .select-text, .prose, .markdown, article) :is(strong, b, h1, h2, h3, h4, h5, h6, th, .font-semibold, .font-bold) :is(i, em, .italic),
-html[data-ag-os="win32"][data-ag-page-type="plugin"] :where(h1, h2, h3, h4, h5, h6, b, strong, .swarm-title, .o2 .o2-h, .o2-goal > b, .o2-lb b, .o2-cb b, .o2-tht b) {
+html[data-ag-os="win32"] :is([data-markdown-root], [data-testid="user-message-content"], .agy-user-bubble, .select-text:not([role="dialog"] *), .prose, .markdown, article) :is(strong, b, h1, h2, h3, h4, h5, h6, th, .font-semibold, .font-bold),
+html[data-ag-os="win32"] :is([data-markdown-root], [data-testid="user-message-content"], .agy-user-bubble, .select-text:not([role="dialog"] *), .prose, .markdown, article) :is(strong, b, h1, h2, h3, h4, h5, h6, th, .font-semibold, .font-bold) :is(i, em, .italic) {
   font-weight: 600 !important;
   font-variation-settings: 'wght' 600, 'opsz' 16 !important;
 }
 
 html[data-ag-os="win32"] :is(code, pre, kbd, samp, .font-mono, [class*="language-"], .monaco-editor, .xterm),
 html[data-ag-os="win32"] :is(code, pre, kbd, samp, .font-mono, [class*="language-"], .monaco-editor, .xterm) *,
-html[data-ag-os="win32"] :is([data-markdown-root], [data-testid="user-message-content"], .agy-user-bubble, .select-text, .prose, .markdown, article) :is(code, pre, kbd, samp, .font-mono, [class*="language-"]),
-html[data-ag-os="win32"] :is([data-markdown-root], [data-testid="user-message-content"], .agy-user-bubble, .select-text, .prose, .markdown, article) :is(code, pre, kbd, samp, .font-mono, [class*="language-"]) :is(*, strong, b, i, em, .italic, .font-medium, .font-semibold, .font-bold) {
+html[data-ag-os="win32"] :is([data-markdown-root], [data-testid="user-message-content"], .agy-user-bubble, .select-text:not([role="dialog"] *), .prose, .markdown, article) :is(code, pre, kbd, samp, .font-mono, [class*="language-"]),
+html[data-ag-os="win32"] :is([data-markdown-root], [data-testid="user-message-content"], .agy-user-bubble, .select-text:not([role="dialog"] *), .prose, .markdown, article) :is(code, pre, kbd, samp, .font-mono, [class*="language-"]) :is(*, strong, b, i, em, .italic, .font-medium, .font-semibold, .font-bold) {
   font-variation-settings: normal !important;
 }
 
@@ -259,6 +318,7 @@ html[data-ag-wax-seal="off"] :is(#antigravity\.agentSidePanelInputBox, [id="anti
 }
 
 /* 输入框内部卡片 */
+body[data-agy-theme] .surface-composer > .surface-composer-card,
 body[data-agy-theme][data-newux-theme="onyx"] .surface-composer > .surface-composer-card,
 .surface-composer-card.bg-card,
 [id="antigravity.agentSidePanelInputBox"] .surface-composer-card,
@@ -270,6 +330,7 @@ body[data-agy-theme][data-newux-theme="onyx"] .surface-composer > .surface-compo
   transition: box-shadow 250ms cubic-bezier(0.16, 1, 0.3, 1), border-color 250ms ease !important;
 }
 
+body[data-agy-theme] .surface-composer:focus-within > .surface-composer-card,
 body[data-agy-theme][data-newux-theme="onyx"] .surface-composer:focus-within > .surface-composer-card,
 .surface-composer:focus-within > .surface-composer-card,
 .surface-composer-card:focus-within,
@@ -290,7 +351,6 @@ body[data-agy-theme][data-newux-theme="onyx"] .surface-composer:focus-within > .
 
 :is(#antigravity\.agentSidePanelInputBox, [id="antigravity.agentSidePanelInputBox"]) :is([class*="text-secondary-foreground"]:not(#ag-live-metrics-pill *):not(.ag-live-metrics-pill *):not([data-ag-metrics-pill] *), button, span:not(#ag-live-metrics-pill):not(#ag-live-metrics-pill *):not(.ag-live-metrics-pill):not(.ag-live-metrics-pill *):not([data-ag-metrics-pill]):not([data-ag-metrics-pill] *)):not([data-lexical-editor="true"]):not([data-lexical-editor="true"] *) {
   font-weight: 500 !important;
-  letter-spacing: -0.012em !important;
   text-shadow: var(--ag-ink-shadow-md);
 }
 
@@ -373,11 +433,10 @@ html[data-ag-preset] #antigravity\.agentSidePanelInputBox [data-testid="voice-li
   display: flex !important;
 }
 
-/* 6. 侧边栏、对话列表、下拉菜单与设置弹窗统一排版与色彩变量绑定 */
+/* 6. 侧边栏、对话列表、下拉菜单与设置弹窗统一排版与色彩变量绑定（交还原生 Google Sans Flex 字距，避免与 wdth:92 叠加过紧） */
 .bg-sidebar :is(a, button, [class*="truncate"], [class*="text-sm"], [class*="text-xs"]),
 aside :is(a, button) {
   font-weight: 450 !important;
-  letter-spacing: -0.012em !important;
   color: var(--ag-sidebar-fg, #262422) !important;
   text-shadow: var(--ag-ink-shadow-sm);
 }
@@ -388,7 +447,6 @@ aside :is(a, button) {
 .agy-sidebar-row:not([data-selected="true"]) span.truncate,
 aside [data-testid="conversation-row-sidebar"]:not([data-selected="true"]) span {
   font-weight: 400 !important;
-  letter-spacing: -0.005em !important;
   color: var(--ag-sidebar-row-fg, #262422) !important;
   text-shadow: none !important;
 }
@@ -406,7 +464,6 @@ button[data-project-card="true"],
 button[data-testid="project-header"] span,
 button[data-project-card="true"] span {
   font-weight: 450 !important;
-  letter-spacing: -0.01em !important;
   color: var(--ag-sidebar-header-title-fg, #2C2B29) !important;
   text-shadow: var(--ag-ink-shadow-xs) !important;
 }
@@ -426,12 +483,7 @@ button[data-project-card="true"] span {
 
 .bg-sidebar :is([class*="text-muted"], [class*="text-[11px]"], [class*="uppercase"]) {
   font-weight: 500 !important;
-  letter-spacing: -0.005em !important;
   color: var(--ag-sidebar-muted-fg, #7A7670) !important;
-}
-
-button, [role="button"], select {
-  letter-spacing: -0.012em;
 }
 
 [role="menu"], [role="menuitem"], [role="listbox"], [role="option"], [data-select-popup], [data-testid="title-menu-bar"], [data-testid="title-menu-bar-item"], [data-testid="title-menu-bar-option"], .agy-overlay, .agy-overlay-item, [data-radix-menu-content], [data-radix-popper-content-wrapper], [data-side] {
@@ -441,14 +493,12 @@ button, [role="button"], select {
 [role="option"]:not([data-disabled]),
 [data-testid="title-menu-bar-option"] {
   font-weight: 450 !important;
-  letter-spacing: -0.01em !important;
   color: var(--ag-menu-item-fg, #1F1E1D) !important;
 }
 
 [role="menu"] :is([role="menuitem"], .agy-overlay-item, [class*="truncate"], [class*="text-xs"], [class*="text-[13px]"], span),
 .agy-overlay .agy-overlay-item {
   font-weight: 400 !important;
-  letter-spacing: -0.01em !important;
   color: var(--ag-menu-item-fg, #1F1E1D) !important;
 }
 
@@ -457,14 +507,12 @@ button, [role="button"], select {
 .agy-overlay .agy-overlay-item > span,
 .agy-overlay .agy-overlay-item :is(span[class*="flex-1"], span.truncate) {
   font-weight: 450 !important;
-  letter-spacing: -0.01em !important;
   color: var(--ag-menu-item-fg, #1F1E1D) !important;
 }
 
 [role="menu"] :is([class*="font-medium"], [class*="text-muted-foreground"], h2, h3, h4),
 .agy-overlay :is([class*="font-medium"], [class*="text-muted-foreground"]) {
   font-weight: 500 !important;
-  letter-spacing: -0.01em !important;
   color: var(--ag-menu-header-fg, #1A1A1A) !important;
 }
 
@@ -474,13 +522,11 @@ button, [role="button"], select {
 
 [role="dialog"] :is(h2, h3) {
   font-weight: 500 !important;
-  letter-spacing: -0.01em !important;
   color: var(--ag-dialog-title-fg, #1F1E1D) !important;
 }
 
 [role="dialog"] :is(.agy-card, [class*="agy-card"], [class*="divide-border"]) span.text-sm {
   font-weight: 450 !important;
-  letter-spacing: -0.01em !important;
   color: var(--ag-dialog-item-fg, #1F1E1D) !important;
   text-shadow: var(--ag-ink-shadow-xs) !important;
 }
@@ -631,8 +677,10 @@ html:not([data-ag-theme-mode="dark"])[data-ag-preset="vintage-deep"] body:not(.d
   --code-foreground: #332D25 !important;
 }
 
-/* 白天模式侧栏选中项与高对比边框细节 */
-body[data-agy-theme][data-newux-theme="onyx"]:not(.dark) .agy-sidebar-row[data-selected="true"] {
+/* 白天模式侧栏选中项与高对比边框细节（兼容 2.33.0+ 移除 data-newux-theme="onyx" 后的纯 body[data-agy-theme] 选择器） */
+body[data-agy-theme]:not(.dark) .agy-sidebar-row[data-selected="true"],
+body[data-agy-theme][data-newux-theme="onyx"]:not(.dark) .agy-sidebar-row[data-selected="true"],
+html:not([data-ag-theme-mode="dark"]) body:not(.dark) .agy-sidebar-row[data-selected="true"] {
   background-color: var(--sidebar-secondary) !important;
   --row-bg: var(--sidebar-secondary) !important;
   box-shadow: none !important;
@@ -755,6 +803,7 @@ html[data-ag-preset] body[data-agy-theme].dark {
 }
 
 /* 黑夜模式侧栏选中态：还原官方 onyx.dark 立体微高光胶囊 (#1F1F24) */
+body[data-agy-theme].dark .agy-sidebar-row[data-selected="true"],
 body[data-agy-theme][data-newux-theme="onyx"].dark .agy-sidebar-row[data-selected="true"],
 :is(html[data-ag-theme-mode="dark"] body, body.dark) .agy-sidebar-row[data-selected="true"] {
   background-color: var(--onyx-selected, #1F1F24) !important;
@@ -880,6 +929,7 @@ html[data-ag-dark-preset="claude-warm"][data-ag-preset] body[data-agy-theme].dar
   --code-foreground: #EDE9D9 !important;
 }
 
+html[data-ag-dark-preset="claude-warm"] body[data-agy-theme].dark .agy-sidebar-row[data-selected="true"],
 html[data-ag-dark-preset="claude-warm"] body[data-agy-theme][data-newux-theme="onyx"].dark .agy-sidebar-row[data-selected="true"],
 :is(html[data-ag-dark-preset="claude-warm"][data-ag-theme-mode="dark"] body, html[data-ag-dark-preset="claude-warm"] body.dark) .agy-sidebar-row[data-selected="true"] {
   box-shadow: inset 0 1px 0 rgba(243, 240, 228, 0.08), inset 0 0 0 1px rgba(243, 240, 228, 0.07) !important;

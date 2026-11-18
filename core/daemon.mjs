@@ -2,9 +2,9 @@
 /**
  * chuanban-antigravity-theme-patch · CDP Theme & Live Metrics Daemon (core/daemon.mjs)
  *
- * 架构特性（v5.4.3）：
+ * 架构特性（v5.5.0）：
  * 1. 动态 Node 分级：
- *    - Node >= 22.0：完整启用昼夜双模式独立主题（暖纸浅色三预设 + 深色 onyx / claude-warm 双预设）、四层字体、输入框三态、1790条母语级汉化、宿主独占指纹门禁、死锁与冷启动兜底包自愈及 2.32.2/2.32.1 curtainView/Swarm 适配。
+ *    - Node >= 22.0：完整启用昼夜双模式独立主题（暖纸浅色三预设 + 深色 onyx / claude-warm 双预设）、Google Sans Flex 原生西文引擎 × 更纱黑体 UI 精密字重桥接 + Anthropic Serif 正文、输入框三态、1860条母语级汉化、宿主独占指纹门禁、死锁与冷启动兜底包自愈及 2.33.0+ CDP Opt-in 自动接力（M2）。
  *    - Node >= 22.13：动态 `await import('node:sqlite')` 解锁底部实时会话指标胶囊（O(1) 增量尾行解析 + WSL2 双轨只读读取）；低版本优雅降级绝不崩溃。
  * 2. 模块化与热重载：
  *    - 周期性检测 `user/config.json`、`user/custom.css`、`user/i18n.override.json`、`user/custom.js` 的 mtime，
@@ -20,7 +20,7 @@ import path from 'node:path';
 import os from 'node:os';
 import http from 'node:http';
 import crypto from 'node:crypto';
-import { execFile, spawnSync } from 'node:child_process';
+import { execFile, spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -288,7 +288,7 @@ function resolveActiveChannelEndpoints(channelMode = 'auto', userCfg = {}) {
 // ============================================================================
 // 2. 动态构建注入载荷（支持 core/ + user/ 实时合并与热更新签名）
 // ============================================================================
-const BASE_VERSION = '20261118-v5.4.3';
+const BASE_VERSION = '20261119-v5.5.0';
 let cachedBundleSig = '';
 let cachedInjectScript = '';
 let cachedPatchVersion = '';
@@ -332,6 +332,7 @@ let activeConfig = {
     deadlockHealer: true,
     coldBootHealer: true,
     zoomShortcuts: true,
+    cdpAutoRelaunch: true,
     customCss: true,
     customJs: true
   },
@@ -530,6 +531,7 @@ function rebuildBundleIfNeeded() {
       deadlockHealer: true,
       coldBootHealer: true,
       zoomShortcuts: true,
+      cdpAutoRelaunch: true,
       customCss: true,
       customJs: true
     },
@@ -3440,6 +3442,346 @@ function ensureZhTitlePatchIfPresent() {
 }
 
 const fallbackBackoffUntil = new Map();
+const CDP_RELAUNCH_GUARD_FILE = path.join(os.tmpdir(), 'ag-cdp-relaunch-guard.json');
+const ignoredUnflaggedHostPids = new Set();
+let isCdpRelaunching = false;
+
+function parsePosixEtimeSeconds(raw) {
+  const s = String(raw || '').trim();
+  if (!s) return Infinity;
+  let days = 0;
+  let rest = s;
+  const dashIdx = s.indexOf('-');
+  if (dashIdx !== -1) {
+    days = parseInt(s.slice(0, dashIdx), 10);
+    if (!Number.isFinite(days)) return Infinity;
+    rest = s.slice(dashIdx + 1);
+  }
+  const parts = rest.split(':').map((p) => parseInt(p, 10));
+  if (parts.some((n) => !Number.isFinite(n))) return Infinity;
+  if (parts.length === 3) return days * 86400 + parts[0] * 3600 + parts[1] * 60 + parts[2];
+  if (parts.length === 2) return days * 86400 + parts[0] * 60 + parts[1];
+  if (parts.length === 1) return days * 86400 + parts[0];
+  return Infinity;
+}
+
+function isPidAlive(pid) {
+  if (!pid || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (err) {
+    return Boolean(err && err.code === 'EPERM');
+  }
+}
+
+function pruneIgnoredHostPids() {
+  for (const pid of Array.from(ignoredUnflaggedHostPids)) {
+    if (!isPidAlive(pid)) {
+      ignoredUnflaggedHostPids.delete(pid);
+    }
+  }
+}
+
+function probeRunningHostProcesses(channelMode = 'auto', endpoints = []) {
+  const allowStable = channelMode !== 'insiders';
+  const allowInsiders = channelMode !== 'stable';
+
+  if (process.platform === 'darwin') {
+    const res = spawnSync('ps', ['-axo', 'pid=,etime=,command='], {
+      encoding: 'utf8',
+      timeout: 2500
+    });
+    if (res.status !== 0 || !res.stdout) return [];
+    const found = [];
+    for (const line of String(res.stdout).split(/\r?\n/)) {
+      const m = line.trim().match(/^(\d+)\s+(\S+)\s+(.+)$/);
+      if (!m) continue;
+      const pid = parseInt(m[1], 10);
+      const etimeRaw = m[2];
+      const cmd = m[3];
+      if (!pid || /\s--type=/.test(cmd) || /Helper(?:\s|\.|\/)/i.test(cmd)) continue;
+      const appMatch = cmd.match(/^(\S.*?\/Antigravity(?:\s-\sInsiders)?\.app)\/Contents\/MacOS\/(Antigravity(?:\s-\sInsiders)?)(?:\s|$)/);
+      if (!appMatch) continue;
+      const appPath = appMatch[1];
+      const binName = appMatch[2];
+      const ch = /Insiders/i.test(binName) ? 'insiders' : 'stable';
+      if ((ch === 'stable' && !allowStable) || (ch === 'insiders' && !allowInsiders)) continue;
+      found.push({
+        pid,
+        channel: ch,
+        elapsedSec: parsePosixEtimeSeconds(etimeRaw),
+        appPath,
+        exePath: `${appPath}/Contents/MacOS/${binName}`,
+        cmd,
+        hasCdpFlag: /--remote-debugging-port(?:=|\s|$)/.test(cmd),
+        hasUpdatedFlag: /--updated(?:\s|$)/.test(cmd)
+      });
+    }
+    return found;
+  }
+
+  if (process.platform === 'win32') {
+    // 零开销预筛：先用原生 C++ tasklist (<18ms) 检查是否存在尚未评估过的 Antigravity 主映像 PID，杜绝空闲态周期性拉起 PowerShell
+    const imageNames = [];
+    if (allowStable) imageNames.push('Antigravity.exe');
+    if (allowInsiders && endpoints.some((ep) => ep.channel === 'insiders' && ep.channelInstalled)) {
+      imageNames.push('Antigravity - Insiders.exe');
+    }
+    const candidatePids = [];
+    for (const img of imageNames) {
+      const tl = spawnSync('tasklist', ['/FI', `IMAGENAME eq ${img}`, '/FO', 'CSV', '/NH'], {
+        windowsHide: true,
+        encoding: 'utf8',
+        timeout: 2500
+      });
+      if (tl.status === 0 && tl.stdout) {
+        for (const row of String(tl.stdout).split(/\r?\n/)) {
+          const cm = row.trim().match(/^"([^"]+)","(\d+)"/);
+          if (cm && cm[1].toLowerCase() === img.toLowerCase()) {
+            const p = parseInt(cm[2], 10);
+            if (p > 0 && !ignoredUnflaggedHostPids.has(p)) {
+              candidatePids.push(p);
+            }
+          }
+        }
+      }
+    }
+    if (candidatePids.length === 0) return [];
+
+    const psCmd = [
+      `$ErrorActionPreference = 'SilentlyContinue'`,
+      `$now = [DateTime]::UtcNow`,
+      `$procs = Get-CimInstance Win32_Process -Filter "Name = 'Antigravity.exe' OR Name = 'Antigravity - Insiders.exe'"`,
+      `$out = @()`,
+      `foreach ($p in $procs) {`,
+      `  $cmd = [string]$p.CommandLine`,
+      `  if ($cmd -match '--type=|--crashpad-handler|--utility-sub-type=') { continue }`,
+      `  $age = if ($p.CreationDate) { [Math]::Max(0, [int][Math]::Round(($now - ([DateTime]$p.CreationDate).ToUniversalTime()).TotalSeconds)) } else { 999999 }`,
+      `  $out += @{ pid = [int]$p.ProcessId; name = [string]$p.Name; exe = [string]$p.ExecutablePath; cmd = $cmd; elapsedSec = $age }`,
+      `}`,
+      `$out | ConvertTo-Json -Compress`
+    ].join('; ');
+    const cim = spawnSync('powershell', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', psCmd], {
+      windowsHide: true,
+      encoding: 'utf8',
+      timeout: 5000
+    });
+    if (cim.status !== 0 || !cim.stdout || !cim.stdout.trim()) return [];
+    let parsed = [];
+    try {
+      const rawJson = JSON.parse(cim.stdout.trim());
+      parsed = Array.isArray(rawJson) ? rawJson : rawJson ? [rawJson] : [];
+    } catch {
+      return [];
+    }
+    return parsed
+      .map((item) => {
+        const ch = /insiders/i.test(item.name || item.exe || '') ? 'insiders' : 'stable';
+        const cmd = String(item.cmd || '');
+        return {
+          pid: Number(item.pid) || 0,
+          channel: ch,
+          elapsedSec: Number.isFinite(Number(item.elapsedSec)) ? Number(item.elapsedSec) : Infinity,
+          appPath: '',
+          exePath: String(item.exe || ''),
+          cmd,
+          hasCdpFlag: /--remote-debugging-port(?:=|\s|$)/i.test(cmd),
+          hasUpdatedFlag: /--updated(?:\s|$)/i.test(cmd)
+        };
+      })
+      .filter(
+        (p) =>
+          p.pid > 0 &&
+          p.exePath &&
+          ((p.channel === 'stable' && allowStable) || (p.channel === 'insiders' && allowInsiders))
+      );
+  }
+
+  if (process.platform === 'linux') {
+    const res = spawnSync('ps', ['-axo', 'pid=,etime=,command='], {
+      encoding: 'utf8',
+      timeout: 2500
+    });
+    if (res.status !== 0 || !res.stdout) return [];
+    const found = [];
+    for (const line of String(res.stdout).split(/\r?\n/)) {
+      const m = line.trim().match(/^(\d+)\s+(\S+)\s+(.+)$/);
+      if (!m) continue;
+      const pid = parseInt(m[1], 10);
+      const etimeRaw = m[2];
+      const cmd = m[3];
+      if (!pid || /\s--type=|--crashpad|daemon\.mjs|install\.mjs/.test(cmd)) continue;
+      const binMatch = cmd.match(/^(\/\S*\/antigravity(?:-insiders)?)(?:\s|$)/i);
+      if (!binMatch) continue;
+      const exePath = binMatch[1];
+      const ch = /insiders/i.test(exePath) ? 'insiders' : 'stable';
+      if ((ch === 'stable' && !allowStable) || (ch === 'insiders' && !allowInsiders)) continue;
+      found.push({
+        pid,
+        channel: ch,
+        elapsedSec: parsePosixEtimeSeconds(etimeRaw),
+        appPath: '',
+        exePath,
+        cmd,
+        hasCdpFlag: /--remote-debugging-port(?:=|\s|$)/.test(cmd),
+        hasUpdatedFlag: /--updated(?:\s|$)/.test(cmd)
+      });
+    }
+    return found;
+  }
+
+  return [];
+}
+
+function hasActiveConversationWalWrite(endpoint, windowSec = 15) {
+  if (!endpoint) return false;
+  const dirs = [endpoint.conversationsDir].filter(Boolean);
+  if (process.platform === 'win32') {
+    const cachedWsl = wslDirsCache.get(path.join(path.dirname(endpoint.portFile || ''), 'wsl_state.json'));
+    if (cachedWsl && Array.isArray(cachedWsl.dirs)) {
+      dirs.push(...cachedWsl.dirs);
+    }
+  }
+  const now = Date.now();
+  const windowMs = windowSec * 1000;
+  for (const dir of dirs) {
+    try {
+      if (!fs.existsSync(dir)) continue;
+      for (const name of fs.readdirSync(dir)) {
+        if (!name.endsWith('.db-wal')) continue;
+        const st = fs.statSync(path.join(dir, name), { throwIfNoEntry: false });
+        if (st && st.size > 4096 && now - st.mtimeMs < windowMs) {
+          return true;
+        }
+      }
+    } catch {}
+  }
+  return false;
+}
+
+function maybeAutoRelaunchColdStartWithoutCdp() {
+  if (
+    SAFE_MODE ||
+    RUN_ONCE ||
+    isCdpRelaunching ||
+    !activeConfig.enabled ||
+    activeConfig.modules?.cdpAutoRelaunch === false
+  ) {
+    return false;
+  }
+
+  pruneIgnoredHostPids();
+  const hostProcs = probeRunningHostProcesses(activeConfig.channel, activeConfig.endpoints);
+  if (hostProcs.length === 0) return false;
+
+  for (const proc of hostProcs) {
+    if (proc.hasCdpFlag) continue;
+    if (ignoredUnflaggedHostPids.has(proc.pid)) continue;
+
+    const ep = activeConfig.endpoints.find((e) => e.channel === proc.channel) || activeConfig.endpoints[0];
+    if (ep && readPort(ep.portFile)) continue;
+
+    const maxWindowSec = proc.hasUpdatedFlag ? 25 : 12;
+    if (proc.elapsedSec > maxWindowSec) {
+      ignoredUnflaggedHostPids.add(proc.pid);
+      const msg = `[Daemon] Detected running Antigravity (${proc.channel}, PID ${proc.pid}, uptime ${proc.elapsedSec}s) started without --remote-debugging-port; skipping auto-relaunch to protect active session. Run \`node ${path.join(ROOT_DIR, 'install.mjs')} relaunch\` when idle.`;
+      console.log(msg);
+      logDaemonEvent(msg);
+      continue;
+    }
+
+    if (hasActiveConversationWalWrite(ep, 15)) {
+      ignoredUnflaggedHostPids.add(proc.pid);
+      const msg = `[Daemon] Skipped cold-start auto-relaunch for PID ${proc.pid}: active conversation WAL write detected within 15s.`;
+      console.log(msg);
+      logDaemonEvent(msg);
+      continue;
+    }
+
+    const guard = readJsonSafe(CDP_RELAUNCH_GUARD_FILE, {});
+    const handledPids = Array.isArray(guard.handledPids) ? guard.handledPids.map((n) => Number(n)).filter(Boolean) : [];
+    const lastAt = Number(guard.lastRelaunchAtMs) || 0;
+    if (handledPids.includes(proc.pid) || Date.now() - lastAt < 60000) {
+      ignoredUnflaggedHostPids.add(proc.pid);
+      logDaemonEvent(
+        `Skipped cold-start auto-relaunch for PID ${proc.pid}: guard cooldown active (lastRelaunchDeltaMs=${Date.now() - lastAt}).`
+      );
+      continue;
+    }
+
+    isCdpRelaunching = true;
+    try {
+      ignoredUnflaggedHostPids.add(proc.pid);
+      const nextGuard = {
+        lastRelaunchAtMs: Date.now(),
+        lastChannel: proc.channel,
+        lastOldPid: proc.pid,
+        reason: proc.hasUpdatedFlag ? 'cold-start-post-update' : 'cold-start-unflagged',
+        handledPids: Array.from(new Set([...handledPids.slice(-15), proc.pid]))
+      };
+      try {
+        fs.writeFileSync(CDP_RELAUNCH_GUARD_FILE, `${JSON.stringify(nextGuard, null, 2)}\n`, 'utf8');
+      } catch {}
+
+      // 终止刚冷启动的无标记主进程，并严格等待其释放 SingletonLock 后再拉起带 --remote-debugging-port=0 的新进程
+      if (process.platform === 'win32') {
+        const stopPs = [
+          `$gp = Get-Process -Id ${proc.pid} -ErrorAction SilentlyContinue`,
+          `if ($gp) { [void]$gp.CloseMainWindow(); Start-Sleep -Milliseconds 300; Stop-Process -Id ${proc.pid} -Force -ErrorAction SilentlyContinue }`
+        ].join('; ');
+        spawnSync('powershell', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', stopPs], {
+          windowsHide: true,
+          stdio: 'ignore',
+          timeout: 4000
+        });
+      } else {
+        try {
+          process.kill(proc.pid, 'SIGTERM');
+        } catch {}
+      }
+
+      for (let i = 0; i < 55; i++) {
+        if (!isPidAlive(proc.pid)) break;
+        sleepSync(80);
+      }
+      if (isPidAlive(proc.pid) && process.platform !== 'win32') {
+        try {
+          process.kill(proc.pid, 'SIGKILL');
+        } catch {}
+        for (let i = 0; i < 15 && isPidAlive(proc.pid); i++) {
+          sleepSync(60);
+        }
+      }
+      // 预留极短排空窗口确保 Electron SingletonLock 文件句柄完全释放
+      sleepSync(180);
+
+      if (process.platform === 'darwin' && proc.appPath) {
+        spawnSync('/usr/bin/open', ['-a', proc.appPath, '--args', '--remote-debugging-port=0'], {
+          stdio: 'ignore',
+          timeout: 5000
+        });
+      } else if (proc.exePath) {
+        const child = spawn(proc.exePath, ['--remote-debugging-port=0'], {
+          detached: true,
+          stdio: 'ignore',
+          windowsHide: false
+        });
+        child.unref();
+      }
+
+      const okMsg = `[Daemon] Cold-start auto-relaunched Antigravity (${proc.channel}, old PID ${proc.pid}, age ${proc.elapsedSec}s) with --remote-debugging-port=0.`;
+      console.log(okMsg);
+      logDaemonEvent(okMsg);
+      return true;
+    } catch (err) {
+      logDaemonEvent(`Cold-start auto-relaunch error for PID ${proc.pid}: ${err?.message || err}`);
+    } finally {
+      isCdpRelaunching = false;
+    }
+  }
+  return false;
+}
 
 function trimPosixDaemonLogsIfNeeded() {
   if (process.platform === 'win32') return;
@@ -3564,6 +3906,11 @@ async function sync() {
     // 先同步宿主 page 目标以获取权威深浅色状态，再同步子 Swarm iframe（确保 --once 与冷启动零闪烁）
     await syncTargetBatch(pendingPages);
     await syncTargetBatch(pendingIframes);
+
+    // 2.33.0+ 冷启动无标记自愈（M2）：仅在 0 活跃 CDP 目标时按严苛冷启动时间窗探测并自动接力重启
+    if (pendingPages.length === 0 && attachedTargets.size === 0) {
+      maybeAutoRelaunchColdStartWithoutCdp();
+    }
 
     // 清理已关闭的目标连接
     for (const [id, entry] of attachedTargets.entries()) {

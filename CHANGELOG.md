@@ -4,6 +4,28 @@
 
 ---
 
+## [v5.5.0] - 2026-11-19
+
+> **适用版本**：Antigravity `2.33.0+`（macOS `CL=1023160026` / Windows `CL=1028566590`，向下完全兼容 `2.32.x` / `2.31.x` / `2.30.0`）  
+> **核心定位**：`2.33.0` `cdpPipe` 迁移后的 **`M1 + M2` 零侵入双保险 CDP Opt-in 启动架构** + **UI 西文原生切换 `Google Sans Flex` 可变字体引擎 × 中文更纱黑体精密字重桥接** + **`data-newux-theme` 移除兼容** + **`1,860` 条零冲突词典**
+
+### Changed & Added（`2.33.0+` `M1 + M2` 启动接力架构、UI `Google Sans Flex` 原生引擎迁移与 `1,860` 条词典）
+- **落地 `M1 + M2` 双保险零侵入 CDP Opt-in 启动接力机制，根治 `2.33.0` 默认移除 `DevToolsActivePort` 导致的注入断联（`install.mjs` / `core/daemon.mjs` / `user/config.json`）**：
+  - **根因背景**：Antigravity `2.33.0` 将内置浏览器操控通道切换至匿名管道 `cdpPipe.js`，主进程移除无条件 `appendSwitch('remote-debugging-port', '0')` 并在未传参启动时调用 `removeStaleActivePortFile()` 清理 `DevToolsActivePort`（显式传入 `--remote-debugging-port=0` 时则原生保留 `0o600` 端口文件）；同时 Windows `electron-updater` `quitAndInstall()` 更新重启会以 `--updated --force-run` 吞掉快捷方式参数；
+  - **M1（单图标原地打标与一键平滑接力 `relaunch`）**：Windows 端自动幂等扫描并原地修补桌面、公共桌面、开始菜单与任务栏 `Antigravity.lnk` 快捷方式参数，Linux 端写入 `~/.local/share/applications/antigravity.desktop`；macOS 端默认采用**单图标纯净模式**（不生成第二个应用图标，仅在显式传 `--with-launcher` 时才按需生成带 `LSUIElement` 的启动器，默认安装时自动注销并回收历史 `(Theme).app`）；新增 `node install.mjs relaunch [--channel ...] [--force]` 子命令（默认内置 15s `.db-wal` 活跃对话防误杀门禁、SingletonLock 释放等待与重注验收）；
+  - **M2（后台守护进程早期冷启动无感自动接力 `cdpAutoRelaunch`）**：当 `daemon.mjs` 处于 0 活跃 CDP 目标时（Windows 端前置 `<18ms` 原生 `tasklist` 零 PowerShell 空闲开销预筛），若探测到无 `--remote-debugging-port` 启动的客户端处于严苛冷启动窗口内（常规启动 `<= 12s`、更新重启 `--updated <= 25s`）、近 15s 无活跃会话 `.db-wal` 写入且未触发 60s 冷却防死锁，自动优雅终止并补挂 `--remote-debugging-port=0` 接力拉起；对运行已超窗口期的存量会话严格豁免（每 PID 仅输出单行提醒，绝不刷屏、绝不误杀）。
+- **UI 西文排版全面切换至官方原生 `Google Sans Flex` 可变字体引擎，保留更纱黑体与对话正文 `Anthropic Serif`（`core/theme.css` / `core/runtime.js` / `install.mjs`）**：
+  - 移除 `Anthropic Sans` `@font-face` 与 UI 负字距覆盖，完整放行官方 `<body data-agy-font="google-sans">` 的可变字重阶梯（`350 / 450 / 550 / 650`）、`wdth: 92`、`ROND: 0/20` 与 `slnt: -10` 光学斜体轴（同时保留用户切换官方 `Inter` 偏好的分支）；
+  - 新增内部桥接族 `AgSarasaUI` `@font-face`（`100..299 -> Light`、`300..499 -> Regular`、`500..639 -> SemiBold`、`640..900 -> Bold` 及其斜体），紧随 `'Google Sans Flex', 'Google Sans'` 之后、排在 `system-ui / Segoe UI` 之前，彻底解决官方 `350` 字重导致 `Sarasa-SuperTTC` 向下误落 `Light (300)` 发虚及 Windows `FontLink` 微软雅黑截胡两大隐患；
+  - 对话正文与 Markdown/Artifact（`[data-markdown-root]` 等）100% 保持 `Anthropic Serif` + `Sarasa Mono Slab SC` 经典书卷衬线，并在正文容器局部重置 `--agy-gsf-fvs: normal` / `--agy-gsf-italic: italic` / `400-700` 标准字重阶梯，严密隔离外层 `wdth: 92` 窄轴污染；`Swarm` 独立子帧同步挂载 `Google Sans Flex` 缓存字体表。
+- **修复 `2.33.0` 移除 `data-newux-theme="onyx"` 后的选择器失配与 `doctor` 假绿盲区（`core/theme.css` / `install.mjs`）**：
+  - 为浅色/深色/暖炭深色侧栏选中项 `.agy-sidebar-row[data-selected="true"]` 与 `.surface-composer-card` 补齐无 `data-newux-theme` 的 `body[data-agy-theme]` 并列选择器，防止 `2.33.0` 新增原生内阴影微框穿透暖纸侧栏；
+  - `node install.mjs doctor` 新增客户端版本、运行主进程参数与 `cdpStatus`（`ready` / `missing_opt_in_flag` / `app_not_running`）探测，未带端口运行时明确返回 `ok: false` 与 `remediation` 引导，消除静默假绿。
+- **扩充静态汉化词典 70 条至 `1,860` 条（`core/i18n.json`）**：
+  - 覆盖 `2.33.0` 新增插件组合包（`Bundles`）、内置浏览器数据与按站点管理 Cookie、快捷键方案（`Keybinding Scheme`）、外观字体 `System UI` / `Appears larger on mobile`、支线提问插入主对话、语音听写麦克风状态、虚拟机初始化流程（`Setup Script`）与蜂群回放对比文案，严格保持 0 大小写与弯直引号碰撞。
+
+---
+
 ## [v5.4.3] - 2026-11-18
 
 > **适用版本**：Antigravity `2.32.2+` / `2.32.1`（`CL=1022991777`，向下完全兼容 `2.32.0` / `2.31.x` / `2.30.0`）  

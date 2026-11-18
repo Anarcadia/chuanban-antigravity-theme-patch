@@ -106,7 +106,7 @@
     }
   }
 
-  const PATCH_VERSION = boot.version || '20261118-v5.4.3';
+  const PATCH_VERSION = boot.version || '20261119-v5.5.0';
   const DETECTED_OS =
     boot.platform || (/Win/i.test(navigator.platform || '') ? 'win32' : /Mac/i.test(navigator.platform || '') ? 'darwin' : 'linux');
   const ENABLED = boot.enabled !== false;
@@ -122,6 +122,7 @@
       deadlockHealer: true,
       coldBootHealer: true,
       zoomShortcuts: true,
+      cdpAutoRelaunch: true,
       customCss: true,
       customJs: true
     },
@@ -493,6 +494,8 @@
     if (s1) s1.remove();
     const s2 = document.getElementById('antigravity-user-custom-style');
     if (s2) s2.remove();
+    const sSwarmFont = document.getElementById('ag-swarm-google-fonts');
+    if (sSwarmFont) sSwarmFont.remove();
     try {
       document.querySelectorAll('#ag-live-metrics-pill, .ag-live-metrics-pill, [data-ag-metrics-pill]').forEach((el) => el.remove());
       document.querySelectorAll('[data-ag-row-mode]').forEach((el) => el.removeAttribute('data-ag-row-mode'));
@@ -692,9 +695,30 @@
   }
 
   // ============================================================================
-  // 1. 注入更纱黑体与主题样式（#ag-custom-fonts -> #ag-user-theme-vars -> #antigravity-user-custom-style）
+  // 1. 注入 Google Sans Flex（Swarm 帧缓存复用）、更纱黑体与主题样式（#ag-custom-fonts -> #ag-user-theme-vars -> #antigravity-user-custom-style）
   // ============================================================================
   const headTarget = document.head || document.getElementsByTagName('head')[0] || document.documentElement;
+
+  if (
+    IS_SWARM_PLUGIN_FRAME &&
+    headTarget &&
+    !document.getElementById('agy-new-themes-fonts') &&
+    !document.getElementById('ag-swarm-google-fonts')
+  ) {
+    try {
+      const gfLink = document.createElement('link');
+      gfLink.id = 'ag-swarm-google-fonts';
+      gfLink.rel = 'stylesheet';
+      gfLink.href =
+        'https://fonts.googleapis.com/css2?family=Google+Sans:ital,wght@0,400..700;1,400..700&family=Google+Sans+Flex:ROND,opsz,slnt,wdth,wght@0..100,6..144,-10..0,92..100,100..1000&display=swap';
+      gfLink.onerror = () => {
+        try {
+          gfLink.remove();
+        } catch (e) {}
+      };
+      headTarget.appendChild(gfLink);
+    } catch (e) {}
+  }
 
   let style = document.getElementById('ag-custom-fonts');
   if (!style) {
