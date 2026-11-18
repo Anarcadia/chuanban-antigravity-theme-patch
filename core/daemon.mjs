@@ -502,6 +502,9 @@ function rebuildBundleIfNeeded() {
     rawDarkPreset === '暖炭'
       ? 'claude-warm'
       : 'onyx';
+  if (activeConfig && darkPreset !== activeConfig.darkPreset) {
+    targetDarkPresets.clear();
+  }
   const rawCtxLimit = Number(userCfg.contextLimit);
   const contextLimit = Number.isFinite(rawCtxLimit) && rawCtxLimit > 0 ? rawCtxLimit : 256000;
   const rawCtxOverride = Number(userCfg.contextLimitOverride);
@@ -567,6 +570,13 @@ function rebuildBundleIfNeeded() {
   ) {
     normalizedSelectors.excludeI18n +=
       ', [data-testid="conversation-row-history"] a[href^="/c/"], [data-testid="conversation-row-history"] span.truncate';
+  }
+  if (
+    typeof normalizedSelectors.excludeI18n === 'string' &&
+    normalizedSelectors.excludeI18n.trim() &&
+    !normalizedSelectors.excludeI18n.includes('ag-live-metrics-pill')
+  ) {
+    normalizedSelectors.excludeI18n += ', .ag-live-metrics-pill, [data-ag-metrics-pill]';
   }
 
   const DEFAULT_ALLOWED_ORIGINS = [
@@ -664,14 +674,16 @@ function rebuildBundleIfNeeded() {
   return true;
 }
 
-rebuildBundleIfNeeded();
-
 // ============================================================================
 // 3. 单实例 PID 锁与协作式所有权围栏（防跨周期陈旧锁自杀、防跨完整性双实例并存）
 // ============================================================================
 const attachedTargets = new Map();
 const targetThemeModes = new Map();
+const targetDarkPresets = new Map();
 const targetMetaMap = new Map();
+
+rebuildBundleIfNeeded();
+
 const MY_PROC_START_MS = Math.round(Date.now() - process.uptime() * 1000);
 const DAEMON_LOG_FILE = path.join(os.tmpdir(), 'ag-theme-daemon.log');
 
@@ -851,6 +863,7 @@ function shutdownDaemon(reason, unlinkStopFile = false) {
   }
   attachedTargets.clear();
   targetThemeModes.clear();
+  targetDarkPresets.clear();
   targetMetaMap.clear();
   process.exit(0);
 }
@@ -2340,6 +2353,51 @@ function syncThemeToChildIframes(parentTargetId, mode) {
   }
 }
 
+function resolveParentDarkPreset(target, endpoint) {
+  let curId = target?.parentId || null;
+  const seen = new Set();
+  while (curId && !seen.has(curId)) {
+    seen.add(curId);
+    if (targetDarkPresets.has(curId)) {
+      return targetDarkPresets.get(curId);
+    }
+    curId = targetMetaMap.get(curId)?.parentId || null;
+  }
+  const ch = endpoint?.channel || null;
+  for (const [id, entry] of attachedTargets.entries()) {
+    if (
+      entry.hostConfirmed &&
+      entry.type === 'page' &&
+      (!ch || entry.endpoint?.channel === ch) &&
+      targetDarkPresets.has(id)
+    ) {
+      return targetDarkPresets.get(id);
+    }
+  }
+  return null;
+}
+
+function syncDarkPresetToChildIframes(parentTargetId, rawDarkPreset) {
+  if (!activeConfig.enabled) return;
+  const nextDarkPreset = String(rawDarkPreset || '').trim().toLowerCase() === 'claude-warm' ? 'claude-warm' : 'onyx';
+  targetDarkPresets.set(parentTargetId, nextDarkPreset);
+  const parentEntry = attachedTargets.get(parentTargetId);
+  const parentChannel = parentEntry?.endpoint?.channel || null;
+  for (const [, entry] of attachedTargets.entries()) {
+    if (!entry.hostConfirmed || entry.type !== 'iframe') continue;
+    if (!belongsToParentTarget(entry, parentTargetId, parentChannel)) continue;
+    entry
+      .send('Runtime.evaluate', {
+        expression: `window.__ag_set_host_dark_preset && window.__ag_set_host_dark_preset(${JSON.stringify(nextDarkPreset)})`,
+        returnByValue: false
+      })
+      .catch(() => {});
+    if (entry.updateNewDocScript) {
+      entry.updateNewDocScript().catch(() => {});
+    }
+  }
+}
+
 function getTargetOriginKey(urlStr) {
   const raw = String(urlStr || '').trim();
   if (!raw) return '';
@@ -2430,6 +2488,55 @@ function isAllowedOrigin(urlStr) {
   return activeConfig.allowedOrigins.some((prefix) => urlStr.startsWith(prefix));
 }
 
+const CASCADE_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const MAX_WATCHED_CASCADES = 12;
+
+function normalizeCascadeIdList(raw) {
+  const candidates = [];
+  if (Array.isArray(raw)) {
+    for (const item of raw) {
+      if (typeof item === 'string') candidates.push(item);
+    }
+  } else if (typeof raw === 'string') {
+    const trimmed = raw.trim();
+    if (trimmed) {
+      let decoded = trimmed;
+      try {
+        decoded = decodeURIComponent(trimmed);
+      } catch {}
+      for (const part of decoded.split(/[+,]/)) {
+        candidates.push(part);
+      }
+    }
+  }
+  const seen = new Set();
+  const out = [];
+  for (const item of candidates) {
+    const clean = String(item || '').trim().toLowerCase();
+    if (!CASCADE_UUID_RE.test(clean) || seen.has(clean)) continue;
+    seen.add(clean);
+    out.push(clean);
+    if (out.length >= MAX_WATCHED_CASCADES) break;
+  }
+  return out;
+}
+
+function parseMetricsSubscriptionPayload(rawPayload) {
+  const raw = String(rawPayload ?? '').trim();
+  if (!raw) return { valid: false, ids: [] };
+  if (raw.startsWith('[')) {
+    try {
+      const arr = JSON.parse(raw);
+      if (Array.isArray(arr)) {
+        return { valid: true, ids: normalizeCascadeIdList(arr) };
+      }
+    } catch {}
+    return { valid: false, ids: [] };
+  }
+  const ids = normalizeCascadeIdList(raw);
+  return { valid: ids.length > 0, ids };
+}
+
 function attachTarget(target, endpoint) {
   const wsUrl = target.webSocketDebuggerUrl;
   if (!wsUrl) return Promise.resolve(false);
@@ -2447,9 +2554,9 @@ function attachTarget(target, endpoint) {
     try {
       const ws = new WebSocket(wsUrl);
       let msgId = 1;
-      let activeCascadeId = '';
-      let lastPushedHash = '';
-      let lastRenderedSig = '';
+      let watchedCascadeIds = [];
+      let hasExplicitSubscription = false;
+      const perCascadeState = new Map(); // cascadeId -> { lastPushedHash, lastRenderedSig }
       let evalScriptId = null;
       const pendingCallbacks = new Map();
 
@@ -2473,26 +2580,24 @@ function attachTarget(target, endpoint) {
 
       const buildTargetInjectScript = () => {
         if (!activeConfig.enabled || target.type !== 'iframe') {
-          return { script: cachedInjectScript, parentMode: '' };
+          return { script: cachedInjectScript, parentMode: '', parentDarkPreset: '' };
         }
         const parentMode = resolveParentThemeMode(target, endpoint) || '';
-        if (parentMode !== 'dark' && parentMode !== 'light') {
-          return {
-            script: `window.__ag_host_theme_mode=null;\n${cachedInjectScript}`,
-            parentMode: ''
-          };
-        }
+        const parentDarkPreset = resolveParentDarkPreset(target, endpoint) || '';
+        const modeVal = parentMode === 'dark' || parentMode === 'light' ? parentMode : null;
+        const darkVal = parentDarkPreset === 'claude-warm' || parentDarkPreset === 'onyx' ? parentDarkPreset : null;
         return {
-          script: `window.__ag_host_theme_mode=${JSON.stringify(parentMode)};\n${cachedInjectScript}`,
-          parentMode
+          script: `window.__ag_host_theme_mode=${modeVal ? JSON.stringify(modeVal) : 'null'};\nwindow.__ag_host_dark_preset=${darkVal ? JSON.stringify(darkVal) : 'null'};\n${cachedInjectScript}`,
+          parentMode: modeVal || '',
+          parentDarkPreset: darkVal || ''
         };
       };
 
       const updateNewDocScript = (force = false) => {
         newDocQueue = newDocQueue
           .then(async () => {
-            const { script, parentMode } = buildTargetInjectScript();
-            const nextSig = `${activeConfig.enabled}|${cachedPatchVersion}|${parentMode}`;
+            const { script, parentMode, parentDarkPreset } = buildTargetInjectScript();
+            const nextSig = `${activeConfig.enabled}|${cachedPatchVersion}|${parentMode}|${parentDarkPreset || ''}`;
             if (!force && evalScriptId && nextSig === lastNewDocSig) return;
             if (evalScriptId) {
               await send('Page.removeScriptToEvaluateOnNewDocument', { identifier: evalScriptId });
@@ -2513,6 +2618,9 @@ function attachTarget(target, endpoint) {
       };
 
       const inject = async () => {
+        if (target.type === 'page') {
+          hasExplicitSubscription = false;
+        }
         const { script } = buildTargetInjectScript();
         const res = await send('Runtime.evaluate', {
           expression: script,
@@ -2531,6 +2639,9 @@ function attachTarget(target, endpoint) {
           if (target.type === 'page') {
             if (!activeConfig.enabled) {
               targetThemeModes.delete(target.id);
+              targetDarkPresets.delete(target.id);
+              watchedCascadeIds = [];
+              perCascadeState.clear();
             } else {
               const resolvedMode = res?.result?.result?.value;
               if (resolvedMode === 'dark' || resolvedMode === 'light') {
@@ -2547,71 +2658,135 @@ function attachTarget(target, endpoint) {
         }
       };
 
-      const syncMetricsForSession = async (force = false) => {
+      const syncMetricsForSession = async (force = false, skipDomEval = false) => {
         if (target.type === 'iframe' || !DatabaseSync || !activeConfig.modules.metrics || !activeConfig.enabled) return;
 
-        // 仅在尚未获知 activeCascadeId 或强制重同步时向前端发起 Runtime.evaluate，日常靠 __agRequestMetrics 绑定事件实时驱动
-        if (!activeCascadeId || force) {
+        // 仅在尚未获知前端订阅或强制重同步时向前端发起 Runtime.evaluate，日常靠 __agRequestMetrics 绑定事件实时驱动
+        if (!skipDomEval && (!hasExplicitSubscription || force)) {
           const evalRes = await send('Runtime.evaluate', {
             expression: `(function(){
-              if (window.__ag_watched_cascade_id) return window.__ag_watched_cascade_id;
-              const m = window.location.pathname.match(/\\/c\\/([0-9a-f-]{36})/i);
-              if (m) return m[1];
-              const el = document.querySelector('[data-testid=conversation-row-sidebar][data-selected=true]');
-              return el ? (el.getAttribute('data-cascade-id') || '') : '';
+              if (Array.isArray(window.__ag_watched_cascade_ids) && typeof window.__ag_watched_cascade_sig === 'string') {
+                return window.__ag_watched_cascade_ids;
+              }
+              var out = [];
+              var seen = {};
+              var add = function(v) {
+                var s = String(v || '').trim().toLowerCase();
+                if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s) && !seen[s]) {
+                  seen[s] = true;
+                  out.push(s);
+                }
+              };
+              var addTab = function(v) {
+                var m = String(v || '').trim().match(/^(?:side_question|subagent_convo)__([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i);
+                if (m) add(m[1]);
+              };
+              var views = document.querySelectorAll('[data-testid="conversation-view"][data-cascade-id], [data-testid="side-question-tab-conversation"][data-cascade-id], [data-testid="subagent-tab-conversation"][data-cascade-id]');
+              for (var i = 0; i < views.length; i++) add(views[i].getAttribute('data-cascade-id'));
+              var activeTabs = document.querySelectorAll('[data-active-tab-id^="side_question__"], [data-active-tab-id^="subagent_convo__"]');
+              for (var t = 0; t < activeTabs.length; t++) addTab(activeTabs[t].getAttribute('data-active-tab-id'));
+              try {
+                var dec = decodeURIComponent(window.location.pathname || '');
+                var m = dec.match(/\\/c\\/([^/?#]+)/i);
+                if (m) {
+                  var parts = m[1].split(/[+%]/);
+                  for (var j = 0; j < parts.length; j++) add(parts[j]);
+                }
+                var sp = new URLSearchParams(window.location.search || '');
+                add(sp.get('focused'));
+                add(sp.get('cascadeId'));
+                var tabs = sp.getAll('tab');
+                for (var u = 0; u < tabs.length; u++) addTab(tabs[u]);
+              } catch (e) {}
+              if (out.length === 0) {
+                var sel = document.querySelectorAll('[data-testid=conversation-row-sidebar][data-selected=true]');
+                for (var k = 0; k < sel.length; k++) add(sel[k].getAttribute('data-cascade-id'));
+              }
+              return out;
             })()`,
             returnByValue: true
           });
-          const detected = evalRes?.result?.result?.value;
-          if (detected && /^[0-9a-f-]{36}$/i.test(detected)) {
-            activeCascadeId = detected;
+          const rawDetected = evalRes?.result?.result?.value;
+          if (Array.isArray(rawDetected)) {
+            const detectedIds = normalizeCascadeIdList(rawDetected);
+            if (!hasExplicitSubscription || detectedIds.length > 0 || rawDetected.length === 0) {
+              watchedCascadeIds = detectedIds;
+              const keep = new Set(watchedCascadeIds);
+              for (const k of perCascadeState.keys()) {
+                if (!keep.has(k)) perCascadeState.delete(k);
+              }
+            }
           }
         }
-        if (!activeCascadeId) return;
+        if (watchedCascadeIds.length === 0) return;
 
-        // 先在 Node 本地通过 statSync 检查 .db/.db-wal 与子 Agent 复合签名（兼容 Windows WSL 按需懒探测），未变化则 0 WebSocket 通信直接返回
         const currentEndpoint = attachedTargets.get(target.id)?.endpoint || endpoint;
-        const dbState = getDbState(activeCascadeId, currentEndpoint);
-        const conversationsDir = dbState?.dbPath ? path.dirname(dbState.dbPath) : '';
-        const childSnap = conversationsDir
-          ? getCompositeChildSnapshot(activeCascadeId, conversationsDir, dbState.rawSig || dbState.sig)
-          : null;
-        const sig = childSnap?.sig || dbState?.sig || 'empty';
-        const sessionKey = `${activeCascadeId}@${sig}|${metricsConfigEpoch}`;
-        const uncCoolingDown = Boolean(
-          (dbState?.uncDeferred || childSnap?.uncBackoffActive) && Date.now() < wslUncBackoffUntil
-        );
-        if (
-          !force &&
-          ((!childSnap?.isDraining && !childSnap?.partialStale && sessionKey === lastPushedHash) ||
-            (uncCoolingDown && lastRenderedSig !== ''))
-        ) {
-          return;
-        }
+        const pendingUpdates = [];
 
-        const payload = parseConversationMetrics(activeCascadeId, currentEndpoint, dbState, childSnap);
-        if (!payload || payload.transientError) {
-          if (force && payload?.cachedPayload) {
-            await send('Runtime.evaluate', {
-              expression: `window.__ag_render_metrics && window.__ag_render_metrics(${JSON.stringify(payload.cachedPayload)})`,
-              returnByValue: false
-            });
+        for (const cid of watchedCascadeIds) {
+          let cState = perCascadeState.get(cid);
+          if (!cState) {
+            cState = { lastPushedHash: '', lastRenderedSig: '' };
+            perCascadeState.set(cid, cState);
           }
-          return;
+
+          // 先在 Node 本地通过 statSync 检查 .db/.db-wal 与子 Agent 复合签名（兼容 Windows WSL 按需懒探测），未变化则 0 WebSocket 通信直接跳过
+          const dbState = getDbState(cid, currentEndpoint);
+          const conversationsDir = dbState?.dbPath ? path.dirname(dbState.dbPath) : '';
+          const childSnap = conversationsDir
+            ? getCompositeChildSnapshot(cid, conversationsDir, dbState.rawSig || dbState.sig)
+            : null;
+          const sig = childSnap?.sig || dbState?.sig || 'empty';
+          const sessionKey = `${cid}@${sig}|${metricsConfigEpoch}`;
+          const uncCoolingDown = Boolean(
+            (dbState?.uncDeferred || childSnap?.uncBackoffActive) && Date.now() < wslUncBackoffUntil
+          );
+          if (
+            !force &&
+            ((!childSnap?.isDraining && !childSnap?.partialStale && sessionKey === cState.lastPushedHash) ||
+              (uncCoolingDown && cState.lastRenderedSig !== ''))
+          ) {
+            continue;
+          }
+
+          const payload = parseConversationMetrics(cid, currentEndpoint, dbState, childSnap);
+          if (!payload || payload.transientError) {
+            if (force && payload?.cachedPayload) {
+              pendingUpdates.push({ payload: payload.cachedPayload, isTransientFallback: true });
+            }
+            continue;
+          }
+
+          const renderedSig = `${payload.hasData ? '1' : '0'}\n${payload.inlineHtml || ''}\n${payload.tooltipHtml || ''}`;
+          if (force || renderedSig !== cState.lastRenderedSig) {
+            pendingUpdates.push({
+              payload,
+              state: cState,
+              renderedSig,
+              sessionKey,
+              canCommitHash: !payload.isDraining && !payload.partialStale
+            });
+          } else if (!payload.isDraining && !payload.partialStale) {
+            cState.lastPushedHash = sessionKey;
+          } else {
+            cState.lastPushedHash = '';
+          }
         }
 
-        const renderedSig = `${payload.hasData ? '1' : '0'}\n${payload.inlineHtml || ''}\n${payload.tooltipHtml || ''}`;
-        if (force || renderedSig !== lastRenderedSig) {
-          await send('Runtime.evaluate', {
-            expression: `window.__ag_render_metrics && window.__ag_render_metrics(${JSON.stringify(payload)})`,
+        if (pendingUpdates.length > 0) {
+          const pushPayloads = pendingUpdates.map((u) => u.payload);
+          const pushRes = await send('Runtime.evaluate', {
+            expression: `if (typeof window.__ag_render_metrics === 'function') { for (const p of ${JSON.stringify(pushPayloads)}) { window.__ag_render_metrics(p); } }`,
             returnByValue: false
           });
-          lastRenderedSig = renderedSig;
-        }
-        if (!payload.isDraining && !payload.partialStale) {
-          lastPushedHash = sessionKey;
-        } else {
-          lastPushedHash = '';
+          const pushOk = Boolean(pushRes && !pushRes.error && !pushRes.result?.exceptionDetails);
+          if (pushOk) {
+            for (const u of pendingUpdates) {
+              if (u.isTransientFallback || !u.state) continue;
+              u.state.lastRenderedSig = u.renderedSig;
+              u.state.lastPushedHash = u.canCommitHash ? u.sessionKey : '';
+            }
+          }
         }
       };
 
@@ -2622,6 +2797,7 @@ function attachTarget(target, endpoint) {
             if (attachedTargets.get(target.id)?.ws === ws) {
               attachedTargets.delete(target.id);
               targetThemeModes.delete(target.id);
+              targetDarkPresets.delete(target.id);
             }
             try {
               ws.close();
@@ -2637,7 +2813,9 @@ function attachTarget(target, endpoint) {
                 JSON.stringify(!activeConfig.enabled) +
                 ' || (window.__ag_body_ready === true && !!document.getElementById("ag-custom-fonts"))), mode: ' +
                 JSON.stringify(target.type === 'iframe' ? 'iframe' : 'page') +
-                ' === "iframe" ? (window.__ag_host_theme_mode || null) : (window.__ag_resolved_theme_mode || null) })',
+                ' === "iframe" ? (window.__ag_host_theme_mode || null) : (window.__ag_resolved_theme_mode || null), darkPreset: ' +
+                JSON.stringify(target.type === 'iframe' ? 'iframe' : 'page') +
+                ' === "iframe" ? (window.__ag_host_dark_preset || window.__ag_runtime_dark_preset || (document.documentElement ? document.documentElement.getAttribute("data-ag-dark-preset") : null)) : (document.documentElement ? document.documentElement.getAttribute("data-ag-dark-preset") : null) })',
               returnByValue: true
             });
             const checkVal = checkRes?.result?.result?.value;
@@ -2652,15 +2830,32 @@ function attachTarget(target, endpoint) {
                   syncThemeToChildIframes(target.id, checkVal.mode);
                 }
               }
+              if (checkVal.darkPreset === 'claude-warm' || checkVal.darkPreset === 'onyx') {
+                const prevDarkPreset = targetDarkPresets.get(target.id);
+                targetDarkPresets.set(target.id, checkVal.darkPreset);
+                if (prevDarkPreset !== checkVal.darkPreset) {
+                  syncDarkPresetToChildIframes(target.id, checkVal.darkPreset);
+                }
+              }
             } else if (activeConfig.enabled && target.type === 'iframe') {
               const parentMode = resolveParentThemeMode(target, endpoint);
+              const parentDarkPreset = resolveParentDarkPreset(target, endpoint);
+              let needNewDocUpdate = !evalScriptId;
               if (parentMode && checkVal.mode !== parentMode) {
                 await send('Runtime.evaluate', {
                   expression: `window.__ag_set_host_theme_mode && window.__ag_set_host_theme_mode(${JSON.stringify(parentMode)})`,
                   returnByValue: false
                 });
-                await updateNewDocScript();
-              } else if (!evalScriptId) {
+                needNewDocUpdate = true;
+              }
+              if (parentDarkPreset && checkVal.darkPreset !== parentDarkPreset) {
+                await send('Runtime.evaluate', {
+                  expression: `window.__ag_set_host_dark_preset && window.__ag_set_host_dark_preset(${JSON.stringify(parentDarkPreset)})`,
+                  returnByValue: false
+                });
+                needNewDocUpdate = true;
+              }
+              if (needNewDocUpdate) {
                 await updateNewDocScript();
               }
             }
@@ -2671,7 +2866,8 @@ function attachTarget(target, endpoint) {
               injected: window.__ag_patch_version === ${JSON.stringify(cachedPatchVersion)} && (${JSON.stringify(!activeConfig.enabled)} || (window.__ag_body_ready === true && !!document.getElementById("ag-custom-fonts"))),
               skipNonHost: window.__ag_skip_non_host === true,
               kind: ${HOST_PROBE_EXPRESSION},
-              mode: window.__ag_resolved_theme_mode || null
+              mode: window.__ag_resolved_theme_mode || null,
+              darkPreset: document.documentElement ? document.documentElement.getAttribute("data-ag-dark-preset") : null
             })`,
             returnByValue: true
           });
@@ -2696,6 +2892,13 @@ function attachTarget(target, endpoint) {
               targetThemeModes.set(target.id, state.mode);
               if (prevMode !== state.mode) {
                 syncThemeToChildIframes(target.id, state.mode);
+              }
+            }
+            if (state.darkPreset === 'claude-warm' || state.darkPreset === 'onyx') {
+              const prevDarkPreset = targetDarkPresets.get(target.id);
+              targetDarkPresets.set(target.id, state.darkPreset);
+              if (prevDarkPreset !== state.darkPreset) {
+                syncDarkPresetToChildIframes(target.id, state.darkPreset);
               }
             }
           }
@@ -2757,6 +2960,7 @@ function attachTarget(target, endpoint) {
         if (attachedTargets.get(target.id)?.ws === ws) {
           attachedTargets.delete(target.id);
           targetThemeModes.delete(target.id);
+          targetDarkPresets.delete(target.id);
         }
         clearTimeout(attachTimeout);
         try {
@@ -2817,6 +3021,7 @@ function attachTarget(target, endpoint) {
           if (attachedTargets.get(target.id)?.ws === ws) {
             attachedTargets.delete(target.id);
             targetThemeModes.delete(target.id);
+            targetDarkPresets.delete(target.id);
           }
           clearTimeout(attachTimeout);
           try {
@@ -2846,6 +3051,7 @@ function attachTarget(target, endpoint) {
             if (attachedTargets.get(target.id)?.ws === ws) {
               attachedTargets.delete(target.id);
               targetThemeModes.delete(target.id);
+              targetDarkPresets.delete(target.id);
             }
             clearTimeout(attachTimeout);
             try {
@@ -2918,12 +3124,24 @@ function attachTarget(target, endpoint) {
           }
           if (msg.method === 'Runtime.bindingCalled' && msg.params?.name === '__agRequestMetrics') {
             if (!hostConfirmed) return;
-            const nextId = String(msg.params.payload || '').trim();
-            if (/^[0-9a-f-]{36}$/i.test(nextId)) {
-              activeCascadeId = nextId;
-              lastPushedHash = '';
-              lastRenderedSig = '';
-              syncMetricsForSession(true);
+            const parsedSub = parseMetricsSubscriptionPayload(msg.params.payload);
+            if (parsedSub.valid) {
+              watchedCascadeIds = parsedSub.ids;
+              hasExplicitSubscription = true;
+              const keep = new Set(watchedCascadeIds);
+              for (const k of perCascadeState.keys()) {
+                if (!keep.has(k)) perCascadeState.delete(k);
+              }
+              for (const cid of watchedCascadeIds) {
+                const st = perCascadeState.get(cid);
+                if (st) {
+                  st.lastPushedHash = '';
+                  st.lastRenderedSig = '';
+                }
+              }
+              if (watchedCascadeIds.length > 0) {
+                syncMetricsForSession(true, true);
+              }
             }
             return;
           }
@@ -2961,10 +3179,13 @@ function attachTarget(target, endpoint) {
             return;
           }
           if (msg.method === 'Runtime.bindingCalled' && msg.params?.name === '__agSetDarkPreset') {
-            if (!hostConfirmed || target.type !== 'page' || SAFE_MODE || !activeConfig.enabled) {
+            if (!hostConfirmed || target.type !== 'page' || !activeConfig.enabled) {
               return;
             }
-            persistDarkPresetToUserConfig(msg.params.payload);
+            syncDarkPresetToChildIframes(target.id, msg.params.payload);
+            if (!SAFE_MODE) {
+              persistDarkPresetToUserConfig(msg.params.payload);
+            }
             return;
           }
           if (
@@ -2973,6 +3194,7 @@ function attachTarget(target, endpoint) {
             msg.params?.frame?.url
           ) {
             currentTargetUrl = String(msg.params.frame.url);
+            hasExplicitSubscription = false;
           }
           if (
             msg.method === 'Page.frameNavigated' ||
@@ -3008,6 +3230,7 @@ function attachTarget(target, endpoint) {
         if (attachedTargets.get(target.id)?.ws === ws) {
           attachedTargets.delete(target.id);
           targetThemeModes.delete(target.id);
+          targetDarkPresets.delete(target.id);
         }
         finishAttach(false);
       };
@@ -3034,9 +3257,10 @@ function attachTarget(target, endpoint) {
           if (u) currentTargetUrl = String(u);
         },
         setActiveCascade: (cid) => {
-          activeCascadeId = cid;
-          lastPushedHash = '';
-          lastRenderedSig = '';
+          const ids = normalizeCascadeIdList(cid);
+          watchedCascadeIds = ids;
+          hasExplicitSubscription = ids.length > 0;
+          perCascadeState.clear();
         }
       });
     } catch {
@@ -3248,6 +3472,7 @@ async function sync() {
     const bundleChanged = rebuildBundleIfNeeded();
     if (!activeConfig.enabled) {
       targetThemeModes.clear();
+      targetDarkPresets.clear();
     }
     const shouldHeartbeatCheck = bundleChanged || syncTickCount % 6 === 1;
 
@@ -3348,6 +3573,7 @@ async function sync() {
         } catch {}
         attachedTargets.delete(id);
         targetThemeModes.delete(id);
+        targetDarkPresets.delete(id);
       }
     }
     if (seenRawTargetIds.size > 0) {

@@ -81,7 +81,7 @@ Google Antigravity 原生浅色界面偏冷刺眼、全局仅使用单一无衬�
 
 ### 近期更新
 - **v5.4.3（2026-11-18 · 现行版）**
-  - 全面适配 Antigravity `2.32.2`（Electron `44.9.1` `wcv` 三层堆栈 / `catcherView` 透明层与 `Gemini 4 Carbon` 512k 模型矩阵），扩充词典至 `1,790` 条并补齐账号套餐、模型括号档位与退出码动态规则；修复 `coldBootHealer` 二次复检自锁缺陷、补齐历史对话列表防误翻隔离、升级中文标题外挂悬浮告警卡「一键复制修复命令」闭环及后台日志自截断保护。
+  - 全面适配 Antigravity `2.32.2`（Electron `44.9.1` `wcv` 三层堆栈 / `catcherView` 透明层与 `Gemini 4 Carbon` 512k 模型矩阵），扩充词典至 `1,790` 条并补齐账号套餐、模型括号档位（含 `Minimal` 正文与无障碍 `aria-label`）与退出码动态规则；新增多路平铺分屏、`/btw` 支线提问与子 Agent 侧栏标签页（`subagent_convo__`）独立实时指标胶囊及窄分屏 `+N sub` 动态折行（合入 [@CaramelizedCUDA](https://github.com/CaramelizedCUDA) [#17](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/pull/17) 修复 [#16](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/issues/16)）；加固 Swarm 协作子帧 `darkPreset`（📖 ↔ 🌙）`<1ms` 瞬时同步与重载防回退、修复 `coldBootHealer` 二次复检自锁缺陷、补齐历史对话列表防误翻隔离、升级中文标题外挂悬浮告警卡「一键复制修复命令」闭环及后台日志自截断保护。
 - **v5.4.2（2026-11-17）**
   - 新增宿主主窗口 → `plugin://swarm--` 蜂群子帧实时深浅色中继、零闪白预置与浅色次级变量兜底，根治 `THEME_MODE_INHERIT` 及双向切换下的子帧主题失步（合入 [@honlam996](https://github.com/honlam996) [#15](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/pull/15) 修复 [#14](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/issues/14)）。
 - **v5.4.1（2026-11-17）**

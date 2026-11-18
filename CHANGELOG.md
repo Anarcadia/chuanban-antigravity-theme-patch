@@ -7,9 +7,15 @@
 ## [v5.4.3] - 2026-11-18
 
 > **适用版本**：Antigravity `2.32.2+` / `2.32.1`（`CL=1022991777`，向下完全兼容 `2.32.0` / `2.31.x` / `2.30.0`）  
-> **核验基线**：macOS `2.32.2`（Electron `44.9.1` `wcv` 三层堆栈与 `catcherView` 透明层兼容核验 + `Gemini 4 Carbon` 512k 动态上下文与全链路 CDP 断言验收）
+> **核验基线**：macOS `2.32.2` × Windows 11 `2.32.2`（Electron `44.9.1` `wcv` 三层堆栈、多路平铺分屏、`/btw` 支线提问与子 Agent 侧栏实时指标胶囊、`Gemini 4 Carbon` 512k 动态上下文及全链路 CDP 断言验收）  
+> **社区致谢**：特别感谢 [@CaramelizedCUDA](https://github.com/CaramelizedCUDA)（[Issue #16](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/issues/16) · [PR #17](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/pull/17)）对多路分屏、`/btw` 支线提问侧栏独立指标胶囊与窄栏动态折行阈值的完整根因分析与高质量实现！
 
-### Fixed（冷启动自愈二次复检自锁修复、历史对话标题隔离、标题补丁交互复制闭环与后台日志自截断）
+### Fixed（多路分屏/`/btw`/子 Agent 侧栏独立指标胶囊、Swarm 深色预设瞬时中继、冷启动自锁修复、历史标题隔离与标题补丁交互复制闭环）
+- **支持双/三/四分屏对话、`/btw`（支线提问）与子 Agent 侧栏对话标签页独立实时指标胶囊及窄分屏动态折行（`core/daemon.mjs` / `core/runtime.js` / `core/theme.css` / `install.mjs`，合入 [#17](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/pull/17) 修复 [#16](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/issues/16)）**：
+  - 将单输入框单例挂载升级为全输入框遍历（`getAllInputBoxes()` + `.ag-live-metrics-pill`，仅当前聚焦面板保留唯一 `#ag-live-metrics-pill` 向后兼容），通过 `conversation-view[data-cascade-id]`、`side-question-tab-conversation[data-cascade-id]`、`subagent-tab-conversation[data-cascade-id]`（含 `[data-media-drop-scope="subpane"]`）及 `[data-active-tab-id^="side_question__"]` / `[data-active-tab-id^="subagent_convo__"]` 精准绑定各分屏、`/btw` 与子 Agent 标签页独立会话（未发送空白草稿与混合新建首页零串染，无模型选择器面板自动隐藏胶囊左分割竖线），并基于 `WeakMap` 隔离各面板 `ResizeObserver` 与悬浮详情卡（无缝兼容标题外挂 `160ms` 复制按钮悬停桥接，流式刷新期间自动保持 `✓ 已复制` 状态不冲刷）；
+  - `daemon.mjs` 将每个 CDP 目标的标量订阅升级为 `watchedCascadeIds[]` 与 `perCascadeState` 映射表，单拍批量推送多路会话指标；`runtime.js` 依据胶囊自然 `scrollWidth` 动态上调 `middle -> bottom` 折行阈值（保留 `+16px` 滞回与极窄单行省略兜底），根治窄分屏下 `+N sub` 被过早截断的问题。
+- **加固 `plugin://swarm--` 子帧 `darkPreset`（📖 ↔ 🌙）`<1ms` 瞬时同步与重载/损坏配置防回退保护（`core/daemon.mjs` / `core/runtime.js`）**：
+  - 新增 `targetDarkPresets` 宿主预设状态表、`resolveParentDarkPreset()`、`syncDarkPresetToChildIframes()` 与 `window.__ag_set_host_dark_preset` / `window.__ag_host_dark_preset` 预置契约，同步写入子帧 `NewDocument` 注入签名，彻底消除切换「Claude 暖纸深夜」时的 ~200ms 异色闪烁以及 `--safe-mode` 或 `user/config.json` 损坏保护态下新开/重载子帧回退冷碳黑的分裂缺陷。
 - **修复 `coldBootHealer` 二次复检（`attempt === 2`）被自身 `HEAD /main.js` 探测条目污染导致自锁 `no-perf-entry` 的缺陷（`core/runtime.js`）**：
   - 根治第 1 轮 `fetch('/main.js', { method: 'HEAD' })` 向 `PerformanceResourceTiming` 写入 `initiatorType: "fetch"`（`decodedBodySize: 0`）后，第 2 轮复检 `entries[entries.length - 1]` 误取 0 字节 `HEAD` 条目而提前退出（`skippedReason: "no-perf-entry"`）的隐藏缺陷；
   - 新增 `resolveInitialMainBundleSize()` 优先筛选 `initiatorType === 'script'` 非零条目并在模块初始化时持久化快照 `window.__ag_coldboot_initial_main_size`，同时免疫长会话 250 条 `ResourceTiming` 环形缓冲淘汰。
@@ -24,7 +30,7 @@
 ### Added（Antigravity `2.32.2` 与 `Gemini 4 Carbon` 模型矩阵汉化扩充至 `1,790` 条）
 - **新增 50 条 `2.32.2` 静态 UI 词条至 `1,790` 条（`core/i18n.json`）与 5 组精准动态规则（`core/runtime.js`）**：
   - 补齐账号与订阅页后端动态下发文案（`Your Plan`、`Your Plan: <Tier>` → `当前套餐：<Tier>`、`You are subscribed to the best Google AI plan.`、`Available AI Credits: <N>`、`Invite a Friend`、`Authenticated via / Managed by Enterprise Gateway`）、模型低配额告警（`Your quota for this model is running low.`）、Best-of-N 退出反馈问卷全套 8 条、MCP 参数重启说明、Google Drive `@drive:` 指引、远程会话手机扫码接续及校验超时提示，保持 100% 原始 JSON 零重复键、零大小写与弯直引号碰撞；
-  - 新增 `RE_MODEL_EFFORT_LABEL`（在 `Best of N` 多选、单档位模型行与配额弹窗中自动将 `Gemini 4 Carbon (Medium)` / `GPT-OSS 120B (Medium)` / `Gemini 4 Hydrogen (XHigh)` 译为 `(中)` / `(超高)`）及 `RE_SUMMARY_EXITED_CODE` / `RE_EXITED_CODE_ONLY`（将聊天流失败命令状态尾巴 `· Exited with code <N>` 实时译为 `· 退出码 <N>`）。
+  - 新增 `RE_MODEL_EFFORT_LABEL` 并扩展 `RE_EFFORT_SUFFIX` / `EFFORT_MAP`（在 `Best of N` 多选、模型选择器 `aria-label`、单档位模型行与配额弹窗中自动将 `Gemini 4 Carbon (Minimal)` / `Gemini 4 Carbon (Medium)` / `GPT-OSS 120B (Medium)` / `Gemini 4 Hydrogen (XHigh)` 译为 `(最低)` / `(中)` / `(超高)`）及 `RE_SUMMARY_EXITED_CODE` / `RE_EXITED_CODE_ONLY`（将聊天流失败命令状态尾巴 `· Exited with code <N>` 实时译为 `· 退出码 <N>`）。
 
 ---
 

@@ -131,7 +131,7 @@
   const DEFAULT_PRESET = boot.preset || 'high-contrast';
   const DEFAULT_DARK_PRESET = boot.darkPreset || 'onyx';
   const DEFAULT_EXCLUDE_I18N =
-    'code, pre, kbd, samp, textarea, input, style, script, noscript, [contenteditable="true"], [data-markdown-root], [data-testid="user-message-content"], .agy-user-bubble, .monaco-editor, .monaco-diff-editor, .xterm, [class*="onyx-key"], .prose, .markdown, [class*="chat-message"], [class*="group/file-title"], [data-testid="conversation-row-sidebar"] a[href^="/c/"], [data-testid="conversation-row-sidebar"] span.truncate, [data-testid="conversation-row-history"] a[href^="/c/"], [data-testid="conversation-row-history"] span.truncate, [data-testid="conversation-navigator-turn"], .msg-body, #raw, [data-testid="swarm-raw"], #swarm-title, #ag-live-metrics-pill, #ag-live-metrics-tooltip';
+    'code, pre, kbd, samp, textarea, input, style, script, noscript, [contenteditable="true"], [data-markdown-root], [data-testid="user-message-content"], .agy-user-bubble, .monaco-editor, .monaco-diff-editor, .xterm, [class*="onyx-key"], .prose, .markdown, [class*="chat-message"], [class*="group/file-title"], [data-testid="conversation-row-sidebar"] a[href^="/c/"], [data-testid="conversation-row-sidebar"] span.truncate, [data-testid="conversation-row-history"] a[href^="/c/"], [data-testid="conversation-row-history"] span.truncate, [data-testid="conversation-navigator-turn"], .msg-body, #raw, [data-testid="swarm-raw"], #swarm-title, #ag-live-metrics-pill, .ag-live-metrics-pill, [data-ag-metrics-pill], #ag-live-metrics-tooltip';
 
   const SELECTORS = Object.assign(
     {
@@ -154,6 +154,33 @@
     }
   }
   window.__ag_cleanup_fns = [];
+  if (window.__ag_metrics_ro) {
+    try {
+      window.__ag_metrics_ro.disconnect();
+    } catch (e) {}
+    window.__ag_metrics_ro = null;
+    window.__ag_metrics_ro_target = null;
+    window.__ag_metrics_ro_observed = null;
+    window.__ag_last_metrics_layout_sig = '';
+  }
+  if (window.__ag_metrics_raf) {
+    try {
+      cancelAnimationFrame(window.__ag_metrics_raf);
+    } catch (e) {}
+    window.__ag_metrics_raf = 0;
+  }
+  window.__ag_watched_cascade_sig = undefined;
+  try {
+    document.querySelectorAll('#ag-live-metrics-pill, .ag-live-metrics-pill, [data-ag-metrics-pill]').forEach((el) => {
+      if (el.getAttribute('data-ag-pill-ver') !== PATCH_VERSION) {
+        el.remove();
+      }
+    });
+    const staleTt = document.getElementById('ag-live-metrics-tooltip');
+    if (staleTt && staleTt.getAttribute('data-ag-tt-ver') !== PATCH_VERSION) {
+      staleTt.remove();
+    }
+  } catch (e) {}
   if (window.__ag_dcl_handler) {
     try {
       window.removeEventListener('DOMContentLoaded', window.__ag_dcl_handler);
@@ -466,8 +493,10 @@
     if (s1) s1.remove();
     const s2 = document.getElementById('antigravity-user-custom-style');
     if (s2) s2.remove();
-    const pill = document.getElementById('ag-live-metrics-pill');
-    if (pill) pill.remove();
+    try {
+      document.querySelectorAll('#ag-live-metrics-pill, .ag-live-metrics-pill, [data-ag-metrics-pill]').forEach((el) => el.remove());
+      document.querySelectorAll('[data-ag-row-mode]').forEach((el) => el.removeAttribute('data-ag-row-mode'));
+    } catch (e) {}
     const tt = document.getElementById('ag-live-metrics-tooltip');
     if (tt) tt.remove();
     if (window.__ag_metrics_tt_hide_timer) {
@@ -476,6 +505,15 @@
       } catch (e) {}
       window.__ag_metrics_tt_hide_timer = null;
     }
+    window.__ag_active_tooltip_pill = null;
+    window.__ag_pill_tooltip_map = null;
+    window.__ag_metrics_focusin_fn = null;
+    window.__ag_metrics_click_fn = null;
+    window.__ag_metrics_by_id = null;
+    window.__ag_watched_cascade_ids = null;
+    window.__ag_watched_cascade_id = '';
+    window.__ag_watched_cascade_sig = '';
+    window.__ag_last_metrics = null;
     const themeBtnTt = document.getElementById('ag-theme-btn-tooltip');
     if (themeBtnTt) themeBtnTt.remove();
     if (window.__ag_theme_btn_tt_timer) {
@@ -566,7 +604,9 @@
     window.__ag_settings_click_fn = null;
     window.__ag_sync_preset_fn = null;
     window.__ag_host_theme_mode = null;
+    window.__ag_host_dark_preset = null;
     window.__ag_set_host_theme_mode = null;
+    window.__ag_set_host_dark_preset = null;
     window.__ag_resolved_theme_mode = null;
     window.__ag_body_ready = false;
     applyThemeVars({}, {});
@@ -1255,11 +1295,16 @@
       Storage.prototype.setItem.call(localStorage, 'theme-color-flavor', DEFAULT_PRESET);
     } catch (e) {}
   }
-  if (DEFAULT_DARK_PRESET && window.__ag_last_boot_dark_preset !== DEFAULT_DARK_PRESET) {
-    window.__ag_last_boot_dark_preset = DEFAULT_DARK_PRESET;
-    window.__ag_runtime_dark_preset = DEFAULT_DARK_PRESET;
+  const effectiveBootDarkPreset =
+    IS_SWARM_PLUGIN_FRAME &&
+    (window.__ag_host_dark_preset === DARK_PRESETS.CLAUDE_WARM || window.__ag_host_dark_preset === DARK_PRESETS.ONYX)
+      ? window.__ag_host_dark_preset
+      : DEFAULT_DARK_PRESET;
+  if (effectiveBootDarkPreset && window.__ag_last_boot_dark_preset !== effectiveBootDarkPreset) {
+    window.__ag_last_boot_dark_preset = effectiveBootDarkPreset;
+    window.__ag_runtime_dark_preset = effectiveBootDarkPreset;
     try {
-      Storage.prototype.setItem.call(localStorage, 'theme-dark-flavor', DEFAULT_DARK_PRESET);
+      Storage.prototype.setItem.call(localStorage, 'theme-dark-flavor', effectiveBootDarkPreset);
     } catch (e) {}
   }
 
@@ -1318,8 +1363,14 @@
       try {
         storedDarkFlavor = Storage.prototype.getItem.call(localStorage, 'theme-dark-flavor');
       } catch (e) {}
+      const liveHostDarkPreset =
+        IS_SWARM_PLUGIN_FRAME &&
+        (window.__ag_host_dark_preset === DARK_PRESETS.CLAUDE_WARM ||
+          window.__ag_host_dark_preset === DARK_PRESETS.ONYX)
+          ? window.__ag_host_dark_preset
+          : null;
       const targetDarkPreset = resolveNormalizedDarkPreset(
-        window.__ag_runtime_dark_preset || storedDarkFlavor || DEFAULT_DARK_PRESET
+        liveHostDarkPreset || window.__ag_runtime_dark_preset || storedDarkFlavor || DEFAULT_DARK_PRESET
       );
       const prevDarkPreset = document.documentElement.getAttribute('data-ag-dark-preset');
       if (prevDarkPreset !== targetDarkPreset) {
@@ -1444,6 +1495,18 @@
   window.__ag_set_host_theme_mode = (mode) => {
     if (mode !== 'dark' && mode !== 'light') return;
     window.__ag_host_theme_mode = mode;
+    if (typeof window.__ag_sync_preset_fn === 'function') {
+      window.__ag_sync_preset_fn();
+    }
+  };
+  window.__ag_set_host_dark_preset = (nextDarkPreset) => {
+    window.__ag_runtime_dark_preset = resolveNormalizedDarkPreset(nextDarkPreset);
+    if (IS_SWARM_PLUGIN_FRAME) {
+      window.__ag_host_dark_preset = window.__ag_runtime_dark_preset;
+    }
+    try {
+      Storage.prototype.setItem.call(localStorage, 'theme-dark-flavor', window.__ag_runtime_dark_preset);
+    } catch (e) {}
     if (typeof window.__ag_sync_preset_fn === 'function') {
       window.__ag_sync_preset_fn();
     }
@@ -1831,21 +1894,215 @@
 
   // ============================================================================
   // 3.5 模型名称同行实时指标胶囊 (Scheme C: TPS · TTFT · Ctx/256k · Out + Hover 详情卡)
-  // 常规宽度恒定锁定同行(middle)；仅窄侧边栏(<165px，恢复>=180px滞回)折入框内第二行(bottom)。
+  // 支持多窗格/多分屏与 /btw 独立挂载、动态宽度折行及标题外挂告警一键复制桥接。
   // ============================================================================
   const MIDDLE_ENTER_BOTTOM_PX = 165;
   const MIDDLE_EXIT_BOTTOM_PX = 180;
+  const CASCADE_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const AUX_CONVO_TAB_RE =
+    /^(?:side_question|subagent_convo)__([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
+  function extractAuxConvoTabUuid(raw) {
+    const m = String(raw || '').trim().match(AUX_CONVO_TAB_RE);
+    return m ? m[1].toLowerCase() : '';
+  }
+  function isWeakMapInstance(v) {
+    return (
+      v instanceof WeakMap ||
+      !!(
+        v &&
+        typeof v.get === 'function' &&
+        typeof v.set === 'function' &&
+        typeof v.delete === 'function' &&
+        typeof v.has === 'function'
+      )
+    );
+  }
+  if (!isWeakMapInstance(window.__ag_pill_tooltip_map)) {
+    window.__ag_pill_tooltip_map = new WeakMap();
+  }
+  const pillTooltipMap = window.__ag_pill_tooltip_map;
+  const rowStateMap = new WeakMap();
+  const activeMetricsObservers = new Set();
+  const activeMetricsRafs = new Set();
+  const metricsRouteTimers = new Set();
 
-  function extractCascadeId() {
+  function scheduleTrackedHandle(trackSet, schedulerFn, callback) {
+    let settled = false;
+    let handle = 0;
+    handle = schedulerFn(() => {
+      settled = true;
+      if (handle) trackSet.delete(handle);
+      callback();
+    });
+    if (!settled && handle) trackSet.add(handle);
+    return settled ? 0 : handle;
+  }
+
+  if (!window.__ag_metrics_by_id || window.__ag_metrics_cache_ver !== PATCH_VERSION) {
+    window.__ag_metrics_by_id = Object.create(null);
+    window.__ag_metrics_cache_ver = PATCH_VERSION;
+  }
+  const metricsById = window.__ag_metrics_by_id;
+
+  window.__ag_cleanup_fns.push(() => {
+    for (const ro of activeMetricsObservers) {
+      try {
+        ro.disconnect();
+      } catch (e) {}
+    }
+    activeMetricsObservers.clear();
+    for (const rafId of activeMetricsRafs) {
+      try {
+        cancelAnimationFrame(rafId);
+      } catch (e) {}
+    }
+    activeMetricsRafs.clear();
+    for (const tid of metricsRouteTimers) {
+      try {
+        clearTimeout(tid);
+      } catch (e) {}
+    }
+    metricsRouteTimers.clear();
+    window.__ag_metrics_focusin_fn = null;
+    window.__ag_metrics_click_fn = null;
+    window.__ag_trigger_route_check_fn = null;
+  });
+
+  function isPillNode(el) {
+    return !!(
+      el &&
+      el.nodeType === 1 &&
+      (el.id === 'ag-live-metrics-pill' ||
+        el.hasAttribute('data-ag-metrics-pill') ||
+        (el.classList && el.classList.contains('ag-live-metrics-pill')))
+    );
+  }
+
+  function getPillTextEl(pill) {
+    if (!pill || !pill.querySelector) return null;
+    return pill.querySelector('[data-ag-metrics-text="1"], .ag-live-metrics-text, #ag-live-metrics-text');
+  }
+
+  function getAllInputBoxes() {
     try {
-      const m = window.location.pathname.match(/\/c\/([0-9a-f-]{36})/i);
-      if (m) return m[1];
-      const q = new URLSearchParams(window.location.search).get('cascadeId');
-      if (q && /^[0-9a-f-]{36}$/i.test(q)) return q;
+      const rawId = String(SELECTORS.inputBoxId || '').trim();
+      if (!rawId || typeof document.querySelectorAll !== 'function') return [];
+      const escId = rawId.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+      return Array.from(document.querySelectorAll('[id="' + escId + '"]'));
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function extractAllPathnameCascadeIds() {
+    const out = [];
+    const seen = new Set();
+    try {
+      let decoded = String(window.location.pathname || '');
+      try {
+        decoded = decodeURIComponent(decoded);
+      } catch (e) {}
+      const m = decoded.match(/\/c\/([^/?#]+)/i);
+      if (m) {
+        const parts = m[1].split(/\+|%2b/i);
+        for (let i = 0; i < parts.length; i++) {
+          const cid = String(parts[i] || '').trim().toLowerCase();
+          if (CASCADE_UUID_RE.test(cid) && !seen.has(cid)) {
+            seen.add(cid);
+            out.push(cid);
+          }
+        }
+      }
+      const sp = new URLSearchParams(window.location.search || '');
+      const tabs = sp.getAll('tab');
+      for (let i = 0; i < tabs.length; i++) {
+        const sideCid = extractAuxConvoTabUuid(tabs[i]);
+        if (sideCid && !seen.has(sideCid)) {
+          seen.add(sideCid);
+          out.push(sideCid);
+        }
+      }
+    } catch (e) {}
+    return out;
+  }
+
+  function extractFocusedOrPrimaryCascadeId() {
+    try {
+      const sp = new URLSearchParams(window.location.search || '');
+      const focused = String(sp.get('focused') || '').trim().toLowerCase();
+      if (CASCADE_UUID_RE.test(focused)) return focused;
+      const pathIds = extractAllPathnameCascadeIds();
+      if (pathIds.length > 0) return pathIds[0];
+      const q = String(sp.get('cascadeId') || '').trim().toLowerCase();
+      if (CASCADE_UUID_RE.test(q)) return q;
       const selected = document.querySelector('[data-testid=conversation-row-sidebar][data-selected=true]');
       if (selected) {
-        const cid = selected.getAttribute('data-cascade-id');
-        if (cid && /^[0-9a-f-]{36}$/i.test(cid)) return cid;
+        const cid = String(selected.getAttribute('data-cascade-id') || '').trim().toLowerCase();
+        if (CASCADE_UUID_RE.test(cid)) return cid;
+      }
+    } catch (e) {}
+    return '';
+  }
+
+  function extractCascadeId() {
+    return extractFocusedOrPrimaryCascadeId();
+  }
+
+  function resolveBoxCascadeId(box, totalBoxes) {
+    if (!box) return '';
+    try {
+      const sideContainer =
+        box.closest &&
+        box.closest(
+          '[data-testid="side-question-tab-content"], [data-testid="side-question-tab-composer"], [data-side-panel-composer], [data-media-drop-scope="subpane"]'
+        );
+      if (sideContainer) {
+        const tabContent =
+          (sideContainer.matches &&
+          sideContainer.matches('[data-testid="side-question-tab-content"], [data-media-drop-scope="subpane"]')
+            ? sideContainer
+            : sideContainer.closest &&
+              sideContainer.closest('[data-testid="side-question-tab-content"], [data-media-drop-scope="subpane"]')) ||
+          sideContainer;
+        const sideConv =
+          tabContent && tabContent.querySelector
+            ? tabContent.querySelector(
+                '[data-testid="side-question-tab-conversation"][data-cascade-id], [data-testid="subagent-tab-conversation"][data-cascade-id], [data-cascade-id]'
+              )
+            : null;
+        if (sideConv) {
+          const sideCid = String(sideConv.getAttribute('data-cascade-id') || '').trim().toLowerCase();
+          if (CASCADE_UUID_RE.test(sideCid)) return sideCid;
+        }
+        const auxRoot =
+          (box.closest && box.closest('[data-testid="aux-pane-split"], [data-pane-id]')) || document;
+        const strip =
+          auxRoot && auxRoot.querySelector
+            ? auxRoot.querySelector('[data-active-tab-id^="side_question__"], [data-active-tab-id^="subagent_convo__"]')
+            : null;
+        if (strip) {
+          const stripCid = extractAuxConvoTabUuid(strip.getAttribute('data-active-tab-id'));
+          if (stripCid) return stripCid;
+        }
+        return '';
+      }
+      const view =
+        box.closest && box.closest('[data-testid="conversation-view"][data-cascade-id], [data-cascade-id]');
+      if (view) {
+        const cid = String(view.getAttribute('data-cascade-id') || '').trim().toLowerCase();
+        if (CASCADE_UUID_RE.test(cid)) return cid;
+      }
+      if (totalBoxes === 1) {
+        const paneScope =
+          (box.closest && box.closest('[data-pane-id], [data-testid="overview-panel-host"], main')) || document;
+        const hasHomeGreeting = !!(
+          (box.closest && box.closest(SELECTORS.homeGreeting)) ||
+          (paneScope && paneScope.querySelector && paneScope.querySelector(SELECTORS.homeGreeting))
+        );
+        const hasBranchTrigger = !!(box.querySelector && box.querySelector(SELECTORS.branchPillInBox));
+        if (window.location.pathname !== '/' && !hasHomeGreeting && !hasBranchTrigger) {
+          return extractFocusedOrPrimaryCascadeId();
+        }
       }
     } catch (e) {}
     return '';
@@ -1866,6 +2123,7 @@
       window.__ag_metrics_tt_hide_timer = null;
       const tt = document.getElementById('ag-live-metrics-tooltip');
       if (tt) tt.removeAttribute('data-visible');
+      window.__ag_active_tooltip_pill = null;
     }, delayMs);
   }
 
@@ -1898,9 +2156,16 @@
 
   function ensureMetricsTooltip() {
     let tt = document.getElementById('ag-live-metrics-tooltip');
+    if (tt && tt.getAttribute('data-ag-tt-ver') !== PATCH_VERSION) {
+      try {
+        tt.remove();
+      } catch (e) {}
+      tt = null;
+    }
     if (!tt && document.body) {
       tt = document.createElement('div');
       tt.id = 'ag-live-metrics-tooltip';
+      tt.setAttribute('data-ag-tt-ver', PATCH_VERSION);
       document.body.appendChild(tt);
     } else if (tt && tt.parentElement !== document.body && document.body) {
       document.body.appendChild(tt);
@@ -1921,17 +2186,35 @@
         const cmd = String(btn.getAttribute('data-ag-copy-cmd') || '').trim();
         if (!cmd) return;
         copyTextWithFallback(cmd).then((ok) => {
-          if (!btn.isConnected) return;
-          btn.textContent = ok ? '✓ 已复制' : '复制失败';
-          if (btn.__ag_copy_reset_timer) clearTimeout(btn.__ag_copy_reset_timer);
-          btn.__ag_copy_reset_timer = setTimeout(() => {
-            btn.__ag_copy_reset_timer = null;
-            if (btn.isConnected) btn.textContent = '复制命令';
+          const label = ok ? '✓ 已复制' : '复制失败';
+          tt.__ag_copy_feedback_until = Date.now() + 1800;
+          tt.__ag_copy_feedback_text = label;
+          tt.__ag_copy_feedback_cmd = cmd;
+          if (btn.isConnected) btn.textContent = label;
+          if (tt.__ag_copy_reset_timer) clearTimeout(tt.__ag_copy_reset_timer);
+          tt.__ag_copy_reset_timer = setTimeout(() => {
+            tt.__ag_copy_reset_timer = null;
+            tt.__ag_copy_feedback_until = 0;
+            tt.__ag_copy_feedback_text = '';
+            tt.__ag_copy_feedback_cmd = '';
+            const curBtn = tt.querySelector && tt.querySelector('.ag-tt-copy-btn');
+            if (curBtn) curBtn.textContent = '复制命令';
           }, 1800);
         });
       });
     }
     return tt;
+  }
+
+  function hideMetricsTooltipIfOwner(pill) {
+    if (!pill || window.__ag_active_tooltip_pill === pill) {
+      clearMetricsTooltipHideTimer();
+      const tt = document.getElementById('ag-live-metrics-tooltip');
+      if (tt) tt.removeAttribute('data-visible');
+      if (!pill || window.__ag_active_tooltip_pill === pill) {
+        window.__ag_active_tooltip_pill = null;
+      }
+    }
   }
 
   function findFooterRow(box) {
@@ -1955,54 +2238,85 @@
     return directFooter || null;
   }
 
+  function findPillInBox(box) {
+    if (!box || !box.querySelector) return null;
+    return box.querySelector('[data-ag-metrics-pill="1"], .ag-live-metrics-pill, #ag-live-metrics-pill');
+  }
+
   function measureNaturalLeftWidth(leftGroup) {
     let w = 0;
     for (let i = 0; i < leftGroup.children.length; i++) {
       const ch = leftGroup.children[i];
-      if (ch.id === 'ag-live-metrics-pill') continue;
+      if (isPillNode(ch)) continue;
       const cw = Math.max(ch.offsetWidth || 0, ch.scrollWidth || 0);
       if (cw > 0) w += cw;
     }
     return w;
   }
 
-  function syncMetricsResizeObserver(bottomRow, leftGroup, rightGroup) {
-    if (typeof ResizeObserver === 'undefined' || !bottomRow) return;
-    if (window.__ag_metrics_ro_target !== bottomRow || window.__ag_metrics_ro_ver !== PATCH_VERSION) {
-      if (window.__ag_metrics_ro) {
+  function computeNeededPillWidth(pill) {
+    if (!pill || pill.style.display === 'none') return 0;
+    const textEl = getPillTextEl(pill);
+    const textScrollW = textEl ? textEl.scrollWidth || 0 : 0;
+    return textScrollW > 0 ? Math.ceil(textScrollW + 12) : 0;
+  }
+
+  function syncMetricsResizeObserver(box, bottomRow, leftGroup, rightGroup) {
+    if (typeof ResizeObserver === 'undefined' || !bottomRow) return null;
+    let state = rowStateMap.get(bottomRow);
+    if (!state || state.ver !== PATCH_VERSION) {
+      if (state && state.ro) {
         try {
-          window.__ag_metrics_ro.disconnect();
+          state.ro.disconnect();
         } catch (e) {}
+        activeMetricsObservers.delete(state.ro);
       }
-      window.__ag_metrics_ro_target = bottomRow;
-      window.__ag_metrics_ro_ver = PATCH_VERSION;
-      window.__ag_metrics_ro_observed = new WeakSet();
-      window.__ag_last_metrics_layout_sig = '';
-      window.__ag_metrics_ro = new ResizeObserver(() => {
-        if (window.__ag_metrics_raf) return;
-        window.__ag_metrics_raf = requestAnimationFrame(() => {
-          window.__ag_metrics_raf = 0;
-          const curBox = document.getElementById(SELECTORS.inputBoxId);
-          const curBottom = findFooterRow(curBox);
-          if (!curBottom || !curBottom.children[0]) return;
-          const curLeft = curBottom.children[0];
-          const curRight = curBottom.children[1] || null;
-          const rw = curBottom.clientWidth || 0;
+      if (state && state.rafId) {
+        try {
+          cancelAnimationFrame(state.rafId);
+        } catch (e) {}
+        activeMetricsRafs.delete(state.rafId);
+      }
+      state = {
+        ver: PATCH_VERSION,
+        observed: new WeakSet(),
+        rafId: 0,
+        lastSig: '',
+        lastRowW: 0,
+        ro: null
+      };
+      const ro = new ResizeObserver(() => {
+        if (state.rafId) return;
+        state.rafId = scheduleTrackedHandle(activeMetricsRafs, requestAnimationFrame, () => {
+          state.rafId = 0;
+          if (!bottomRow.isConnected || !box.isConnected) {
+            try {
+              ro.disconnect();
+            } catch (e) {}
+            activeMetricsObservers.delete(ro);
+            return;
+          }
+          const curLeft = bottomRow.children[0];
+          if (!curLeft) return;
+          const curRight = bottomRow.children[1] || null;
+          const rw = bottomRow.clientWidth || 0;
           if (rw <= 0) return;
           const lw = measureNaturalLeftWidth(curLeft);
           const rgw = curRight ? curRight.offsetWidth || 0 : 0;
-          const sig = rw + ':' + lw + ':' + rgw;
-          if (sig !== window.__ag_last_metrics_layout_sig) {
-            if (typeof window.__ag_ensure_metrics_pill_fn === 'function') {
-              window.__ag_ensure_metrics_pill_fn(true);
-            }
+          const curPill = findPillInBox(box);
+          const nw = computeNeededPillWidth(curPill);
+          const sig = rw + ':' + lw + ':' + rgw + ':' + nw;
+          if (sig !== state.lastSig) {
+            ensureMetricsPillForBox(box, true, false);
           }
         });
       });
+      state.ro = ro;
+      activeMetricsObservers.add(ro);
+      rowStateMap.set(bottomRow, state);
     }
-    const ro = window.__ag_metrics_ro;
-    const seen = window.__ag_metrics_ro_observed;
-    if (!ro || !seen) return;
+    const ro = state.ro;
+    const seen = state.observed;
     const observeOnce = (el) => {
       if (el && el.nodeType === 1 && !seen.has(el)) {
         seen.add(el);
@@ -2016,84 +2330,109 @@
     if (leftGroup) {
       for (let i = 0; i < leftGroup.children.length; i++) {
         const ch = leftGroup.children[i];
-        if (ch.id !== 'ag-live-metrics-pill') observeOnce(ch);
+        if (!isPillNode(ch)) observeOnce(ch);
       }
     }
+    return state;
   }
 
-  function ensureMetricsPill(forceLayout = false, resetHysteresis = false) {
-    if (!MODULES.metrics) {
-      const existing = document.getElementById('ag-live-metrics-pill');
-      if (existing) existing.style.display = 'none';
-      if (window.__ag_metrics_ro) {
-        try {
-          window.__ag_metrics_ro.disconnect();
-        } catch (e) {}
-        window.__ag_metrics_ro = null;
-        window.__ag_metrics_ro_target = null;
-        window.__ag_metrics_ro_observed = null;
-        window.__ag_last_metrics_layout_sig = '';
+  function createPillElement() {
+    const pill = document.createElement('div');
+    pill.className = 'ag-live-metrics-pill';
+    pill.setAttribute('data-ag-metrics-pill', '1');
+    pill.setAttribute('data-ag-pill-ver', PATCH_VERSION);
+    const span = document.createElement('span');
+    span.className = 'ag-live-metrics-text';
+    span.setAttribute('data-ag-metrics-text', '1');
+    pill.appendChild(span);
+    pill.addEventListener('mouseenter', () => {
+      clearMetricsTooltipHideTimer();
+      const map = isWeakMapInstance(window.__ag_pill_tooltip_map) ? window.__ag_pill_tooltip_map : pillTooltipMap;
+      const ttHtml = map.get(pill);
+      if (!ttHtml) return;
+      const tt = ensureMetricsTooltip();
+      if (!tt) return;
+      if (tt.innerHTML !== ttHtml) {
+        tt.innerHTML = ttHtml;
       }
-      return null;
-    }
-    const box = document.getElementById(SELECTORS.inputBoxId);
-    if (!box) return null;
+      window.__ag_active_tooltip_pill = pill;
+      const r = pill.getBoundingClientRect();
+      const ttWidth = Math.min(450, Math.max(370, tt.offsetWidth || 400));
+      const left = Math.max(12, Math.min(r.left, window.innerWidth - ttWidth - 16));
+      const bottomPx = Math.min(window.innerHeight - r.top + 8, window.innerHeight - (tt.offsetHeight || 220) - 12);
+      tt.style.left = left + 'px';
+      tt.style.bottom = Math.max(8, bottomPx) + 'px';
+      tt.setAttribute('data-visible', '1');
+    });
+    pill.addEventListener('mouseleave', () => {
+      if (window.__ag_active_tooltip_pill !== pill) return;
+      const tt = document.getElementById('ag-live-metrics-tooltip');
+      if (tt && tt.querySelector && tt.querySelector('.ag-tt-copy-btn')) {
+        scheduleMetricsTooltipHide(160);
+      } else {
+        hideMetricsTooltipIfOwner(pill);
+      }
+    });
+    return pill;
+  }
+
+  function ensureMetricsPillForBox(box, forceLayout = false, resetHysteresis = false) {
+    if (!MODULES.metrics || !box) return null;
     const bottomRow = findFooterRow(box);
     if (!bottomRow || !bottomRow.children[0]) return null;
     const leftGroup = bottomRow.children[0];
     const rightGroup = bottomRow.children[1] || null;
 
-    let pill = document.getElementById('ag-live-metrics-pill');
+    let pill = findPillInBox(box);
     let isNewPill = false;
     if (!pill) {
       isNewPill = true;
-      pill = document.createElement('div');
-      pill.id = 'ag-live-metrics-pill';
-      pill.innerHTML = '<span id="ag-live-metrics-text"></span>';
-      pill.addEventListener('mouseenter', () => {
-        clearMetricsTooltipHideTimer();
-        const tt = ensureMetricsTooltip();
-        if (!tt || !tt.innerHTML) return;
-        const r = pill.getBoundingClientRect();
-        const ttWidth = Math.min(450, Math.max(370, tt.offsetWidth || 400));
-        const left = Math.max(12, Math.min(r.left, window.innerWidth - ttWidth - 16));
-        const bottomPx = Math.min(window.innerHeight - r.top + 8, window.innerHeight - (tt.offsetHeight || 220) - 12);
-        tt.style.left = left + 'px';
-        tt.style.bottom = Math.max(8, bottomPx) + 'px';
-        tt.setAttribute('data-visible', '1');
-      });
-      pill.addEventListener('mouseleave', () => {
-        const tt = document.getElementById('ag-live-metrics-tooltip');
-        if (tt && tt.querySelector('.ag-tt-copy-btn')) {
-          scheduleMetricsTooltipHide(160);
-        } else if (tt) {
-          clearMetricsTooltipHideTimer();
-          tt.removeAttribute('data-visible');
+      pill = createPillElement();
+    } else if (!pill.hasAttribute('data-ag-metrics-pill')) {
+      pill.setAttribute('data-ag-metrics-pill', '1');
+      pill.setAttribute('data-ag-pill-ver', PATCH_VERSION);
+      if (pill.classList && !pill.classList.contains('ag-live-metrics-pill')) {
+        pill.classList.add('ag-live-metrics-pill');
+      }
+      const textEl = getPillTextEl(pill);
+      if (textEl) {
+        if (textEl.classList && !textEl.classList.contains('ag-live-metrics-text')) {
+          textEl.classList.add('ag-live-metrics-text');
         }
-      });
+        textEl.setAttribute('data-ag-metrics-text', '1');
+      }
     }
 
-    syncMetricsResizeObserver(bottomRow, leftGroup, rightGroup);
+    const rowState = syncMetricsResizeObserver(box, bottomRow, leftGroup, rightGroup);
 
     const rowW = bottomRow.clientWidth || 0;
-    if (rowW <= 0) return pill;
+    if (rowW <= 0) {
+      if (pill.parentElement !== leftGroup && !(bottomRow.parentElement && pill.parentElement === bottomRow.parentElement)) {
+        leftGroup.appendChild(pill);
+      }
+      return pill;
+    }
     const leftW = measureNaturalLeftWidth(leftGroup);
     const rightW = rightGroup ? rightGroup.offsetWidth || 0 : 0;
-    const curLayoutSig = rowW + ':' + leftW + ':' + rightW;
+    const neededPillW = computeNeededPillWidth(pill);
+    const curLayoutSig = rowW + ':' + leftW + ':' + rightW + ':' + neededPillW;
 
     const isMountedHere =
       pill.parentElement === leftGroup || (bottomRow.parentElement && pill.parentElement === bottomRow.parentElement);
-    if (!forceLayout && !isNewPill && isMountedHere && window.__ag_last_metrics_layout_sig === curLayoutSig) {
+    if (!forceLayout && !isNewPill && isMountedHere && rowState && rowState.lastSig === curLayoutSig) {
       return pill;
     }
 
-    window.__ag_last_metrics_layout_sig = curLayoutSig;
-    window.__ag_last_row_width = rowW;
+    if (rowState) {
+      rowState.lastSig = curLayoutSig;
+      rowState.lastRowW = rowW;
+    }
     const availMiddleW = rowW - leftW - rightW - 8;
+    const enterBottomPx = Math.max(MIDDLE_ENTER_BOTTOM_PX, neededPillW);
+    const exitBottomPx = Math.max(MIDDLE_EXIT_BOTTOM_PX, enterBottomPx + 16);
 
     const prevMode = resetHysteresis ? 'middle' : pill.getAttribute('data-ag-row-mode') || 'middle';
-    const useBottomRow =
-      prevMode === 'bottom' ? availMiddleW < MIDDLE_EXIT_BOTTOM_PX : availMiddleW < MIDDLE_ENTER_BOTTOM_PX;
+    const useBottomRow = prevMode === 'bottom' ? availMiddleW < exitBottomPx : availMiddleW < enterBottomPx;
     const rowMode = useBottomRow ? 'bottom' : 'middle';
 
     if (bottomRow.getAttribute('data-ag-row-mode') !== rowMode) {
@@ -2117,31 +2456,207 @@
     return pill;
   }
 
+  function pruneOrphanedPills(activeBoxes) {
+    const activeSet = new Set(activeBoxes || []);
+    const allPills = document.querySelectorAll('[data-ag-metrics-pill="1"], .ag-live-metrics-pill, #ag-live-metrics-pill');
+    const kept = [];
+    for (let i = 0; i < allPills.length; i++) {
+      const p = allPills[i];
+      let ownerBox = null;
+      for (let j = 0; j < activeBoxes.length; j++) {
+        if (activeBoxes[j] && activeBoxes[j].contains && activeBoxes[j].contains(p)) {
+          ownerBox = activeBoxes[j];
+          break;
+        }
+      }
+      if (!ownerBox || !activeSet.has(ownerBox)) {
+        hideMetricsTooltipIfOwner(p);
+        p.remove();
+      } else {
+        kept.push({ pill: p, box: ownerBox });
+      }
+    }
+    if (window.__ag_active_tooltip_pill && !window.__ag_active_tooltip_pill.isConnected) {
+      hideMetricsTooltipIfOwner(null);
+    }
+    return kept;
+  }
+
+  function assignPrimaryPillIds(mountedEntries, primaryCid) {
+    if (!Array.isArray(mountedEntries) || mountedEntries.length === 0) return null;
+    let primary = null;
+    for (let i = 0; i < mountedEntries.length; i++) {
+      const { pill, box } = mountedEntries[i];
+      const focused = !(box.closest && box.closest('[data-pane-unfocused]'));
+      if (focused && (!primaryCid || pill.getAttribute('data-ag-cascade-id') === primaryCid)) {
+        primary = pill;
+        break;
+      }
+    }
+    if (!primary) {
+      for (let i = 0; i < mountedEntries.length; i++) {
+        const { pill, box } = mountedEntries[i];
+        if (!(box.closest && box.closest('[data-pane-unfocused]'))) {
+          primary = pill;
+          break;
+        }
+      }
+    }
+    if (!primary && primaryCid) {
+      for (let i = 0; i < mountedEntries.length; i++) {
+        if (mountedEntries[i].pill.getAttribute('data-ag-cascade-id') === primaryCid) {
+          primary = mountedEntries[i].pill;
+          break;
+        }
+      }
+    }
+    if (!primary) primary = mountedEntries[0].pill;
+
+    for (let i = 0; i < mountedEntries.length; i++) {
+      const p = mountedEntries[i].pill;
+      const t = getPillTextEl(p);
+      if (p === primary) {
+        if (p.id !== 'ag-live-metrics-pill') p.id = 'ag-live-metrics-pill';
+        if (t && t.id !== 'ag-live-metrics-text') t.id = 'ag-live-metrics-text';
+      } else {
+        if (p.id) p.removeAttribute('id');
+        if (t && t.id) t.removeAttribute('id');
+      }
+    }
+    return primary;
+  }
+
+  function applyPayloadToPill(box, pill, payload) {
+    if (!pill) return;
+    const textEl = getPillTextEl(pill);
+    const ttMap = isWeakMapInstance(window.__ag_pill_tooltip_map) ? window.__ag_pill_tooltip_map : pillTooltipMap;
+    if (!payload || !payload.hasData) {
+      pill.removeAttribute('data-ag-rendered-cid');
+      if (textEl && textEl.innerHTML !== '') {
+        textEl.innerHTML = '';
+      }
+      if (pill.style.display !== 'none') pill.style.display = 'none';
+      ttMap.delete(pill);
+      hideMetricsTooltipIfOwner(pill);
+      return;
+    }
+    const renderedCid = String(payload.cascadeId || pill.getAttribute('data-ag-cascade-id') || '').trim().toLowerCase();
+    if (renderedCid) {
+      if (pill.getAttribute('data-ag-rendered-cid') !== renderedCid) {
+        pill.setAttribute('data-ag-rendered-cid', renderedCid);
+      }
+    } else {
+      pill.removeAttribute('data-ag-rendered-cid');
+    }
+    const nextTooltip = payload.tooltipHtml || '';
+    ttMap.set(pill, nextTooltip);
+    if (window.__ag_active_tooltip_pill === pill) {
+      const tt = document.getElementById('ag-live-metrics-tooltip');
+      if (tt && tt.getAttribute('data-visible') === '1' && tt.innerHTML !== nextTooltip) {
+        tt.innerHTML = nextTooltip;
+        if (tt.__ag_copy_feedback_until > Date.now() && tt.__ag_copy_feedback_cmd) {
+          const newBtn = tt.querySelector && tt.querySelector('.ag-tt-copy-btn');
+          if (
+            newBtn &&
+            String(newBtn.getAttribute('data-ag-copy-cmd') || '').trim() === tt.__ag_copy_feedback_cmd
+          ) {
+            newBtn.textContent = tt.__ag_copy_feedback_text || '✓ 已复制';
+          }
+        }
+      }
+    }
+    const nextHtml = payload.inlineHtml || '';
+    const textChanged = !!(textEl && textEl.innerHTML !== nextHtml);
+    if (textEl && textChanged) {
+      textEl.innerHTML = nextHtml;
+    }
+    const wasHidden = pill.style.display !== 'inline-flex';
+    if (wasHidden) {
+      pill.style.display = 'inline-flex';
+    }
+    if (wasHidden || textChanged) {
+      ensureMetricsPillForBox(box, true, false);
+    }
+  }
+
+  function syncPillForResolvedCascade(box, pill, cid) {
+    if (!pill) return;
+    if (!cid) {
+      if (pill.hasAttribute('data-ag-cascade-id')) {
+        pill.removeAttribute('data-ag-cascade-id');
+      }
+      applyPayloadToPill(box, pill, null);
+      return;
+    }
+    if (pill.getAttribute('data-ag-cascade-id') !== cid) {
+      pill.setAttribute('data-ag-cascade-id', cid);
+    }
+    const renderedCid = String(pill.getAttribute('data-ag-rendered-cid') || '').trim().toLowerCase();
+    const cached = metricsById[cid];
+    if (cached && cached.hasData) {
+      if (renderedCid !== cid || pill.style.display !== 'inline-flex') {
+        applyPayloadToPill(box, pill, cached);
+      }
+    } else if (renderedCid !== '' || pill.style.display === 'inline-flex') {
+      applyPayloadToPill(box, pill, null);
+    }
+  }
+
+  function ensureMetricsPill(forceLayout = false, resetHysteresis = false) {
+    if (!MODULES.metrics) {
+      document.querySelectorAll('#ag-live-metrics-pill, .ag-live-metrics-pill, [data-ag-metrics-pill]').forEach((el) => {
+        el.style.display = 'none';
+      });
+      for (const ro of activeMetricsObservers) {
+        try {
+          ro.disconnect();
+        } catch (e) {}
+      }
+      activeMetricsObservers.clear();
+      hideMetricsTooltipIfOwner(null);
+      return null;
+    }
+    const boxes = getAllInputBoxes();
+    const totalBoxes = boxes.length;
+    for (let i = 0; i < boxes.length; i++) {
+      const box = boxes[i];
+      const pill = ensureMetricsPillForBox(box, forceLayout, resetHysteresis);
+      if (pill) {
+        syncPillForResolvedCascade(box, pill, resolveBoxCascadeId(box, totalBoxes));
+      }
+    }
+    const kept = pruneOrphanedPills(boxes);
+    return assignPrimaryPillIds(kept, extractFocusedOrPrimaryCascadeId());
+  }
+
   window.__ag_ensure_metrics_pill_fn = ensureMetricsPill;
 
   window.__ag_render_metrics = function (payload) {
     try {
-      if (!MODULES.metrics) return;
-      window.__ag_last_metrics = payload;
-      const currentId = extractCascadeId();
-      const pill = ensureMetricsPill(false);
-      const ttEl = ensureMetricsTooltip();
-      if (!pill) return;
-      if (!currentId || !payload || !payload.hasData || payload.cascadeId !== currentId) {
-        if (pill.style.display !== 'none') pill.style.display = 'none';
-        if (ttEl) ttEl.removeAttribute('data-visible');
-        return;
+      if (!MODULES.metrics || !payload || typeof payload !== 'object') return;
+      const cid = String(payload.cascadeId || '').trim().toLowerCase();
+      if (!CASCADE_UUID_RE.test(cid)) return;
+      metricsById[cid] = payload;
+      const primaryCid = window.__ag_watched_cascade_id || extractFocusedOrPrimaryCascadeId();
+      if (!primaryCid || cid === primaryCid) {
+        window.__ag_last_metrics = payload;
       }
-      const textEl = pill.querySelector('#ag-live-metrics-text');
-      if (textEl && textEl.innerHTML !== payload.inlineHtml) {
-        textEl.innerHTML = payload.inlineHtml;
-      }
-      if (ttEl && ttEl.innerHTML !== payload.tooltipHtml) {
-        ttEl.innerHTML = payload.tooltipHtml;
-      }
-      if (pill.style.display !== 'inline-flex') {
-        pill.style.display = 'inline-flex';
-        ensureMetricsPill(true);
+      ensureMetricsPill(false);
+      const boxes = getAllInputBoxes();
+      const totalBoxes = boxes.length;
+      for (let i = 0; i < boxes.length; i++) {
+        const box = boxes[i];
+        const pill = findPillInBox(box);
+        if (!pill) continue;
+        const boxCid =
+          String(pill.getAttribute('data-ag-cascade-id') || '').trim().toLowerCase() ||
+          resolveBoxCascadeId(box, totalBoxes);
+        if (boxCid === cid) {
+          if (pill.getAttribute('data-ag-cascade-id') !== cid) {
+            pill.setAttribute('data-ag-cascade-id', cid);
+          }
+          applyPayloadToPill(box, pill, payload);
+        }
       }
     } catch (e) {}
   };
@@ -2155,56 +2670,133 @@
         return;
       }
       if (document.hidden) return;
+      const boxes = getAllInputBoxes();
+      const totalBoxes = boxes.length;
+      const paneCids = [];
+      const activeIds = [];
+      const seenIds = new Set();
+      for (let i = 0; i < boxes.length; i++) {
+        const boxCid = resolveBoxCascadeId(boxes[i], totalBoxes);
+        paneCids.push(boxCid);
+        if (boxCid && !seenIds.has(boxCid)) {
+          seenIds.add(boxCid);
+          activeIds.push(boxCid);
+        }
+      }
+
       const pathname = window.location.pathname;
       const isChatRoute = pathname.startsWith('/c/');
-      const cid = extractCascadeId();
-      const isHome = pathname === '/' || (!isChatRoute && !cid) || (!isChatRoute && !!document.querySelector(SELECTORS.homeGreeting));
+      const primaryCid = extractFocusedOrPrimaryCascadeId() || activeIds[0] || '';
+      const isHome =
+        pathname === '/' ||
+        (!isChatRoute && !primaryCid && activeIds.length === 0) ||
+        (!isChatRoute && !!document.querySelector(SELECTORS.homeGreeting));
       const pageType = isHome ? 'home' : 'chat';
       if (document.documentElement.getAttribute('data-ag-page-type') !== pageType) {
         document.documentElement.setAttribute('data-ag-page-type', pageType);
       }
 
       if (!MODULES.metrics) {
-        const existing = document.getElementById('ag-live-metrics-pill');
-        if (existing) existing.style.display = 'none';
+        document.querySelectorAll('#ag-live-metrics-pill, .ag-live-metrics-pill, [data-ag-metrics-pill]').forEach((el) => {
+          if (el.style.display !== 'none') el.style.display = 'none';
+        });
+        hideMetricsTooltipIfOwner(null);
         return;
       }
 
-      if (!cid) {
-        window.__ag_watched_cascade_id = '';
-        const pill = document.getElementById('ag-live-metrics-pill');
-        if (pill && pill.style.display !== 'none') {
-          pill.style.display = 'none';
+      for (let i = 0; i < boxes.length; i++) {
+        const box = boxes[i];
+        const pill = ensureMetricsPillForBox(box, false, false);
+        if (pill) {
+          syncPillForResolvedCascade(box, pill, paneCids[i]);
         }
-        const ttEl = document.getElementById('ag-live-metrics-tooltip');
-        if (ttEl) ttEl.removeAttribute('data-visible');
-        return;
       }
 
-      if (cid !== window.__ag_watched_cascade_id) {
-        window.__ag_watched_cascade_id = cid;
-        window.__ag_last_metrics_layout_sig = '';
-        const pill = ensureMetricsPill(true, true);
-        if (pill && (!window.__ag_last_metrics || window.__ag_last_metrics.cascadeId !== cid)) {
-          pill.style.display = 'none';
-        }
+      const kept = pruneOrphanedPills(boxes);
+      assignPrimaryPillIds(kept, primaryCid);
+
+      const watchedIds = boxes.length === 0 && isChatRoute ? extractAllPathnameCascadeIds() : activeIds;
+      const watchedSig = watchedIds.join(',');
+      const primaryWatched = (primaryCid && seenIds.has(primaryCid) ? primaryCid : watchedIds[0]) || '';
+      window.__ag_watched_cascade_ids = watchedIds;
+      window.__ag_watched_cascade_id = primaryWatched;
+      window.__ag_last_metrics = primaryWatched ? metricsById[primaryWatched] || null : null;
+
+      if (watchedSig !== window.__ag_watched_cascade_sig) {
+        window.__ag_watched_cascade_sig = watchedSig;
         if (typeof window.__agRequestMetrics === 'function') {
           try {
-            window.__agRequestMetrics(cid);
+            window.__agRequestMetrics(JSON.stringify(watchedIds));
           } catch (e) {}
-        }
-      } else if (window.__ag_last_metrics && window.__ag_last_metrics.cascadeId === cid) {
-        const pill = ensureMetricsPill(false);
-        if (pill && window.__ag_last_metrics.hasData && pill.style.display === 'none') {
-          window.__ag_render_metrics(window.__ag_last_metrics);
         }
       }
     } catch (e) {}
   }
 
+  function scheduleRouteCheck() {
+    const runCheck = () => {
+      if (typeof window.__ag_check_route_fn === 'function') window.__ag_check_route_fn();
+    };
+    scheduleTrackedHandle(activeMetricsRafs, requestAnimationFrame, () => {
+      scheduleTrackedHandle(metricsRouteTimers, (cb) => setTimeout(cb, 0), runCheck);
+    });
+    for (const delay of [120, 400]) {
+      scheduleTrackedHandle(metricsRouteTimers, (cb) => setTimeout(cb, delay), runCheck);
+    }
+  }
+
+  window.__ag_trigger_route_check_fn = scheduleRouteCheck;
+  window.__ag_metrics_focusin_fn = (e) => {
+    const t = e && e.target;
+    if (!t || !t.closest) return;
+    const rawId = String(SELECTORS.inputBoxId || '').trim().replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+    const baseSel =
+      '[data-pane-id], [data-testid="conversation-view"], [data-testid="side-question-tab-content"], [data-media-drop-scope="subpane"], [data-side-panel-strip]';
+    const matchSel = rawId ? `${baseSel}, [id="${rawId}"]` : baseSel;
+    if (t.closest(matchSel)) {
+      scheduleRouteCheck();
+    }
+  };
+  window.__ag_metrics_click_fn = (e) => {
+    const t = e && e.target;
+    if (!t || !t.closest) return;
+    if (t.closest('[data-tab-id], [data-side-panel-strip]')) {
+      scheduleRouteCheck();
+    }
+  };
+
+  if (!IS_SWARM_PLUGIN_FRAME && !window.__ag_metrics_focusin_installed) {
+    window.__ag_metrics_focusin_installed = true;
+    document.addEventListener(
+      'focusin',
+      (e) => {
+        if (typeof window.__ag_metrics_focusin_fn === 'function') {
+          window.__ag_metrics_focusin_fn(e);
+        }
+      },
+      true
+    );
+  }
+  if (!IS_SWARM_PLUGIN_FRAME && !window.__ag_metrics_click_installed) {
+    window.__ag_metrics_click_installed = true;
+    document.addEventListener(
+      'click',
+      (e) => {
+        if (typeof window.__ag_metrics_click_fn === 'function') {
+          window.__ag_metrics_click_fn(e);
+        }
+      },
+      true
+    );
+  }
+
   if (!IS_SWARM_PLUGIN_FRAME && !window.__ag_history_hook_installed) {
     window.__ag_history_hook_installed = true;
     const triggerRouteCheck = () => {
+      if (typeof window.__ag_trigger_route_check_fn === 'function') {
+        window.__ag_trigger_route_check_fn();
+        return;
+      }
       requestAnimationFrame(() => {
         setTimeout(() => {
           if (typeof window.__ag_check_route_fn === 'function') window.__ag_check_route_fn();
@@ -2213,6 +2805,9 @@
       setTimeout(() => {
         if (typeof window.__ag_check_route_fn === 'function') window.__ag_check_route_fn();
       }, 120);
+      setTimeout(() => {
+        if (typeof window.__ag_check_route_fn === 'function') window.__ag_check_route_fn();
+      }, 400);
     };
     const wrapHistory = (type) => {
       const orig = history[type];
@@ -2378,7 +2973,7 @@
     }
 
     const CONTAINER_IMMUTABLE_EXCLUDE_SELECTOR =
-      'code, pre, kbd, samp, style, script, noscript, [data-markdown-root], [data-testid="user-message-content"], .agy-user-bubble, .monaco-editor, .monaco-diff-editor, .xterm, #ag-live-metrics-pill, #ag-live-metrics-tooltip, .msg-body, #raw, [data-testid="swarm-raw"], #swarm-title';
+      'code, pre, kbd, samp, style, script, noscript, [data-markdown-root], [data-testid="user-message-content"], .agy-user-bubble, .monaco-editor, .monaco-diff-editor, .xterm, #ag-live-metrics-pill, .ag-live-metrics-pill, [data-ag-metrics-pill], #ag-live-metrics-tooltip, .msg-body, #raw, [data-testid="swarm-raw"], #swarm-title';
     const TEXT_IMMUTABLE_EXCLUDE_SELECTOR =
       'textarea, input, [contenteditable="true"], [data-testid="conversation-navigator-turn"], ' +
       CONTAINER_IMMUTABLE_EXCLUDE_SELECTOR;
@@ -2634,7 +3229,7 @@
     const RE_MODEL_PERIOD_LIMIT =
       /^(Gemini\b[\w .+-]*|Claude\b[\w .+-]*|GPT\b[\w .+-]*|Orchestrator\b[\w .+()-]*)\s+(Weekly|Daily|Monthly)\s+Limit$/i;
     const RE_MODEL_EFFORT_LABEL =
-      /^(Gemini\b[\w .+-]*|Claude\b[\w .+-]*|GPT\b[\w .+-]*)\s+\((Extra\s+High|Low|Medium|High|Extra|XHigh|Max)\)$/i;
+      /^(Gemini\b[\w .+-]*|Claude\b[\w .+-]*|GPT\b[\w .+-]*)\s+\((Extra\s+High|Minimal|Low|Medium|High|Extra|XHigh|Max)\)$/i;
     const RE_YOUR_PLAN = /^Your Plan:\s*([^\r\n]{1,80})$/;
     const RE_AVAILABLE_AI_CREDITS = /^Available AI Credits:\s*([^\r\n]{1,40})$/i;
     const RE_EXITED_CODE_ONLY = /^Exited with code\s+(-?\d+)(\.)?$/i;
@@ -2659,8 +3254,8 @@
     const RE_ARIA_GOTO_TURN = /^Go to turn\s+(\d+)\s+of\s+(\d+)$/i;
     const RE_ARIA_LOAD_OLDER = /^(?:Load\s+(\d+)\s+older\s+turns?.*|(Load|No more) older messages,\s*showing\s+(\d+)\s+of\s+(\d+))$/i;
     const RE_EFFORT_SUFFIX =
-      /^(.*?)\s*(?:\((Extra\s+High|Low|Medium|High|Extra|XHigh|Max)(?:\s+thinking)?\)|\b(Extra\s+High|Low|Medium|High|Extra|XHigh|Max))(?:\s*·\s*(.+))?\s*$/i;
-    const EFFORT_MAP = { low: '低', medium: '中', high: '高', extra: '超高', 'extra high': '超高', xhigh: '超高', max: '最高' };
+      /^(.*?)\s*(?:\((Extra\s+High|Minimal|Low|Medium|High|Extra|XHigh|Max)(?:\s+thinking)?\)|\b(Extra\s+High|Minimal|Low|Medium|High|Extra|XHigh|Max))(?:\s*·\s*(.+))?\s*$/i;
+    const EFFORT_MAP = { minimal: '最低', low: '低', medium: '中', high: '高', extra: '超高', 'extra high': '超高', xhigh: '超高', max: '最高' };
     const MONTH_FULL_MAP = {
       january: 1,
       february: 2,
