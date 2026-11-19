@@ -4,6 +4,25 @@
 
 ---
 
+## [v5.5.2] - 2026-11-20
+
+> **适用版本**：Antigravity `2.33.0+`（macOS `CL=1023160026` × Windows 11 `CL=1028566590`，向下完全兼容 `2.32.x` / `2.31.x` / `2.30.0`）  
+> **核验基线**：macOS `2.33.0` (`Track M`) × Windows 11 `2.33.0` (`2.4x HiDPI DirectWrite` · 中文 `CP936` `W552-Check 1 ~ 4` 真机 CDP 全绿联合定版)  
+> **社区致谢**：特别感谢 [@aci825223](https://github.com/aci825223)（[#19](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/issues/19)）、[@CaramelizedCUDA](https://github.com/CaramelizedCUDA)（[#19](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/issues/19) C++ `FontDataManager` 追踪定位）、[@we23345](https://github.com/we23345)（[#23](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/issues/23)）、[@hyt315](https://github.com/hyt315)（[#19](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/issues/19) 拆分字体实测、[#22](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/pull/22)、[#24](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/pull/24)）、[@shixiaogaoya](https://github.com/shixiaogaoya)（[#21](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/pull/21)）与 [@CiaoBye](https://github.com/CiaoBye)（[#20](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/issues/20)）的深度排障与代码贡献！
+
+### Fixed & Perf（Windows 二级菜单/弹窗冻结双层根治、Browser 级 CDP 事件驱动发现、冷启动重载防误拉黑与 macOS Homebrew 稳定路径解析）
+- **根治 Windows 端切换二级菜单、设置弹窗与对话时的渲染卡顿（`core/theme.css` / `core/runtime.js` / `install.mjs`，修复 [#19](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/issues/19)、[#23](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/issues/23)，合入并增强 [#24](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/pull/24)）**：
+  - **`win32` 跨字号零拷贝直连栈（存量 `SuperTTC` 用户零改动即刻止血）**：在 `html[data-ag-os="win32"]` 下绕过 `AgSarasaUI` `@font-face local()`（其在 Windows Chromium `LocalFontFaceSource` 下不跨字号复用 `SkTypeface`，遇 `791.4MB` `Sarasa-SuperTTC.ttc` 每新字号在 `CrRendererMain` 同步阻塞 `1.2s–10.5s`）并剔除冗余同源族名别名（`更纱黑体 UI SC` / `等距更纱黑体 Slab SC` / `Sarasa Gothic SC`），直连 `'Sarasa UI SC'` 并将 `win32` 主窗与 Swarm 子帧默认 UI 字重设为 `400`（防止 `350` 跌入 `Light 300` 发虚，跨字号切换耗时从 `~1,200ms` 压至 `3.3~5.5ms`）；
+  - **拆分版 14 字重精简包上架与 `--retire-super-ttc` UTF-16 原生注册表退订（彻底释放 `23.2GB` 虚存与冷加载耗时）**：在对外公开资源仓上架 [`Windows-Sarasa-Split-SC-TTF-v1.0.43.zip`](https://drive.google.com/file/d/1iVVvZXtwUcDiHy42tJ25X6N-JlOf3l7A/view?usp=sharing)；`install.mjs` 通过 `.NET` `Microsoft.Win32.Registry` UTF-16 接口精准读取并删除 `HKCU\...\Fonts` 中 ASCII 与中文复合键名（如 `"更紗黑體 CL & 更纱黑体 SC & ..."`，规避中文 Windows `CP936` `reg.exe` 乱码残留）及 `_0.ttc` 副本，合并执行 `RemoveFontResourceW` + `WM_FONTCHANGE`。Windows 11 真机冷启动 31 组全字重/字号布局总耗时从 `23,831.8 ms` 降至 **`142.6 ms`（提速 `167.1×`）**，渲染器 `WorkingSet` 从 `4,515.1 MB` 降至 **`336.2 MB`（`-92.6%`）**；
+  - **渲染器微开销同步收敛**：在宿主 `#agy-new-themes-fonts` 就绪后自动移除保底 `#ag-google-sans-flex-fonts`（消除 `document.fonts` 86 条重复字体面，并支持 `modules.googleFonts: false` 离线关闭）；为 `syncChuanbanPreset()` 增加状态签名短路（弹窗滚动锁触发 `getComputedStyle` 次数 `8 -> 0`）；为 `__ag_appearance_toggle_observer` 增加对话正文/代码/历史列表容器 `O(1)` 豁免（300 节点消息流 `toggle-group` 扫描 `301 -> 0`，设置弹窗仍 `0.3ms` 同微任务挂载）；移除 `theme.css` `win32` 等宽规则末尾的 `*` 通配符。
+- **新增 Browser 级 CDP 事件驱动目标发现，并修复冷启动切端口过渡期误触发 `non_host` 永久拉黑（`core/daemon.mjs`，合入并融合加固 [#21](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/pull/21) 与 [#22](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/pull/22)）**：
+  - 订阅 `Target.setDiscoverTargets` 将托盘重开、新建窗口与 `plugin://swarm--` 子帧挂载延迟从 `0–2.5s` 轮询压缩至毫秒级（Windows 11 真机系统托盘唤醒重开主窗 **`150.0 ms`**、Swarm 子帧 **`69.5 ms`** 即时完成注入），支持托盘 `0` 窗口态（`HTTP 200 []`）保活、`sync()` 旧快照防竞态误杀、3000ms WS 握手超时保护及 `/json/version` `Browser + User-Agent` 联合校验（放行 Electron 44 / Antigravity `2.33.0`，精准隔离 `fallbackPort` 外部 Chrome/Edge 以免误拦 M2 冷启动自愈）；
+  - 将 `about:` / `chrome-error:` / `data:` 瞬时过渡文档在 `HOST_PROBE_EXPRESSION` 中识别为 `'pending'`，并在事件流与轮询共享入口统一接入 `isSkippedNonHost()` 有限退避复检（标题切入 `Antigravity` `150ms` 快速解封 + 最多 5 次 3s 重试，普通本地访客页最多 2 次 8s 复检后静默跳过）。
+- **修复 macOS / Linux 下系统服务将 Homebrew Node 固化为版本化 `Cellar` 路径的问题（`install.mjs`，修复 [#20](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/issues/20)）**：
+  - 新增 `resolveStableNodeExecPath()`，动态兼容 Homebrew 标准链接公式（`Cellar/node/<ver>/bin/node -> bin/node`）、Keg-only 版本化公式（如 `node@22 -> opt/node@22/bin/node`）及 `fnm` 默认持久软链（`aliases/default/bin/node`），经 `fs.realpathSync` 严格校验同一实体后写入 `LaunchAgent` plist 与 `systemd` unit，避免 `brew upgrade node && brew cleanup` 后守护进程启动失败。
+
+---
+
 ## [v5.5.1] - 2026-11-19
 
 > **适用版本**：Antigravity `2.33.0+`（向下完全兼容 `2.32.x` / `2.31.x` / `2.30.0`）  

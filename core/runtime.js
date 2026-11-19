@@ -106,7 +106,7 @@
     }
   }
 
-  const PATCH_VERSION = boot.version || '20261119-v5.5.1';
+  const PATCH_VERSION = boot.version || '20261119-v5.5.2';
   const DETECTED_OS =
     boot.platform || (/Win/i.test(navigator.platform || '') ? 'win32' : /Mac/i.test(navigator.platform || '') ? 'darwin' : 'linux');
   const ENABLED = boot.enabled !== false;
@@ -118,6 +118,7 @@
     {
       i18n: true,
       metrics: true,
+      googleFonts: true,
       composerWaxSeal: true,
       deadlockHealer: true,
       coldBootHealer: true,
@@ -296,7 +297,10 @@
 
     let varStyle = document.getElementById('ag-user-theme-vars');
     if (globalDecls.length === 0 && lightDecls.length === 0 && darkDecls.length === 0) {
-      if (varStyle) varStyle.remove();
+      if (varStyle) {
+        varStyle.remove();
+        window.__ag_style_rev = (window.__ag_style_rev || 0) + 1;
+      }
     } else {
       const head = document.head || document.getElementsByTagName('head')[0] || document.documentElement;
       if (!varStyle) {
@@ -330,6 +334,7 @@
       const nextCss = blocks.join('\n');
       if (varStyle.textContent !== nextCss) {
         varStyle.textContent = nextCss;
+        window.__ag_style_rev = (window.__ag_style_rev || 0) + 1;
       }
     }
 
@@ -613,6 +618,7 @@
     window.__ag_set_host_theme_mode = null;
     window.__ag_set_host_dark_preset = null;
     window.__ag_resolved_theme_mode = null;
+    window.__ag_last_surface_sync_key = '';
     window.__ag_body_ready = false;
     applyThemeVars({}, {});
     document.documentElement.removeAttribute('data-ag-preset');
@@ -703,11 +709,17 @@
 
   const legacySwarmFont = document.getElementById('ag-swarm-google-fonts');
   if (legacySwarmFont) legacySwarmFont.remove();
-  if (
-    headTarget &&
-    !document.getElementById('agy-new-themes-fonts') &&
-    !document.getElementById('ag-google-sans-flex-fonts')
-  ) {
+
+  function dedupFallbackGoogleFontsLink() {
+    if (MODULES.googleFonts === false || document.getElementById('agy-new-themes-fonts')) {
+      const dupGsf = document.getElementById('ag-google-sans-flex-fonts');
+      if (dupGsf) dupGsf.remove();
+      return true;
+    }
+    return false;
+  }
+
+  if (!dedupFallbackGoogleFontsLink() && headTarget && !document.getElementById('ag-google-sans-flex-fonts')) {
     try {
       const gfLink = document.createElement('link');
       gfLink.id = 'ag-google-sans-flex-fonts';
@@ -731,6 +743,7 @@
   }
   if (style && style.textContent !== CSS_TEXT) {
     style.textContent = CSS_TEXT;
+    window.__ag_style_rev = (window.__ag_style_rev || 0) + 1;
   }
 
   document.documentElement.setAttribute('data-ag-wax-seal', MODULES.composerWaxSeal === false ? 'off' : 'on');
@@ -747,12 +760,15 @@
     }
     if (userStyle.textContent !== CUSTOM_CSS_TEXT) {
       userStyle.textContent = CUSTOM_CSS_TEXT;
+      window.__ag_style_rev = (window.__ag_style_rev || 0) + 1;
     }
   } else if (userStyle) {
     userStyle.remove();
+    window.__ag_style_rev = (window.__ag_style_rev || 0) + 1;
   }
 
   function ensureStylesAtEndOfHead() {
+    dedupFallbackGoogleFontsLink();
     const h = document.head || document.getElementsByTagName('head')[0];
     if (!h) return;
     const base = document.getElementById('ag-custom-fonts');
@@ -1502,6 +1518,7 @@
         document.documentElement.setAttribute('data-ag-theme-mode', targetMode);
       }
       window.__ag_resolved_theme_mode = targetMode;
+      dedupFallbackGoogleFontsLink();
       if (!IS_SWARM_PLUGIN_FRAME && lastSyncedHostMode !== targetMode) {
         lastSyncedHostMode = targetMode;
         if (typeof window.__agSyncHostThemeMode === 'function') {
@@ -1510,8 +1527,15 @@
           } catch (e) {}
         }
       }
-      syncWinTitleBarOverlay(isDark, darkPresetChanged);
-      syncCurtainSurfaceColor(darkPresetChanged);
+      const bodyStateFlag = bodyEl ? (bodyEl.hasAttribute('data-agy-theme') || bodyEl.hasAttribute('data-newux-theme') ? 2 : 1) : 0;
+      const surfaceSyncKey = `${targetMode}|${targetPreset}|${targetDarkPreset}|${bodyStateFlag}|${window.__ag_style_rev || 0}`;
+      if (darkPresetChanged || window.__ag_last_surface_sync_key !== surfaceSyncKey) {
+        if (bodyEl) {
+          window.__ag_last_surface_sync_key = surfaceSyncKey;
+        }
+        syncWinTitleBarOverlay(isDark, darkPresetChanged);
+        syncCurtainSurfaceColor(darkPresetChanged);
+      }
       if (typeof window.__ag_sync_warm_night_btn_fn === 'function') {
         window.__ag_sync_warm_night_btn_fn();
       }
@@ -1893,19 +1917,23 @@
           window.__ag_appearance_toggle_observer.disconnect();
         } catch (e) {}
       }
+      const APPEARANCE_SKIP_SELECTOR =
+        '[data-markdown-root], [data-testid="user-message-content"], .agy-user-bubble, .prose, .markdown, pre, code, .monaco-editor, .xterm, #ag-live-metrics-pill, .ag-live-metrics-pill, [data-ag-metrics-pill], [data-testid="conversation-row-history"]';
       window.__ag_appearance_toggle_observer = new MutationObserver((mutations) => {
         for (let i = 0; i < mutations.length; i++) {
           const m = mutations[i];
           if (m.type !== 'childList' || m.addedNodes.length === 0) continue;
+          const targetEl = m.target && m.target.nodeType === 1 ? m.target : null;
+          if (targetEl && targetEl.closest && targetEl.closest(APPEARANCE_SKIP_SELECTOR)) continue;
           for (let j = 0; j < m.addedNodes.length; j++) {
             const n = m.addedNodes[j];
-            if (n && n.nodeType === 1) {
-              if (
-                (n.matches && n.matches('[data-slot="toggle-group"]')) ||
-                (n.firstElementChild && n.querySelector && n.querySelector('[data-slot="toggle-group"]'))
-              ) {
-                ensureAppearanceWarmNightToggle(n);
-              }
+            if (!n || n.nodeType !== 1) continue;
+            if (n.matches && n.matches(APPEARANCE_SKIP_SELECTOR)) continue;
+            if (
+              (n.matches && n.matches('[data-slot="toggle-group"]')) ||
+              (n.firstElementChild && n.querySelector && n.querySelector('[data-slot="toggle-group"]'))
+            ) {
+              ensureAppearanceWarmNightToggle(n);
             }
           }
         }

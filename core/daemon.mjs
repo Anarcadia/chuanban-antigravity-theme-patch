@@ -2,7 +2,7 @@
 /**
  * chuanban-antigravity-theme-patch · CDP Theme & Live Metrics Daemon (core/daemon.mjs)
  *
- * 架构特性（v5.5.1）：
+ * 架构特性（v5.5.2）：
  * 1. 动态 Node 分级：
  *    - Node >= 22.0：完整启用昼夜双模式独立主题（暖纸浅色三预设 + 深色 onyx / claude-warm 双预设）、Google Sans Flex 原生西文引擎 × 更纱黑体 UI 精密字重桥接 + Anthropic Serif 正文、输入框三态、1860条母语级汉化、宿主独占指纹门禁、死锁与冷启动兜底包自愈及 2.33.0+ CDP Opt-in 自动接力（M2）。
  *    - Node >= 22.13：动态 `await import('node:sqlite')` 解锁底部实时会话指标胶囊（O(1) 增量尾行解析 + WSL2 双轨只读读取）；低版本优雅降级绝不崩溃。
@@ -258,12 +258,15 @@ function resolveChannelPaths(singleChannel = 'stable', userCfg = {}) {
   const explicitConvDir = getArg('--conversations-dir', userCfg.conversationsDir || '');
   const primaryConvDir = explicitConvDir || defaultConvDir;
 
+  const customFallbackPort =
+    Number(userCfg.fallbackPort) > 0 ? Number(userCfg.fallbackPort) : Number(userCfg.port) > 0 ? Number(userCfg.port) : 0;
+
   return {
     channel: singleChannel,
     portFile,
     geminiSubDir,
     explicitConvDir: Boolean(explicitConvDir),
-    fallbackPort: Number(userCfg.fallbackPort) > 0 ? Number(userCfg.fallbackPort) : fallbackPort,
+    fallbackPort: customFallbackPort || fallbackPort,
     channelInstalled,
     conversationsDir: primaryConvDir
   };
@@ -288,7 +291,7 @@ function resolveActiveChannelEndpoints(channelMode = 'auto', userCfg = {}) {
 // ============================================================================
 // 2. 动态构建注入载荷（支持 core/ + user/ 实时合并与热更新签名）
 // ============================================================================
-const BASE_VERSION = '20261119-v5.5.1';
+const BASE_VERSION = '20261119-v5.5.2';
 let cachedBundleSig = '';
 let cachedInjectScript = '';
 let cachedPatchVersion = '';
@@ -535,6 +538,8 @@ function rebuildBundleIfNeeded() {
       coldBootHealer: true,
       zoomShortcuts: true,
       cdpAutoRelaunch: true,
+      cdpEventDiscovery: true,
+      googleFonts: true,
       customCss: true,
       customJs: true
     },
@@ -686,6 +691,11 @@ const attachedTargets = new Map();
 const targetThemeModes = new Map();
 const targetDarkPresets = new Map();
 const targetMetaMap = new Map();
+const skippedNonHostTargets = new Map(); // targetId -> { origin, skippedAt }
+const browserWatchers = new Map(); // `${channel}:${port}` -> { ws, wsUrl, port, channel, endpoint, reconnectAfterMs, closing }
+const browserWatcherBackoffUntil = new Map(); // `${channel}:${port}` -> timestamp ms
+const attachingTargetIds = new Set();
+const destroyedWhileAttaching = new Set();
 
 rebuildBundleIfNeeded();
 
@@ -861,15 +871,19 @@ function shutdownDaemon(reason, unlinkStopFile = false) {
     } catch {}
   }
   logDaemonEvent(reason);
+  closeAllBrowserWatchers();
   for (const [, entry] of attachedTargets.entries()) {
     try {
       entry.ws.close();
     } catch {}
   }
   attachedTargets.clear();
+  attachingTargetIds.clear();
+  destroyedWhileAttaching.clear();
   targetThemeModes.clear();
   targetDarkPresets.clear();
   targetMetaMap.clear();
+  skippedNonHostTargets.clear();
   process.exit(0);
 }
 
@@ -991,10 +1005,14 @@ if (!RUN_ONCE) {
     };
     process.on('exit', cleanPid);
     process.on('SIGINT', () => {
+      daemonExiting = true;
+      closeAllBrowserWatchers();
       cleanPid();
       process.exit(0);
     });
     process.on('SIGTERM', () => {
+      daemonExiting = true;
+      closeAllBrowserWatchers();
       cleanPid();
       process.exit(0);
     });
@@ -2296,7 +2314,6 @@ function parseConversationMetrics(cascadeId, endpointOrDir, precomputedState = n
 // ============================================================================
 // 5. CDP 目标发现、WebSocket 会话挂载与热更新推送
 // ============================================================================
-const skippedNonHostTargets = new Map(); // targetId -> { origin, skippedAt }
 
 function belongsToParentTarget(entry, parentTargetId, parentChannel) {
   let curId = entry.parentId || null;
@@ -2443,7 +2460,12 @@ const HOST_PROBE_EXPRESSION = `(function(){
       typeof document.querySelector === 'function' &&
       document.querySelector('link[href*="/jetbox.css"], body[data-agy-theme], body[data-newux-theme], [id="antigravity.agentSidePanelInputBox"]')
     ) return 'host';
-    if (typeof document === 'undefined' || !document.documentElement || document.readyState === 'loading') {
+    if (
+      typeof document === 'undefined' ||
+      !document.documentElement ||
+      document.readyState === 'loading' ||
+      (loc && (loc.protocol === 'chrome-error:' || loc.protocol === 'about:' || loc.protocol === 'data:'))
+    ) {
       return 'pending';
     }
     return 'non_host';
@@ -2452,44 +2474,384 @@ const HOST_PROBE_EXPRESSION = `(function(){
   }
 })()`;
 
-function readPort(portFile) {
+function readPortInfo(portFile) {
   try {
     const raw = fs.readFileSync(portFile, 'utf8').trim();
     const lines = raw.split(/\r?\n/);
     const port = parseInt(lines[0], 10);
-    return Number.isFinite(port) && port > 0 ? port : null;
+    const wsPath = (lines[1] || '').trim();
+    return {
+      port: Number.isFinite(port) && port > 0 ? port : null,
+      browserWsPath: wsPath.startsWith('/') ? wsPath : ''
+    };
   } catch {
-    return null;
+    return { port: null, browserWsPath: '' };
   }
 }
 
-function fetchTargets(port) {
+function readPort(portFile) {
+  return readPortInfo(portFile).port;
+}
+
+function isExternalNonHostBrowserProduct(browserStr, userAgentStr = '') {
+  const b = String(browserStr || '').trim();
+  const ua = String(userAgentStr || '').trim();
+  if (!b && !ua) return false;
+  if (/electron|antigravity/i.test(b) || /electron\/|antigravity\//i.test(ua)) return false;
+  return /^(?:Headless)?Chrome\/|^Edg\/|^Brave\//i.test(b);
+}
+
+function fetchBrowserVersionInfo(port) {
   return new Promise((resolve) => {
+    let settled = false;
+    const done = (val) => {
+      if (!settled) {
+        settled = true;
+        resolve(val);
+      }
+    };
     const req = http.get(
-      { host: '127.0.0.1', port, path: '/json/list', timeout: 450 },
+      { host: '127.0.0.1', port, path: '/json/version', timeout: 450 },
       (res) => {
+        if (res.statusCode !== 200) {
+          res.resume();
+          done({ wsUrl: '', externalBrowser: false });
+          return;
+        }
         let data = '';
         res.on('data', (chunk) => (data += chunk));
         res.on('end', () => {
           try {
-            resolve(JSON.parse(data));
+            const parsed = JSON.parse(data);
+            const rawWs = typeof parsed?.webSocketDebuggerUrl === 'string' ? parsed.webSocketDebuggerUrl.trim() : '';
+            const wsUrl = rawWs.startsWith('ws://') || rawWs.startsWith('wss://') ? rawWs : '';
+            done({
+              wsUrl,
+              externalBrowser: isExternalNonHostBrowserProduct(parsed?.Browser, parsed?.['User-Agent'])
+            });
           } catch {
-            resolve([]);
+            done({ wsUrl: '', externalBrowser: false });
           }
         });
+        res.on('error', () => done({ wsUrl: '', externalBrowser: false }));
       }
     );
-    req.on('error', () => resolve([]));
+    req.on('error', () => done({ wsUrl: '', externalBrowser: false }));
     req.on('timeout', () => {
       req.destroy();
-      resolve([]);
+      done({ wsUrl: '', externalBrowser: false });
     });
   });
+}
+
+async function fetchBrowserWsUrl(port, rejectExternal = false) {
+  const info = await fetchBrowserVersionInfo(port);
+  if (rejectExternal && info.externalBrowser) return '';
+  return info.wsUrl;
+}
+
+function fetchTargetsResult(port) {
+  return new Promise((resolve) => {
+    let settled = false;
+    const done = (val) => {
+      if (!settled) {
+        settled = true;
+        resolve(val);
+      }
+    };
+    const req = http.get(
+      { host: '127.0.0.1', port, path: '/json/list', timeout: 450 },
+      (res) => {
+        if (res.statusCode !== 200) {
+          res.resume();
+          done({ reachable: false, targets: [] });
+          return;
+        }
+        let data = '';
+        res.on('data', (chunk) => (data += chunk));
+        res.on('end', () => {
+          try {
+            const parsed = JSON.parse(data);
+            if (Array.isArray(parsed)) {
+              done({ reachable: true, targets: parsed });
+            } else {
+              done({ reachable: false, targets: [] });
+            }
+          } catch {
+            done({ reachable: false, targets: [] });
+          }
+        });
+        res.on('error', () => done({ reachable: false, targets: [] }));
+      }
+    );
+    req.on('error', () => done({ reachable: false, targets: [] }));
+    req.on('timeout', () => {
+      req.destroy();
+      done({ reachable: false, targets: [] });
+    });
+  });
+}
+
+async function fetchTargets(port) {
+  const res = await fetchTargetsResult(port);
+  return res.targets;
 }
 
 function isAllowedOrigin(urlStr) {
   if (!urlStr || typeof urlStr !== 'string') return false;
   return activeConfig.allowedOrigins.some((prefix) => urlStr.startsWith(prefix));
+}
+
+function isEventDiscoveryEnabled() {
+  return Boolean(
+    !RUN_ONCE &&
+      !daemonExiting &&
+      activeConfig.enabled &&
+      activeConfig.modules?.cdpEventDiscovery !== false
+  );
+}
+
+function closeAllBrowserWatchers() {
+  for (const [, entry] of browserWatchers.entries()) {
+    entry.closing = true;
+    try {
+      entry.ws?.close();
+    } catch {}
+  }
+  browserWatchers.clear();
+  browserWatcherBackoffUntil.clear();
+}
+
+function isSkippedNonHost(t, nowMs = Date.now()) {
+  const id = String(t?.id || t?.targetId || '').trim();
+  if (!id) return false;
+  const skipped = skippedNonHostTargets.get(id);
+  if (!skipped || skipped.origin !== getTargetOriginKey(t.url)) return false;
+  const attempts = skipped.attempts || 1;
+  const ageMs = nowMs - (skipped.skippedAt || 0);
+  const titleHasAg = String(t.title || '').includes('Antigravity');
+  if (titleHasAg && !skipped.titleHadAg && attempts < 6 && ageMs >= 150) return false;
+  if (titleHasAg && attempts < 6 && ageMs >= 3000) return false;
+  if (attempts < 3 && ageMs >= 8000) return false;
+  return true;
+}
+
+function isCandidateTargetInfo(t, nowMs = Date.now()) {
+  if (!t || typeof t !== 'object') return false;
+  const id = String(t.id || t.targetId || '').trim();
+  if (!id) return false;
+  const type = String(t.type || '');
+  const url = String(t.url || '');
+  if (!(type === 'page' || (type === 'iframe' && url.startsWith('plugin://swarm--')))) {
+    return false;
+  }
+  if (url.startsWith('devtools://')) return false;
+  if (!isAllowedOrigin(url)) return false;
+  if (String(t.title || '').includes('Launchpad')) return false;
+  if (isSkippedNonHost(t, nowMs)) return false;
+  return true;
+}
+
+function handleBrowserTargetUpsert(info, watcherEntry) {
+  if (!isEventDiscoveryEnabled()) return;
+  if (!info || typeof info !== 'object') return;
+  const targetId = String(info.targetId || info.id || '').trim();
+  if (!targetId) return;
+
+  const url = String(info.url || '');
+  const title = String(info.title || '');
+  const prevMeta = targetMetaMap.get(targetId);
+  const nextParentId = info.parentId || prevMeta?.parentId || null;
+  targetMetaMap.set(targetId, {
+    type: info.type || prevMeta?.type || '',
+    parentId: nextParentId,
+    channel: watcherEntry.channel || prevMeta?.channel || 'stable',
+    updatedAt: Date.now()
+  });
+
+  const skipped = skippedNonHostTargets.get(targetId);
+  if (skipped && (!isAllowedOrigin(url) || getTargetOriginKey(url) !== skipped.origin)) {
+    skippedNonHostTargets.delete(targetId);
+  }
+
+  const existingAttached = attachedTargets.get(targetId);
+  if (existingAttached) {
+    if (url || title) {
+      existingAttached.updateTargetUrl?.(url, title);
+    }
+    return;
+  }
+
+  if (attachingTargetIds.has(targetId)) return;
+  if (!isCandidateTargetInfo(info, Date.now())) return;
+
+  const syntheticTarget = {
+    id: targetId,
+    type: info.type,
+    title: info.title || '',
+    url,
+    parentId: nextParentId,
+    webSocketDebuggerUrl: `ws://127.0.0.1:${watcherEntry.port}/devtools/page/${targetId}`
+  };
+  void attachTarget(syntheticTarget, watcherEntry.endpoint);
+}
+
+function handleBrowserTargetDestroyed(rawTargetId) {
+  const targetId = String(rawTargetId || '').trim();
+  if (!targetId) return;
+  if (attachingTargetIds.has(targetId)) {
+    destroyedWhileAttaching.add(targetId);
+  }
+  const entry = attachedTargets.get(targetId);
+  if (entry) {
+    attachedTargets.delete(targetId);
+    try {
+      entry.ws?.close();
+    } catch {}
+  }
+  targetThemeModes.delete(targetId);
+  targetDarkPresets.delete(targetId);
+  targetMetaMap.delete(targetId);
+  skippedNonHostTargets.delete(targetId);
+}
+
+async function ensureBrowserWatcher(endpoint, port, browserWsPath = '', isFallbackPort = false) {
+  if (!isEventDiscoveryEnabled() || !port) return false;
+  const channel = endpoint?.channel || 'stable';
+  const watcherKey = `${channel}:${port}`;
+
+  // 同通道切换了新端口时，主动关闭旧端口上的残留 BrowserWatcher
+  for (const [key, entry] of Array.from(browserWatchers.entries())) {
+    if (entry.channel === channel && entry.port !== port) {
+      entry.closing = true;
+      browserWatchers.delete(key);
+      browserWatcherBackoffUntil.delete(key);
+      try {
+        entry.ws?.close();
+      } catch {}
+    }
+  }
+
+  const desiredWsUrl = browserWsPath && browserWsPath.startsWith('/') ? `ws://127.0.0.1:${port}${browserWsPath}` : '';
+  const existing = browserWatchers.get(watcherKey);
+  if (existing && existing.ws) {
+    const isAlive = existing.ws.readyState === WebSocket.CONNECTING || existing.ws.readyState === WebSocket.OPEN;
+    const sameEndpointUrl = !desiredWsUrl || existing.wsUrl === desiredWsUrl;
+    if (isAlive && sameEndpointUrl) {
+      existing.endpoint = endpoint;
+      return true;
+    }
+    existing.closing = true;
+    browserWatchers.delete(watcherKey);
+    try {
+      existing.ws.close();
+    } catch {}
+  }
+
+  const backoffUntil = browserWatcherBackoffUntil.get(watcherKey) || 0;
+  if (Date.now() < backoffUntil) {
+    return false;
+  }
+
+  const wsUrl = desiredWsUrl || (await fetchBrowserWsUrl(port, isFallbackPort));
+  if (!wsUrl || !isEventDiscoveryEnabled()) return false;
+
+  const existingAfterAwait = browserWatchers.get(watcherKey);
+  if (
+    existingAfterAwait &&
+    existingAfterAwait.ws &&
+    (existingAfterAwait.ws.readyState === WebSocket.CONNECTING || existingAfterAwait.ws.readyState === WebSocket.OPEN) &&
+    existingAfterAwait.wsUrl === wsUrl
+  ) {
+    existingAfterAwait.endpoint = endpoint;
+    return true;
+  }
+
+  try {
+    const ws = new WebSocket(wsUrl);
+    const watcherEntry = {
+      ws,
+      wsUrl,
+      port,
+      channel,
+      endpoint,
+      reconnectAfterMs: 0,
+      closing: false
+    };
+    browserWatchers.set(watcherKey, watcherEntry);
+
+    let msgId = 1;
+    let disconnected = false;
+    const watcherConnectTimer = setTimeout(() => {
+      if (!disconnected && ws.readyState === WebSocket.CONNECTING) {
+        try {
+          ws.close();
+        } catch {}
+        handleDisconnect();
+      }
+    }, 3000);
+
+    ws.addEventListener('open', () => {
+      clearTimeout(watcherConnectTimer);
+      if (watcherEntry.closing || !isEventDiscoveryEnabled()) {
+        try {
+          ws.close();
+        } catch {}
+        return;
+      }
+      browserWatcherBackoffUntil.delete(watcherKey);
+      watcherEntry.reconnectAfterMs = 0;
+      try {
+        ws.send(
+          JSON.stringify({
+            id: msgId++,
+            method: 'Target.setDiscoverTargets',
+            params: { discover: true }
+          })
+        );
+        console.log(`[Daemon] Browser CDP watcher connected (${channel}:${port})`);
+      } catch {}
+    });
+
+    ws.addEventListener('message', (event) => {
+      if (watcherEntry.closing || !isEventDiscoveryEnabled()) return;
+      let msg;
+      try {
+        msg = JSON.parse(String(event.data));
+      } catch {
+        return;
+      }
+      if (!msg || !msg.method) return;
+      if (msg.method === 'Target.targetCreated' || msg.method === 'Target.targetInfoChanged') {
+        handleBrowserTargetUpsert(msg.params?.targetInfo, watcherEntry);
+      } else if (msg.method === 'Target.targetDestroyed') {
+        handleBrowserTargetDestroyed(msg.params?.targetId);
+      }
+    });
+
+    const handleDisconnect = () => {
+      if (disconnected) return;
+      disconnected = true;
+      clearTimeout(watcherConnectTimer);
+      if (browserWatchers.get(watcherKey) === watcherEntry) {
+        browserWatchers.delete(watcherKey);
+      }
+      if (!watcherEntry.closing && isEventDiscoveryEnabled()) {
+        const until = Date.now() + 5000;
+        watcherEntry.reconnectAfterMs = until;
+        browserWatcherBackoffUntil.set(watcherKey, until);
+      }
+    };
+
+    ws.addEventListener('close', handleDisconnect);
+    ws.addEventListener('error', handleDisconnect);
+    return true;
+  } catch {
+    if (isEventDiscoveryEnabled()) {
+      browserWatcherBackoffUntil.set(watcherKey, Date.now() + 5000);
+    }
+    return false;
+  }
 }
 
 const CASCADE_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -2544,19 +2906,41 @@ function parseMetricsSubscriptionPayload(rawPayload) {
 function attachTarget(target, endpoint) {
   const wsUrl = target.webSocketDebuggerUrl;
   if (!wsUrl) return Promise.resolve(false);
+  if (attachedTargets.has(target.id) || attachingTargetIds.has(target.id)) {
+    return Promise.resolve(false);
+  }
+  attachingTargetIds.add(target.id);
+  destroyedWhileAttaching.delete(target.id);
 
   return new Promise((resolveAttach) => {
+    let ws = null;
     let settled = false;
     const finishAttach = (ok) => {
       if (!settled) {
         settled = true;
+        clearTimeout(attachTimeout);
+        attachingTargetIds.delete(target.id);
+        if (destroyedWhileAttaching.delete(target.id)) {
+          if (attachedTargets.get(target.id)?.ws === ws) {
+            attachedTargets.delete(target.id);
+          }
+          targetThemeModes.delete(target.id);
+          targetDarkPresets.delete(target.id);
+          targetMetaMap.delete(target.id);
+          skippedNonHostTargets.delete(target.id);
+          try {
+            ws?.close();
+          } catch {}
+          resolveAttach(false);
+          return;
+        }
         resolveAttach(ok);
       }
     };
     const attachTimeout = setTimeout(() => finishAttach(false), 2500);
 
     try {
-      const ws = new WebSocket(wsUrl);
+      ws = new WebSocket(wsUrl);
       let msgId = 1;
       let watchedCascadeIds = [];
       let hasExplicitSubscription = false;
@@ -2630,6 +3014,9 @@ function attachTarget(target, endpoint) {
           expression: script,
           returnByValue: true
         });
+        if (ws.readyState !== WebSocket.OPEN || destroyedWhileAttaching.has(target.id)) {
+          return false;
+        }
         if (res?.error) {
           console.error(`[Daemon] Injection error on ${target.id}:`, res.error.message || res.error);
           return false;
@@ -2910,6 +3297,7 @@ function attachTarget(target, endpoint) {
       };
 
       let currentTargetUrl = String(target.url || '');
+      let currentTargetTitle = String(target.title || '');
       let hostConfirmed = false;
       let nonHostSettled = false;
       let pendingProbe = false;
@@ -2952,7 +3340,16 @@ function attachTarget(target, endpoint) {
         }
         const originKey = getTargetOriginKey(reasonUrl || target.url);
         if (originKey) {
-          skippedNonHostTargets.set(target.id, { origin: originKey, skippedAt: Date.now() });
+          const prevSkipped = skippedNonHostTargets.get(target.id);
+          const sameOrigin = prevSkipped && prevSkipped.origin === originKey;
+          const attempts = sameOrigin ? (prevSkipped.attempts || 1) + 1 : 1;
+          const titleHasAg = String(currentTargetTitle || target.title || '').includes('Antigravity');
+          skippedNonHostTargets.set(target.id, {
+            origin: originKey,
+            skippedAt: Date.now(),
+            attempts,
+            titleHadAg: Boolean((sameOrigin && prevSkipped.titleHadAg) || titleHasAg)
+          });
         }
         if (evalScriptId && ws.readyState === WebSocket.OPEN) {
           const idToRemove = evalScriptId;
@@ -2978,6 +3375,7 @@ function attachTarget(target, endpoint) {
         hostConfirmed = true;
         pendingProbe = false;
         clearPendingTimer();
+        skippedNonHostTargets.delete(target.id);
         const entry = attachedTargets.get(target.id);
         if (entry && entry.ws === ws) {
           entry.hostConfirmed = true;
@@ -3017,6 +3415,7 @@ function attachTarget(target, endpoint) {
         return ok;
       };
 
+      const PENDING_RETRY_DELAYS_MS = [30, 50, 100, 200];
       const schedulePendingRetry = () => {
         clearPendingTimer();
         if (!pendingProbe || hostConfirmed || nonHostSettled || ws.readyState !== WebSocket.OPEN) return;
@@ -3034,11 +3433,12 @@ function attachTarget(target, endpoint) {
           finishAttach(false);
           return;
         }
+        const delayMs = PENDING_RETRY_DELAYS_MS[Math.min(pendingRetryCount, PENDING_RETRY_DELAYS_MS.length - 1)];
         pendingRetryCount += 1;
         pendingRetryTimer = setTimeout(() => {
           pendingRetryTimer = null;
           void recheckPendingHost();
-        }, 200);
+        }, delayMs);
       };
 
       const recheckPendingHost = async () => {
@@ -3089,6 +3489,10 @@ function attachTarget(target, endpoint) {
       };
 
       ws.addEventListener('open', async () => {
+        if (destroyedWhileAttaching.has(target.id) || ws.readyState !== WebSocket.OPEN || nonHostSettled) {
+          finishAttach(false);
+          return;
+        }
         if (isExemptInternalTarget(target)) {
           await promoteToHost();
           return;
@@ -3097,9 +3501,15 @@ function attachTarget(target, endpoint) {
           runtimeEnabled = true;
           await send('Runtime.enable');
         }
-        if (ws.readyState !== WebSocket.OPEN || nonHostSettled) return;
+        if (ws.readyState !== WebSocket.OPEN || nonHostSettled || destroyedWhileAttaching.has(target.id)) {
+          finishAttach(false);
+          return;
+        }
         const kind = await probeHostKind();
-        if (ws.readyState !== WebSocket.OPEN || nonHostSettled) return;
+        if (ws.readyState !== WebSocket.OPEN || nonHostSettled || destroyedWhileAttaching.has(target.id)) {
+          finishAttach(false);
+          return;
+        }
         if (kind === 'host') {
           await promoteToHost();
           return;
@@ -3113,7 +3523,10 @@ function attachTarget(target, endpoint) {
           pageEnabled = true;
           await send('Page.enable');
         }
-        if (ws.readyState !== WebSocket.OPEN || nonHostSettled) return;
+        if (ws.readyState !== WebSocket.OPEN || nonHostSettled || destroyedWhileAttaching.has(target.id)) {
+          finishAttach(false);
+          return;
+        }
         await recheckPendingHost();
       });
 
@@ -3245,6 +3658,7 @@ function attachTarget(target, endpoint) {
         ws,
         type: target.type,
         parentId: target.parentId || null,
+        attachedAt: Date.now(),
         send,
         updateNewDocScript,
         inject,
@@ -3257,8 +3671,25 @@ function attachTarget(target, endpoint) {
         set hostConfirmed(v) {
           hostConfirmed = Boolean(v);
         },
-        updateTargetUrl: (u) => {
-          if (u) currentTargetUrl = String(u);
+        updateTargetUrl: (u, nextTitle = '') => {
+          let changed = false;
+          if (nextTitle) {
+            const tStr = String(nextTitle);
+            if (tStr !== currentTargetTitle) {
+              currentTargetTitle = tStr;
+              if (tStr.includes('Antigravity')) changed = true;
+            }
+          }
+          if (u) {
+            const nextUrl = String(u);
+            if (nextUrl !== currentTargetUrl) {
+              currentTargetUrl = nextUrl;
+              changed = true;
+            }
+          }
+          if (changed && pendingProbe && !hostConfirmed && !nonHostSettled && ws.readyState === WebSocket.OPEN) {
+            void recheckPendingHost();
+          }
         },
         setActiveCascade: (cid) => {
           const ids = normalizeCascadeIdList(cid);
@@ -3860,6 +4291,7 @@ async function sync() {
   checkPidFileOwnership();
   if (isSyncing) return;
   isSyncing = true;
+  const syncStartMs = Date.now();
   syncTickCount = (syncTickCount + 1) % 6000;
   try {
     if (syncTickCount % 12 === 1) ensureZhTitlePatchIfPresent();
@@ -3869,58 +4301,83 @@ async function sync() {
       targetThemeModes.clear();
       targetDarkPresets.clear();
     }
+    if (!isEventDiscoveryEnabled()) {
+      closeAllBrowserWatchers();
+    }
     const shouldHeartbeatCheck = bundleChanged || syncTickCount % 6 === 1;
 
     const activeTargetIds = new Set();
     const seenRawTargetIds = new Set();
+    const reachableChannels = new Set();
     const pendingPages = [];
     const pendingIframes = [];
 
     const probedPorts = new Set();
     const nowMs = Date.now();
     for (const endpoint of activeConfig.endpoints) {
-      let port = readPort(endpoint.portFile);
+      const portInfo = readPortInfo(endpoint.portFile);
+      let activePort = portInfo.port;
+      let activeBrowserWsPath = portInfo.browserWsPath;
+      let fromPortFile = false;
+      let reachable = false;
       let targets = [];
-      if (port && !probedPorts.has(port)) {
-        probedPorts.add(port);
-        targets = await fetchTargets(port);
+      if (activePort && !probedPorts.has(activePort)) {
+        probedPorts.add(activePort);
+        const res = await fetchTargetsResult(activePort);
+        reachable = res.reachable;
+        targets = res.targets;
+        if (reachable) fromPortFile = true;
       }
       if (
-        targets.length === 0 &&
+        !reachable &&
         endpoint.channelInstalled !== false &&
         endpoint.fallbackPort &&
         !probedPorts.has(endpoint.fallbackPort) &&
         (RUN_ONCE || nowMs >= (fallbackBackoffUntil.get(endpoint.fallbackPort) || 0))
       ) {
         probedPorts.add(endpoint.fallbackPort);
-        targets = await fetchTargets(endpoint.fallbackPort);
-        if (targets.length === 0) {
+        const res = await fetchTargetsResult(endpoint.fallbackPort);
+        if (!res.reachable) {
           fallbackBackoffUntil.set(endpoint.fallbackPort, nowMs + 10000);
         } else {
-          fallbackBackoffUntil.delete(endpoint.fallbackPort);
+          const verInfo = await fetchBrowserVersionInfo(endpoint.fallbackPort);
+          if (verInfo.externalBrowser) {
+            fallbackBackoffUntil.set(endpoint.fallbackPort, nowMs + 10000);
+          } else {
+            reachable = true;
+            targets = res.targets;
+            fallbackBackoffUntil.delete(endpoint.fallbackPort);
+            activePort = endpoint.fallbackPort;
+            activeBrowserWsPath = '';
+          }
         }
+      }
+      if (!reachable) continue;
+
+      if (fromPortFile || targets.length > 0) {
+        reachableChannels.add(endpoint.channel);
+      }
+      if (isEventDiscoveryEnabled() && activePort) {
+        await ensureBrowserWatcher(endpoint, activePort, activeBrowserWsPath, !fromPortFile);
       }
       if (targets.length === 0) continue;
 
       for (const t of targets) {
         if (!t?.id) continue;
         seenRawTargetIds.add(t.id);
-        targetMetaMap.set(t.id, { type: t.type, parentId: t.parentId || null, channel: endpoint.channel });
+        targetMetaMap.set(t.id, {
+          type: t.type,
+          parentId: t.parentId || null,
+          channel: endpoint.channel,
+          updatedAt: Date.now()
+        });
         const skipped = skippedNonHostTargets.get(t.id);
         if (skipped && (!isAllowedOrigin(t.url) || getTargetOriginKey(t.url) !== skipped.origin)) {
           skippedNonHostTargets.delete(t.id);
         }
       }
 
-      const pages = targets.filter(
-        (t) =>
-          (t.type === 'page' || (t.type === 'iframe' && String(t.url || '').startsWith('plugin://swarm--'))) &&
-          t.webSocketDebuggerUrl &&
-          !String(t.url || '').startsWith('devtools://') &&
-          isAllowedOrigin(t.url) &&
-          !String(t.title || '').includes('Launchpad') &&
-          skippedNonHostTargets.get(t.id)?.origin !== getTargetOriginKey(t.url)
-      );
+      const pages = targets.filter((t) => Boolean(t.webSocketDebuggerUrl) && isCandidateTargetInfo(t, nowMs));
 
       for (const page of pages) {
         activeTargetIds.add(page.id);
@@ -3936,12 +4393,14 @@ async function sync() {
       const attachPromises = [];
       for (const { page, endpoint } of items) {
         if (!attachedTargets.has(page.id)) {
-          attachPromises.push(attachTarget(page, endpoint));
+          if (!attachingTargetIds.has(page.id)) {
+            attachPromises.push(attachTarget(page, endpoint));
+          }
         } else {
           const entry = attachedTargets.get(page.id);
           entry.endpoint = endpoint;
           entry.parentId = page.parentId || entry.parentId || null;
-          entry.updateTargetUrl?.(page.url);
+          entry.updateTargetUrl?.(page.url, page.title);
           if (entry.hostConfirmed) {
             if (bundleChanged && entry.updateNewDocScript) {
               await entry.updateNewDocScript();
@@ -3960,14 +4419,17 @@ async function sync() {
     await syncTargetBatch(pendingPages);
     await syncTargetBatch(pendingIframes);
 
-    // 2.33.0+ 冷启动无标记自愈（M2）：仅在 0 活跃 CDP 目标时按严苛冷启动时间窗探测并自动接力重启
-    if (pendingPages.length === 0 && attachedTargets.size === 0) {
+    // 2.33.0+ 冷启动无标记自愈（M2）：仅在 0 活跃 CDP 目标且无可达 CDP 通道时按严苛冷启动时间窗探测并自动接力重启
+    if (pendingPages.length === 0 && attachedTargets.size === 0 && reachableChannels.size === 0) {
       maybeAutoRelaunchColdStartWithoutCdp();
     }
 
-    // 清理已关闭的目标连接
+    // 清理已关闭的目标连接（防竞态误杀：跳过本轮快照开始后由 BrowserWS 新附着的目标）
     for (const [id, entry] of attachedTargets.entries()) {
       if (!activeTargetIds.has(id)) {
+        if (entry.attachedAt && entry.attachedAt >= syncStartMs) {
+          continue;
+        }
         try {
           entry.ws.close();
         } catch {}
@@ -3977,18 +4439,32 @@ async function sync() {
       }
     }
     if (seenRawTargetIds.size > 0) {
-      for (const id of skippedNonHostTargets.keys()) {
-        if (!seenRawTargetIds.has(id)) {
+      for (const [id, skipped] of skippedNonHostTargets.entries()) {
+        if (!seenRawTargetIds.has(id) && (skipped?.skippedAt || 0) < syncStartMs) {
           skippedNonHostTargets.delete(id);
         }
       }
-      for (const id of targetMetaMap.keys()) {
-        if (!seenRawTargetIds.has(id)) {
+      for (const [id, meta] of targetMetaMap.entries()) {
+        if (
+          !seenRawTargetIds.has(id) &&
+          !attachedTargets.has(id) &&
+          !attachingTargetIds.has(id) &&
+          (meta?.updatedAt || 0) < syncStartMs
+        ) {
           targetMetaMap.delete(id);
         }
       }
-    } else if (attachedTargets.size === 0) {
-      targetMetaMap.clear();
+    } else if (attachedTargets.size === 0 && attachingTargetIds.size === 0) {
+      for (const [id, skipped] of skippedNonHostTargets.entries()) {
+        if ((skipped?.skippedAt || 0) < syncStartMs) {
+          skippedNonHostTargets.delete(id);
+        }
+      }
+      for (const [id, meta] of targetMetaMap.entries()) {
+        if ((meta?.updatedAt || 0) < syncStartMs) {
+          targetMetaMap.delete(id);
+        }
+      }
     }
   } finally {
     isSyncing = false;

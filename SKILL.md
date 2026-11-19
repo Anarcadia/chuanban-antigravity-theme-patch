@@ -1,9 +1,9 @@
 ---
 name: chuanban-antigravity-theme-patch
-description: 船板的 Antigravity 2.0 主题、字体与汉化补丁（v5.5.1 · 适配 Antigravity 2.33.0+ macOS / Windows / Linux 单图标 M1+M2 启动接力 + UI 西文 Google Sans Flex 可变字体引擎 × 中文更纱黑体字重桥接 + 对话正文 Anthropic Serif 衬线 + 昼夜双模式四套预设与外观面板 📖 书卷切换钮 + 宿主独占指纹门禁 + WSL2 双轨只读 SQLite + 1,860 条零冲突词典 + 分屏/支线提问(/btw)/子Agent侧栏独立实时指标胶囊）。采用「core/ 只读内核 + user/ 永不覆盖改装层 + install.mjs CLI」，支持 Agent 一键部署、2.5 秒热重载定制与 --safe-mode 沙箱排障。当用户提到“安装船板 Antigravity 主题”、“升级/修复 Antigravity 汉化与字体”、“定制 Antigravity 界面样式或汉化词条”时触发。
+description: 船板的 Antigravity 2.0 主题、字体与汉化补丁（v5.5.2 · 适配 Antigravity 2.33.0+ macOS / Windows / Linux 单图标 M1+M2 启动接力 + Browser 级 CDP 事件驱动毫秒级发现 + UI 西文 Google Sans Flex 可变字体引擎 × 中文更纱黑体跨平台零卡顿映射 + 对话正文 Anthropic Serif 衬线 + 昼夜双模式四套预设与外观面板 📖 书卷切换钮 + 宿主独占指纹门禁 + WSL2 双轨只读 SQLite + 1,860 条零冲突词典 + 分屏/支线提问(/btw)/子Agent侧栏独立实时指标胶囊）。采用「core/ 只读内核 + user/ 永不覆盖改装层 + install.mjs CLI」，支持 Agent 一键部署、2.5 秒热重载定制与 --safe-mode 沙箱排障。当用户提到“安装船板 Antigravity 主题”、“升级/修复 Antigravity 汉化与字体”、“定制 Antigravity 界面样式或汉化词条”时触发。
 ---
 
-# 船板的 Antigravity 主题、字体与汉化补丁（v5.5.1 · AI Agent 部署与改装契约）
+# 船板的 Antigravity 主题、字体与汉化补丁（v5.5.2 · AI Agent 部署与改装契约）
 
 > **核心摘要（致执行端 AI Agent）**：
 > - **功能边界**：纯运行时本地回环 CDP 注入（不改 `.asar`、不破系统签名、零第三方 npm 依赖），适配 Google Antigravity **`2.33.0+`**：
@@ -22,8 +22,8 @@ description: 船板的 Antigravity 2.0 主题、字体与汉化补丁（v5.5.1 �
 ## 一、核心资源链接与示例基准
 
 1. **Google Drive 资源包（含必备字体）**：<https://drive.google.com/drive/folders/1NX92SgVUqtSjWg6bt6sIJXy-cn7J_boC>
-   - 必备 4 个字体文件：`AnthropicSerif-Regular.ttf`、`AnthropicSerif-Bold.ttf`、`AnthropicMono-Regular.ttf`、`Sarasa-SuperTTC.ttc`（`v5.5.0` UI 西文直连官方 `Google Sans Flex`，**不再依赖 `AnthropicSans-*.ttf`**）。
-   - *限流备选*：若 `Sarasa-SuperTTC.ttc`（~791 MB）触发 Google Drive 24h 下载限额，macOS 直接运行 `brew install --cask font-sarasa-gothic`，Windows / Linux 从 [`be5invis/Sarasa-Gothic` Releases](https://github.com/be5invis/Sarasa-Gothic/releases) 下载同款 `Sarasa-SuperTTC.ttc`。
+   - 必备字体：`AnthropicSerif-Regular.ttf`、`AnthropicSerif-Bold.ttf`、`AnthropicMono-Regular.ttf`，以及更纱黑体中文包（`v5.5.0` UI 西文直连官方 `Google Sans Flex`，**不再依赖 `AnthropicSans-*.ttf`**）。
+   - **Windows 强烈推荐拆分版 SC TTF**（避免 791 MB `Sarasa-SuperTTC.ttc` 在 DirectWrite/Chromium 引起数秒加载冻结与 >2GB 虚存占用，见 #19）：可直接从上方 Google Drive 共享目录下载打包好的 **[`Windows-Sarasa-Split-SC-TTF-v1.0.43.zip`](https://drive.google.com/file/d/1iVVvZXtwUcDiHy42tJ25X6N-JlOf3l7A/view?usp=sharing)**（170 MB，已筛好 `SarasaUiSC` + `SarasaMonoSlabSC` 共 14 个 SC 字重 `.ttf`，解压后直接运行 `node install.mjs install-fonts --from "<解压目录>" --retire-super-ttc` 即可一键注册并退订旧 `SuperTTC`）；亦可从 [`be5invis/Sarasa-Gothic` Releases](https://github.com/be5invis/Sarasa-Gothic/releases) 下载 `SarasaUiSC-TTF-*.7z` + `SarasaMonoSlabSC-TTF-*.7z`；macOS / Linux 仍可直接用 `brew install --cask font-sarasa-gothic` 或 `Sarasa-SuperTTC.ttc`。
 2. **GitHub 代码仓库**：<https://github.com/Anarcadia/chuanban-antigravity-theme-patch>
 3. **Notion 引导页**：<https://chuanban.notion.site/chuanban-antigravity-theme-patch-db7c5846f37546be9481cd791aed0554>
 
@@ -57,7 +57,7 @@ chuanban-antigravity-theme-patch/
 ├── README.md                   # 面向用户的项目说明与快速上手指南
 ├── CHANGELOG.md                # 版本演进记录
 ├── core/                       # 【只读内核】随版本升级原子替换，Agent 严禁直接修改
-│   ├── manifest.json           # 版本号（5.5.1）、三端地址与 core/* 四件套 SHA-256 校验清单
+│   ├── manifest.json           # 版本号（5.5.2）、三端地址与 core/* 四件套 SHA-256 校验清单
 │   ├── daemon.mjs              # Node CDP 守护进程（宿主独占指纹门禁、2.33.0+ M2 冷启动自动接力重启、Windows 0.02ms 内存空闲短路与跨完整性 PID 协作围栏、SQLite O(1) 增量与子 Agent `+N sub` 聚合、WSL2 双轨只读读取、Swarm 子帧注入、2.5s 热重载感知）
 │   ├── runtime.js              # 浏览器端注入引擎（宿主指纹门禁与 0ms 防闪白、昼夜双预设 `preset`/`darkPreset` 与 curtainView/标题栏联动、Google Sans Flex 防脱靶保底 `#ag-google-sans-flex-fonts`、冷启动兜底包自愈、弯引号与 DICT_CI 索引）
 │   ├── theme.css               # 四段式样式表（Part I Google Sans Flex × AgSarasaUI 字重桥接、Anthropic Serif 正文与 macOS 浅色全域活字润墨平衡 / Part II 白天暖纸三预设 / Part III 独立黑夜双预设 / Part IV 指标胶囊）
@@ -84,7 +84,7 @@ node install.mjs doctor
     node install.mjs install-fonts --from "<字体所在目录>"
     ```
     *（关键：在 Windows 10/11 下，单纯复制字体文件到用户字体目录不会写 `HKCU\...\Fonts` 注册表，Chromium `local()` 将无法识别字体，**必须**通过 `install-fonts` 写入注册表并广播 `WM_FONTCHANGE`。）*
-  - 若尚未下载：引导用户从 [Google Drive 资源包](https://drive.google.com/drive/folders/1NX92SgVUqtSjWg6bt6sIJXy-cn7J_boC) 获取（macOS 下 `Sarasa-SuperTTC.ttc` 亦可直接执行 `brew install --cask font-sarasa-gothic`）。
+  - 若尚未下载：引导用户从 [Google Drive 资源包](https://drive.google.com/drive/folders/1NX92SgVUqtSjWg6bt6sIJXy-cn7J_boC) 获取 Anthropic 字体（macOS 下 `Sarasa-SuperTTC.ttc` 亦可直接执行 `brew install --cask font-sarasa-gothic`；**Windows 下若 `doctor` 提示 `fonts.superTtcWarning` 或首次安装更纱黑体，优先引导从 `be5invis/Sarasa-Gothic` Releases 下载 `SarasaUiSC-TTF-*.7z` + `SarasaMonoSlabSC-TTF-*.7z`，可用 Windows 11 自带 `tar -xf` 解压并只安装 `Light / Regular / Italic / SemiBold / SemiBoldItalic / Bold / BoldItalic` 这 14 个独立 TTF**）。
 - **若老用户此前使用早期 `v1 ~ v4` 单文件版 `~/.gemini/antigravity/scripts/antigravity-font-daemon.mjs`**：先读取旧文件检查是否有用户手改过的字号或配色值，安装完成后将其迁入 `~/.gemini/antigravity/theme-patch/user/config.json` 或 `user/custom.css`。
 
 ### Step 2：安装内核与注册系统常驻服务

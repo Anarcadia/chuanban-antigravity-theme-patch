@@ -117,7 +117,7 @@ function buildManifest(baseDir = __dirname) {
   }
   const manifest = {
     name: 'chuanban-antigravity-theme-patch',
-    version: '5.5.1',
+    version: '5.5.2',
     minNodeVersion: '22.0.0',
     fullMetricsNodeVersion: '22.13.0',
     distribution: {
@@ -517,19 +517,52 @@ async function detectEnvironment(channel = 'auto') {
       : [path.join(home, '.local/share/fonts'), '/usr/local/share/fonts', '/usr/share/fonts'];
 
   let allFontFiles = [];
+  let systemFontFiles = [];
   for (const d of fontDirs) {
     try {
       if (fs.existsSync(d)) {
-        allFontFiles.push(...fs.readdirSync(d));
+        const list = fs.readdirSync(d);
+        allFontFiles.push(...list);
+        if (process.platform === 'win32' && /\\Windows\\Fonts$/i.test(d)) {
+          systemFontFiles = list;
+        }
       }
     } catch {}
   }
 
-  // v5.5.0 UI 西文直连官方 Google Sans Flex 引擎，本地仅需 Anthropic Serif（对话正文）+ Anthropic Mono（代码）+ Sarasa（中文）
+  let winHkcuFontEntries = null;
+  if (process.platform === 'win32') {
+    winHkcuFontEntries = readWinHkcuFontRegistryEntries();
+  }
+
+  // v5.5.0+ UI 西文直连官方 Google Sans Flex 引擎，本地仅需 Anthropic Serif（对话正文）+ Anthropic Mono（代码）+ Sarasa（中文）
   const hasAnthropicSerifFont = allFontFiles.some((f) => /AnthropicSerif|Anthropic[ _-]Serif/i.test(f));
   const hasAnthropicMonoFont = allFontFiles.some((f) => /AnthropicMono|Anthropic[ _-]Mono/i.test(f));
   const hasAnthropicFont = hasAnthropicSerifFont && hasAnthropicMonoFont;
-  const hasSarasaFont = allFontFiles.some((f) => /Sarasa|更纱/i.test(f));
+  const hasSarasaUiScSplit = allFontFiles.some((f) => /^SarasaUiSC-.*\.ttf$/i.test(f));
+  const hasSarasaMonoSlabScSplit = allFontFiles.some((f) => /^SarasaMonoSlabSC-.*\.ttf$/i.test(f));
+  const hasSarasaSplitScTtf = hasSarasaUiScSplit && hasSarasaMonoSlabScSplit;
+  const diskHasSuperTtc = allFontFiles.some((f) => /Sarasa[ _-]?SuperTTC[^\\\/]*\.ttc$/i.test(f));
+  const sysHasSuperTtc = systemFontFiles.some((f) => /Sarasa[ _-]?SuperTTC[^\\\/]*\.ttc$/i.test(f));
+  const hkcuHasSuperTtc =
+    winHkcuFontEntries !== null
+      ? winHkcuFontEntries.some(
+          (e) => /Sarasa[ _-]?SuperTTC/i.test(e.name) || /Sarasa[ _-]?SuperTTC[^\\\/]*\.ttc$/i.test(e.data)
+        )
+      : diskHasSuperTtc;
+  const hasSarasaSuperTtc =
+    process.platform === 'win32' ? Boolean(sysHasSuperTtc || hkcuHasSuperTtc) : diskHasSuperTtc;
+  const orphanSuperTtcPendingReboot = Boolean(process.platform === 'win32' && diskHasSuperTtc && !hasSarasaSuperTtc);
+  const hasSarasaFont =
+    process.platform === 'win32'
+      ? Boolean(
+          hasSarasaSplitScTtf ||
+            hasSarasaSuperTtc ||
+            systemFontFiles.some((f) => /Sarasa|更纱|更紗/i.test(f)) ||
+            (winHkcuFontEntries !== null &&
+              winHkcuFontEntries.some((e) => /Sarasa|更纱|更紗/i.test(e.name) || /Sarasa|更纱|更紗/i.test(e.data)))
+        )
+      : allFontFiles.some((f) => /Sarasa|更纱|更紗/i.test(f));
 
   const checkSingleChannel = (ch) => {
     const isInsiders = ch === 'insiders';
@@ -609,6 +642,9 @@ async function detectEnvironment(channel = 'auto') {
     hasAnthropicSerifFont,
     hasAnthropicMonoFont,
     hasSarasaFont,
+    hasSarasaSplitScTtf,
+    hasSarasaSuperTtc,
+    orphanSuperTtcPendingReboot,
     channel,
     appExists: chInfo.appExists || insidersInfo.appExists || hostRuntime.runningProcesses.length > 0,
     appVersion: hostRuntime.appVersion,
@@ -1038,9 +1074,9 @@ function ensureCdpLaunchers(channel = 'auto', options = {}) {
           '  <key>CFBundlePackageType</key>',
           '  <string>APPL</string>',
           '  <key>CFBundleShortVersionString</key>',
-          '  <string>5.5.1</string>',
+          '  <string>5.5.2</string>',
           '  <key>CFBundleVersion</key>',
-          '  <string>551</string>',
+          '  <string>552</string>',
           ...(iconBase ? ['  <key>CFBundleIconFile</key>', `  <string>${iconBase}</string>`] : []),
           '  <key>LSMinimumSystemVersion</key>',
           '  <string>12.0</string>',
@@ -1257,8 +1293,18 @@ async function runDoctor() {
   const missingFonts = [];
   if (!env.hasAnthropicSerifFont) missingFonts.push('Anthropic Serif (AnthropicSerif-Regular.ttf, AnthropicSerif-Bold.ttf)');
   if (!env.hasAnthropicMonoFont) missingFonts.push('Anthropic Mono (AnthropicMono-Regular.ttf)');
-  if (!env.hasSarasaFont) missingFonts.push('Sarasa Gothic (Sarasa-SuperTTC.ttc)');
+  if (!env.hasSarasaFont) {
+    missingFonts.push(
+      process.platform === 'win32'
+        ? 'Sarasa Gothic (Windows 推荐拆分版 SarasaUiSC-TTF + SarasaMonoSlabSC-TTF，避免 791MB SuperTTC 卡顿)'
+        : 'Sarasa Gothic (Sarasa-SuperTTC.ttc)'
+    );
+  }
   const allRequiredFontsInstalled = missingFonts.length === 0;
+  const superTtcWarning =
+    process.platform === 'win32' && env.hasSarasaSuperTtc
+      ? 'Detected monolithic 791MB Sarasa-SuperTTC.ttc active on Windows; DirectWrite/Chromium may stall 1.5–10.5s on initial weight instantiation and consume >2GB renderer virtual memory. Recommended: download Windows-Sarasa-Split-SC-TTF-v1.0.43.zip (https://drive.google.com/file/d/1iVVvZXtwUcDiHy42tJ25X6N-JlOf3l7A/view?usp=sharing) and run `node install.mjs install-fonts --from <dir> --retire-super-ttc`.'
+      : null;
   const launcherMode =
     process.platform === 'darwin'
       ? env.launcherInstalled
@@ -1273,6 +1319,7 @@ async function runDoctor() {
     node: {
       version: env.nodeVer,
       execPath: process.execPath,
+      serviceExecPath: resolveStableNodeExecPath(),
       tier: env.tier
     },
     fonts: {
@@ -1282,6 +1329,10 @@ async function runDoctor() {
       anthropicSerifInstalled: env.hasAnthropicSerifFont,
       anthropicMonoInstalled: env.hasAnthropicMonoFont,
       sarasaInstalled: env.hasSarasaFont,
+      sarasaSplitScInstalled: env.hasSarasaSplitScTtf,
+      superTtcActive: env.hasSarasaSuperTtc,
+      orphanSuperTtcPendingReboot: env.orphanSuperTtcPendingReboot,
+      superTtcWarning,
       missing: missingFonts,
       downloadUrl: !allRequiredFontsInstalled ? GOOGLE_DRIVE_URL : null
     },
@@ -1494,8 +1545,70 @@ function stopRunningDaemonProcesses() {
   return stopped;
 }
 
+function resolveStableNodeExecPath(execPath = process.execPath, platform = process.platform, home = os.homedir()) {
+  if (platform !== 'darwin' && platform !== 'linux') return execPath;
+  let realExec = '';
+  try {
+    realExec = fs.realpathSync(execPath);
+  } catch {
+    return execPath;
+  }
+
+  const dynamicCellarCandidates = [];
+  for (const probePath of [execPath, realExec]) {
+    const m = String(probePath || '').match(/^(.*)\/Cellar\/([^/]+)\/[^/]+\/bin\/(node)$/i);
+    if (m) {
+      const brewPrefix = m[1];
+      const formula = m[2];
+      const binName = m[3];
+      dynamicCellarCandidates.push(path.join(brewPrefix, 'bin', binName));
+      dynamicCellarCandidates.push(path.join(brewPrefix, 'opt', formula, 'bin', binName));
+    }
+  }
+
+  const envExtra = process.env.AG_STABLE_NODE_CANDIDATES
+    ? String(process.env.AG_STABLE_NODE_CANDIDATES)
+        .split(path.delimiter)
+        .map((s) => s.trim())
+        .filter(Boolean)
+    : [];
+
+  const staticCandidates =
+    platform === 'darwin'
+      ? [
+          '/opt/homebrew/bin/node',
+          '/usr/local/bin/node',
+          '/opt/homebrew/opt/node/bin/node',
+          '/usr/local/opt/node/bin/node',
+          '/opt/homebrew/opt/node@22/bin/node',
+          '/opt/homebrew/opt/node@24/bin/node',
+          path.join(home, 'Library', 'Application Support', 'fnm', 'aliases', 'default', 'bin', 'node'),
+          path.join(home, '.local', 'share', 'fnm', 'aliases', 'default', 'bin', 'node')
+        ]
+      : [
+          '/home/linuxbrew/.linuxbrew/bin/node',
+          '/home/linuxbrew/.linuxbrew/opt/node/bin/node',
+          '/usr/local/bin/node',
+          '/usr/bin/node',
+          path.join(home, '.local', 'share', 'fnm', 'aliases', 'default', 'bin', 'node')
+        ];
+
+  const seen = new Set();
+  for (const cand of [...envExtra, ...dynamicCellarCandidates, ...staticCandidates]) {
+    if (!cand || seen.has(cand)) continue;
+    seen.add(cand);
+    try {
+      if (fs.existsSync(cand) && fs.realpathSync(cand) === realExec) {
+        return cand;
+      }
+    } catch {}
+  }
+  return execPath;
+}
+
 function registerSystemService(targetDir, wrapperDaemon) {
   const home = os.homedir();
+  const serviceNodeExec = resolveStableNodeExecPath();
   if (process.platform === 'darwin') {
     const launchAgentsDir = path.join(home, 'Library', 'LaunchAgents');
     fs.mkdirSync(launchAgentsDir, { recursive: true });
@@ -1512,7 +1625,7 @@ function registerSystemService(targetDir, wrapperDaemon) {
     <string>${label}</string>
     <key>ProgramArguments</key>
     <array>
-        <string>${process.execPath}</string>
+        <string>${serviceNodeExec}</string>
         <string>--disable-warning=ExperimentalWarning</string>
         <string>${wrapperDaemon}</string>
     </array>
@@ -1585,7 +1698,7 @@ function registerSystemService(targetDir, wrapperDaemon) {
       }
       if (!runningNow) runningNow = queryServiceState().loaded;
     } catch {}
-    return { platform: 'darwin', serviceFile: activePlist, label, runningNow };
+    return { platform: 'darwin', serviceFile: activePlist, label, nodeExec: serviceNodeExec, runningNow };
   }
 
   if (process.platform === 'linux') {
@@ -1597,7 +1710,7 @@ Description=Chuanban Antigravity Theme & Live Metrics Daemon
 After=default.target
 
 [Service]
-ExecStart="${process.execPath}" --disable-warning=ExperimentalWarning "${wrapperDaemon}"
+ExecStart="${serviceNodeExec}" --disable-warning=ExperimentalWarning "${wrapperDaemon}"
 Restart=always
 RestartSec=3
 
@@ -2468,6 +2581,10 @@ function runInstallFonts() {
       execSync('fc-cache -f 2>/dev/null || true');
     } catch {}
   }
+  const shouldRetireSuperTtc = process.platform === 'win32' && hasFlag('--retire-super-ttc');
+  const superTtcRetirement = shouldRetireSuperTtc
+    ? retireWindowsSuperTtc({ destDir, force: hasFlag('--force') })
+    : null;
   console.log(
     JSON.stringify(
       {
@@ -2479,12 +2596,161 @@ function runInstallFonts() {
         fontRegisteredCount,
         fontBroadcastOk,
         installed,
-        skippedLocked
+        skippedLocked,
+        ...(superTtcRetirement ? { superTtcRetirement } : {})
       },
       null,
       2
     )
   );
+}
+
+function readWinHkcuFontRegistryEntries() {
+  if (process.platform !== 'win32') return null;
+  try {
+    const ps = [
+      '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8',
+      '$sk = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey("SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Fonts", $false)',
+      'if ($null -eq $sk) { Write-Output "[]"; exit 0 }',
+      'try {',
+      '  $items = @(foreach ($n in $sk.GetValueNames()) {',
+      '    if ($n) { [PSCustomObject]@{ name = [string]$n; data = [string]$sk.GetValue($n) } }',
+      '  })',
+      '  if ($items.Count -eq 0) { Write-Output "[]" } else { ConvertTo-Json -InputObject $items -Compress }',
+      '} finally { $sk.Dispose() }'
+    ].join('\n');
+    const r = spawnSync('powershell', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', ps], {
+      encoding: 'utf8',
+      windowsHide: true,
+      timeout: 5000
+    });
+    if (r.status === 0) {
+      const parsed = JSON.parse(String(r.stdout || '').trim() || '[]');
+      return Array.isArray(parsed) ? parsed : [parsed];
+    }
+  } catch {}
+  return null;
+}
+
+function retireWindowsSuperTtc({ destDir = null, force = false } = {}) {
+  if (process.platform !== 'win32') {
+    return { ok: true, skipped: true, reason: 'non-win32' };
+  }
+  const home = os.homedir();
+  const userFontsDir =
+    destDir || path.join(process.env.LOCALAPPDATA || path.join(home, 'AppData', 'Local'), 'Microsoft', 'Windows', 'Fonts');
+  let userFontList = [];
+  try {
+    if (fs.existsSync(userFontsDir)) userFontList = fs.readdirSync(userFontsDir);
+  } catch {}
+  const hasUiSplit = userFontList.some((f) => /^SarasaUiSC-.*\.ttf$/i.test(f));
+  const hasMonoSplit = userFontList.some((f) => /^SarasaMonoSlabSC-.*\.ttf$/i.test(f));
+  if (!force && (!hasUiSplit || !hasMonoSplit)) {
+    return {
+      ok: false,
+      reason: 'split_sc_ttf_missing',
+      hint: 'Install SarasaUiSC-*.ttf and SarasaMonoSlabSC-*.ttf first (or pass --force) before retiring Sarasa-SuperTTC.ttc.'
+    };
+  }
+
+  const removedRegistryValues = [];
+  const candidateTtcPaths = new Set();
+  for (const f of userFontList) {
+    if (/^Sarasa[ _-]?SuperTTC[^\\\/]*\.ttc$/i.test(f)) {
+      candidateTtcPaths.add(path.join(userFontsDir, f));
+    }
+  }
+
+  let gdiRemovedCount = 0;
+  let broadcastOk = false;
+  try {
+    const seedTmp = path.join(os.tmpdir(), `ag-retire-ttc-${process.pid}-${Date.now()}.json`);
+    fs.writeFileSync(seedTmp, JSON.stringify({ userFontsDir, initialPaths: Array.from(candidateTtcPaths) }), 'utf8');
+    try {
+      const psRetire = [
+        '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8',
+        '$ErrorActionPreference = "SilentlyContinue"',
+        'Add-Type -TypeDefinition @"',
+        'using System; using System.Runtime.InteropServices;',
+        'public static class AgFontRetire {',
+        '  [DllImport("gdi32.dll", CharSet = CharSet.Unicode)] public static extern bool RemoveFontResource(string lpFileName);',
+        '  [DllImport("user32.dll", CharSet = CharSet.Auto)] public static extern bool SendNotifyMessage(IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam);',
+        '}',
+        '"@',
+        `$seed = Get-Content -LiteralPath '${seedTmp.replace(/'/g, "''")}' -Raw -Encoding UTF8 | ConvertFrom-Json`,
+        '$paths = New-Object System.Collections.Generic.HashSet[string]([System.StringComparer]::OrdinalIgnoreCase)',
+        'foreach ($p in @($seed.initialPaths)) { if ($p) { [void]$paths.Add([string]$p) } }',
+        '$removedNames = New-Object System.Collections.Generic.List[string]',
+        '$sk = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey("SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Fonts", $true)',
+        'if ($null -ne $sk) {',
+        '  try {',
+        '    foreach ($n in @($sk.GetValueNames())) {',
+        '      if (-not $n) { continue }',
+        '      $d = [string]$sk.GetValue($n)',
+        '      if (($n -match "Sarasa[ _-]?SuperTTC") -or ($d -match "Sarasa[ _-]?SuperTTC[^\\\\/]*\\.ttc$")) {',
+        '        if ($d -and ($d -match "\\.ttc$")) {',
+        '          $full = if ([System.IO.Path]::IsPathRooted($d)) { $d } else { Join-Path ([string]$seed.userFontsDir) $d }',
+        '          [void]$paths.Add($full)',
+        '        }',
+        '        $sk.DeleteValue($n, $false)',
+        '        if ($null -eq $sk.GetValue($n, $null)) { $removedNames.Add([string]$n) }',
+        '      }',
+        '    }',
+        '  } finally { $sk.Dispose() }',
+        '}',
+        '$rem = 0',
+        '$notified = $false',
+        'if ($paths.Count -gt 0 -or $removedNames.Count -gt 0) {',
+        '  foreach ($fp in $paths) { if ($fp) { for ($i = 0; $i -lt 4; $i++) { if ([AgFontRetire]::RemoveFontResource([string]$fp)) { $rem++ } else { break } } } }',
+        '  $notified = [bool][AgFontRetire]::SendNotifyMessage([IntPtr]0xffff, 0x001D, [IntPtr]::Zero, [IntPtr]::Zero)',
+        '}',
+        '[PSCustomObject]@{ removedNames = @($removedNames); candidatePaths = @($paths); gdiRemoved = $rem; notified = $notified } | ConvertTo-Json -Compress'
+      ].join('\n');
+      const r = spawnSync('powershell', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', psRetire], {
+        encoding: 'utf8',
+        windowsHide: true,
+        timeout: 15000
+      });
+      if (r.status === 0) {
+        const d = JSON.parse(String(r.stdout || '').trim() || '{}');
+        if (Array.isArray(d.removedNames)) removedRegistryValues.push(...d.removedNames);
+        if (Array.isArray(d.candidatePaths)) {
+          for (const cp of d.candidatePaths) {
+            if (cp) candidateTtcPaths.add(String(cp));
+          }
+        }
+        gdiRemovedCount = Number(d.gdiRemoved) || 0;
+        broadcastOk = Boolean(d.notified);
+      }
+    } finally {
+      try {
+        if (fs.existsSync(seedTmp)) fs.unlinkSync(seedTmp);
+      } catch {}
+    }
+  } catch {}
+
+  const deletedFiles = [];
+  const lockedPendingRebootFiles = [];
+  for (const fp of candidateTtcPaths) {
+    if (!fp.toLowerCase().startsWith(userFontsDir.toLowerCase())) continue;
+    if (!fs.existsSync(fp)) continue;
+    try {
+      fs.unlinkSync(fp);
+      deletedFiles.push(fp);
+    } catch {
+      lockedPendingRebootFiles.push(fp);
+    }
+  }
+
+  return {
+    ok: true,
+    removedRegistryValues,
+    gdiRemovedCount,
+    broadcastOk,
+    deletedFiles,
+    lockedPendingRebootFiles,
+    effectiveOnNextAntigravityLaunch: true
+  };
 }
 
 async function runUninstall() {
@@ -2597,6 +2863,9 @@ switch (subcommand) {
   case 'install-fonts':
     runInstallFonts();
     break;
+  case 'retire-super-ttc':
+    console.log(JSON.stringify(retireWindowsSuperTtc({ force: hasFlag('--force') }), null, 2));
+    break;
   case 'verify':
     await runVerify();
     break;
@@ -2608,11 +2877,12 @@ switch (subcommand) {
     break;
   default:
     console.log(`Usage:
-  node install.mjs install       [--channel auto|stable|insiders] [--preset high-contrast|claude-desktop-purewhite|vintage-deep] [--dark-preset onyx|claude-warm] [--sync-user] [--with-launcher]
-  node install.mjs relaunch      [--channel auto|stable|insiders] [--force]
-  node install.mjs install-fonts --from <font-folder-path>
-  node install.mjs doctor        [--channel auto|stable|insiders]
-  node install.mjs verify        [--safe-mode] [--channel auto|stable|insiders]
+  node install.mjs install          [--channel auto|stable|insiders] [--preset high-contrast|claude-desktop-purewhite|vintage-deep] [--dark-preset onyx|claude-warm] [--sync-user] [--with-launcher]
+  node install.mjs relaunch         [--channel auto|stable|insiders] [--force]
+  node install.mjs install-fonts    --from <font-folder-path> [--retire-super-ttc]
+  node install.mjs retire-super-ttc [--force]
+  node install.mjs doctor           [--channel auto|stable|insiders]
+  node install.mjs verify           [--safe-mode] [--channel auto|stable|insiders]
   node install.mjs rollback
   node install.mjs uninstall
   node install.mjs build-manifest
