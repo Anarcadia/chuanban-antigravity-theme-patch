@@ -294,6 +294,9 @@ let cachedInjectScript = '';
 let cachedPatchVersion = '';
 let metricsConfigEpoch = 0;
 const metricsCache = new Map(); // dbPath -> { sig, payload }
+// Must be declared before the top-level rebuildBundleIfNeeded() call: it clears this cache
+// when user/config.json contextLimit differs from the default, which would otherwise hit the TDZ.
+const lastBestEffortPayloadCache = new Map(); // dbPath -> payload
 const incrementalMetricsMap = new Map(); // dbPath -> { rowCount, maxIdx, userStepsCount, lastUserStepIdx, items, validItems, totalIn, totalCache, totalOut, totalThink, totalResp }
 const MAX_METRICS_CACHE_SIZE = 30;
 
@@ -1071,7 +1074,6 @@ function fmtNum(n) {
 const resolvedCascadeDbCache = new Map();
 const negativeCascadeWslCache = new Map(); // cacheKey -> expireAtMs
 const lastKnownDbStateCache = new Map(); // dbPath -> { dbPath, rawSig, sig }
-const lastBestEffortPayloadCache = new Map(); // dbPath -> payload
 const UUID_RE = /^[0-9a-f-]{36}$/i;
 const DB_FILE_RE = /^([0-9a-f-]{36})\.db$/i;
 const textDecoder = new TextDecoder('utf-8', { fatal: false });
