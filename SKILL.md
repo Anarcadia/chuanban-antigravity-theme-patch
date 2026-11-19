@@ -22,8 +22,8 @@ description: 船板的 Antigravity 2.0 主题、字体与汉化补丁（v5.5.1 �
 ## 一、核心资源链接与示例基准
 
 1. **Google Drive 资源包（含必备字体）**：<https://drive.google.com/drive/folders/1NX92SgVUqtSjWg6bt6sIJXy-cn7J_boC>
-   - 必备 4 个字体文件：`AnthropicSerif-Regular.ttf`、`AnthropicSerif-Bold.ttf`、`AnthropicMono-Regular.ttf`、`Sarasa-SuperTTC.ttc`（`v5.5.0` UI 西文直连官方 `Google Sans Flex`，**不再依赖 `AnthropicSans-*.ttf`**）。
-   - *限流备选*：若 `Sarasa-SuperTTC.ttc`（~791 MB）触发 Google Drive 24h 下载限额，macOS 直接运行 `brew install --cask font-sarasa-gothic`，Windows / Linux 从 [`be5invis/Sarasa-Gothic` Releases](https://github.com/be5invis/Sarasa-Gothic/releases) 下载同款 `Sarasa-SuperTTC.ttc`。
+   - 必备字体：`AnthropicSerif-Regular.ttf`、`AnthropicSerif-Bold.ttf`、`AnthropicMono-Regular.ttf`，以及更纱黑体中文包（`v5.5.0` UI 西文直连官方 `Google Sans Flex`，**不再依赖 `AnthropicSans-*.ttf`**）。
+   - **Windows 强烈推荐拆分版 SC TTF**（避免 791 MB `Sarasa-SuperTTC.ttc` 在 DirectWrite/Chromium 引起数秒排版冻结，见 #19）：从 [`be5invis/Sarasa-Gothic` Releases](https://github.com/be5invis/Sarasa-Gothic/releases) 下载 `SarasaUiSC-TTF-*.7z` 与 `SarasaMonoSlabSC-TTF-*.7z`（单个 `.ttf` 约 23 MB），Windows 11 自带 `tar -xf` 即可原生解压 `.7z`，再筛选 `Light / Regular / Italic / SemiBold / SemiBoldItalic / Bold / BoldItalic`（共 14 个 SC 字重）经 `install-fonts` 安装；macOS / Linux 仍可直接用 `brew install --cask font-sarasa-gothic` 或 `Sarasa-SuperTTC.ttc`。
 2. **GitHub 代码仓库**：<https://github.com/Anarcadia/chuanban-antigravity-theme-patch>
 3. **Notion 引导页**：<https://chuanban.notion.site/chuanban-antigravity-theme-patch-db7c5846f37546be9481cd791aed0554>
 
@@ -84,7 +84,7 @@ node install.mjs doctor
     node install.mjs install-fonts --from "<字体所在目录>"
     ```
     *（关键：在 Windows 10/11 下，单纯复制字体文件到用户字体目录不会写 `HKCU\...\Fonts` 注册表，Chromium `local()` 将无法识别字体，**必须**通过 `install-fonts` 写入注册表并广播 `WM_FONTCHANGE`。）*
-  - 若尚未下载：引导用户从 [Google Drive 资源包](https://drive.google.com/drive/folders/1NX92SgVUqtSjWg6bt6sIJXy-cn7J_boC) 获取（macOS 下 `Sarasa-SuperTTC.ttc` 亦可直接执行 `brew install --cask font-sarasa-gothic`）。
+  - 若尚未下载：引导用户从 [Google Drive 资源包](https://drive.google.com/drive/folders/1NX92SgVUqtSjWg6bt6sIJXy-cn7J_boC) 获取 Anthropic 字体（macOS 下 `Sarasa-SuperTTC.ttc` 亦可直接执行 `brew install --cask font-sarasa-gothic`；**Windows 下若 `doctor` 提示 `fonts.superTtcWarning` 或首次安装更纱黑体，优先引导从 `be5invis/Sarasa-Gothic` Releases 下载 `SarasaUiSC-TTF-*.7z` + `SarasaMonoSlabSC-TTF-*.7z`，可用 Windows 11 自带 `tar -xf` 解压并只安装 `Light / Regular / Italic / SemiBold / SemiBoldItalic / Bold / BoldItalic` 这 14 个独立 TTF**）。
 - **若老用户此前使用早期 `v1 ~ v4` 单文件版 `~/.gemini/antigravity/scripts/antigravity-font-daemon.mjs`**：先读取旧文件检查是否有用户手改过的字号或配色值，安装完成后将其迁入 `~/.gemini/antigravity/theme-patch/user/config.json` 或 `user/custom.css`。
 
 ### Step 2：安装内核与注册系统常驻服务

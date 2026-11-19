@@ -530,6 +530,7 @@ async function detectEnvironment(channel = 'auto') {
   const hasAnthropicMonoFont = allFontFiles.some((f) => /AnthropicMono|Anthropic[ _-]Mono/i.test(f));
   const hasAnthropicFont = hasAnthropicSerifFont && hasAnthropicMonoFont;
   const hasSarasaFont = allFontFiles.some((f) => /Sarasa|更纱/i.test(f));
+  const hasSarasaSuperTtc = allFontFiles.some((f) => /Sarasa-?SuperTTC\.ttc$/i.test(f));
 
   const checkSingleChannel = (ch) => {
     const isInsiders = ch === 'insiders';
@@ -609,6 +610,7 @@ async function detectEnvironment(channel = 'auto') {
     hasAnthropicSerifFont,
     hasAnthropicMonoFont,
     hasSarasaFont,
+    hasSarasaSuperTtc,
     channel,
     appExists: chInfo.appExists || insidersInfo.appExists || hostRuntime.runningProcesses.length > 0,
     appVersion: hostRuntime.appVersion,
@@ -1257,8 +1259,18 @@ async function runDoctor() {
   const missingFonts = [];
   if (!env.hasAnthropicSerifFont) missingFonts.push('Anthropic Serif (AnthropicSerif-Regular.ttf, AnthropicSerif-Bold.ttf)');
   if (!env.hasAnthropicMonoFont) missingFonts.push('Anthropic Mono (AnthropicMono-Regular.ttf)');
-  if (!env.hasSarasaFont) missingFonts.push('Sarasa Gothic (Sarasa-SuperTTC.ttc)');
+  if (!env.hasSarasaFont) {
+    missingFonts.push(
+      process.platform === 'win32'
+        ? 'Sarasa Gothic (Windows 推荐拆分版 SarasaUiSC-TTF + SarasaMonoSlabSC-TTF，避免 791MB SuperTTC 卡顿)'
+        : 'Sarasa Gothic (Sarasa-SuperTTC.ttc)'
+    );
+  }
   const allRequiredFontsInstalled = missingFonts.length === 0;
+  const superTtcWarning =
+    process.platform === 'win32' && env.hasSarasaSuperTtc
+      ? 'Detected monolithic 791MB Sarasa-SuperTTC.ttc on Windows; DirectWrite/Chromium may stall 1.5–3.6s on font cache misses. Recommended: replace with split SarasaUiSC-TTF + SarasaMonoSlabSC-TTF from https://github.com/be5invis/Sarasa-Gothic/releases.'
+      : null;
   const launcherMode =
     process.platform === 'darwin'
       ? env.launcherInstalled
@@ -1282,6 +1294,7 @@ async function runDoctor() {
       anthropicSerifInstalled: env.hasAnthropicSerifFont,
       anthropicMonoInstalled: env.hasAnthropicMonoFont,
       sarasaInstalled: env.hasSarasaFont,
+      superTtcWarning,
       missing: missingFonts,
       downloadUrl: !allRequiredFontsInstalled ? GOOGLE_DRIVE_URL : null
     },
