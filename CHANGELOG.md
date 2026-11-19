@@ -4,6 +4,17 @@
 
 ---
 
+## [v5.5.1] - 2026-11-19
+
+> **适用版本**：Antigravity `2.33.0+`（向下完全兼容 `2.32.x` / `2.31.x` / `2.30.0`）  
+> **社区致谢**：特别感谢 [@2217173240](https://github.com/2217173240)（[PR #18](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/pull/18)）定位并修复自定义 `contextLimit` 场景下守护进程启动阶段的暂时性死区（TDZ）崩溃问题！
+
+### Fixed（非默认 `contextLimit` 配置下守护进程启动崩溃修复）
+- **修复 `user/config.json` 中 `contextLimit` 或 `contextLimitOverride` 非内置默认值（`256000` / `0`）时守护进程冷启动即崩溃退出的缺陷（`core/daemon.mjs` / `core/manifest.json`，合入 [#18](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/pull/18)）**：
+  - 将 `lastBestEffortPayloadCache` 的声明提前至顶层同步调用 `rebuildBundleIfNeeded()` 之前（与 `metricsCache` 并列），消除启动阶段对比非默认 `contextLimit` 清理缓存时触发的 `ReferenceError: Cannot access 'lastBestEffortPayloadCache' before initialization`。
+
+---
+
 ## [v5.5.0] - 2026-11-19
 
 > **适用版本**：Antigravity `2.33.0+`（macOS `CL=1023160026` / Windows `CL=1028566590`，向下完全兼容 `2.32.x` / `2.31.x` / `2.30.0`）  

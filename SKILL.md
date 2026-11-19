@@ -1,9 +1,9 @@
 ---
 name: chuanban-antigravity-theme-patch
-description: 船板的 Antigravity 2.0 主题、字体与汉化补丁（v5.5.0 · 适配 Antigravity 2.33.0+ macOS / Windows / Linux 单图标 M1+M2 启动接力 + UI 西文 Google Sans Flex 可变字体引擎 × 中文更纱黑体字重桥接 + 对话正文 Anthropic Serif 衬线 + 昼夜双模式四套预设与外观面板 📖 书卷切换钮 + 宿主独占指纹门禁 + WSL2 双轨只读 SQLite + 1,860 条零冲突词典 + 分屏/支线提问(/btw)/子Agent侧栏独立实时指标胶囊）。采用「core/ 只读内核 + user/ 永不覆盖改装层 + install.mjs CLI」，支持 Agent 一键部署、2.5 秒热重载定制与 --safe-mode 沙箱排障。当用户提到“安装船板 Antigravity 主题”、“升级/修复 Antigravity 汉化与字体”、“定制 Antigravity 界面样式或汉化词条”时触发。
+description: 船板的 Antigravity 2.0 主题、字体与汉化补丁（v5.5.1 · 适配 Antigravity 2.33.0+ macOS / Windows / Linux 单图标 M1+M2 启动接力 + UI 西文 Google Sans Flex 可变字体引擎 × 中文更纱黑体字重桥接 + 对话正文 Anthropic Serif 衬线 + 昼夜双模式四套预设与外观面板 📖 书卷切换钮 + 宿主独占指纹门禁 + WSL2 双轨只读 SQLite + 1,860 条零冲突词典 + 分屏/支线提问(/btw)/子Agent侧栏独立实时指标胶囊）。采用「core/ 只读内核 + user/ 永不覆盖改装层 + install.mjs CLI」，支持 Agent 一键部署、2.5 秒热重载定制与 --safe-mode 沙箱排障。当用户提到“安装船板 Antigravity 主题”、“升级/修复 Antigravity 汉化与字体”、“定制 Antigravity 界面样式或汉化词条”时触发。
 ---
 
-# 船板的 Antigravity 主题、字体与汉化补丁（v5.5.0 · AI Agent 部署与改装契约）
+# 船板的 Antigravity 主题、字体与汉化补丁（v5.5.1 · AI Agent 部署与改装契约）
 
 > **核心摘要（致执行端 AI Agent）**：
 > - **功能边界**：纯运行时本地回环 CDP 注入（不改 `.asar`、不破系统签名、零第三方 npm 依赖），适配 Google Antigravity **`2.33.0+`**：
@@ -57,7 +57,7 @@ chuanban-antigravity-theme-patch/
 ├── README.md                   # 面向用户的项目说明与快速上手指南
 ├── CHANGELOG.md                # 版本演进记录
 ├── core/                       # 【只读内核】随版本升级原子替换，Agent 严禁直接修改
-│   ├── manifest.json           # 版本号（5.5.0）、三端地址与 core/* 四件套 SHA-256 校验清单
+│   ├── manifest.json           # 版本号（5.5.1）、三端地址与 core/* 四件套 SHA-256 校验清单
 │   ├── daemon.mjs              # Node CDP 守护进程（宿主独占指纹门禁、2.33.0+ M2 冷启动自动接力重启、Windows 0.02ms 内存空闲短路与跨完整性 PID 协作围栏、SQLite O(1) 增量与子 Agent `+N sub` 聚合、WSL2 双轨只读读取、Swarm 子帧注入、2.5s 热重载感知）
 │   ├── runtime.js              # 浏览器端注入引擎（宿主指纹门禁与 0ms 防闪白、昼夜双预设 `preset`/`darkPreset` 与 curtainView/标题栏联动、Google Sans Flex 防脱靶保底 `#ag-google-sans-flex-fonts`、冷启动兜底包自愈、弯引号与 DICT_CI 索引）
 │   ├── theme.css               # 四段式样式表（Part I Google Sans Flex × AgSarasaUI 字重桥接、Anthropic Serif 正文与 macOS 浅色全域活字润墨平衡 / Part II 白天暖纸三预设 / Part III 独立黑夜双预设 / Part IV 指标胶囊）
