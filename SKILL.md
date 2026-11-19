@@ -33,8 +33,9 @@ description: 船板的 Antigravity 2.0 主题、字体与深度汉化全栈成�
    - 链接：<https://chuanban.notion.site/chuanban-antigravity-theme-patch-db7c5846f37546be9481cd791aed0554>
 
 ### 实机样式基准参考
-- **三栏对话与工件视图（高对比暖白 + 暗红蜡封 + 同行实时指标胶囊）**：[`assets/preview-workspace-chat-and-artifact.png`](assets/preview-workspace-chat-and-artifact.png)
-- **新建对话首页视图（全界面汉化 + 首页蜡封聚焦态）**：[`assets/preview-home-new-conversation.png`](assets/preview-home-new-conversation.png)
+- **标准浅色主界面视图（高对比书卷暖白四栏工作台 + 古典衬线正文 + 暗红蜡封输入框）**：[`assets/preview-light-workbench.png`](assets/preview-light-workbench.png)
+- **黑夜界面视图（Claude 暖纸深夜模式 + 代码审阅 Diff 视图，支持与官方碳黑一键切换）**：[`assets/preview-dark-workbench.png`](assets/preview-dark-workbench.png)
+- **上下文对话信息胶囊视图（同行实时指标胶囊 + 悬停全量调用与缓存遥测详情卡）**：[`assets/preview-metrics-capsule.png`](assets/preview-metrics-capsule.png)
 
 ---
 
