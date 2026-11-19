@@ -2443,7 +2443,12 @@ const HOST_PROBE_EXPRESSION = `(function(){
       typeof document.querySelector === 'function' &&
       document.querySelector('link[href*="/jetbox.css"], body[data-agy-theme], body[data-newux-theme], [id="antigravity.agentSidePanelInputBox"]')
     ) return 'host';
-    if (typeof document === 'undefined' || !document.documentElement || document.readyState === 'loading') {
+    if (
+      typeof document === 'undefined' ||
+      !document.documentElement ||
+      document.readyState === 'loading' ||
+      (loc && (loc.protocol === 'chrome-error:' || loc.protocol === 'about:' || loc.protocol === 'data:'))
+    ) {
       return 'pending';
     }
     return 'non_host';
@@ -2952,7 +2957,9 @@ function attachTarget(target, endpoint) {
         }
         const originKey = getTargetOriginKey(reasonUrl || target.url);
         if (originKey) {
-          skippedNonHostTargets.set(target.id, { origin: originKey, skippedAt: Date.now() });
+          const prevSkipped = skippedNonHostTargets.get(target.id);
+          const attempts = prevSkipped && prevSkipped.origin === originKey ? (prevSkipped.attempts || 1) + 1 : 1;
+          skippedNonHostTargets.set(target.id, { origin: originKey, skippedAt: Date.now(), attempts });
         }
         if (evalScriptId && ws.readyState === WebSocket.OPEN) {
           const idToRemove = evalScriptId;
@@ -2978,6 +2985,7 @@ function attachTarget(target, endpoint) {
         hostConfirmed = true;
         pendingProbe = false;
         clearPendingTimer();
+        skippedNonHostTargets.delete(target.id);
         const entry = attachedTargets.get(target.id);
         if (entry && entry.ws === ws) {
           entry.hostConfirmed = true;
@@ -3912,6 +3920,16 @@ async function sync() {
         }
       }
 
+      const isSkippedNonHost = (t) => {
+        const skipped = skippedNonHostTargets.get(t.id);
+        if (!skipped || skipped.origin !== getTargetOriginKey(t.url)) return false;
+        const attempts = skipped.attempts || 1;
+        const ageMs = nowMs - (skipped.skippedAt || 0);
+        if (attempts < 6 && String(t.title || '').includes('Antigravity') && ageMs >= 3000) return false;
+        if (attempts < 3 && ageMs >= 8000) return false;
+        return true;
+      };
+
       const pages = targets.filter(
         (t) =>
           (t.type === 'page' || (t.type === 'iframe' && String(t.url || '').startsWith('plugin://swarm--'))) &&
@@ -3919,7 +3937,7 @@ async function sync() {
           !String(t.url || '').startsWith('devtools://') &&
           isAllowedOrigin(t.url) &&
           !String(t.title || '').includes('Launchpad') &&
-          skippedNonHostTargets.get(t.id)?.origin !== getTargetOriginKey(t.url)
+          !isSkippedNonHost(t)
       );
 
       for (const page of pages) {
