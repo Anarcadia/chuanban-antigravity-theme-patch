@@ -3,7 +3,7 @@
  * chuanban-antigravity-theme-patch · 一键安装、自检、CDP 接力重启、安全模式验证、打包与回滚 CLI (install.mjs)
  *
  * 支持子命令：
- *   node install.mjs install  [--channel auto|stable|insiders] [--preset high-contrast] [--sync-user] [--with-launcher] [--target-dir <dir>]
+ *   node install.mjs install  [--channel auto|stable|insiders] [--preset high-contrast|claude-desktop-purewhite|vintage-deep] [--dark-preset onyx|claude-warm] [--sync-user] [--with-launcher] [--target-dir <dir>]
  *   node install.mjs relaunch [--channel auto|stable|insiders] [--force] [--target-dir <dir>]
  *   node install.mjs install-fonts --from <font-folder-path>
  *   node install.mjs doctor   [--channel auto|stable|insiders] [--target-dir <dir>]
@@ -528,8 +528,7 @@ async function detectEnvironment(channel = 'auto') {
   // v5.5.0 UI 西文直连官方 Google Sans Flex 引擎，本地仅需 Anthropic Serif（对话正文）+ Anthropic Mono（代码）+ Sarasa（中文）
   const hasAnthropicSerifFont = allFontFiles.some((f) => /AnthropicSerif|Anthropic[ _-]Serif/i.test(f));
   const hasAnthropicMonoFont = allFontFiles.some((f) => /AnthropicMono|Anthropic[ _-]Mono/i.test(f));
-  const hasAnthropicFont =
-    (hasAnthropicSerifFont && hasAnthropicMonoFont) || allFontFiles.some((f) => /Anthropic/i.test(f));
+  const hasAnthropicFont = hasAnthropicSerifFont && hasAnthropicMonoFont;
   const hasSarasaFont = allFontFiles.some((f) => /Sarasa|更纱/i.test(f));
 
   const checkSingleChannel = (ch) => {
@@ -1255,6 +1254,20 @@ async function runDoctor() {
   const cdpMissingFlag = !isCustomSandboxTarget && !live.reachable && env.cdpStatus === 'missing_opt_in_flag';
   const remediation = cdpMissingFlag ? `node ${JSON.stringify(path.join(targetDir, 'install.mjs'))} relaunch` : null;
 
+  const missingFonts = [];
+  if (!env.hasAnthropicSerifFont) missingFonts.push('Anthropic Serif (AnthropicSerif-Regular.ttf, AnthropicSerif-Bold.ttf)');
+  if (!env.hasAnthropicMonoFont) missingFonts.push('Anthropic Mono (AnthropicMono-Regular.ttf)');
+  if (!env.hasSarasaFont) missingFonts.push('Sarasa Gothic (Sarasa-SuperTTC.ttc)');
+  const allRequiredFontsInstalled = missingFonts.length === 0;
+  const launcherMode =
+    process.platform === 'darwin'
+      ? env.launcherInstalled
+        ? 'optional-launcher-app'
+        : 'single-icon-m2-relay'
+      : process.platform === 'win32'
+      ? 'in-place-lnk'
+      : 'desktop-entry';
+
   const report = {
     ok: Boolean(env.nodeBasicOk && integrity.ok && !cdpMissingFlag),
     node: {
@@ -1264,17 +1277,20 @@ async function runDoctor() {
     },
     fonts: {
       uiLatinEngine: 'Google Sans Flex (native variable font)',
+      allRequiredInstalled: allRequiredFontsInstalled,
       anthropicInstalled: env.hasAnthropicFont,
       anthropicSerifInstalled: env.hasAnthropicSerifFont,
       anthropicMonoInstalled: env.hasAnthropicMonoFont,
       sarasaInstalled: env.hasSarasaFont,
-      downloadUrl: !env.hasAnthropicFont || !env.hasSarasaFont ? GOOGLE_DRIVE_URL : null
+      missing: missingFonts,
+      downloadUrl: !allRequiredFontsInstalled ? GOOGLE_DRIVE_URL : null
     },
     antigravity: {
       channel: env.channel,
       appExists: env.appExists,
       appVersion: env.appVersion,
       cdpStatus: live.reachable ? 'ready' : env.cdpStatus,
+      launcherMode,
       launcherInstalled: env.launcherInstalled,
       runningProcesses: env.runningProcesses,
       remediation,
@@ -1914,6 +1930,24 @@ async function runInstall() {
     currentCfg.darkPreset = darkPreset;
   } else if (!currentCfg.darkPreset) {
     currentCfg.darkPreset = 'onyx';
+  }
+  if (!currentCfg.modules || typeof currentCfg.modules !== 'object' || Array.isArray(currentCfg.modules)) {
+    currentCfg.modules = {};
+  }
+  for (const modKey of [
+    'i18n',
+    'metrics',
+    'composerWaxSeal',
+    'deadlockHealer',
+    'coldBootHealer',
+    'zoomShortcuts',
+    'cdpAutoRelaunch',
+    'customCss',
+    'customJs'
+  ]) {
+    if (typeof currentCfg.modules[modKey] !== 'boolean') {
+      currentCfg.modules[modKey] = true;
+    }
   }
   // 自动清理早期版本遗留在 user/config.json 中的出厂默认 selectors，确保后续升级由 core/runtime.js 统一托管
   if (currentCfg.selectors && typeof currentCfg.selectors === 'object') {
@@ -2574,7 +2608,7 @@ switch (subcommand) {
     break;
   default:
     console.log(`Usage:
-  node install.mjs install       [--channel auto|stable|insiders] [--preset high-contrast] [--sync-user]
+  node install.mjs install       [--channel auto|stable|insiders] [--preset high-contrast|claude-desktop-purewhite|vintage-deep] [--dark-preset onyx|claude-warm] [--sync-user] [--with-launcher]
   node install.mjs relaunch      [--channel auto|stable|insiders] [--force]
   node install.mjs install-fonts --from <font-folder-path>
   node install.mjs doctor        [--channel auto|stable|insiders]
