@@ -301,6 +301,8 @@ const metricsCache = new Map(); // dbPath -> { sig, payload }
 // when user/config.json contextLimit differs from the default, which would otherwise hit the TDZ.
 const lastBestEffortPayloadCache = new Map(); // dbPath -> payload
 const incrementalMetricsMap = new Map(); // dbPath -> { rowCount, maxIdx, userStepsCount, lastUserStepIdx, items, validItems, totalIn, totalCache, totalOut, totalThink, totalResp }
+const tokenAnalyticsDbCache = new Map(); // dbPath -> { sig, parsed }
+const tokenAnalyticsSummariesCache = new Map(); // summariesDbPath -> { sig, map }
 const MAX_METRICS_CACHE_SIZE = 30;
 
 function setMetricsCache(dbPath, entry) {
@@ -533,6 +535,7 @@ function rebuildBundleIfNeeded() {
     {
       i18n: true,
       metrics: true,
+      tokenAnalytics: true,
       composerWaxSeal: true,
       deadlockHealer: true,
       coldBootHealer: true,
@@ -547,6 +550,7 @@ function rebuildBundleIfNeeded() {
   );
   if (!DatabaseSync) {
     modules.metrics = false;
+    modules.tokenAnalytics = false;
   }
   modules.metricsCapsule = modules.metrics;
 
@@ -587,6 +591,13 @@ function rebuildBundleIfNeeded() {
     !normalizedSelectors.excludeI18n.includes('ag-live-metrics-pill')
   ) {
     normalizedSelectors.excludeI18n += ', .ag-live-metrics-pill, [data-ag-metrics-pill]';
+  }
+  if (
+    typeof normalizedSelectors.excludeI18n === 'string' &&
+    normalizedSelectors.excludeI18n.trim() &&
+    !normalizedSelectors.excludeI18n.includes('ag-token-analytics-panel')
+  ) {
+    normalizedSelectors.excludeI18n += ', #ag-token-nav-section, #ag-token-analytics-panel, #ag-ta-tooltip, [data-ag-token-ui]';
   }
 
   const DEFAULT_ALLOWED_ORIGINS = [
@@ -2312,6 +2323,899 @@ function parseConversationMetrics(cascadeId, endpointOrDir, precomputedState = n
 }
 
 // ============================================================================
+// 4.5 SQLite 全量增量 Token 统计分析（系统设置弹窗「Token 统计」Tab）
+// ============================================================================
+
+const TA_MEMORY_PATH_RE = /MEMORY\.md|[\\/]\.gemini[\\/]antigravity[\\/]brain[\\/]|\bmemory_/i;
+const TA_PRINTABLE_STR_RE = /^[\x20-\x7e\u00a0-\uffff]{2,260}$/;
+const TA_SLUG_LABELS = {
+  'gemini-pro-orchestrator-neon': 'Orchestrator (Neon)',
+  'gemini-pro-orchestrator-g1-pro': 'Orchestrator (Argon)',
+  'gemini-flash-worker-agy': 'Gemini 4 Hydrogen (Orchestrator)',
+  'gemini-4-hydrogen': 'Gemini 4 Hydrogen',
+  'gemini-4-argon-trial': 'Gemini 4 Argon',
+  'gemini-3.8-flash-n': 'Gemini 3.8 Flash',
+  'gemini-3.8-flash-tiered': 'Gemini 3.8 Flash',
+  'claude-opus-5-5-medium': 'Claude Opus 5.5 (Medium)',
+  'claude-opus-5-5-high': 'Claude Opus 5.5 (High)'
+};
+
+function taParseProtoAll(buf) {
+  const fields = [];
+  if (!buf || typeof buf.length !== 'number' || buf.length === 0) return fields;
+  let i = 0;
+  while (i < buf.length) {
+    let tag = 0;
+    let shift = 0;
+    while (i < buf.length) {
+      const b = buf[i++];
+      tag |= (b & 0x7f) << shift;
+      if (!(b & 0x80)) break;
+      shift += 7;
+      if (shift > 35) return fields;
+    }
+    const field = tag >>> 3;
+    const wire = tag & 7;
+    if (field <= 0 || field > 10000) break;
+    if (wire === 0) {
+      let v = 0n;
+      let s = 0n;
+      while (i < buf.length) {
+        const b = buf[i++];
+        v |= BigInt(b & 0x7f) << s;
+        if (!(b & 0x80)) break;
+        s += 7n;
+        if (s > 70n) return fields;
+      }
+      fields.push({ f: field, w: 0, v: Number(v) });
+    } else if (wire === 2) {
+      let len = 0;
+      let s = 0;
+      while (i < buf.length) {
+        const b = buf[i++];
+        len |= (b & 0x7f) << s;
+        if (!(b & 0x80)) break;
+        s += 7;
+        if (s > 35) return fields;
+      }
+      if (len < 0 || i + len > buf.length) break;
+      fields.push({ f: field, w: 2, buf: buf.subarray(i, i + len) });
+      i += len;
+    } else if (wire === 1) {
+      if (i + 8 > buf.length) break;
+      i += 8;
+    } else if (wire === 5) {
+      if (i + 4 > buf.length) break;
+      i += 4;
+    } else {
+      break;
+    }
+  }
+  return fields;
+}
+
+function taParsePackedVarints(buf) {
+  const out = [];
+  if (!buf || typeof buf.length !== 'number') return out;
+  let i = 0;
+  while (i < buf.length) {
+    let v = 0;
+    let s = 0;
+    while (i < buf.length) {
+      const b = buf[i++];
+      v |= (b & 0x7f) << s;
+      if (!(b & 0x80)) break;
+      s += 7;
+      if (s > 35) return out;
+    }
+    out.push(v);
+  }
+  return out;
+}
+
+function taGetField(fields, num) {
+  return fields.find((x) => x.f === num);
+}
+
+function taGetAllFields(fields, num) {
+  return fields.filter((x) => x.f === num);
+}
+
+function taFieldToStr(f) {
+  return f?.buf ? textDecoder.decode(f.buf) : '';
+}
+
+function taExtractPrintableStrings(buf, maxDepth = 3, out = [], limit = 24) {
+  if (maxDepth < 0 || !buf || !buf.length || out.length >= limit) return out;
+  for (const fld of taParseProtoAll(buf)) {
+    if (out.length >= limit) break;
+    if (fld.w === 2 && fld.buf.length > 0 && fld.buf.length <= 512) {
+      const s = textDecoder.decode(fld.buf);
+      if (TA_PRINTABLE_STR_RE.test(s)) {
+        out.push(s);
+      } else if (maxDepth > 0 && fld.buf.length >= 2) {
+        taExtractPrintableStrings(fld.buf, maxDepth - 1, out, limit);
+      }
+    }
+  }
+  return out;
+}
+
+function taExtractStepTimestamp(metaBuf) {
+  if (!metaBuf || !metaBuf.length) return 0;
+  for (const fld of taParseProtoAll(metaBuf)) {
+    if (fld.w === 2 && fld.buf.length >= 2 && fld.buf.length <= 24) {
+      const sub = taParseProtoAll(fld.buf);
+      const sec = taGetField(sub, 1)?.v;
+      if (sec && sec > 1700000000 && sec < 1900000000) return sec;
+    }
+  }
+  return 0;
+}
+
+function taResolveStepLookup(stepTs, fallbackSec) {
+  const sorted = [...stepTs.keys()].sort((a, b) => a - b);
+  return (stepIdx) => {
+    if (stepTs.has(stepIdx)) return stepTs.get(stepIdx);
+    for (let i = sorted.length - 1; i >= 0; i -= 1) {
+      if (sorted[i] <= stepIdx) return stepTs.get(sorted[i]);
+    }
+    return sorted.length > 0 ? stepTs.get(sorted[0]) : fallbackSec;
+  };
+}
+
+function taGetDbFileSig(dbPath) {
+  try {
+    const unc = isUncPath(dbPath);
+    if (unc && Date.now() < wslUncBackoffUntil) return null;
+    const t0 = Date.now();
+    const st = fs.statSync(dbPath, { throwIfNoEntry: false });
+    if (unc && Date.now() - t0 > 400) {
+      wslUncBackoffUntil = Date.now() + 45000;
+    }
+    if (!st) return null;
+    let wst = null;
+    if (!unc || Date.now() >= wslUncBackoffUntil) {
+      wst = fs.statSync(`${dbPath}-wal`, { throwIfNoEntry: false });
+      if (unc && Date.now() - t0 > 400) {
+        wslUncBackoffUntil = Date.now() + 45000;
+      }
+    }
+    const walSig = wst ? `${wst.mtimeMs}:${wst.size}` : '0:0';
+    return {
+      sig: `${st.mtimeMs}:${st.size}|${walSig}`,
+      mtimeMs: Math.max(st.mtimeMs || 0, wst ? wst.mtimeMs || 0 : 0)
+    };
+  } catch {
+    return null;
+  }
+}
+
+function taNormalizeSlashPath(raw) {
+  let s = String(raw || '').trim();
+  if (!s) return '';
+  if (s.startsWith('file://')) {
+    s = s.slice(7);
+    try {
+      s = decodeURIComponent(s);
+    } catch {}
+  }
+  s = s.replace(/\\/g, '/');
+  if (/^\/[A-Za-z]:\//.test(s)) {
+    s = s.slice(1);
+  }
+  if (!s.startsWith('//')) {
+    s = s.replace(/\/{2,}/g, '/');
+  } else {
+    s = '//' + s.slice(2).replace(/\/{2,}/g, '/');
+  }
+  if (s.length > 1 && !/^[A-Za-z]:\/$/.test(s)) {
+    s = s.replace(/\/+$/, '');
+  }
+  return s || '/';
+}
+
+const TA_NORMALIZED_OS_TMP = taNormalizeSlashPath(os.tmpdir()).toLowerCase();
+
+function taIsTempPath(p) {
+  if (!p) return false;
+  const low = p.toLowerCase();
+  if (TA_NORMALIZED_OS_TMP && TA_NORMALIZED_OS_TMP.length > 1) {
+    if (low === TA_NORMALIZED_OS_TMP || low.startsWith(`${TA_NORMALIZED_OS_TMP}/`)) return true;
+  }
+  return (
+    /^(?:\/private)?\/tmp(?:\/|$)/i.test(low) ||
+    /^\/var\/folders(?:\/|$)/i.test(low) ||
+    /^[a-z]:\/users\/[^/]+\/appdata\/local\/temp(?:\/|$)/i.test(low) ||
+    /^[a-z]:\/windows\/temp(?:\/|$)/i.test(low) ||
+    /^\/mnt\/[a-z]\/users\/[^/]+\/appdata\/local\/temp(?:\/|$)/i.test(low)
+  );
+}
+
+function taParseWorkspaceUrisList(workspaceUris) {
+  if (!workspaceUris) return [];
+  if (Array.isArray(workspaceUris)) {
+    return workspaceUris.map((x) => taNormalizeSlashPath(x)).filter(Boolean);
+  }
+  const str = String(workspaceUris).trim();
+  if (!str) return [];
+  if (str.startsWith('[')) {
+    try {
+      const arr = JSON.parse(str);
+      if (Array.isArray(arr)) {
+        return arr.map((x) => taNormalizeSlashPath(x)).filter(Boolean);
+      }
+    } catch {}
+  }
+  const decoded = taNormalizeSlashPath(str);
+  return decoded ? [decoded] : [];
+}
+
+function taNormalizeProjectInfo(workspaceUris, projectId = '') {
+  const paths = taParseWorkspaceUrisList(workspaceUris);
+  const nonTemp = paths.find((p) => !taIsTempPath(p));
+  const chosen = nonTemp || paths[0] || '';
+  const pid = String(projectId || '').trim();
+
+  if (!chosen || (pid === 'outside-of-project' && !nonTemp)) {
+    return {
+      key: '__none__',
+      name: '未绑定项目',
+      rawBasename: '未绑定项目',
+      path: '',
+      isTemp: false
+    };
+  }
+
+  if (taIsTempPath(chosen)) {
+    return {
+      key: '__tmp__',
+      name: '临时目录 (/tmp)',
+      rawBasename: '临时目录 (/tmp)',
+      path: '/tmp',
+      isTemp: true
+    };
+  }
+
+  const parts = chosen.split('/').filter(Boolean);
+  const base = parts[parts.length - 1] || chosen;
+  const isCaseInsensitive =
+    process.platform === 'darwin' ||
+    process.platform === 'win32' ||
+    /^[a-z]:\//i.test(chosen) ||
+    /^\/mnt\/[a-z]\//i.test(chosen);
+  return {
+    key: isCaseInsensitive ? chosen.toLowerCase() : chosen,
+    name: base,
+    rawBasename: base,
+    path: chosen,
+    isTemp: false
+  };
+}
+
+function taClassifyModelPool({ label = '', slug = '', modelEnum = '', usedClaude = '' } = {}) {
+  const combined = `${label} ${slug} ${modelEnum}`.toLowerCase();
+  if (combined.includes('argon')) return 'Argon';
+  if (combined.includes('claude') || combined.includes('gpt') || String(usedClaude).toLowerCase() === 'true') {
+    return 'Claude & GPT';
+  }
+  return 'Gemini';
+}
+
+function taNormalizeModelLabel({ label = '', slug = '', modelEnum = '', enumId = 0 } = {}) {
+  const trimmedLabel = String(label || '').trim();
+  if (trimmedLabel) return trimmedLabel;
+  const trimmedSlug = String(slug || '').trim();
+  if (trimmedSlug && TA_SLUG_LABELS[trimmedSlug]) return TA_SLUG_LABELS[trimmedSlug];
+  if (trimmedSlug) return trimmedSlug;
+  if (modelEnum) return String(modelEnum).trim();
+  return `model-${enumId || 'unknown'}`;
+}
+
+function taClassifyCallScenario({
+  isSubagent = false,
+  source = 'desktop',
+  slug = '',
+  label = '',
+  linkedStepTypes = [],
+  linkedStepStrings = [],
+  hasNearbyCompaction = false
+} = {}) {
+  if (isSubagent) return 'subagent';
+
+  const slugLower = String(slug || '').toLowerCase();
+  const labelTrim = String(label || '').trim();
+  if ((slugLower.includes('orchestrator') && !slugLower.includes('worker')) || /^orchestrator\b/i.test(labelTrim)) {
+    return 'planning';
+  }
+
+  if (hasNearbyCompaction || linkedStepStrings.some((s) => TA_MEMORY_PATH_RE.test(s))) {
+    return 'memory';
+  }
+
+  if (source === 'cli' || !Array.isArray(linkedStepTypes) || linkedStepTypes.length === 0) {
+    return 'internal';
+  }
+
+  if (linkedStepTypes.includes(132)) return 'tools';
+  if (linkedStepTypes.includes(15)) return 'chat';
+  return 'internal';
+}
+
+function taParseIsoSeconds(val) {
+  if (!val) return 0;
+  const str = String(val).trim();
+  if (!str || str.startsWith('0001-01-01')) return 0;
+  const ms = Date.parse(str.includes('T') ? str : str.replace(' ', 'T'));
+  if (!Number.isFinite(ms) || ms <= 0) return 0;
+  return Math.floor(ms / 1000);
+}
+
+function taToLocalDateString(tsSec) {
+  const d = new Date(tsSec * 1000);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function taReadSummariesIndex(summariesDbPath) {
+  const map = new Map();
+  if (!summariesDbPath || !fs.existsSync(summariesDbPath)) return map;
+  try {
+    withReadOnlyDb(summariesDbPath, 150, (db) => {
+      const rows = db
+        .prepare(
+          `SELECT conversation_id, title, workspace_uris, project_id, source, agent_name,
+                  parent_conversation_id, nesting_depth, last_modified_time
+           FROM conversation_summaries`
+        )
+        .all();
+      for (const r of rows) {
+        if (!r?.conversation_id) continue;
+        map.set(r.conversation_id, {
+          id: r.conversation_id,
+          title: String(r.title || '').trim(),
+          workspaceUris: String(r.workspace_uris || ''),
+          projectId: String(r.project_id || ''),
+          source: String(r.source || '') === 'CORTEX_TRAJECTORY_SOURCE_CLI' ? 'cli' : 'desktop',
+          agentName: String(r.agent_name || '').trim(),
+          parentId: String(r.parent_conversation_id || '').trim(),
+          nestingDepth: Number(r.nesting_depth || 0) || 0,
+          lastModifiedSec: taParseIsoSeconds(r.last_modified_time)
+        });
+      }
+    });
+    return map;
+  } catch {
+    return null;
+  }
+}
+
+function taLoadSummariesCached(summariesDbPath, force) {
+  if (!summariesDbPath) return new Map();
+  const sigInfo = taGetDbFileSig(summariesDbPath);
+  if (!sigInfo) return new Map();
+  const cached = tokenAnalyticsSummariesCache.get(summariesDbPath);
+  if (!force && cached && cached.sig === sigInfo.sig) {
+    return cached.map;
+  }
+  const fresh = taReadSummariesIndex(summariesDbPath);
+  if (fresh) {
+    tokenAnalyticsSummariesCache.set(summariesDbPath, { sig: sigInfo.sig, map: fresh });
+    return fresh;
+  }
+  return cached ? cached.map : new Map();
+}
+
+function taParseConversationDetailDb(dbPath, statInfo) {
+  const dbId = path.basename(dbPath, '.db');
+  try {
+    return withReadOnlyDb(dbPath, 150, (db) => {
+      const fallbackSec = Math.floor((statInfo?.mtimeMs || fs.statSync(dbPath).mtimeMs || Date.now()) / 1000);
+
+      let trajParentId = '';
+      let trajRootId = '';
+      let trajWorkspaceUri = '';
+      let trajProjectId = '';
+      try {
+        const mrow = db.prepare('SELECT data FROM trajectory_metadata_blob LIMIT 1').get();
+        if (mrow?.data) {
+          const mf = taParseProtoAll(mrow.data);
+          trajParentId = taFieldToStr(taGetField(mf, 5)).trim();
+          trajRootId = taFieldToStr(taGetField(mf, 6)).trim();
+          trajWorkspaceUri = taFieldToStr(taGetField(mf, 7)).trim();
+          trajProjectId = taFieldToStr(taGetField(mf, 18)).trim();
+          if (!trajWorkspaceUri) {
+            const wsField = taGetField(mf, 1);
+            if (wsField?.buf) {
+              const wsSub = taParseProtoAll(wsField.buf);
+              trajWorkspaceUri =
+                taFieldToStr(taGetField(wsSub, 1)).trim() || taFieldToStr(taGetField(wsSub, 2)).trim();
+            }
+          }
+        }
+      } catch {}
+
+      const stepTs = new Map();
+      const stepByIdx = new Map();
+      const compactionStepIndices = new Set();
+
+      for (const row of db.prepare('SELECT idx, step_type, metadata, step_payload FROM steps').all()) {
+        const ts = taExtractStepTimestamp(row.metadata);
+        if (ts > 0) stepTs.set(row.idx, ts);
+        if (row.step_type === 23) compactionStepIndices.add(row.idx);
+        const strings =
+          row.step_type === 132 && row.step_payload && row.step_payload.length > 0
+            ? taExtractPrintableStrings(row.step_payload, 3, [], 18)
+            : [];
+        stepByIdx.set(row.idx, { stepType: row.step_type, strings });
+      }
+      const lookupTs = taResolveStepLookup(stepTs, fallbackSec);
+
+      const calls = [];
+      for (const row of db.prepare('SELECT idx, data FROM gen_metadata ORDER BY idx ASC').all()) {
+        const top = taParseProtoAll(row.data);
+        const chatField = taGetField(top, 1);
+        if (!chatField?.buf) continue;
+        const chat = taParseProtoAll(chatField.buf);
+        const usageField = taGetField(chat, 4);
+        if (!usageField?.buf) continue;
+        const usage = taParseProtoAll(usageField.buf);
+
+        const kv = {};
+        for (const entry of taGetAllFields(chat, 20)) {
+          const pair = taParseProtoAll(entry.buf);
+          const k = taFieldToStr(taGetField(pair, 1));
+          if (k) kv[k] = taFieldToStr(taGetField(pair, 2));
+        }
+
+        const stepIndicesField = taGetField(top, 2);
+        const stepIndices = stepIndicesField?.buf ? taParsePackedVarints(stepIndicesField.buf) : [];
+        const refStep = stepIndices.length > 0 ? stepIndices[0] : Number(kv.last_step_index) || 0;
+        const ts = lookupTs(refStep);
+
+        const linkedStepTypes = [];
+        const linkedStepStrings = [];
+        let hasNearbyCompaction = false;
+        for (const sIdx of stepIndices) {
+          const info = stepByIdx.get(sIdx);
+          if (info) {
+            linkedStepTypes.push(info.stepType);
+            if (info.strings.length > 0) linkedStepStrings.push(...info.strings);
+          }
+          if (
+            compactionStepIndices.has(sIdx) ||
+            compactionStepIndices.has(sIdx - 1) ||
+            compactionStepIndices.has(sIdx + 1)
+          ) {
+            hasNearbyCompaction = true;
+          }
+        }
+        if (!hasNearbyCompaction && stepIndices.length === 0 && refStep > 0) {
+          if (
+            compactionStepIndices.has(refStep) ||
+            compactionStepIndices.has(refStep - 1) ||
+            compactionStepIndices.has(refStep + 1)
+          ) {
+            hasNearbyCompaction = true;
+          }
+        }
+
+        const slug = taFieldToStr(taGetField(chat, 19));
+        const rawLabel = taFieldToStr(taGetField(chat, 21));
+        const enumId = taGetField(usage, 1)?.v || taGetField(chat, 3)?.v || 0;
+        const modelEnum = kv.model_enum || '';
+        const usedClaude = kv.used_claude || '';
+        const label = taNormalizeModelLabel({ label: rawLabel, slug, modelEnum, enumId });
+        const pool = taClassifyModelPool({ label, slug, modelEnum, usedClaude });
+
+        const inTok = taGetField(usage, 2)?.v || 0;
+        const outTok = taGetField(usage, 3)?.v || 0;
+        const cacheRead = taGetField(usage, 5)?.v || 0;
+        const thinkTok = taGetField(usage, 9)?.v || 0;
+        const respTok = taGetField(usage, 10)?.v || 0;
+
+        const subagentType = String(kv.subagent_type || '').trim();
+        const parentCascadeId = String(kv.parent_cascade_id || '').trim();
+        const rootCascadeId = String(kv.root_cascade_id || '').trim();
+
+        calls.push({
+          dbId,
+          idx: row.idx,
+          ts,
+          model: label,
+          slug,
+          pool,
+          inTok,
+          cacheRead,
+          outTok,
+          thinkTok,
+          respTok,
+          total: inTok + cacheRead + outTok,
+          weighted: Math.round(inTok + 0.1 * cacheRead + 6 * outTok),
+          billable: inTok + outTok,
+          linkedStepTypes,
+          linkedStepStrings,
+          hasNearbyCompaction,
+          subagentType,
+          parentCascadeId,
+          rootCascadeId
+        });
+      }
+
+      return {
+        ok: true,
+        dbId,
+        mtimeSec: fallbackSec,
+        trajMeta: {
+          parentId: trajParentId,
+          rootId: trajRootId,
+          workspaceUri: trajWorkspaceUri,
+          projectId: trajProjectId
+        },
+        calls
+      };
+    });
+  } catch (err) {
+    return {
+      ok: false,
+      dbId,
+      error: err?.message || String(err)
+    };
+  }
+}
+
+function taChooseCanonicalProjectNames(projVotes) {
+  const canonical = new Map();
+  for (const [key, voteMap] of projVotes.entries()) {
+    const candidates = [...voteMap.entries()].sort((a, b) => {
+      if (b[1] !== a[1]) return b[1] - a[1];
+      const aUpper = /^[A-Z]/.test(a[0]) ? 1 : 0;
+      const bUpper = /^[A-Z]/.test(b[0]) ? 1 : 0;
+      if (bUpper !== aUpper) return bUpper - aUpper;
+      return a[0].localeCompare(b[0]);
+    });
+    canonical.set(key, candidates[0]?.[0] || key);
+  }
+  return canonical;
+}
+
+function queryTokenAnalytics(endpoint, { maxDays = 365, force = false, nowSec = Math.floor(Date.now() / 1000) } = {}) {
+  const t0 = performance.now();
+  const primaryDir =
+    endpoint?.conversationsDir || path.join(os.homedir(), endpoint?.geminiSubDir || '.gemini/antigravity', 'conversations');
+
+  const candidateDirs = [];
+  const pushDir = (d) => {
+    if (d && !candidateDirs.includes(d)) candidateDirs.push(d);
+  };
+  pushDir(primaryDir);
+
+  if (
+    process.platform === 'win32' &&
+    !endpoint?.explicitConvDir &&
+    endpoint?.portFile &&
+    Date.now() >= wslUncBackoffUntil
+  ) {
+    const wslDirs = resolveWin32WslConversationsDirs(
+      endpoint.portFile,
+      endpoint.geminiSubDir || '.gemini/antigravity'
+    );
+    for (const wd of wslDirs) pushDir(wd);
+  }
+
+  const summaries = new Map();
+  const dbCandidateById = new Map(); // dbId -> { dbPath, sigInfo }
+
+  for (const convDir of candidateDirs) {
+    const uncDir = isUncPath(convDir);
+    if (uncDir && Date.now() < wslUncBackoffUntil) continue;
+    const tDir = Date.now();
+    let dirExists = false;
+    try {
+      dirExists = fs.existsSync(convDir);
+    } catch {
+      dirExists = false;
+    }
+    if (uncDir && Date.now() - tDir > 400) {
+      wslUncBackoffUntil = Date.now() + 45000;
+    }
+    if (!dirExists) continue;
+
+    const sumPath = path.join(path.dirname(convDir), 'conversation_summaries.db');
+    const sumMap = taLoadSummariesCached(sumPath, force);
+    for (const [k, v] of sumMap.entries()) {
+      if (!summaries.has(k)) summaries.set(k, v);
+    }
+
+    let entries = [];
+    try {
+      const tRead = Date.now();
+      entries = fs.readdirSync(convDir).filter((name) => name.endsWith('.db')).sort();
+      if (uncDir && Date.now() - tRead > 400) {
+        wslUncBackoffUntil = Date.now() + 45000;
+      }
+    } catch {
+      entries = [];
+    }
+
+    for (const fileName of entries) {
+      const dbPath = path.join(convDir, fileName);
+      const dbId = path.basename(fileName, '.db');
+      const sigInfo = taGetDbFileSig(dbPath);
+      if (!sigInfo) continue;
+      const existing = dbCandidateById.get(dbId);
+      if (!existing || sigInfo.mtimeMs > existing.sigInfo.mtimeMs) {
+        dbCandidateById.set(dbId, { dbPath, sigInfo });
+      }
+    }
+  }
+
+  const activePaths = new Set();
+  const parsedDbs = [];
+  const failedDbs = [];
+  let cacheHits = 0;
+  let cacheMisses = 0;
+
+  const dbEntries = [...dbCandidateById.values()].sort((a, b) => a.dbPath.localeCompare(b.dbPath));
+  for (const { dbPath, sigInfo } of dbEntries) {
+    activePaths.add(dbPath);
+    const cached = !force ? tokenAnalyticsDbCache.get(dbPath) : null;
+    if (cached && cached.sig === sigInfo.sig) {
+      cacheHits += 1;
+      parsedDbs.push(cached.parsed);
+      continue;
+    }
+
+    cacheMisses += 1;
+    const parsed = taParseConversationDetailDb(dbPath, sigInfo);
+    if (parsed.ok) {
+      tokenAnalyticsDbCache.set(dbPath, { sig: sigInfo.sig, parsed });
+      parsedDbs.push(parsed);
+    } else if (cached?.parsed) {
+      parsedDbs.push(cached.parsed);
+    } else {
+      failedDbs.push({ dbId: parsed.dbId, error: parsed.error });
+    }
+  }
+
+  for (const oldPath of tokenAnalyticsDbCache.keys()) {
+    if (!activePaths.has(oldPath)) tokenAnalyticsDbCache.delete(oldPath);
+  }
+
+  const cutoffSec = maxDays > 0 ? nowSec - maxDays * 86400 : 0;
+
+  const rawMetaById = new Map();
+  for (const parsed of parsedDbs) {
+    const id = parsed.dbId;
+    const sum = summaries.get(id);
+    const firstParentCall = parsed.calls.find((c) => c.parentCascadeId)?.parentCascadeId || '';
+    const firstRootCall = parsed.calls.find((c) => c.rootCascadeId)?.rootCascadeId || '';
+    const firstAgentCall = parsed.calls.find((c) => c.subagentType)?.subagentType || '';
+
+    const parentId = sum?.parentId || parsed.trajMeta.parentId || firstParentCall || '';
+    const rawRoot = parsed.trajMeta.rootId || firstRootCall || '';
+    const agentName = sum?.agentName || firstAgentCall || '';
+    const isSubagent = Boolean(
+      (sum && sum.nestingDepth > 0) ||
+        parentId ||
+        agentName ||
+        (rawRoot && rawRoot !== id)
+    );
+    const source = sum?.source || 'desktop';
+    const workspaceUris = sum?.workspaceUris || parsed.trajMeta.workspaceUri || '';
+    const projectId = sum?.projectId || parsed.trajMeta.projectId || '';
+    const proj = taNormalizeProjectInfo(workspaceUris, projectId);
+
+    rawMetaById.set(id, {
+      id,
+      title: sum?.title || '',
+      source,
+      agentName,
+      parentId,
+      rawRoot,
+      isSubagent,
+      proj,
+      parsed
+    });
+  }
+
+  const resolvedMetaById = new Map();
+  const projectRegistry = new Map();
+
+  function resolveRootId(id) {
+    const seen = new Set();
+    let cur = id;
+    while (cur && !seen.has(cur)) {
+      seen.add(cur);
+      const m = rawMetaById.get(cur);
+      if (!m) break;
+      if (m.parentId && rawMetaById.has(m.parentId) && m.parentId !== cur) {
+        cur = m.parentId;
+        continue;
+      }
+      if (m.rawRoot && rawMetaById.has(m.rawRoot) && m.rawRoot !== cur) {
+        cur = m.rawRoot;
+        continue;
+      }
+      return cur;
+    }
+    const m = rawMetaById.get(id);
+    return m?.parentId || m?.rawRoot || id;
+  }
+
+  for (const [id, m] of rawMetaById.entries()) {
+    const rootId = resolveRootId(id);
+    let proj = m.proj;
+    if (proj.key === '__none__' && rootId !== id && rawMetaById.has(rootId)) {
+      proj = rawMetaById.get(rootId).proj;
+    }
+    if (!projectRegistry.has(proj.key)) {
+      projectRegistry.set(proj.key, {
+        key: proj.key,
+        path: proj.path,
+        isTemp: proj.isTemp,
+        votes: new Map()
+      });
+    }
+    const reg = projectRegistry.get(proj.key);
+    reg.votes.set(proj.rawBasename, (reg.votes.get(proj.rawBasename) || 0) + 1);
+    if (!reg.path && proj.path) reg.path = proj.path;
+
+    const fallbackTitle = m.isSubagent
+      ? `${m.agentName || 'subagent'} 子任务 (${id.slice(0, 8)})`
+      : `会话 ${id.slice(0, 8)}`;
+
+    resolvedMetaById.set(id, {
+      id,
+      title: m.title || fallbackTitle,
+      source: m.source,
+      agentName: m.agentName,
+      parentId: m.parentId || (m.isSubagent && rootId !== id ? rootId : ''),
+      rootId,
+      isSubagent: m.isSubagent,
+      projectKey: proj.key,
+      parsed: m.parsed
+    });
+  }
+
+  const projVotes = new Map([...projectRegistry.entries()].map(([k, v]) => [k, v.votes]));
+  const canonicalProjectNames = taChooseCanonicalProjectNames(projVotes);
+
+  const projects = [...projectRegistry.values()]
+    .map((p) => ({
+      key: p.key,
+      name: p.key === '__none__' ? '未绑定项目' : p.key === '__tmp__' ? '临时目录 (/tmp)' : canonicalProjectNames.get(p.key),
+      path: p.path,
+      isTemp: p.isTemp
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name, 'zh-CN'));
+  const projNameByKey = new Map(projects.map((p) => [p.key, p.name]));
+
+  const factsMap = new Map();
+  const conversations = {};
+  const dailyMap = new Map();
+  let totalCalls = 0;
+
+  for (const meta of resolvedMetaById.values()) {
+    const windowCalls = cutoffSec > 0 ? meta.parsed.calls.filter((c) => c.ts >= cutoffSec) : meta.parsed.calls;
+    if (windowCalls.length === 0) continue;
+
+    let lastTs = 0;
+    const modelSet = new Set();
+
+    for (const c of windowCalls) {
+      totalCalls += 1;
+      if (c.ts > lastTs) lastTs = c.ts;
+      modelSet.add(c.model);
+
+      const callIsSubagent = meta.isSubagent || Boolean(c.subagentType);
+      const subagentType = callIsSubagent ? c.subagentType || meta.agentName || 'subagent' : '';
+      const scenario = taClassifyCallScenario({
+        isSubagent: callIsSubagent,
+        source: meta.source,
+        slug: c.slug,
+        label: c.model,
+        linkedStepTypes: c.linkedStepTypes,
+        linkedStepStrings: c.linkedStepStrings,
+        hasNearbyCompaction: c.hasNearbyCompaction
+      });
+      const date = taToLocalDateString(c.ts || meta.parsed.mtimeSec);
+      const fKey = `${date}\x00${meta.id}\x00${c.model}\x00${c.pool}\x00${scenario}\x00${subagentType}`;
+      let fact = factsMap.get(fKey);
+      if (!fact) {
+        fact = {
+          date,
+          cid: meta.id,
+          model: c.model,
+          pool: c.pool,
+          scenario,
+          subagentType,
+          calls: 0,
+          inTok: 0,
+          cacheRead: 0,
+          outTok: 0,
+          thinkTok: 0,
+          respTok: 0,
+          total: 0,
+          weighted: 0,
+          billable: 0
+        };
+        factsMap.set(fKey, fact);
+      }
+      fact.calls += 1;
+      fact.inTok += c.inTok;
+      fact.cacheRead += c.cacheRead;
+      fact.outTok += c.outTok;
+      fact.thinkTok += c.thinkTok;
+      fact.respTok += c.respTok;
+      fact.total += c.total;
+      fact.weighted += c.weighted;
+      fact.billable += c.billable;
+
+      let dAcc = dailyMap.get(date);
+      if (!dAcc) {
+        dAcc = { date, calls: 0, inTok: 0, cacheRead: 0, outTok: 0, total: 0, weighted: 0, billable: 0 };
+        dailyMap.set(date, dAcc);
+      }
+      dAcc.calls += 1;
+      dAcc.inTok += c.inTok;
+      dAcc.cacheRead += c.cacheRead;
+      dAcc.outTok += c.outTok;
+      dAcc.total += c.total;
+      dAcc.weighted += c.weighted;
+      dAcc.billable += c.billable;
+    }
+
+    conversations[meta.id] = {
+      id: meta.id,
+      title: meta.title,
+      projectKey: meta.projectKey,
+      projectName: projNameByKey.get(meta.projectKey) || '未绑定项目',
+      source: meta.source,
+      isSubagent: meta.isSubagent,
+      agentName: meta.agentName,
+      parentId: meta.parentId,
+      rootId: meta.rootId,
+      lastTs,
+      models: [...modelSet]
+    };
+  }
+
+  const facts = [...factsMap.values()].sort((a, b) => {
+    if (b.date !== a.date) return b.date.localeCompare(a.date);
+    return b.weighted - a.weighted;
+  });
+  const dailySummary = [...dailyMap.values()].sort((a, b) => a.date.localeCompare(b.date));
+
+  const usedProjectKeys = new Set(Object.values(conversations).map((c) => c.projectKey));
+  const activeProjects = projects.filter((p) => usedProjectKeys.has(p.key));
+
+  return {
+    version: 1,
+    generatedAt: new Date(nowSec * 1000).toISOString(),
+    nowSec,
+    defaultMetric: 'weighted',
+    elapsedMs: Number((performance.now() - t0).toFixed(2)),
+    stats: {
+      dbCount: dbEntries.length,
+      scannedDbs: parsedDbs.length,
+      failedDbs: failedDbs.length,
+      totalCalls,
+      conversationCount: Object.keys(conversations).length,
+      projectCount: activeProjects.length,
+      cacheHits,
+      cacheMisses
+    },
+    projects: activeProjects,
+    conversations,
+    facts,
+    dailySummary
+  };
+}
+
+// ============================================================================
 // 5. CDP 目标发现、WebSocket 会话挂载与热更新推送
 // ============================================================================
 
@@ -3400,6 +4304,7 @@ function attachTarget(target, endpoint) {
             await send('Runtime.addBinding', { name: '__agRequestHardReload' });
             await send('Runtime.addBinding', { name: '__agSetDarkPreset' });
             await send('Runtime.addBinding', { name: '__agSyncHostThemeMode' });
+            await send('Runtime.addBinding', { name: '__agRequestTokenAnalytics' });
           }
         }
         if (ws.readyState !== WebSocket.OPEN || nonHostSettled) {
@@ -3603,6 +4508,45 @@ function attachTarget(target, endpoint) {
             if (!SAFE_MODE) {
               persistDarkPresetToUserConfig(msg.params.payload);
             }
+            return;
+          }
+          if (msg.method === 'Runtime.bindingCalled' && msg.params?.name === '__agRequestTokenAnalytics') {
+            if (
+              !hostConfirmed ||
+              target.type !== 'page' ||
+              !activeConfig.enabled ||
+              !activeConfig.modules.tokenAnalytics ||
+              !DatabaseSync
+            ) {
+              return;
+            }
+            let req = {};
+            try {
+              req = msg.params.payload ? JSON.parse(String(msg.params.payload)) : {};
+            } catch {}
+            const reqId = String(req?.reqId || '');
+            const maxDays = Number(req?.maxDays) > 0 ? Number(req.maxDays) : 365;
+            const force = Boolean(req?.force);
+            void (async () => {
+              let out;
+              try {
+                const data = queryTokenAnalytics(endpoint, { maxDays, force });
+                out = { ok: true, data };
+              } catch (err) {
+                out = { ok: false, error: err?.message || String(err || 'token analytics failed') };
+              }
+              if (ws.readyState === WebSocket.OPEN) {
+                const payloadJson = JSON.stringify(out)
+                  .replace(/\u2028/g, '\\u2028')
+                  .replace(/\u2029/g, '\\u2029');
+                try {
+                  await send('Runtime.evaluate', {
+                    expression: `if (typeof window.__ag_on_token_analytics === 'function') { window.__ag_on_token_analytics(${JSON.stringify(reqId)}, ${payloadJson}); }`,
+                    returnByValue: false
+                  });
+                } catch {}
+              }
+            })();
             return;
           }
           if (
