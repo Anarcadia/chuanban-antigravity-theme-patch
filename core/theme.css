@@ -1823,15 +1823,6 @@ html[data-ag-dark-preset="claude-warm"] body.theme-dark {
   color: var(--ag-ta-primary);
 }
 
-#ag-token-nav-btn .ag-ta-nav-dot {
-  margin-left: auto;
-  width: 6px;
-  height: 6px;
-  border-radius: 999px;
-  background-color: var(--ag-ta-primary);
-  opacity: 0.75;
-}
-
 /* 右侧 Token 统计主面板 */
 #ag-token-analytics-panel {
   width: 100%;

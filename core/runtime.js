@@ -5814,7 +5814,6 @@
             `      <rect x="12" y="6" width="3" height="11" rx="1"/><rect x="17" y="13" width="3" height="4" rx="1"/>` +
             `    </svg>` +
             `    <span>Token 统计</span>` +
-            `    <span class="ag-ta-nav-dot"></span>` +
             `  </button>` +
             `</div>`;
           navSection.querySelector(`#${NAV_BTN_ID}`)?.addEventListener('click', (e) => {
