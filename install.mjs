@@ -117,7 +117,7 @@ function buildManifest(baseDir = __dirname) {
   }
   const manifest = {
     name: 'chuanban-antigravity-theme-patch',
-    version: '5.5.2',
+    version: '5.5.3',
     minNodeVersion: '22.0.0',
     fullMetricsNodeVersion: '22.13.0',
     distribution: {
@@ -1074,9 +1074,9 @@ function ensureCdpLaunchers(channel = 'auto', options = {}) {
           '  <key>CFBundlePackageType</key>',
           '  <string>APPL</string>',
           '  <key>CFBundleShortVersionString</key>',
-          '  <string>5.5.2</string>',
+          '  <string>5.5.3</string>',
           '  <key>CFBundleVersion</key>',
-          '  <string>552</string>',
+          '  <string>553</string>',
           ...(iconBase ? ['  <key>CFBundleIconFile</key>', `  <string>${iconBase}</string>`] : []),
           '  <key>LSMinimumSystemVersion</key>',
           '  <string>12.0</string>',
@@ -1730,7 +1730,8 @@ WantedBy=default.target
     const startupDir = path.join(appData, 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup');
     const vbsFile = path.join(startupDir, 'AntigravityThemeDaemon.vbs');
     const localVbsFile = path.join(targetDir, 'AntigravityThemeDaemon.vbs');
-    const cmd = `""${process.execPath}"" --disable-warning=ExperimentalWarning ""${wrapperDaemon}""`;
+    // 传入 --keep-alive：PT5M 周期保活探测到健康守护仍在运行时直接静默退出（不强杀清缓存），仅在进程意外退出/被误杀后自动复活
+    const cmd = `""${process.execPath}"" --disable-warning=ExperimentalWarning ""${wrapperDaemon}"" --keep-alive`;
     const vbsContent = `\uFEFFSet WshShell = CreateObject("WScript.Shell")\r\nWshShell.Run "${cmd}", 0, False\r\n`;
     try {
       // 使用 UTF-16LE (带 BOM) 写入本地启动跳板 VBS，彻底兼容 Windows 中文用户名路径 (wscript.exe 原生支持 UTF-16LE)
@@ -1791,6 +1792,10 @@ WantedBy=default.target
       '    <LogonTrigger>',
       '      <Enabled>true</Enabled>',
       `      <UserId>${xmlEsc(principalId)}</UserId>`,
+      '      <Repetition>',
+      '        <Interval>PT5M</Interval>',
+      '        <StopAtDurationEnd>false</StopAtDurationEnd>',
+      '      </Repetition>',
       '    </LogonTrigger>',
       '  </Triggers>',
       '  <Actions Context="Author">',

@@ -4,6 +4,28 @@
 
 ---
 
+## [v5.5.3] - 2026-11-21
+
+> **适用版本**：Antigravity `2.34.0+` / `2.33.x`（macOS `2.34.0` `CL=1026637980` × Windows 11 `2.34.0.0` `2.34.0-5887025308631040`，向下完全兼容 `2.33.x` / `2.32.x` / `2.31.x` / `2.30.0`）  
+> **核验基线**：macOS `2.34.0` (`504` 实机会话库压测) × Windows 11 `2.34.0.0` (`CP936` · `HiDPI DirectWrite` `W553-Check 1 ~ 5` 真机全绿联合定版)  
+> **社区致谢**：特别感谢 [@ghang](https://github.com/ghang)（[PR #25](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/pull/25)「系统设置 → 本地扩展 → Token 统计」多维 SQLite 归因面板）与 [@wysxxx](https://github.com/wysxxx)（[Issue #27](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/issues/27) 遗漏词条反馈）！
+
+### Added, Fixed & Perf（设置弹窗「Token 统计」多维归因面板 + Antigravity `2.34.0` 双端功能漂移对齐 + 守护进程零子进程空闲短路与 Windows 自愈保活 + 渲染器观察器/样式重算/布局抖动根治 + `1,940` 条词典）
+- **新增「系统设置 → 本地扩展 → Token 统计」多维增量分析面板，并完成四项生产级性能与载荷手术（`core/daemon.mjs` / `core/runtime.js` / `core/theme.css` / `user/config.json`，合入并加固 [#25](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/pull/25)）**：
+  - **多维本地轨迹归因与全预设视觉适配**：基于 `node:sqlite` 只读增量聚合本机 `conversations/*.db` 与 `conversation_summaries.db`（兼容 Windows WSL2 UNC 只读与 `400ms` 预算保护），提供加权等效 / 总 Tokens / 净新消耗 / 调用次数 4 指标切换、7/30/90/全部天窗口、26 周贡献热力图与近 14 日堆叠柱状图、具体模型与配额池（`Argon` / `Claude & GPT` / `Gemini`，补齐 `2.34.0` `Carbon` / `Neon` / `Sonnet 5.5` 映射）、6 类工作场景（工具执行 / 子 Agent / 纯对话 / 规划 / 记忆压缩 / CLI 与内部）以及支持展开子 Agent 子轨迹的会话/项目明细与低缓存命中（`<80%`）预警，无缝适配三套暖纸白天预设、`onyx` 冷碳黑与 `claude-warm` 暖纸深夜；
+  - **零噪声弹窗观察器、异步分片非阻塞扫描与 `~100 KB` 动态载荷裁剪**：移除对 `document.body` 的全量 `class`/`aria-hidden` 属性监听（日常流式对话与悬停触发 `syncSettingsModal` 次数 **`0`**，仅在检测到设置弹窗节点时定向绑定 `backdropObs`）；将后端 `queryTokenAnalytics` 改造为按最新 `mtime` 优先、每 8 个未命中库或 `16ms` CPU 切片自动 `setImmediate` 让出事件循环的异步管线（预结算紧凑 `baseScenario` 使缓存内存占用缩减 `>75%`，空闲 10 分钟自动回收缓存，彻底保护实时指标胶囊与 `BrowserWatcher` 零卡顿）；同时对 `Swarm` 子 `iframe` 及 `modules.tokenAnalytics: false` 状态自动在注入前剥离 Token 统计 CSS/JS（单子帧立省 `~100 KB` 且保持统一版本哈希）。
+- **修复 Antigravity `2.34.0` 双端界面漂移、上下文守卫与 `1,940` 条词典扩充（`core/theme.css` / `core/runtime.js` / `core/daemon.mjs` / `core/i18n.json`，含 [#27](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/issues/27)）**：
+  - **行内文件胶囊字体隔离与 `Quote` / `Comment` 交互上下文守卫**：针对 `2.33.0+` / `2.34.0` 将可点击文件芯片重构为 `button.inline-pill[data-uri="file:///..."] > span.select-text` 的变更，显式恢复 `[data-uri^="file:"]` / `[data-uri^="vscode-"]` 的 `Anthropic Mono` 等宽栈与 i18n 不可变排除缓存（非文件类 `.inline-pill` 保持 `Google Sans Flex` UI 栈），并将高频单词 `Quote` / `Comment` 从无上下文全局静态词表移入 `computeTextTranslation` 交互控件上下文门禁（仅翻译按钮、菜单项与划词胶囊，100% 免疫文件树与普通文本中的同名标识符）；
+  - **`…` ↔ `...` 双向省略号容错、无括号模型努力度后缀与 `1,940` 条零冲突词典**：在 `dictLookup()` 底层支持单字符 `…`（`\u2026`）与三点 `...` 双向无感回退匹配，扩展 `RE_MODEL_EFFORT_LABEL` 识别 `2.34.0` 模型选择器无括号努力度标签（如 `Gemini 4 Neon Extra High` → `Gemini 4 Neon · 超高`），并合入 macOS / Windows `2.34.0` 设置新项（自动展开步骤、聊天外观、队列发送模式、代码自动格式化、命令安全名单、任务计划提醒等）与 [#27](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/issues/27) 实机命中词条共 80 条至 **`1,940` 条**；
+  - **`2.34.0` 内置浏览器三层透明打孔与 `Swarm` 子帧外链字体去重**：为 `body` 与 `.bg-sidebar` 补齐 `:not([data-has-three-layer-browser-hole="true"])`，将内嵌框打孔豁免升级为 `O(1)` 自身属性 `:not([data-has-browser-hole="true"])`；升级 `dedupFallbackGoogleFontsLink()` 识别任意原生 `Google+Sans+Flex` `<link>`，根除 `plugin://swarm--` 子帧重建时重复挂载 86 条 `@font-face`。
+- **根治后台守护进程空闲 CPU 空转，并加固 Windows 计划任务保活、`M2` 死端口穿透与更新后 `.lnk` 自愈（`install.mjs` / `core/daemon.mjs`）**：
+  - **全平台客户端关闭态 / 豁免态 `0` 子进程短路与 `BrowserWatcher` 83% 轮询降频**：macOS / Linux 基于 `SingletonLock` 软链 PID 存活预检（空闲态 `0.01ms`、**`0` 次 `ps` 派生**），Windows 基于无锁 `userDataDir/lockfile` 存在性预检（关闭态 **`0` 次 `tasklist.exe`**）；`BrowserWatcher` 在线时跳过 5/6 拍的 `/json/list` HTTP 轮询，并为 `stale_inode` 增加旧 PID 存活门控、为空会话库增加 5 分钟 `noMetaPending` 自动毕业；
+  - **Windows 5 分钟无扰保活（`PT5M` + `--keep-alive`）、`M2` 死端口穿透与 `.lnk` 自动自愈**：在 Windows `AntigravityThemeDaemon` 计划任务 `<LogonTrigger>` 内新增 `PT5M` 5 分钟重复唤醒，并为 `daemon.mjs` 与启动 VBS 新增 `--keep-alive`（`--if-not-running`）标志（健康守护在线时立即 `exit(0)` 保留原 `PID` 与全量 SQLite 内存缓存，意外退出/被误杀后无黑框秒级复活）；将 `sync()` 实测可达集合 `reachableChannels` 传入 `M2` 冷启动接力以穿透崩溃残留死 `DevToolsActivePort`，按新进程启动时刻 `procBirthMs` 过滤上一轮会话残留 `.db-wal` 防误拦截，并在检测到 `Antigravity.exe` 更新签名变化或 `--updated` 重启后异步幂等自愈 5 处 `.lnk` 快捷方式参数。
+- **消除渲染进程样式重算热点、大子树全页重扫与流式指标同步重排（`core/theme.css` / `core/runtime.js`）**：
+  - 清零 `theme.css` 全量末尾 `*` 通配符并以 `:where(...)` 低特异度规则替代 8 重 `:not(*)` 祖先回溯（Lexical 打字祖先回溯降至 **0**）；在 `__ag_i18n_observer` 入口增加自写入 `O(1)` 短路（消除二次 `flushTranslations()` 放大），在 `dirtyRoots <= 1500` 时先做祖先去重再按顶层根阈值（`> 120`）决定是否回退全页扫描，并将指标胶囊宽度复测合批推入单次 `requestAnimationFrame`。
+
+---
+
 ## [v5.5.2] - 2026-11-20
 
 > **适用版本**：Antigravity `2.33.0+`（macOS `CL=1023160026` × Windows 11 `CL=1028566590`，向下完全兼容 `2.32.x` / `2.31.x` / `2.30.0`）  

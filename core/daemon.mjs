@@ -2,9 +2,9 @@
 /**
  * chuanban-antigravity-theme-patch · CDP Theme & Live Metrics Daemon (core/daemon.mjs)
  *
- * 架构特性（v5.5.2）：
+ * 架构特性（v5.5.3）：
  * 1. 动态 Node 分级：
- *    - Node >= 22.0：完整启用昼夜双模式独立主题（暖纸浅色三预设 + 深色 onyx / claude-warm 双预设）、Google Sans Flex 原生西文引擎 × 更纱黑体 UI 精密字重桥接 + Anthropic Serif 正文、输入框三态、1860条母语级汉化、宿主独占指纹门禁、死锁与冷启动兜底包自愈及 2.33.0+ CDP Opt-in 自动接力（M2）。
+ *    - Node >= 22.0：完整启用昼夜双模式独立主题（暖纸浅色三预设 + 深色 onyx / claude-warm 双预设）、Google Sans Flex 原生西文引擎 × 更纱黑体 UI 精密字重桥接 + Anthropic Serif 正文、输入框三态、1900条母语级汉化、宿主独占指纹门禁、死锁与冷启动兜底包自愈及 2.33.0+ ~ 2.34.0+ CDP Opt-in 自动接力（M2 · SingletonLock/lockfile 零子进程空闲短路）。
  *    - Node >= 22.13：动态 `await import('node:sqlite')` 解锁底部实时会话指标胶囊（O(1) 增量尾行解析 + WSL2 双轨只读读取）；低版本优雅降级绝不崩溃。
  * 2. 模块化与热重载：
  *    - 周期性检测 `user/config.json`、`user/custom.css`、`user/i18n.override.json`、`user/custom.js` 的 mtime，
@@ -57,6 +57,7 @@ function getArg(flag, fallback = null) {
 
 const SAFE_MODE = hasFlag('--safe-mode');
 const RUN_ONCE = hasFlag('--once');
+const KEEP_ALIVE_ONLY = hasFlag('--keep-alive') || hasFlag('--if-not-running');
 const CLI_CHANNEL = getArg('--channel', null);
 
 function readJsonSafe(filePath, fallback = {}) {
@@ -291,9 +292,10 @@ function resolveActiveChannelEndpoints(channelMode = 'auto', userCfg = {}) {
 // ============================================================================
 // 2. 动态构建注入载荷（支持 core/ + user/ 实时合并与热更新签名）
 // ============================================================================
-const BASE_VERSION = '20261119-v5.5.2';
+const BASE_VERSION = '20261121-v5.5.3';
 let cachedBundleSig = '';
 let cachedInjectScript = '';
+let cachedIframeInjectScript = '';
 let cachedPatchVersion = '';
 let metricsConfigEpoch = 0;
 const metricsCache = new Map(); // dbPath -> { sig, payload }
@@ -301,6 +303,11 @@ const metricsCache = new Map(); // dbPath -> { sig, payload }
 // when user/config.json contextLimit differs from the default, which would otherwise hit the TDZ.
 const lastBestEffortPayloadCache = new Map(); // dbPath -> payload
 const incrementalMetricsMap = new Map(); // dbPath -> { rowCount, maxIdx, userStepsCount, lastUserStepIdx, items, validItems, totalIn, totalCache, totalOut, totalThink, totalResp }
+const tokenAnalyticsDbCache = new Map(); // dbPath -> { sig, parsed }
+const tokenAnalyticsSummariesCache = new Map(); // summariesDbPath -> { sig, map }
+let lastTokenAnalyticsAccessMs = 0;
+let inFlightTokenAnalyticsPromise = null;
+let inFlightTokenAnalyticsKey = '';
 const MAX_METRICS_CACHE_SIZE = 30;
 
 function setMetricsCache(dbPath, entry) {
@@ -334,6 +341,7 @@ let activeConfig = {
   modules: {
     i18n: true,
     metrics: true,
+    tokenAnalytics: true,
     composerWaxSeal: true,
     deadlockHealer: true,
     coldBootHealer: true,
@@ -533,6 +541,7 @@ function rebuildBundleIfNeeded() {
     {
       i18n: true,
       metrics: true,
+      tokenAnalytics: true,
       composerWaxSeal: true,
       deadlockHealer: true,
       coldBootHealer: true,
@@ -547,6 +556,7 @@ function rebuildBundleIfNeeded() {
   );
   if (!DatabaseSync) {
     modules.metrics = false;
+    modules.tokenAnalytics = false;
   }
   modules.metricsCapsule = modules.metrics;
 
@@ -587,6 +597,22 @@ function rebuildBundleIfNeeded() {
     !normalizedSelectors.excludeI18n.includes('ag-live-metrics-pill')
   ) {
     normalizedSelectors.excludeI18n += ', .ag-live-metrics-pill, [data-ag-metrics-pill]';
+  }
+  if (
+    typeof normalizedSelectors.excludeI18n === 'string' &&
+    normalizedSelectors.excludeI18n.trim() &&
+    !normalizedSelectors.excludeI18n.includes('data-uri^=')
+  ) {
+    normalizedSelectors.excludeI18n +=
+      ', [data-uri^="file:"], [data-uri^="vscode-"], a.inline-pill[href^="file:"], a.inline-pill[href^="vscode-"]';
+  }
+  if (
+    typeof normalizedSelectors.excludeI18n === 'string' &&
+    normalizedSelectors.excludeI18n.trim() &&
+    !normalizedSelectors.excludeI18n.includes('ag-token-analytics-panel')
+  ) {
+    normalizedSelectors.excludeI18n +=
+      ', #ag-token-nav-section, #ag-token-analytics-panel, #ag-ta-tooltip, [data-ag-token-ui]';
   }
 
   const DEFAULT_ALLOWED_ORIGINS = [
@@ -651,6 +677,14 @@ function rebuildBundleIfNeeded() {
   const channelTag = channel === 'insiders' ? 'insiders' : 'stable';
   cachedPatchVersion = `${BASE_VERSION}-${channelTag}-${hash}`;
 
+  const RE_STRIP_TA_CSS = /\/\* __AG_TOKEN_ANALYTICS_CSS_START__ \*\/[\s\S]*?\/\* __AG_TOKEN_ANALYTICS_CSS_END__ \*\//g;
+  const RE_STRIP_TA_JS = /\/\* __AG_TOKEN_ANALYTICS_JS_START__ \*\/[\s\S]*?\/\* __AG_TOKEN_ANALYTICS_JS_END__ \*\//g;
+
+  const pageCss = modules.tokenAnalytics ? baseCss : baseCss.replace(RE_STRIP_TA_CSS, '');
+  const pageRuntime = modules.tokenAnalytics
+    ? runtimeTemplate
+    : runtimeTemplate.replace(RE_STRIP_TA_JS, '  cleanupTokenAnalyticsDom();');
+
   const bootPayload = {
     version: cachedPatchVersion,
     platform: process.platform,
@@ -658,7 +692,7 @@ function rebuildBundleIfNeeded() {
     enabled,
     preset,
     darkPreset,
-    cssText: baseCss,
+    cssText: pageCss,
     customCss,
     themeVars,
     darkThemeVars,
@@ -679,7 +713,21 @@ function rebuildBundleIfNeeded() {
     customJs
   };
 
-  cachedInjectScript = runtimeTemplate.replace('})(__AG_BOOT_PAYLOAD__);', () => `})(${JSON.stringify(bootPayload)});`);
+  cachedInjectScript = pageRuntime.replace('})(__AG_BOOT_PAYLOAD__);', () => `})(${JSON.stringify(bootPayload)});`);
+
+  // Swarm 等跨进程子 iframe 永不承载设置弹窗，固定裁剪 Token 统计 CSS+JS（单 iframe 立减 ~100 KB，且保持同一 version 哈希）
+  const iframeCss = baseCss.replace(RE_STRIP_TA_CSS, '');
+  const iframeRuntime = runtimeTemplate.replace(RE_STRIP_TA_JS, '');
+  const iframeModules = Object.assign({}, modules, { tokenAnalytics: false });
+  const iframePayload = Object.assign({}, bootPayload, {
+    cssText: iframeCss,
+    modules: iframeModules,
+    config: Object.assign({}, bootPayload.config, { modules: iframeModules })
+  });
+  cachedIframeInjectScript = iframeRuntime.replace(
+    '})(__AG_BOOT_PAYLOAD__);',
+    () => `})(${JSON.stringify(iframePayload)});`
+  );
   cachedBundleSig = sig;
   return true;
 }
@@ -961,7 +1009,11 @@ if (!RUN_ONCE) {
       const { pid: oldPid, startMs: oldStartMs, stopRequested } = parsePidFile(PID_FILE);
       if (!stopRequested && oldPid > 0 && oldPid !== process.pid) {
         const pidState = checkDaemonPidState(oldPid, oldStartMs);
-        if (pidState === 'confirmed') {
+        if (KEEP_ALIVE_ONLY) {
+          if (pidState === 'confirmed' || pidState === 'uncertain') {
+            process.exit(0);
+          }
+        } else if (pidState === 'confirmed') {
           let killed = false;
           try {
             process.kill(oldPid, 'SIGTERM');
@@ -1613,6 +1665,9 @@ function refreshLineageIndex(conversationsDir) {
         if (statInfo.sig !== prevSig && !dirState.unindexedSet.has(uuid)) {
           newlyChanged.push({ uuid, dbPath, mtimeMs: statInfo.mtimeMs, statSig: statInfo.sig });
           dirState.unindexedSet.add(uuid);
+        } else if (statInfo.sig === prevSig && nowMs - statInfo.mtimeMs >= 300000) {
+          // 超过 5 分钟仍未写入 trajectory_metadata 的历史空库移出高频轮询队列（后续若产生新 -wal 仍由 dirChanged 自动捕获）
+          dirState.noMetaPending.delete(uuid);
         }
       }
       if (newlyChanged.length > 0) {
@@ -1672,7 +1727,7 @@ function refreshLineageIndex(conversationsDir) {
           rootId: '',
           statSig: item.statSig
         });
-        if (!res.permanentInvalid) {
+        if (!res.permanentInvalid && Date.now() - item.mtimeMs < 300000) {
           rememberNoMetaPending(dirState, item.uuid, item.statSig);
           dirState.lastPendingScanAt = Date.now();
         } else {
@@ -2309,6 +2364,956 @@ function parseConversationMetrics(cascadeId, endpointOrDir, precomputedState = n
       cachedPayload: cached?.payload || null
     };
   }
+}
+
+// ============================================================================
+// 4.5 SQLite 全量增量 Token 统计分析（系统设置弹窗「Token 统计」Tab）
+// ============================================================================
+
+const TA_MEMORY_PATH_RE = /MEMORY\.md|[\\/]\.gemini[\\/]antigravity[\\/]brain[\\/]|\bmemory_/i;
+const TA_PRINTABLE_STR_RE = /^[\x20-\x7e\u00a0-\uffff]{2,260}$/;
+const TA_SLUG_LABELS = {
+  'gemini-pro-orchestrator-neon': 'Orchestrator (Neon)',
+  'gemini-pro-orchestrator-g1-pro': 'Orchestrator (Argon)',
+  'gemini-pro-orchestrator-carbon': 'Orchestrator (Carbon)',
+  'gemini-flash-worker-agy': 'Gemini 4 Hydrogen (Orchestrator)',
+  'gemini-4-hydrogen': 'Gemini 4 Hydrogen',
+  'gemini-4-argon': 'Gemini 4 Argon',
+  'gemini-4-argon-trial': 'Gemini 4 Argon',
+  'gemini-4-carbon': 'Gemini 4 Carbon',
+  'gemini-4-neon': 'Gemini 4 Neon',
+  'gemini-3.8-flash-n': 'Gemini 3.8 Flash',
+  'gemini-3.8-flash-tiered': 'Gemini 3.8 Flash',
+  'claude-sonnet-5-5': 'Claude Sonnet 5.5',
+  'claude-sonnet-5-5-high': 'Claude Sonnet 5.5 (High)',
+  'claude-opus-5-5-medium': 'Claude Opus 5.5 (Medium)',
+  'claude-opus-5-5-high': 'Claude Opus 5.5 (High)'
+};
+
+function taParseProtoAll(buf) {
+  const fields = [];
+  if (!buf || typeof buf.length !== 'number' || buf.length === 0) return fields;
+  let i = 0;
+  while (i < buf.length) {
+    let tag = 0;
+    let shift = 0;
+    while (i < buf.length) {
+      const b = buf[i++];
+      tag |= (b & 0x7f) << shift;
+      if (!(b & 0x80)) break;
+      shift += 7;
+      if (shift > 35) return fields;
+    }
+    const field = tag >>> 3;
+    const wire = tag & 7;
+    if (field <= 0 || field > 10000) break;
+    if (wire === 0) {
+      let v = 0n;
+      let s = 0n;
+      while (i < buf.length) {
+        const b = buf[i++];
+        v |= BigInt(b & 0x7f) << s;
+        if (!(b & 0x80)) break;
+        s += 7n;
+        if (s > 70n) return fields;
+      }
+      fields.push({ f: field, w: 0, v: Number(v) });
+    } else if (wire === 2) {
+      let len = 0;
+      let s = 0;
+      while (i < buf.length) {
+        const b = buf[i++];
+        len |= (b & 0x7f) << s;
+        if (!(b & 0x80)) break;
+        s += 7;
+        if (s > 35) return fields;
+      }
+      if (len < 0 || i + len > buf.length) break;
+      fields.push({ f: field, w: 2, buf: buf.subarray(i, i + len) });
+      i += len;
+    } else if (wire === 1) {
+      if (i + 8 > buf.length) break;
+      i += 8;
+    } else if (wire === 5) {
+      if (i + 4 > buf.length) break;
+      i += 4;
+    } else {
+      break;
+    }
+  }
+  return fields;
+}
+
+function taParsePackedVarints(buf) {
+  const out = [];
+  if (!buf || typeof buf.length !== 'number') return out;
+  let i = 0;
+  while (i < buf.length) {
+    let v = 0;
+    let s = 0;
+    while (i < buf.length) {
+      const b = buf[i++];
+      v |= (b & 0x7f) << s;
+      if (!(b & 0x80)) break;
+      s += 7;
+      if (s > 35) return out;
+    }
+    out.push(v);
+  }
+  return out;
+}
+
+function taGetField(fields, num) {
+  return fields.find((x) => x.f === num);
+}
+
+function taGetAllFields(fields, num) {
+  return fields.filter((x) => x.f === num);
+}
+
+function taFieldToStr(f) {
+  return f?.buf ? textDecoder.decode(f.buf) : '';
+}
+
+function taStepPayloadHasMemoryPath(buf, maxDepth = 3, state = { seen: 0 }) {
+  if (maxDepth < 0 || !buf || !buf.length || state.seen >= 18) return false;
+  for (const fld of taParseProtoAll(buf)) {
+    if (state.seen >= 18) break;
+    if (fld.w === 2 && fld.buf.length > 0 && fld.buf.length <= 512) {
+      const s = textDecoder.decode(fld.buf);
+      if (TA_PRINTABLE_STR_RE.test(s)) {
+        state.seen += 1;
+        if (TA_MEMORY_PATH_RE.test(s)) return true;
+      } else if (maxDepth > 0 && fld.buf.length >= 2) {
+        if (taStepPayloadHasMemoryPath(fld.buf, maxDepth - 1, state)) return true;
+      }
+    }
+  }
+  return false;
+}
+
+function taExtractStepTimestamp(metaBuf) {
+  if (!metaBuf || !metaBuf.length) return 0;
+  for (const fld of taParseProtoAll(metaBuf)) {
+    if (fld.w === 2 && fld.buf.length >= 2 && fld.buf.length <= 24) {
+      const sub = taParseProtoAll(fld.buf);
+      const sec = taGetField(sub, 1)?.v;
+      if (sec && sec > 1700000000 && sec < 1900000000) return sec;
+    }
+  }
+  return 0;
+}
+
+function taResolveStepLookup(stepTs, fallbackSec) {
+  const sorted = [...stepTs.keys()].sort((a, b) => a - b);
+  return (stepIdx) => {
+    if (stepTs.has(stepIdx)) return stepTs.get(stepIdx);
+    for (let i = sorted.length - 1; i >= 0; i -= 1) {
+      if (sorted[i] <= stepIdx) return stepTs.get(sorted[i]);
+    }
+    return sorted.length > 0 ? stepTs.get(sorted[0]) : fallbackSec;
+  };
+}
+
+function taGetDbFileSig(dbPath) {
+  try {
+    const unc = isUncPath(dbPath);
+    if (unc && Date.now() < wslUncBackoffUntil) return null;
+    const t0 = Date.now();
+    const st = fs.statSync(dbPath, { throwIfNoEntry: false });
+    if (unc && Date.now() - t0 > 400) {
+      wslUncBackoffUntil = Date.now() + 45000;
+    }
+    if (!st) return null;
+    let wst = null;
+    if (!unc || Date.now() >= wslUncBackoffUntil) {
+      wst = fs.statSync(`${dbPath}-wal`, { throwIfNoEntry: false });
+      if (unc && Date.now() - t0 > 400) {
+        wslUncBackoffUntil = Date.now() + 45000;
+      }
+    }
+    const walSig = wst ? `${wst.mtimeMs}:${wst.size}` : '0:0';
+    return {
+      sig: `${st.mtimeMs}:${st.size}|${walSig}`,
+      mtimeMs: Math.max(st.mtimeMs || 0, wst ? wst.mtimeMs || 0 : 0)
+    };
+  } catch {
+    return null;
+  }
+}
+
+function taNormalizeSlashPath(raw) {
+  let s = String(raw || '').trim();
+  if (!s) return '';
+  if (s.startsWith('file://')) {
+    s = s.slice(7);
+    try {
+      s = decodeURIComponent(s);
+    } catch {}
+  }
+  s = s.replace(/\\/g, '/');
+  if (/^\/[A-Za-z]:\//.test(s)) {
+    s = s.slice(1);
+  }
+  if (!s.startsWith('//')) {
+    s = s.replace(/\/{2,}/g, '/');
+  } else {
+    s = '//' + s.slice(2).replace(/\/{2,}/g, '/');
+  }
+  if (s.length > 1 && !/^[A-Za-z]:\/$/.test(s)) {
+    s = s.replace(/\/+$/, '');
+  }
+  return s || '/';
+}
+
+const TA_NORMALIZED_OS_TMP = taNormalizeSlashPath(os.tmpdir()).toLowerCase();
+
+function taIsTempPath(p) {
+  if (!p) return false;
+  const low = p.toLowerCase();
+  if (TA_NORMALIZED_OS_TMP && TA_NORMALIZED_OS_TMP.length > 1) {
+    if (low === TA_NORMALIZED_OS_TMP || low.startsWith(`${TA_NORMALIZED_OS_TMP}/`)) return true;
+  }
+  return (
+    /^(?:\/private)?\/tmp(?:\/|$)/i.test(low) ||
+    /^\/var\/folders(?:\/|$)/i.test(low) ||
+    /^[a-z]:\/users\/[^/]+\/appdata\/local\/temp(?:\/|$)/i.test(low) ||
+    /^[a-z]:\/windows\/temp(?:\/|$)/i.test(low) ||
+    /^\/mnt\/[a-z]\/users\/[^/]+\/appdata\/local\/temp(?:\/|$)/i.test(low)
+  );
+}
+
+function taParseWorkspaceUrisList(workspaceUris) {
+  if (!workspaceUris) return [];
+  if (Array.isArray(workspaceUris)) {
+    return workspaceUris.map((x) => taNormalizeSlashPath(x)).filter(Boolean);
+  }
+  const str = String(workspaceUris).trim();
+  if (!str) return [];
+  if (str.startsWith('[')) {
+    try {
+      const arr = JSON.parse(str);
+      if (Array.isArray(arr)) {
+        return arr.map((x) => taNormalizeSlashPath(x)).filter(Boolean);
+      }
+    } catch {}
+  }
+  const decoded = taNormalizeSlashPath(str);
+  return decoded ? [decoded] : [];
+}
+
+function taNormalizeProjectInfo(workspaceUris, projectId = '') {
+  const paths = taParseWorkspaceUrisList(workspaceUris);
+  const nonTemp = paths.find((p) => !taIsTempPath(p));
+  const chosen = nonTemp || paths[0] || '';
+  const pid = String(projectId || '').trim();
+
+  if (!chosen || (pid === 'outside-of-project' && !nonTemp)) {
+    return {
+      key: '__none__',
+      name: '未绑定项目',
+      rawBasename: '未绑定项目',
+      path: '',
+      isTemp: false
+    };
+  }
+
+  if (taIsTempPath(chosen)) {
+    return {
+      key: '__tmp__',
+      name: '临时目录 (/tmp)',
+      rawBasename: '临时目录 (/tmp)',
+      path: '/tmp',
+      isTemp: true
+    };
+  }
+
+  const parts = chosen.split('/').filter(Boolean);
+  const base = parts[parts.length - 1] || chosen;
+  const isCaseInsensitive =
+    process.platform === 'darwin' ||
+    process.platform === 'win32' ||
+    /^[a-z]:\//i.test(chosen) ||
+    /^\/mnt\/[a-z]\//i.test(chosen);
+  return {
+    key: isCaseInsensitive ? chosen.toLowerCase() : chosen,
+    name: base,
+    rawBasename: base,
+    path: chosen,
+    isTemp: false
+  };
+}
+
+function taClassifyModelPool({ label = '', slug = '', modelEnum = '', usedClaude = '' } = {}) {
+  const combined = `${label} ${slug} ${modelEnum}`.toLowerCase();
+  if (combined.includes('argon')) return 'Argon';
+  if (combined.includes('claude') || combined.includes('gpt') || String(usedClaude).toLowerCase() === 'true') {
+    return 'Claude & GPT';
+  }
+  return 'Gemini';
+}
+
+function taNormalizeModelLabel({ label = '', slug = '', modelEnum = '', enumId = 0 } = {}) {
+  const trimmedLabel = String(label || '').trim();
+  if (trimmedLabel) return trimmedLabel;
+  const trimmedSlug = String(slug || '').trim();
+  if (trimmedSlug && TA_SLUG_LABELS[trimmedSlug]) return TA_SLUG_LABELS[trimmedSlug];
+  if (trimmedSlug) return trimmedSlug;
+  if (modelEnum) return String(modelEnum).trim();
+  return `model-${enumId || 'unknown'}`;
+}
+
+function taResolveCallScenario(callBaseScenario, isSubagent, source) {
+  if (isSubagent) return 'subagent';
+  if (callBaseScenario === 'planning' || callBaseScenario === 'memory') return callBaseScenario;
+  if (source === 'cli') return 'internal';
+  return callBaseScenario || 'internal';
+}
+
+function taParseIsoSeconds(val) {
+  if (!val) return 0;
+  const str = String(val).trim();
+  if (!str || str.startsWith('0001-01-01')) return 0;
+  const ms = Date.parse(str.includes('T') ? str : str.replace(' ', 'T'));
+  if (!Number.isFinite(ms) || ms <= 0) return 0;
+  return Math.floor(ms / 1000);
+}
+
+function taToLocalDateString(tsSec) {
+  const d = new Date(tsSec * 1000);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function taReadSummariesIndex(summariesDbPath) {
+  const map = new Map();
+  if (!summariesDbPath || !fs.existsSync(summariesDbPath)) return map;
+  try {
+    withReadOnlyDb(summariesDbPath, 150, (db) => {
+      const rows = db
+        .prepare(
+          `SELECT conversation_id, title, workspace_uris, project_id, source, agent_name,
+                  parent_conversation_id, nesting_depth, last_modified_time
+           FROM conversation_summaries`
+        )
+        .all();
+      for (const r of rows) {
+        if (!r?.conversation_id) continue;
+        map.set(r.conversation_id, {
+          id: r.conversation_id,
+          title: String(r.title || '').trim(),
+          workspaceUris: String(r.workspace_uris || ''),
+          projectId: String(r.project_id || ''),
+          source: String(r.source || '') === 'CORTEX_TRAJECTORY_SOURCE_CLI' ? 'cli' : 'desktop',
+          agentName: String(r.agent_name || '').trim(),
+          parentId: String(r.parent_conversation_id || '').trim(),
+          nestingDepth: Number(r.nesting_depth || 0) || 0,
+          lastModifiedSec: taParseIsoSeconds(r.last_modified_time)
+        });
+      }
+    });
+    return map;
+  } catch {
+    return null;
+  }
+}
+
+function taLoadSummariesCached(summariesDbPath, force) {
+  if (!summariesDbPath) return new Map();
+  const sigInfo = taGetDbFileSig(summariesDbPath);
+  if (!sigInfo) return new Map();
+  const cached = tokenAnalyticsSummariesCache.get(summariesDbPath);
+  if (!force && cached && cached.sig === sigInfo.sig) {
+    return cached.map;
+  }
+  const fresh = taReadSummariesIndex(summariesDbPath);
+  if (fresh) {
+    tokenAnalyticsSummariesCache.set(summariesDbPath, { sig: sigInfo.sig, map: fresh });
+    return fresh;
+  }
+  return cached ? cached.map : new Map();
+}
+
+function taParseConversationDetailDb(dbPath, statInfo) {
+  const dbId = path.basename(dbPath, '.db');
+  try {
+    return withReadOnlyDb(dbPath, 150, (db) => {
+      const fallbackSec = Math.floor((statInfo?.mtimeMs || fs.statSync(dbPath).mtimeMs || Date.now()) / 1000);
+
+      let trajParentId = '';
+      let trajRootId = '';
+      let trajWorkspaceUri = '';
+      let trajProjectId = '';
+      try {
+        const mrow = db.prepare('SELECT data FROM trajectory_metadata_blob LIMIT 1').get();
+        if (mrow?.data) {
+          const mf = taParseProtoAll(mrow.data);
+          trajParentId = taFieldToStr(taGetField(mf, 5)).trim();
+          trajRootId = taFieldToStr(taGetField(mf, 6)).trim();
+          trajWorkspaceUri = taFieldToStr(taGetField(mf, 7)).trim();
+          trajProjectId = taFieldToStr(taGetField(mf, 18)).trim();
+          if (!trajWorkspaceUri) {
+            const wsField = taGetField(mf, 1);
+            if (wsField?.buf) {
+              const wsSub = taParseProtoAll(wsField.buf);
+              trajWorkspaceUri =
+                taFieldToStr(taGetField(wsSub, 1)).trim() || taFieldToStr(taGetField(wsSub, 2)).trim();
+            }
+          }
+        }
+      } catch {}
+
+      const stepTs = new Map();
+      const stepByIdx = new Map();
+      const compactionStepIndices = new Set();
+
+      for (const row of db.prepare('SELECT idx, step_type, metadata, step_payload FROM steps').all()) {
+        const ts = taExtractStepTimestamp(row.metadata);
+        if (ts > 0) stepTs.set(row.idx, ts);
+        if (row.step_type === 23) compactionStepIndices.add(row.idx);
+        const hasMemoryPath =
+          row.step_type === 132 && row.step_payload && row.step_payload.length > 0
+            ? taStepPayloadHasMemoryPath(row.step_payload, 3)
+            : false;
+        stepByIdx.set(row.idx, { stepType: row.step_type, hasMemoryPath });
+      }
+      const lookupTs = taResolveStepLookup(stepTs, fallbackSec);
+
+      const calls = [];
+      let firstParentCascadeId = '';
+      let firstRootCascadeId = '';
+      let firstSubagentType = '';
+
+      for (const row of db.prepare('SELECT idx, data FROM gen_metadata ORDER BY idx ASC').all()) {
+        const top = taParseProtoAll(row.data);
+        const chatField = taGetField(top, 1);
+        if (!chatField?.buf) continue;
+        const chat = taParseProtoAll(chatField.buf);
+        const usageField = taGetField(chat, 4);
+        if (!usageField?.buf) continue;
+        const usage = taParseProtoAll(usageField.buf);
+
+        const kv = {};
+        for (const entry of taGetAllFields(chat, 20)) {
+          const pair = taParseProtoAll(entry.buf);
+          const k = taFieldToStr(taGetField(pair, 1));
+          if (k) kv[k] = taFieldToStr(taGetField(pair, 2));
+        }
+
+        const stepIndicesField = taGetField(top, 2);
+        const stepIndices = stepIndicesField?.buf ? taParsePackedVarints(stepIndicesField.buf) : [];
+        const refStep = stepIndices.length > 0 ? stepIndices[0] : Number(kv.last_step_index) || 0;
+        const ts = lookupTs(refStep);
+
+        let hasStep132 = false;
+        let hasStep15 = false;
+        let hasLinkedStep = false;
+        let hasMemoryStep = false;
+        let hasNearbyCompaction = false;
+        for (const sIdx of stepIndices) {
+          const info = stepByIdx.get(sIdx);
+          if (info) {
+            hasLinkedStep = true;
+            if (info.stepType === 132) hasStep132 = true;
+            else if (info.stepType === 15) hasStep15 = true;
+            if (info.hasMemoryPath) hasMemoryStep = true;
+          }
+          if (
+            compactionStepIndices.has(sIdx) ||
+            compactionStepIndices.has(sIdx - 1) ||
+            compactionStepIndices.has(sIdx + 1)
+          ) {
+            hasNearbyCompaction = true;
+          }
+        }
+        if (!hasNearbyCompaction && stepIndices.length === 0 && refStep > 0) {
+          if (
+            compactionStepIndices.has(refStep) ||
+            compactionStepIndices.has(refStep - 1) ||
+            compactionStepIndices.has(refStep + 1)
+          ) {
+            hasNearbyCompaction = true;
+          }
+        }
+
+        const slug = taFieldToStr(taGetField(chat, 19));
+        const rawLabel = taFieldToStr(taGetField(chat, 21));
+        const enumId = taGetField(usage, 1)?.v || taGetField(chat, 3)?.v || 0;
+        const modelEnum = kv.model_enum || '';
+        const usedClaude = kv.used_claude || '';
+        const label = taNormalizeModelLabel({ label: rawLabel, slug, modelEnum, enumId });
+        const pool = taClassifyModelPool({ label, slug, modelEnum, usedClaude });
+
+        const slugLower = String(slug || '').toLowerCase();
+        const labelTrim = String(label || '').trim();
+        let baseScenario = 'internal';
+        if ((slugLower.includes('orchestrator') && !slugLower.includes('worker')) || /^orchestrator\b/i.test(labelTrim)) {
+          baseScenario = 'planning';
+        } else if (hasNearbyCompaction || hasMemoryStep) {
+          baseScenario = 'memory';
+        } else if (hasLinkedStep) {
+          if (hasStep132) baseScenario = 'tools';
+          else if (hasStep15) baseScenario = 'chat';
+        }
+
+        const inTok = taGetField(usage, 2)?.v || 0;
+        const outTok = taGetField(usage, 3)?.v || 0;
+        const cacheRead = taGetField(usage, 5)?.v || 0;
+        const thinkTok = taGetField(usage, 9)?.v || 0;
+        const respTok = taGetField(usage, 10)?.v || 0;
+
+        const subagentType = String(kv.subagent_type || '').trim();
+        const parentCascadeId = String(kv.parent_cascade_id || '').trim();
+        const rootCascadeId = String(kv.root_cascade_id || '').trim();
+        if (!firstParentCascadeId && parentCascadeId) firstParentCascadeId = parentCascadeId;
+        if (!firstRootCascadeId && rootCascadeId) firstRootCascadeId = rootCascadeId;
+        if (!firstSubagentType && subagentType) firstSubagentType = subagentType;
+
+        // 紧凑缓存项：预结算 baseScenario，不驻留 linkedStepTypes / linkedStepStrings / Protobuf 原始切片（常驻内存缩减 >75%）
+        calls.push({
+          ts,
+          model: label,
+          pool,
+          inTok,
+          cacheRead,
+          outTok,
+          thinkTok,
+          respTok,
+          total: inTok + cacheRead + outTok,
+          weighted: Math.round(inTok + 0.1 * cacheRead + 6 * outTok),
+          billable: inTok + outTok,
+          baseScenario,
+          subagentType
+        });
+      }
+
+      return {
+        ok: true,
+        dbId,
+        mtimeSec: fallbackSec,
+        trajMeta: {
+          parentId: trajParentId || firstParentCascadeId,
+          rootId: trajRootId || firstRootCascadeId,
+          subagentType: firstSubagentType,
+          workspaceUri: trajWorkspaceUri,
+          projectId: trajProjectId
+        },
+        calls
+      };
+    });
+  } catch (err) {
+    return {
+      ok: false,
+      dbId,
+      error: err?.message || String(err)
+    };
+  }
+}
+
+function taChooseCanonicalProjectNames(projVotes) {
+  const canonical = new Map();
+  for (const [key, voteMap] of projVotes.entries()) {
+    const candidates = [...voteMap.entries()].sort((a, b) => {
+      if (b[1] !== a[1]) return b[1] - a[1];
+      const aUpper = /^[A-Z]/.test(a[0]) ? 1 : 0;
+      const bUpper = /^[A-Z]/.test(b[0]) ? 1 : 0;
+      if (bUpper !== aUpper) return bUpper - aUpper;
+      return a[0].localeCompare(b[0]);
+    });
+    canonical.set(key, candidates[0]?.[0] || key);
+  }
+  return canonical;
+}
+
+const yieldEventLoop = () => new Promise((resolve) => setImmediate(resolve));
+
+async function queryTokenAnalytics(
+  endpoint,
+  { maxDays = 365, force = false, nowSec = Math.floor(Date.now() / 1000) } = {}
+) {
+  lastTokenAnalyticsAccessMs = Date.now();
+  const t0 = performance.now();
+  let sliceStartMs = t0;
+  const primaryDir =
+    endpoint?.conversationsDir || path.join(os.homedir(), endpoint?.geminiSubDir || '.gemini/antigravity', 'conversations');
+
+  const candidateDirs = [];
+  const pushDir = (d) => {
+    if (d && !candidateDirs.includes(d)) candidateDirs.push(d);
+  };
+  pushDir(primaryDir);
+
+  if (
+    process.platform === 'win32' &&
+    !endpoint?.explicitConvDir &&
+    endpoint?.portFile &&
+    Date.now() >= wslUncBackoffUntil
+  ) {
+    const wslDirs = resolveWin32WslConversationsDirs(
+      endpoint.portFile,
+      endpoint.geminiSubDir || '.gemini/antigravity'
+    );
+    for (const wd of wslDirs) pushDir(wd);
+  }
+
+  const summaries = new Map();
+  const dbCandidateById = new Map(); // dbId -> { dbPath, sigInfo }
+
+  for (const convDir of candidateDirs) {
+    const uncDir = isUncPath(convDir);
+    if (uncDir && Date.now() < wslUncBackoffUntil) continue;
+    const tDir = Date.now();
+    let dirExists = false;
+    try {
+      dirExists = fs.existsSync(convDir);
+    } catch {
+      dirExists = false;
+    }
+    if (uncDir && Date.now() - tDir > 400) {
+      wslUncBackoffUntil = Date.now() + 45000;
+    }
+    if (!dirExists || (uncDir && Date.now() < wslUncBackoffUntil)) continue;
+
+    const sumPath = path.join(path.dirname(convDir), 'conversation_summaries.db');
+    const sumMap = taLoadSummariesCached(sumPath, force);
+    for (const [k, v] of sumMap.entries()) {
+      if (!summaries.has(k)) summaries.set(k, v);
+    }
+
+    let entries = [];
+    try {
+      const tRead = Date.now();
+      entries = fs.readdirSync(convDir).filter((name) => name.endsWith('.db')).sort();
+      if (uncDir && Date.now() - tRead > 400) {
+        wslUncBackoffUntil = Date.now() + 45000;
+      }
+    } catch {
+      entries = [];
+    }
+
+    const dirStatLoopStartMs = Date.now();
+    let statIter = 0;
+    for (const fileName of entries) {
+      if (uncDir) {
+        if (Date.now() < wslUncBackoffUntil) break;
+        if (Date.now() - dirStatLoopStartMs > 400) {
+          wslUncBackoffUntil = Date.now() + 45000;
+          break;
+        }
+      }
+      const dbPath = path.join(convDir, fileName);
+      const dbId = path.basename(fileName, '.db');
+      const sigInfo = taGetDbFileSig(dbPath);
+      if (!sigInfo) continue;
+      const existing = dbCandidateById.get(dbId);
+      if (!existing || sigInfo.mtimeMs > existing.sigInfo.mtimeMs) {
+        dbCandidateById.set(dbId, { dbPath, sigInfo });
+      }
+      statIter += 1;
+      if (statIter % 80 === 0 && performance.now() - sliceStartMs >= 16) {
+        await yieldEventLoop();
+        sliceStartMs = performance.now();
+      }
+    }
+  }
+
+  const activePaths = new Set();
+  const parsedDbs = [];
+  const failedDbs = [];
+  let cacheHits = 0;
+  let cacheMisses = 0;
+  let missesSinceYield = 0;
+
+  // 按最新修改时间优先解析，每处理 8 个未命中库或单切片达 16ms 即让出事件循环，保障主窗口胶囊与 BrowserWatcher 零阻塞
+  const dbEntries = [...dbCandidateById.values()].sort(
+    (a, b) => (b.sigInfo.mtimeMs || 0) - (a.sigInfo.mtimeMs || 0) || a.dbPath.localeCompare(b.dbPath)
+  );
+  for (const { dbPath, sigInfo } of dbEntries) {
+    activePaths.add(dbPath);
+    const cached = !force ? tokenAnalyticsDbCache.get(dbPath) : null;
+    if (cached && cached.sig === sigInfo.sig) {
+      cacheHits += 1;
+      parsedDbs.push(cached.parsed);
+      continue;
+    }
+
+    const uncDb = isUncPath(dbPath);
+    if (uncDb && Date.now() < wslUncBackoffUntil) {
+      if (cached?.parsed) parsedDbs.push(cached.parsed);
+      continue;
+    }
+
+    cacheMisses += 1;
+    missesSinceYield += 1;
+    const tDbStart = Date.now();
+    const parsed = taParseConversationDetailDb(dbPath, sigInfo);
+    if (uncDb && Date.now() - tDbStart > 400) {
+      wslUncBackoffUntil = Date.now() + 45000;
+    }
+    if (parsed.ok) {
+      tokenAnalyticsDbCache.set(dbPath, { sig: sigInfo.sig, parsed });
+      parsedDbs.push(parsed);
+    } else if (cached?.parsed) {
+      parsedDbs.push(cached.parsed);
+    } else {
+      failedDbs.push({ dbId: parsed.dbId, error: parsed.error });
+    }
+
+    if (missesSinceYield >= 8 || performance.now() - sliceStartMs >= 16) {
+      await yieldEventLoop();
+      sliceStartMs = performance.now();
+      missesSinceYield = 0;
+    }
+  }
+
+  for (const oldPath of tokenAnalyticsDbCache.keys()) {
+    if (!activePaths.has(oldPath)) tokenAnalyticsDbCache.delete(oldPath);
+  }
+
+  const cutoffSec = maxDays > 0 ? nowSec - maxDays * 86400 : 0;
+
+  const rawMetaById = new Map();
+  for (const parsed of parsedDbs) {
+    const id = parsed.dbId;
+    const sum = summaries.get(id);
+
+    const parentId = sum?.parentId || parsed.trajMeta.parentId || '';
+    const rawRoot = parsed.trajMeta.rootId || '';
+    const agentName = sum?.agentName || parsed.trajMeta.subagentType || '';
+    const isSubagent = Boolean(
+      (sum && sum.nestingDepth > 0) ||
+        parentId ||
+        agentName ||
+        (rawRoot && rawRoot !== id)
+    );
+    const source = sum?.source || 'desktop';
+    const workspaceUris = sum?.workspaceUris || parsed.trajMeta.workspaceUri || '';
+    const projectId = sum?.projectId || parsed.trajMeta.projectId || '';
+    const proj = taNormalizeProjectInfo(workspaceUris, projectId);
+
+    rawMetaById.set(id, {
+      id,
+      title: sum?.title || '',
+      source,
+      agentName,
+      parentId,
+      rawRoot,
+      isSubagent,
+      proj,
+      parsed
+    });
+  }
+
+  const resolvedMetaById = new Map();
+  const projectRegistry = new Map();
+
+  function resolveRootId(id) {
+    const seen = new Set();
+    let cur = id;
+    while (cur && !seen.has(cur)) {
+      seen.add(cur);
+      const m = rawMetaById.get(cur);
+      if (!m) break;
+      if (m.parentId && rawMetaById.has(m.parentId) && m.parentId !== cur) {
+        cur = m.parentId;
+        continue;
+      }
+      if (m.rawRoot && rawMetaById.has(m.rawRoot) && m.rawRoot !== cur) {
+        cur = m.rawRoot;
+        continue;
+      }
+      return cur;
+    }
+    const m = rawMetaById.get(id);
+    return m?.parentId || m?.rawRoot || id;
+  }
+
+  for (const [id, m] of rawMetaById.entries()) {
+    const rootId = resolveRootId(id);
+    let proj = m.proj;
+    if (proj.key === '__none__' && rootId !== id && rawMetaById.has(rootId)) {
+      proj = rawMetaById.get(rootId).proj;
+    }
+    if (!projectRegistry.has(proj.key)) {
+      projectRegistry.set(proj.key, {
+        key: proj.key,
+        path: proj.path,
+        isTemp: proj.isTemp,
+        votes: new Map()
+      });
+    }
+    const reg = projectRegistry.get(proj.key);
+    reg.votes.set(proj.rawBasename, (reg.votes.get(proj.rawBasename) || 0) + 1);
+    if (!reg.path && proj.path) reg.path = proj.path;
+
+    const fallbackTitle = m.isSubagent
+      ? `${m.agentName || 'subagent'} 子任务 (${id.slice(0, 8)})`
+      : `会话 ${id.slice(0, 8)}`;
+
+    resolvedMetaById.set(id, {
+      id,
+      title: m.title || fallbackTitle,
+      source: m.source,
+      agentName: m.agentName,
+      parentId: m.parentId || (m.isSubagent && rootId !== id ? rootId : ''),
+      rootId,
+      isSubagent: m.isSubagent,
+      projectKey: proj.key,
+      parsed: m.parsed
+    });
+  }
+
+  const projVotes = new Map([...projectRegistry.entries()].map(([k, v]) => [k, v.votes]));
+  const canonicalProjectNames = taChooseCanonicalProjectNames(projVotes);
+
+  const projects = [...projectRegistry.values()]
+    .map((p) => ({
+      key: p.key,
+      name: p.key === '__none__' ? '未绑定项目' : p.key === '__tmp__' ? '临时目录 (/tmp)' : canonicalProjectNames.get(p.key),
+      path: p.path,
+      isTemp: p.isTemp
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name, 'zh-CN'));
+  const projNameByKey = new Map(projects.map((p) => [p.key, p.name]));
+
+  const factsMap = new Map();
+  const conversations = {};
+  const dailyMap = new Map();
+  let totalCalls = 0;
+
+  for (const meta of resolvedMetaById.values()) {
+    const windowCalls = cutoffSec > 0 ? meta.parsed.calls.filter((c) => c.ts >= cutoffSec) : meta.parsed.calls;
+    if (windowCalls.length === 0) continue;
+
+    let lastTs = 0;
+    const modelSet = new Set();
+
+    for (const c of windowCalls) {
+      totalCalls += 1;
+      if (c.ts > lastTs) lastTs = c.ts;
+      modelSet.add(c.model);
+
+      const callIsSubagent = meta.isSubagent || Boolean(c.subagentType);
+      const subagentType = callIsSubagent ? c.subagentType || meta.agentName || 'subagent' : '';
+      const scenario = taResolveCallScenario(c.baseScenario, callIsSubagent, meta.source);
+      const date = taToLocalDateString(c.ts || meta.parsed.mtimeSec);
+      const fKey = `${date}\x00${meta.id}\x00${c.model}\x00${c.pool}\x00${scenario}\x00${subagentType}`;
+      let fact = factsMap.get(fKey);
+      if (!fact) {
+        fact = {
+          date,
+          cid: meta.id,
+          model: c.model,
+          pool: c.pool,
+          scenario,
+          subagentType,
+          calls: 0,
+          inTok: 0,
+          cacheRead: 0,
+          outTok: 0,
+          thinkTok: 0,
+          respTok: 0,
+          total: 0,
+          weighted: 0,
+          billable: 0
+        };
+        factsMap.set(fKey, fact);
+      }
+      fact.calls += 1;
+      fact.inTok += c.inTok;
+      fact.cacheRead += c.cacheRead;
+      fact.outTok += c.outTok;
+      fact.thinkTok += c.thinkTok;
+      fact.respTok += c.respTok;
+      fact.total += c.total;
+      fact.weighted += c.weighted;
+      fact.billable += c.billable;
+
+      let dAcc = dailyMap.get(date);
+      if (!dAcc) {
+        dAcc = { date, calls: 0, inTok: 0, cacheRead: 0, outTok: 0, total: 0, weighted: 0, billable: 0 };
+        dailyMap.set(date, dAcc);
+      }
+      dAcc.calls += 1;
+      dAcc.inTok += c.inTok;
+      dAcc.cacheRead += c.cacheRead;
+      dAcc.outTok += c.outTok;
+      dAcc.total += c.total;
+      dAcc.weighted += c.weighted;
+      dAcc.billable += c.billable;
+    }
+
+    conversations[meta.id] = {
+      id: meta.id,
+      title: meta.title,
+      projectKey: meta.projectKey,
+      projectName: projNameByKey.get(meta.projectKey) || '未绑定项目',
+      source: meta.source,
+      isSubagent: meta.isSubagent,
+      agentName: meta.agentName,
+      parentId: meta.parentId,
+      rootId: meta.rootId,
+      lastTs,
+      models: [...modelSet]
+    };
+  }
+
+  const facts = [...factsMap.values()].sort((a, b) => {
+    if (b.date !== a.date) return b.date.localeCompare(a.date);
+    return b.weighted - a.weighted;
+  });
+  const dailySummary = [...dailyMap.values()].sort((a, b) => a.date.localeCompare(b.date));
+
+  const usedProjectKeys = new Set(Object.values(conversations).map((c) => c.projectKey));
+  const activeProjects = projects.filter((p) => usedProjectKeys.has(p.key));
+
+  return {
+    version: 1,
+    generatedAt: new Date(nowSec * 1000).toISOString(),
+    nowSec,
+    defaultMetric: 'weighted',
+    elapsedMs: Number((performance.now() - t0).toFixed(2)),
+    stats: {
+      dbCount: dbEntries.length,
+      scannedDbs: parsedDbs.length,
+      failedDbs: failedDbs.length,
+      totalCalls,
+      conversationCount: Object.keys(conversations).length,
+      projectCount: activeProjects.length,
+      cacheHits,
+      cacheMisses
+    },
+    projects: activeProjects,
+    conversations,
+    facts,
+    dailySummary
+  };
+}
+
+function runTokenAnalyticsQuery(endpoint, opts = {}) {
+  const key = `${endpoint?.channel || 'default'}|${endpoint?.conversationsDir || ''}|${opts.maxDays || 365}`;
+  if (!opts.force && inFlightTokenAnalyticsPromise && inFlightTokenAnalyticsKey === key) {
+    return inFlightTokenAnalyticsPromise;
+  }
+  const run = (async () => {
+    if (inFlightTokenAnalyticsPromise) {
+      try {
+        await inFlightTokenAnalyticsPromise;
+      } catch {}
+    }
+    return queryTokenAnalytics(endpoint, opts);
+  })();
+  inFlightTokenAnalyticsKey = key;
+  inFlightTokenAnalyticsPromise = run;
+  run.finally(() => {
+    if (inFlightTokenAnalyticsPromise === run) {
+      inFlightTokenAnalyticsPromise = null;
+      inFlightTokenAnalyticsKey = '';
+    }
+  });
+  return run;
 }
 
 // ============================================================================
@@ -2967,15 +3972,18 @@ function attachTarget(target, endpoint) {
       let lastNewDocSig = '';
 
       const buildTargetInjectScript = () => {
-        if (!activeConfig.enabled || target.type !== 'iframe') {
+        if (target.type !== 'iframe') {
           return { script: cachedInjectScript, parentMode: '', parentDarkPreset: '' };
+        }
+        if (!activeConfig.enabled) {
+          return { script: cachedIframeInjectScript, parentMode: '', parentDarkPreset: '' };
         }
         const parentMode = resolveParentThemeMode(target, endpoint) || '';
         const parentDarkPreset = resolveParentDarkPreset(target, endpoint) || '';
         const modeVal = parentMode === 'dark' || parentMode === 'light' ? parentMode : null;
         const darkVal = parentDarkPreset === 'claude-warm' || parentDarkPreset === 'onyx' ? parentDarkPreset : null;
         return {
-          script: `window.__ag_host_theme_mode=${modeVal ? JSON.stringify(modeVal) : 'null'};\nwindow.__ag_host_dark_preset=${darkVal ? JSON.stringify(darkVal) : 'null'};\n${cachedInjectScript}`,
+          script: `window.__ag_host_theme_mode=${modeVal ? JSON.stringify(modeVal) : 'null'};\nwindow.__ag_host_dark_preset=${darkVal ? JSON.stringify(darkVal) : 'null'};\n${cachedIframeInjectScript}`,
           parentMode: modeVal || '',
           parentDarkPreset: darkVal || ''
         };
@@ -3395,11 +4403,12 @@ function attachTarget(target, endpoint) {
         }
         if (!bindingsAdded) {
           bindingsAdded = true;
-          await send('Runtime.addBinding', { name: '__agRequestMetrics' });
           if (target.type === 'page') {
+            await send('Runtime.addBinding', { name: '__agRequestMetrics' });
             await send('Runtime.addBinding', { name: '__agRequestHardReload' });
             await send('Runtime.addBinding', { name: '__agSetDarkPreset' });
             await send('Runtime.addBinding', { name: '__agSyncHostThemeMode' });
+            await send('Runtime.addBinding', { name: '__agRequestTokenAnalytics' });
           }
         }
         if (ws.readyState !== WebSocket.OPEN || nonHostSettled) {
@@ -3408,7 +4417,9 @@ function attachTarget(target, endpoint) {
         }
         await updateNewDocScript(true);
         const ok = await inject();
-        await syncMetricsForSession(true);
+        if (target.type === 'page') {
+          await syncMetricsForSession(true);
+        }
         initialAttachDone = true;
         clearTimeout(attachTimeout);
         finishAttach(ok);
@@ -3605,6 +4616,45 @@ function attachTarget(target, endpoint) {
             }
             return;
           }
+          if (msg.method === 'Runtime.bindingCalled' && msg.params?.name === '__agRequestTokenAnalytics') {
+            if (
+              !hostConfirmed ||
+              target.type !== 'page' ||
+              !activeConfig.enabled ||
+              !activeConfig.modules.tokenAnalytics ||
+              !DatabaseSync
+            ) {
+              return;
+            }
+            let req = {};
+            try {
+              req = msg.params.payload ? JSON.parse(String(msg.params.payload)) : {};
+            } catch {}
+            const reqId = String(req?.reqId || '');
+            const maxDays = Number(req?.maxDays) > 0 ? Number(req.maxDays) : 365;
+            const force = Boolean(req?.force);
+            void (async () => {
+              let out;
+              try {
+                const data = await runTokenAnalyticsQuery(endpoint, { maxDays, force });
+                out = { ok: true, data };
+              } catch (err) {
+                out = { ok: false, error: err?.message || String(err || 'token analytics failed') };
+              }
+              if (ws.readyState === WebSocket.OPEN) {
+                const payloadJson = JSON.stringify(out)
+                  .replace(/\u2028/g, '\\u2028')
+                  .replace(/\u2029/g, '\\u2029');
+                try {
+                  await send('Runtime.evaluate', {
+                    expression: `if (typeof window.__ag_on_token_analytics === 'function') { window.__ag_on_token_analytics(${JSON.stringify(reqId)}, ${payloadJson}); }`,
+                    returnByValue: false
+                  });
+                } catch {}
+              }
+            })();
+            return;
+          }
           if (
             msg.method === 'Page.frameNavigated' &&
             (!msg.params?.frame?.parentId || msg.params.frame.id === target.id) &&
@@ -3714,6 +4764,7 @@ let hasProbedZhLiveOnce = false;
 let cachedWorkingPython = undefined;
 let zhPatchFailedSig = '';
 let zhPatchFailCount = 0;
+let staleZhHubPids = [];
 
 function probeZhTitleLiveState(pyBin, scriptPath) {
   if (SAFE_MODE || process.platform !== 'darwin' || isZhStatusProbing || !pyBin || !scriptPath) return;
@@ -3727,10 +4778,24 @@ function probeZhTitleLiveState(pyBin, scriptPath) {
       if (!Array.isArray(records) || records.length === 0) return;
       const activeRecs = records.filter((r) => r && !r.disabled);
       if (activeRecs.length === 0) {
+        staleZhHubPids = [];
         setZhTitleStatus('ok');
         return;
       }
-      if (activeRecs.some((r) => r.diskState === 'PATCHED' && r.liveState === 'STALE_RUNNING_INODE')) {
+      const staleRecs = activeRecs.filter((r) => r.diskState === 'PATCHED' && r.liveState === 'STALE_RUNNING_INODE');
+      if (staleRecs.length > 0) {
+        const nextStalePids = [];
+        for (const rec of staleRecs) {
+          if (Array.isArray(rec.hubProcs)) {
+            for (const hp of rec.hubProcs) {
+              const p = Number(hp?.pid) || 0;
+              if (p > 0 && hp?.match === false && !nextStalePids.includes(p)) {
+                nextStalePids.push(p);
+              }
+            }
+          }
+        }
+        staleZhHubPids = nextStalePids;
         setZhTitleStatus(
           'stale_inode',
           '中文标题补丁待重载生效',
@@ -3740,6 +4805,7 @@ function probeZhTitleLiveState(pyBin, scriptPath) {
         return;
       }
       if (activeRecs.every((r) => r.diskState === 'PATCHED')) {
+        staleZhHubPids = [];
         setZhTitleStatus('ok');
       }
     } catch {
@@ -3801,11 +4867,19 @@ function ensureZhTitlePatchIfPresent() {
   if (!sig) return;
   if (fs.existsSync(disabledMarkerPath)) {
     lastZhPatchSig = sig;
+    staleZhHubPids = [];
     setZhTitleStatus('ok');
     return;
   }
   if (sig === lastZhPatchSig) {
-    if (!hasProbedZhLiveOnce || zhTitleStatus.state === 'stale_inode') {
+    if (!hasProbedZhLiveOnce) {
+      const pyProbe = resolveWorkingPython3();
+      if (pyProbe) probeZhTitleLiveState(pyProbe, scriptPath);
+    } else if (
+      zhTitleStatus.state === 'stale_inode' &&
+      (staleZhHubPids.length === 0 || !staleZhHubPids.every(isPidAlive))
+    ) {
+      // 仅在旧镜像 language_server PID 退出或变化时重新探测，避免空闲态每 30s 反复读取 ~390MB 二进制
       const pyProbe = resolveWorkingPython3();
       if (pyProbe) probeZhTitleLiveState(pyProbe, scriptPath);
     }
@@ -3931,12 +5005,70 @@ function pruneIgnoredHostPids() {
   }
 }
 
-function probeRunningHostProcesses(channelMode = 'auto', endpoints = []) {
+function readPosixSingletonLockState(portFile) {
+  if (!portFile) return { status: 'unknown', pid: 0 };
+  const userDataDir = path.dirname(portFile);
+  if (!fs.existsSync(userDataDir)) return { status: 'absent', pid: 0 };
+  const lockPath = path.join(userDataDir, 'SingletonLock');
+  try {
+    const lst = fs.lstatSync(lockPath, { throwIfNoEntry: false });
+    if (!lst) return { status: 'absent', pid: 0 };
+    if (!lst.isSymbolicLink()) return { status: 'unknown', pid: 0 };
+    const target = String(fs.readlinkSync(lockPath) || '');
+    const m = target.match(/-(\d+)$/);
+    if (!m) return { status: 'unknown', pid: 0 };
+    const pid = parseInt(m[1], 10);
+    if (!pid || pid <= 0) return { status: 'absent', pid: 0 };
+    return isPidAlive(pid) ? { status: 'alive', pid } : { status: 'dead', pid };
+  } catch {
+    return { status: 'unknown', pid: 0 };
+  }
+}
+
+const staleWinLockfileChannels = new Set();
+
+function probeRunningHostProcesses(channelMode = 'auto', endpoints = [], reachableChannels = null) {
   const allowStable = channelMode !== 'insiders';
   const allowInsiders = channelMode !== 'stable';
 
-  if (process.platform === 'darwin') {
-    const res = spawnSync('ps', ['-axo', 'pid=,etime=,command='], {
+  if (process.platform === 'darwin' || process.platform === 'linux') {
+    // 零子进程空闲预筛（解决客户端未启动或已豁免时每 2.5s fork `ps` 被 launchd 标记 inefficient 的 CPU 空转缺陷）：
+    // Electron 主进程启动首行即调用 app.requestSingleInstanceLock() 在 userDataDir 下创建 SingletonLock -> <host>-<pid> 软链。
+    // 仅当通道无活跃可达 CDP、无存活豁免 PID 且 SingletonLock 指向未处理的存活 PID（或罕见非软链残留）时才按需执行 ps。
+    const targetPids = [];
+    let needFullScan = false;
+    const candidateChannels = [];
+    if (allowStable) candidateChannels.push('stable');
+    if (allowInsiders) candidateChannels.push('insiders');
+
+    for (const ch of candidateChannels) {
+      const ep = endpoints.find((e) => e.channel === ch);
+      if (ch === 'insiders' && ep && ep.channelInstalled === false) continue;
+      if (reachableChannels ? reachableChannels.has(ch) : ep && readPort(ep.portFile)) continue;
+      const exemptPid = exemptedHostPidByChannel.get(ch);
+      if (exemptPid && isPidAlive(exemptPid)) continue;
+
+      if (ep && ep.portFile) {
+        const lockState = readPosixSingletonLockState(ep.portFile);
+        if (lockState.status === 'absent' || lockState.status === 'dead') {
+          continue;
+        }
+        if (lockState.status === 'alive') {
+          if (!ignoredUnflaggedHostPids.has(lockState.pid) && !targetPids.includes(lockState.pid)) {
+            targetPids.push(lockState.pid);
+          }
+          continue;
+        }
+      }
+      needFullScan = true;
+    }
+
+    if (!needFullScan && targetPids.length === 0) return [];
+
+    const psArgs = needFullScan
+      ? ['-axo', 'pid=,etime=,command=']
+      : ['-p', targetPids.join(','), '-o', 'pid=,etime=,command='];
+    const res = spawnSync('ps', psArgs, {
       encoding: 'utf8',
       timeout: 2500
     });
@@ -3948,67 +5080,108 @@ function probeRunningHostProcesses(channelMode = 'auto', endpoints = []) {
       const pid = parseInt(m[1], 10);
       const etimeRaw = m[2];
       const cmd = m[3];
-      if (!pid || NON_HOST_CMD_RE.test(cmd) || /Helper(?:\s|\.|\/)/i.test(cmd)) continue;
-      const appMatch = cmd.match(/^(\S.*?\/Antigravity(?:\s-\sInsiders)?\.app)\/Contents\/MacOS\/(Antigravity(?:\s-\sInsiders)?)(?:\s|$)/);
-      if (!appMatch) continue;
-      const appPath = appMatch[1];
-      const binName = appMatch[2];
-      const ch = /Insiders/i.test(binName) ? 'insiders' : 'stable';
-      if ((ch === 'stable' && !allowStable) || (ch === 'insiders' && !allowInsiders)) continue;
-      found.push({
-        pid,
-        channel: ch,
-        elapsedSec: parsePosixEtimeSeconds(etimeRaw),
-        appPath,
-        exePath: `${appPath}/Contents/MacOS/${binName}`,
-        cmd,
-        hasCdpFlag: /--remote-debugging-port(?:=|\s|$)/.test(cmd),
-        hasUpdatedFlag: /--updated(?:\s|$)/.test(cmd)
-      });
+      if (!pid || NON_HOST_CMD_RE.test(cmd)) continue;
+      if (process.platform === 'darwin') {
+        if (/Helper(?:\s|\.|\/)/i.test(cmd)) continue;
+        const appMatch = cmd.match(
+          /^(\S.*?\/Antigravity(?:\s-\sInsiders)?\.app)\/Contents\/MacOS\/(Antigravity(?:\s-\sInsiders)?)(?:\s|$)/
+        );
+        if (!appMatch) continue;
+        const appPath = appMatch[1];
+        const binName = appMatch[2];
+        const ch = /Insiders/i.test(binName) ? 'insiders' : 'stable';
+        if ((ch === 'stable' && !allowStable) || (ch === 'insiders' && !allowInsiders)) continue;
+        found.push({
+          pid,
+          channel: ch,
+          elapsedSec: parsePosixEtimeSeconds(etimeRaw),
+          appPath,
+          exePath: `${appPath}/Contents/MacOS/${binName}`,
+          cmd,
+          hasCdpFlag: /--remote-debugging-port(?:=|\s|$)/.test(cmd),
+          hasUpdatedFlag: /--updated(?:\s|$)/.test(cmd)
+        });
+      } else {
+        if (/daemon\.mjs|install\.mjs/.test(cmd)) continue;
+        const binMatch = cmd.match(/^(\/\S*\/antigravity(?:-insiders)?)(?:\s|$)/i);
+        if (!binMatch) continue;
+        const exePath = binMatch[1];
+        const ch = /insiders/i.test(exePath) ? 'insiders' : 'stable';
+        if ((ch === 'stable' && !allowStable) || (ch === 'insiders' && !allowInsiders)) continue;
+        found.push({
+          pid,
+          channel: ch,
+          elapsedSec: parsePosixEtimeSeconds(etimeRaw),
+          appPath: '',
+          exePath,
+          cmd,
+          hasCdpFlag: /--remote-debugging-port(?:=|\s|$)/.test(cmd),
+          hasUpdatedFlag: /--updated(?:\s|$)/.test(cmd)
+        });
+      }
     }
     return found;
   }
 
   if (process.platform === 'win32') {
-    // 双层零开销预筛：
-    // 1) 若某通道已存在活跃 DevToolsActivePort，或该通道已豁免的无参宿主主进程 PID 仍存活（SingletonLock 保证单通道唯一主进程），直接 O(1) 内存级跳过（0 tasklist + 0 PowerShell）；
-    // 2) 仅对尚未锁定的通道调用原生 C++ tasklist 检查是否存在未见过的 PID，并对渲染/GPU/Utility/sidecar_sdk 同名子进程记入 knownNonHostPids 防止重复唤醒 PowerShell。
+    // 三层零开销预筛（零文件句柄锁竞态）：
+    // 1) 若某通道已存在活跃 DevToolsActivePort，或已豁免无参宿主 PID 仍存活，直接 O(1) 内存级跳过；
+    // 2) 只读检查 userDataDir/lockfile 是否存在（GetFileAttributesExW，绝不打开句柄以免与 Electron FILE_SHARE_NONE 抢锁）：正常关闭后 lockfile 被自动删除，实现客户端关闭态 0 次 tasklist、0 次 PowerShell；
+    // 3) 若遇崩溃残留未删 lockfile，首次未检出进程后降频为隔拍复检（<=5s，仍完全覆盖 12s 冷启动接力窗）。
     const imageSpecs = [];
+    const checkWinChannelCandidate = (ch, ep, img) => {
+      if (reachableChannels ? reachableChannels.has(ch) : ep && readPort(ep.portFile)) {
+        staleWinLockfileChannels.delete(ch);
+        return;
+      }
+      const exemptPid = exemptedHostPidByChannel.get(ch);
+      if (exemptPid && isPidAlive(exemptPid)) return;
+      if (ep && ep.portFile) {
+        const lockPath = path.join(path.dirname(ep.portFile), 'lockfile');
+        if (!fs.statSync(lockPath, { throwIfNoEntry: false })) {
+          staleWinLockfileChannels.delete(ch);
+          return;
+        }
+        if (staleWinLockfileChannels.has(ch) && syncTickCount % 2 === 0) {
+          return;
+        }
+      }
+      imageSpecs.push({ channel: ch, img });
+    };
     const stableEp = endpoints.find((ep) => ep.channel === 'stable');
     const insidersEp = endpoints.find((ep) => ep.channel === 'insiders');
-    const stableExemptPid = exemptedHostPidByChannel.get('stable');
-    const insidersExemptPid = exemptedHostPidByChannel.get('insiders');
-    if (allowStable && !(stableEp && readPort(stableEp.portFile)) && !(stableExemptPid && isPidAlive(stableExemptPid))) {
-      imageSpecs.push({ channel: 'stable', img: 'Antigravity.exe' });
+    if (allowStable) {
+      checkWinChannelCandidate('stable', stableEp, 'Antigravity.exe');
     }
-    if (
-      allowInsiders &&
-      insidersEp &&
-      insidersEp.channelInstalled &&
-      !readPort(insidersEp.portFile) &&
-      !(insidersExemptPid && isPidAlive(insidersExemptPid))
-    ) {
-      imageSpecs.push({ channel: 'insiders', img: 'Antigravity - Insiders.exe' });
+    if (allowInsiders && insidersEp && insidersEp.channelInstalled) {
+      checkWinChannelCandidate('insiders', insidersEp, 'Antigravity - Insiders.exe');
     }
     if (imageSpecs.length === 0) return [];
 
     const candidatePids = [];
-    for (const { img } of imageSpecs) {
+    for (const { channel: ch, img } of imageSpecs) {
       const tl = spawnSync('tasklist', ['/FI', `IMAGENAME eq ${img}`, '/FO', 'CSV', '/NH'], {
         windowsHide: true,
         encoding: 'utf8',
         timeout: 2500
       });
+      let anyProcessForImg = false;
       if (tl.status === 0 && tl.stdout) {
         for (const row of String(tl.stdout).split(/\r?\n/)) {
           const cm = row.trim().match(/^"([^"]+)","(\d+)"/);
           if (cm && cm[1].toLowerCase() === img.toLowerCase()) {
+            anyProcessForImg = true;
             const p = parseInt(cm[2], 10);
             if (p > 0 && !ignoredUnflaggedHostPids.has(p) && !knownNonHostPids.has(p)) {
               candidatePids.push(p);
             }
           }
         }
+      }
+      if (anyProcessForImg) {
+        staleWinLockfileChannels.delete(ch);
+      } else {
+        staleWinLockfileChannels.add(ch);
       }
     }
     if (candidatePids.length === 0) return [];
@@ -4079,43 +5252,10 @@ function probeRunningHostProcesses(channelMode = 'auto', endpoints = []) {
       );
   }
 
-  if (process.platform === 'linux') {
-    const res = spawnSync('ps', ['-axo', 'pid=,etime=,command='], {
-      encoding: 'utf8',
-      timeout: 2500
-    });
-    if (res.status !== 0 || !res.stdout) return [];
-    const found = [];
-    for (const line of String(res.stdout).split(/\r?\n/)) {
-      const m = line.trim().match(/^(\d+)\s+(\S+)\s+(.+)$/);
-      if (!m) continue;
-      const pid = parseInt(m[1], 10);
-      const etimeRaw = m[2];
-      const cmd = m[3];
-      if (!pid || NON_HOST_CMD_RE.test(cmd) || /daemon\.mjs|install\.mjs/.test(cmd)) continue;
-      const binMatch = cmd.match(/^(\/\S*\/antigravity(?:-insiders)?)(?:\s|$)/i);
-      if (!binMatch) continue;
-      const exePath = binMatch[1];
-      const ch = /insiders/i.test(exePath) ? 'insiders' : 'stable';
-      if ((ch === 'stable' && !allowStable) || (ch === 'insiders' && !allowInsiders)) continue;
-      found.push({
-        pid,
-        channel: ch,
-        elapsedSec: parsePosixEtimeSeconds(etimeRaw),
-        appPath: '',
-        exePath,
-        cmd,
-        hasCdpFlag: /--remote-debugging-port(?:=|\s|$)/.test(cmd),
-        hasUpdatedFlag: /--updated(?:\s|$)/.test(cmd)
-      });
-    }
-    return found;
-  }
-
   return [];
 }
 
-function hasActiveConversationWalWrite(endpoint, windowSec = 15) {
+function hasActiveConversationWalWrite(endpoint, windowSec = 15, minWalMtimeMs = 0) {
   if (!endpoint) return false;
   const dirs = [endpoint.conversationsDir].filter(Boolean);
   if (process.platform === 'win32') {
@@ -4132,7 +5272,12 @@ function hasActiveConversationWalWrite(endpoint, windowSec = 15) {
       for (const name of fs.readdirSync(dir)) {
         if (!name.endsWith('.db-wal')) continue;
         const st = fs.statSync(path.join(dir, name), { throwIfNoEntry: false });
-        if (st && st.size > 4096 && now - st.mtimeMs < windowMs) {
+        if (
+          st &&
+          st.size > 4096 &&
+          now - st.mtimeMs < windowMs &&
+          (!minWalMtimeMs || st.mtimeMs >= minWalMtimeMs)
+        ) {
           return true;
         }
       }
@@ -4141,7 +5286,96 @@ function hasActiveConversationWalWrite(endpoint, windowSec = 15) {
   return false;
 }
 
-function maybeAutoRelaunchColdStartWithoutCdp() {
+const WIN32_LNK_SIG_FILE = path.join(os.tmpdir(), 'ag-win32-lnk-sig.json');
+let isWin32LnkHealing = false;
+let lastWin32ExeSigMem = null;
+
+function ensureWin32CdpShortcutsIfUpdated(forceHeal = false) {
+  if (SAFE_MODE || RUN_ONCE || process.platform !== 'win32' || isWin32LnkHealing) return;
+  const localAppData = process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local');
+  const progFiles = process.env.ProgramFiles || 'C:\\Program Files';
+  const exeCandidates = [
+    path.join(localAppData, 'Programs', 'Antigravity', 'Antigravity.exe'),
+    path.join(progFiles, 'Antigravity', 'Antigravity.exe'),
+    path.join(localAppData, 'Programs', 'Antigravity - Insiders', 'Antigravity - Insiders.exe')
+  ];
+  const sigParts = [];
+  for (const exe of exeCandidates) {
+    try {
+      const st = fs.statSync(exe, { throwIfNoEntry: false });
+      if (st) sigParts.push(`${exe}:${Math.round(st.mtimeMs)}:${st.size}`);
+    } catch {}
+  }
+  if (sigParts.length === 0) return;
+  const currentSig = sigParts.join('|');
+
+  if (lastWin32ExeSigMem === null) {
+    const saved = readJsonSafe(WIN32_LNK_SIG_FILE, null);
+    lastWin32ExeSigMem = saved && typeof saved.sig === 'string' ? saved.sig : '';
+  }
+  if (!forceHeal && currentSig === lastWin32ExeSigMem) return;
+
+  isWin32LnkHealing = true;
+  const psHeal = [
+    `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8`,
+    `$ErrorActionPreference = 'SilentlyContinue'`,
+    `$dirs = @(`,
+    `  [Environment]::GetFolderPath('Desktop'),`,
+    `  [Environment]::GetFolderPath('CommonDesktopDirectory'),`,
+    `  [Environment]::GetFolderPath('Programs'),`,
+    `  [Environment]::GetFolderPath('CommonPrograms'),`,
+    `  (Join-Path $env:APPDATA 'Microsoft\\Internet Explorer\\Quick Launch\\User Pinned\\TaskBar')`,
+    `) | Where-Object { $_ -and (Test-Path $_) } | Select-Object -Unique`,
+    `$wsh = New-Object -ComObject WScript.Shell`,
+    `$patched = 0`,
+    `foreach ($d in $dirs) {`,
+    `  $lnks = Get-ChildItem -Path $d -Filter '*.lnk' -Recurse -Depth 2 -ErrorAction SilentlyContinue`,
+    `  foreach ($f in $lnks) {`,
+    `    $sc = $wsh.CreateShortcut($f.FullName)`,
+    `    $tp = [string]$sc.TargetPath`,
+    `    if ($tp -match 'Antigravity( - Insiders)?\\.exe$') {`,
+    `      $args = [string]$sc.Arguments`,
+    `      if ($args -notmatch '--remote-debugging-port') {`,
+    `        $sc.Arguments = if ($args.Trim()) { "$($args.Trim()) --remote-debugging-port=0" } else { '--remote-debugging-port=0' }`,
+    `        $sc.Save()`,
+    `        $patched++`,
+    `      }`,
+    `    }`,
+    `  }`,
+    `}`,
+    `Write-Output "PATCHED=$patched"`
+  ].join('\n');
+
+  const child = execFile(
+    'powershell',
+    ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', psHeal],
+    { windowsHide: true, timeout: 15000 },
+    (err, stdout) => {
+      isWin32LnkHealing = false;
+      if (err) return;
+      lastWin32ExeSigMem = currentSig;
+      const m = String(stdout || '').match(/PATCHED=(\d+)/);
+      const patchedCount = m ? parseInt(m[1], 10) || 0 : 0;
+      try {
+        fs.writeFileSync(
+          WIN32_LNK_SIG_FILE,
+          `${JSON.stringify({ sig: currentSig, updatedAt: new Date().toISOString(), patched: patchedCount }, null, 2)}\n`,
+          'utf8'
+        );
+      } catch {}
+      if (patchedCount > 0) {
+        const msg = `[Daemon] Auto-healed ${patchedCount} Windows shortcut(s) with --remote-debugging-port=0 after client update.`;
+        console.log(msg);
+        logDaemonEvent(msg);
+      }
+    }
+  );
+  try {
+    child.stdin?.end();
+  } catch {}
+}
+
+function maybeAutoRelaunchColdStartWithoutCdp(reachableChannels = null) {
   if (
     SAFE_MODE ||
     RUN_ONCE ||
@@ -4153,7 +5387,7 @@ function maybeAutoRelaunchColdStartWithoutCdp() {
   }
 
   pruneIgnoredHostPids();
-  const hostProcs = probeRunningHostProcesses(activeConfig.channel, activeConfig.endpoints);
+  const hostProcs = probeRunningHostProcesses(activeConfig.channel, activeConfig.endpoints, reachableChannels);
   if (hostProcs.length === 0) return false;
 
   for (const proc of hostProcs) {
@@ -4161,7 +5395,7 @@ function maybeAutoRelaunchColdStartWithoutCdp() {
     if (ignoredUnflaggedHostPids.has(proc.pid)) continue;
 
     const ep = activeConfig.endpoints.find((e) => e.channel === proc.channel) || activeConfig.endpoints[0];
-    if (ep && readPort(ep.portFile)) continue;
+    if (reachableChannels ? reachableChannels.has(proc.channel) : ep && readPort(ep.portFile)) continue;
 
     const maxWindowSec = proc.hasUpdatedFlag ? 25 : 12;
     if (proc.elapsedSec > maxWindowSec) {
@@ -4173,10 +5407,11 @@ function maybeAutoRelaunchColdStartWithoutCdp() {
       continue;
     }
 
-    if (hasActiveConversationWalWrite(ep, 15)) {
+    const procBirthMs = Number.isFinite(proc.elapsedSec) ? Date.now() - proc.elapsedSec * 1000 + 800 : 0;
+    if (hasActiveConversationWalWrite(ep, 15, procBirthMs)) {
       ignoredUnflaggedHostPids.add(proc.pid);
       exemptedHostPidByChannel.set(proc.channel, proc.pid);
-      const msg = `[Daemon] Skipped cold-start auto-relaunch for PID ${proc.pid}: active conversation WAL write detected within 15s.`;
+      const msg = `[Daemon] Skipped cold-start auto-relaunch for PID ${proc.pid}: active conversation WAL write detected after process start.`;
       console.log(msg);
       logDaemonEvent(msg);
       continue;
@@ -4257,6 +5492,9 @@ function maybeAutoRelaunchColdStartWithoutCdp() {
       const okMsg = `[Daemon] Cold-start auto-relaunched Antigravity (${proc.channel}, old PID ${proc.pid}, age ${proc.elapsedSec}s) with --remote-debugging-port=0.`;
       console.log(okMsg);
       logDaemonEvent(okMsg);
+      if (process.platform === 'win32' && proc.hasUpdatedFlag) {
+        ensureWin32CdpShortcutsIfUpdated(true);
+      }
       return true;
     } catch (err) {
       logDaemonEvent(`Cold-start auto-relaunch error for PID ${proc.pid}: ${err?.message || err}`);
@@ -4295,7 +5533,18 @@ async function sync() {
   syncTickCount = (syncTickCount + 1) % 6000;
   try {
     if (syncTickCount % 12 === 1) ensureZhTitlePatchIfPresent();
-    if (syncTickCount % 24 === 1) trimPosixDaemonLogsIfNeeded();
+    if (syncTickCount % 12 === 2) ensureWin32CdpShortcutsIfUpdated(false);
+    if (syncTickCount % 24 === 1) {
+      trimPosixDaemonLogsIfNeeded();
+      if (
+        !inFlightTokenAnalyticsPromise &&
+        (tokenAnalyticsDbCache.size > 0 || tokenAnalyticsSummariesCache.size > 0) &&
+        Date.now() - lastTokenAnalyticsAccessMs > 600000
+      ) {
+        tokenAnalyticsDbCache.clear();
+        tokenAnalyticsSummariesCache.clear();
+      }
+    }
     const bundleChanged = rebuildBundleIfNeeded();
     if (!activeConfig.enabled) {
       targetThemeModes.clear();
@@ -4308,9 +5557,11 @@ async function sync() {
 
     const activeTargetIds = new Set();
     const seenRawTargetIds = new Set();
+    const fullScannedChannels = new Set();
     const reachableChannels = new Set();
     const pendingPages = [];
     const pendingIframes = [];
+    const fastPathPageEntries = [];
 
     const probedPorts = new Set();
     const nowMs = Date.now();
@@ -4318,6 +5569,30 @@ async function sync() {
       const portInfo = readPortInfo(endpoint.portFile);
       let activePort = portInfo.port;
       let activeBrowserWsPath = portInfo.browserWsPath;
+
+      // BrowserWatcher 事件流在线时的非心跳拍快路径：跳过每 2.5s 的 HTTP /json/list 全量枚举（削减 83% 轮询 IPC），
+      // 目标创建/销毁由 Target.setDiscoverTargets 毫秒级实时推送，每 6 拍（15s）或配置热更新时仍执行完整 HTTP 对账。
+      const liveWatcher =
+        !RUN_ONCE && !shouldHeartbeatCheck && isEventDiscoveryEnabled() && activePort
+          ? browserWatchers.get(`${endpoint.channel}:${activePort}`)
+          : null;
+      if (liveWatcher && liveWatcher.ws && liveWatcher.ws.readyState === WebSocket.OPEN) {
+        probedPorts.add(activePort);
+        reachableChannels.add(endpoint.channel);
+        liveWatcher.endpoint = endpoint;
+        for (const [id, entry] of attachedTargets.entries()) {
+          if ((entry.endpoint?.channel || 'stable') !== endpoint.channel) continue;
+          const rs = entry.ws?.readyState;
+          if (rs === WebSocket.OPEN || rs === WebSocket.CONNECTING) {
+            activeTargetIds.add(id);
+            if (entry.hostConfirmed && entry.type !== 'iframe' && entry.syncMetricsForSession) {
+              fastPathPageEntries.push(entry);
+            }
+          }
+        }
+        continue;
+      }
+
       let fromPortFile = false;
       let reachable = false;
       let targets = [];
@@ -4354,6 +5629,7 @@ async function sync() {
       }
       if (!reachable) continue;
 
+      fullScannedChannels.add(endpoint.channel);
       if (fromPortFile || targets.length > 0) {
         reachableChannels.add(endpoint.channel);
       }
@@ -4406,7 +5682,9 @@ async function sync() {
               await entry.updateNewDocScript();
             }
             if (shouldHeartbeatCheck && entry.checkAndInject) await entry.checkAndInject();
-            if (entry.syncMetricsForSession) await entry.syncMetricsForSession(bundleChanged);
+            if (entry.type !== 'iframe' && entry.syncMetricsForSession) {
+              await entry.syncMetricsForSession(bundleChanged);
+            }
           }
         }
       }
@@ -4418,10 +5696,15 @@ async function sync() {
     // 先同步宿主 page 目标以获取权威深浅色状态，再同步子 Swarm iframe（确保 --once 与冷启动零闪烁）
     await syncTargetBatch(pendingPages);
     await syncTargetBatch(pendingIframes);
+    for (const entry of fastPathPageEntries) {
+      if (entry.hostConfirmed && entry.ws?.readyState === WebSocket.OPEN && entry.syncMetricsForSession) {
+        await entry.syncMetricsForSession(false);
+      }
+    }
 
     // 2.33.0+ 冷启动无标记自愈（M2）：仅在 0 活跃 CDP 目标且无可达 CDP 通道时按严苛冷启动时间窗探测并自动接力重启
     if (pendingPages.length === 0 && attachedTargets.size === 0 && reachableChannels.size === 0) {
-      maybeAutoRelaunchColdStartWithoutCdp();
+      maybeAutoRelaunchColdStartWithoutCdp(reachableChannels);
     }
 
     // 清理已关闭的目标连接（防竞态误杀：跳过本轮快照开始后由 BrowserWS 新附着的目标）
@@ -4438,14 +5721,16 @@ async function sync() {
         targetDarkPresets.delete(id);
       }
     }
-    if (seenRawTargetIds.size > 0) {
+    if (fullScannedChannels.size > 0) {
       for (const [id, skipped] of skippedNonHostTargets.entries()) {
-        if (!seenRawTargetIds.has(id) && (skipped?.skippedAt || 0) < syncStartMs) {
+        const metaCh = targetMetaMap.get(id)?.channel;
+        if ((!metaCh || fullScannedChannels.has(metaCh)) && !seenRawTargetIds.has(id) && (skipped?.skippedAt || 0) < syncStartMs) {
           skippedNonHostTargets.delete(id);
         }
       }
       for (const [id, meta] of targetMetaMap.entries()) {
         if (
+          (!meta?.channel || fullScannedChannels.has(meta.channel)) &&
           !seenRawTargetIds.has(id) &&
           !attachedTargets.has(id) &&
           !attachingTargetIds.has(id) &&
@@ -4454,7 +5739,7 @@ async function sync() {
           targetMetaMap.delete(id);
         }
       }
-    } else if (attachedTargets.size === 0 && attachingTargetIds.size === 0) {
+    } else if (reachableChannels.size === 0 && attachedTargets.size === 0 && attachingTargetIds.size === 0) {
       for (const [id, skipped] of skippedNonHostTargets.entries()) {
         if ((skipped?.skippedAt || 0) < syncStartMs) {
           skippedNonHostTargets.delete(id);
