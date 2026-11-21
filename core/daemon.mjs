@@ -89,9 +89,45 @@ function getFileMtimeSig(filePath) {
   }
 }
 
-const wslDirsCache = new Map(); // cacheKey -> { sig, distro, dirs, probedAt }
+const wslDirsCache = new Map(); // cacheKey -> { sig, distro, dirs, probedAt, ttlMs }
 let cachedRegWslDistros = { distros: [], probedAt: 0 };
+let cachedRunningWslDistros = { ok: false, distros: new Set(), probedAt: 0 };
 let wslUncBackoffUntil = 0;
+
+function resolveRunningWslDistros() {
+  if (process.platform !== 'win32') return { ok: false, distros: new Set() };
+  const now = Date.now();
+  if (now - cachedRunningWslDistros.probedAt < 30000) {
+    return cachedRunningWslDistros;
+  }
+  try {
+    const res = spawnSync('wsl.exe', ['--list', '--running', '--quiet'], {
+      windowsHide: true,
+      timeout: 1200,
+      env: { ...process.env, WSL_UTF8: '1' }
+    });
+    if (res.error || res.status === null) {
+      cachedRunningWslDistros = { ok: false, distros: new Set(), probedAt: now };
+      return cachedRunningWslDistros;
+    }
+    const rawOut = Buffer.isBuffer(res.stdout) ? res.stdout : Buffer.from(String(res.stdout || ''), 'utf8');
+    const text = (rawOut.includes(0) ? rawOut.toString('utf16le') : rawOut.toString('utf8')).replace(/^\uFEFF/, '');
+    const running = new Set();
+    if (res.status === 0) {
+      for (const line of text.split(/\r?\n/)) {
+        const name = line.replace(/\0/g, '').trim();
+        if (name && /^[A-Za-z0-9._-]+$/.test(name)) {
+          running.add(name.toLowerCase());
+        }
+      }
+    }
+    cachedRunningWslDistros = { ok: true, distros: running, probedAt: now };
+    return cachedRunningWslDistros;
+  } catch {
+    cachedRunningWslDistros = { ok: false, distros: new Set(), probedAt: now };
+    return cachedRunningWslDistros;
+  }
+}
 
 function resolveWslDistrosFromRegistry() {
   if (process.platform !== 'win32') return [];
@@ -153,11 +189,8 @@ function resolveWin32WslConversationsDirs(portFile, geminiSubDir) {
       return [];
     }
     const cached = wslDirsCache.get(wslStatePath);
-    if (
-      cached &&
-      cached.sig === compositeSig &&
-      ((cached.dirs.length > 0 && now - cached.probedAt < 60000) || now - cached.probedAt < 15000)
-    ) {
+    const cachedTtl = cached?.ttlMs || (cached?.dirs?.length > 0 ? 60000 : 60000);
+    if (cached && cached.sig === compositeSig && now - cached.probedAt < cachedTtl) {
       return cached.dirs;
     }
 
@@ -174,8 +207,18 @@ function resolveWin32WslConversationsDirs(portFile, geminiSubDir) {
       candidateDistros = resolveWslDistrosFromRegistry();
     }
     if (candidateDistros.length === 0) {
-      wslDirsCache.set(wslStatePath, { sig: compositeSig, distro: '', dirs: [], probedAt: now });
+      wslDirsCache.set(wslStatePath, { sig: compositeSig, distro: '', dirs: [], probedAt: now, ttlMs: 60000 });
       return [];
+    }
+
+    // 仅探测当前正在运行的 WSL 发行版，杜绝 fs.existsSync(\\wsl.localhost\...) 冷启动唤醒休眠 VM 阻塞主线程数秒
+    const runningWsl = resolveRunningWslDistros();
+    if (runningWsl.ok) {
+      candidateDistros = candidateDistros.filter((d) => runningWsl.distros.has(d.toLowerCase()));
+      if (candidateDistros.length === 0) {
+        wslDirsCache.set(wslStatePath, { sig: compositeSig, distro: '', dirs: [], probedAt: now, ttlMs: 60000 });
+        return [];
+      }
     }
 
     const t0 = Date.now();
@@ -213,7 +256,8 @@ function resolveWin32WslConversationsDirs(portFile, geminiSubDir) {
       sig: compositeSig,
       distro: candidateDistros.join(','),
       dirs: uniqueDirs,
-      probedAt: Date.now()
+      probedAt: Date.now(),
+      ttlMs: uniqueDirs.length > 0 ? 60000 : 300000
     });
     return uniqueDirs;
   } catch {
@@ -2373,11 +2417,13 @@ function parseConversationMetrics(cascadeId, endpointOrDir, precomputedState = n
 const TA_MEMORY_PATH_RE = /MEMORY\.md|[\\/]\.gemini[\\/]antigravity[\\/]brain[\\/]|\bmemory_/i;
 const TA_PRINTABLE_STR_RE = /^[\x20-\x7e\u00a0-\uffff]{2,260}$/;
 const TA_SLUG_LABELS = {
+  'gemini-pro-orchestrator': 'Orchestrator (Carbon)',
   'gemini-pro-orchestrator-neon': 'Orchestrator (Neon)',
   'gemini-pro-orchestrator-g1-pro': 'Orchestrator (Argon)',
   'gemini-pro-orchestrator-carbon': 'Orchestrator (Carbon)',
   'gemini-flash-worker-agy': 'Gemini 4 Hydrogen (Orchestrator)',
   'gemini-4-hydrogen': 'Gemini 4 Hydrogen',
+  'gemini-4-hydrogen-tiered-high': 'Gemini 4 Hydrogen (High)',
   'gemini-4-argon': 'Gemini 4 Argon',
   'gemini-4-argon-trial': 'Gemini 4 Argon',
   'gemini-4-carbon': 'Gemini 4 Carbon',
@@ -2385,7 +2431,9 @@ const TA_SLUG_LABELS = {
   'gemini-3.8-flash-n': 'Gemini 3.8 Flash',
   'gemini-3.8-flash-tiered': 'Gemini 3.8 Flash',
   'claude-sonnet-5-5': 'Claude Sonnet 5.5',
+  'claude-sonnet-5-5-medium': 'Claude Sonnet 5.5 (Medium)',
   'claude-sonnet-5-5-high': 'Claude Sonnet 5.5 (High)',
+  'claude-opus-4-6-thinking': 'Claude Opus 4.6 (Thinking)',
   'claude-opus-5-5-medium': 'Claude Opus 5.5 (Medium)',
   'claude-opus-5-5-high': 'Claude Opus 5.5 (High)'
 };
@@ -2492,16 +2540,28 @@ function taStepPayloadHasMemoryPath(buf, maxDepth = 3, state = { seen: 0 }) {
   return false;
 }
 
-function taExtractStepTimestamp(metaBuf) {
-  if (!metaBuf || !metaBuf.length) return 0;
+function taInspectStepMetadata(metaBuf, isToolStep) {
+  let ts = 0;
+  let isExitPlan = false;
+  if (!metaBuf || !metaBuf.length) return { ts, isExitPlan };
   for (const fld of taParseProtoAll(metaBuf)) {
-    if (fld.w === 2 && fld.buf.length >= 2 && fld.buf.length <= 24) {
+    if (ts === 0 && fld.w === 2 && fld.buf.length >= 2 && fld.buf.length <= 24) {
       const sub = taParseProtoAll(fld.buf);
       const sec = taGetField(sub, 1)?.v;
-      if (sec && sec > 1700000000 && sec < 1900000000) return sec;
+      if (sec && sec > 1700000000 && sec < 1900000000) ts = sec;
+    } else if (isToolStep && !isExitPlan && fld.f === 4 && fld.w === 2 && fld.buf.length >= 16) {
+      for (const tcFld of taParseProtoAll(fld.buf)) {
+        if (tcFld.f === 2 && tcFld.w === 2) {
+          if (tcFld.buf.length === 14 && textDecoder.decode(tcFld.buf) === 'exit_plan_mode') {
+            isExitPlan = true;
+          }
+          break;
+        }
+      }
     }
+    if (ts > 0 && (!isToolStep || isExitPlan)) break;
   }
-  return 0;
+  return { ts, isExitPlan };
 }
 
 function taResolveStepLookup(stepTs, fallbackSec) {
@@ -2512,6 +2572,65 @@ function taResolveStepLookup(stepTs, fallbackSec) {
       if (sorted[i] <= stepIdx) return stepTs.get(sorted[i]);
     }
     return sorted.length > 0 ? stepTs.get(sorted[0]) : fallbackSec;
+  };
+}
+
+function taExtractUserStepPlanConfig(payloadBuf) {
+  if (!payloadBuf || !payloadBuf.length) return null;
+  const top = taParseProtoAll(payloadBuf);
+  const u19 = taGetField(top, 19);
+  if (!u19?.buf) return null;
+  const u19Fields = taParseProtoAll(u19.buf);
+  let plannerEnum = 0;
+  let execEnum = 0;
+  let planFlag = false;
+  const mc12 = taGetField(u19Fields, 12);
+  if (mc12?.buf) {
+    const mc1 = taGetField(taParseProtoAll(mc12.buf), 1);
+    if (mc1?.buf) {
+      const mcFields = taParseProtoAll(mc1.buf);
+      plannerEnum = taGetField(mcFields, 1)?.v || 0;
+      const f60 = taGetField(mcFields, 60);
+      if (f60?.buf) {
+        execEnum = taGetField(taParseProtoAll(f60.buf), 1)?.v || 0;
+      }
+    }
+  }
+  const u18 = taGetField(u19Fields, 18);
+  if (u18?.buf) {
+    const f3 = taGetField(taParseProtoAll(u18.buf), 3);
+    if (f3?.buf) {
+      const f1 = taGetField(taParseProtoAll(f3.buf), 1);
+      if (f1?.buf) {
+        planFlag = taParseProtoAll(f1.buf).some((x) => x.f === 6 && x.v === 1);
+      }
+    }
+  }
+  return {
+    orchestrator: Boolean(execEnum > 0 || planFlag),
+    plannerEnum,
+    execEnum
+  };
+}
+
+function taResolvePlanStateLookup(planTimeline) {
+  if (!Array.isArray(planTimeline) || planTimeline.length === 0) {
+    return () => null;
+  }
+  return (stepIdx) => {
+    let lo = 0;
+    let hi = planTimeline.length - 1;
+    let best = -1;
+    while (lo <= hi) {
+      const mid = (lo + hi) >>> 1;
+      if (planTimeline[mid].idx <= stepIdx) {
+        best = mid;
+        lo = mid + 1;
+      } else {
+        hi = mid - 1;
+      }
+    }
+    return best >= 0 ? planTimeline[best] : null;
   };
 }
 
@@ -2647,9 +2766,9 @@ function taNormalizeProjectInfo(workspaceUris, projectId = '') {
 function taClassifyModelPool({ label = '', slug = '', modelEnum = '', usedClaude = '' } = {}) {
   const combined = `${label} ${slug} ${modelEnum}`.toLowerCase();
   if (combined.includes('argon')) return 'Argon';
-  if (combined.includes('claude') || combined.includes('gpt') || String(usedClaude).toLowerCase() === 'true') {
-    return 'Claude & GPT';
-  }
+  if (combined.includes('claude') || combined.includes('gpt')) return 'Claude & GPT';
+  if (combined.includes('gemini') || combined.includes('orchestrator')) return 'Gemini';
+  if (String(usedClaude).toLowerCase() === 'true') return 'Claude & GPT';
   return 'Gemini';
 }
 
@@ -2661,6 +2780,17 @@ function taNormalizeModelLabel({ label = '', slug = '', modelEnum = '', enumId =
   if (trimmedSlug) return trimmedSlug;
   if (modelEnum) return String(modelEnum).trim();
   return `model-${enumId || 'unknown'}`;
+}
+
+function taFormatOrchestratorModelLabel(label) {
+  const trimmed = String(label || '').trim();
+  if (!trimmed || /orchestrator/i.test(trimmed)) return trimmed;
+  let core = trimmed.replace(/^Gemini\s+4\s+/i, '');
+  const parenMatch = core.match(/^(.+?)\s*\(([^()]+)\)$/);
+  if (parenMatch) {
+    core = `${parenMatch[1].trim()} · ${parenMatch[2].trim()}`;
+  }
+  return `Orchestrator (${core})`;
 }
 
 function taResolveCallScenario(callBaseScenario, isSubagent, source) {
@@ -2725,7 +2855,7 @@ function taLoadSummariesCached(summariesDbPath, force) {
   const sigInfo = taGetDbFileSig(summariesDbPath);
   if (!sigInfo) return new Map();
   const cached = tokenAnalyticsSummariesCache.get(summariesDbPath);
-  if (!force && cached && cached.sig === sigInfo.sig) {
+  if (force !== 'hard' && cached && cached.sig === sigInfo.sig) {
     return cached.map;
   }
   const fresh = taReadSummariesIndex(summariesDbPath);
@@ -2768,18 +2898,48 @@ function taParseConversationDetailDb(dbPath, statInfo) {
       const stepTs = new Map();
       const stepByIdx = new Map();
       const compactionStepIndices = new Set();
+      const planTimeline = [];
+      let curPlanState = { orchestrator: false, plannerEnum: 0, execEnum: 0, inPlanPhase: false };
 
-      for (const row of db.prepare('SELECT idx, step_type, metadata, step_payload FROM steps').all()) {
-        const ts = taExtractStepTimestamp(row.metadata);
+      for (const row of db
+        .prepare(
+          `SELECT idx, step_type, metadata,
+                  CASE
+                    WHEN step_type IN (14, 132) THEN step_payload
+                    WHEN step_type = 101 THEN substr(step_payload, 1, 1024)
+                    ELSE NULL
+                  END AS step_payload
+           FROM steps
+           ORDER BY idx ASC`
+        )
+        .all()) {
+        const { ts, isExitPlan } = taInspectStepMetadata(row.metadata, row.step_type === 132);
         if (ts > 0) stepTs.set(row.idx, ts);
         if (row.step_type === 23) compactionStepIndices.add(row.idx);
+        if (row.step_type === 14 && row.step_payload) {
+          const cfg = taExtractUserStepPlanConfig(row.step_payload);
+          if (cfg) {
+            curPlanState = { ...cfg, inPlanPhase: cfg.orchestrator };
+            planTimeline.push({ idx: row.idx, ...curPlanState });
+          }
+        } else if (row.step_type === 101 && row.step_payload && curPlanState.orchestrator) {
+          const headStr = textDecoder.decode(row.step_payload);
+          if (headStr.includes('Plan mode is off:') && curPlanState.inPlanPhase) {
+            curPlanState = { ...curPlanState, inPlanPhase: false };
+            planTimeline.push({ idx: row.idx, ...curPlanState });
+          } else if (headStr.includes('[plan review]') && !curPlanState.inPlanPhase) {
+            curPlanState = { ...curPlanState, inPlanPhase: true };
+            planTimeline.push({ idx: row.idx, ...curPlanState });
+          }
+        }
         const hasMemoryPath =
           row.step_type === 132 && row.step_payload && row.step_payload.length > 0
             ? taStepPayloadHasMemoryPath(row.step_payload, 3)
             : false;
-        stepByIdx.set(row.idx, { stepType: row.step_type, hasMemoryPath });
+        stepByIdx.set(row.idx, { stepType: row.step_type, hasMemoryPath, isExitPlan });
       }
       const lookupTs = taResolveStepLookup(stepTs, fallbackSec);
+      const lookupPlanState = taResolvePlanStateLookup(planTimeline);
 
       const calls = [];
       let firstParentCascadeId = '';
@@ -2811,6 +2971,7 @@ function taParseConversationDetailDb(dbPath, statInfo) {
         let hasStep15 = false;
         let hasLinkedStep = false;
         let hasMemoryStep = false;
+        let hasExitPlanStep = false;
         let hasNearbyCompaction = false;
         for (const sIdx of stepIndices) {
           const info = stepByIdx.get(sIdx);
@@ -2819,6 +2980,7 @@ function taParseConversationDetailDb(dbPath, statInfo) {
             if (info.stepType === 132) hasStep132 = true;
             else if (info.stepType === 15) hasStep15 = true;
             if (info.hasMemoryPath) hasMemoryStep = true;
+            if (info.isExitPlan) hasExitPlanStep = true;
           }
           if (
             compactionStepIndices.has(sIdx) ||
@@ -2843,13 +3005,29 @@ function taParseConversationDetailDb(dbPath, statInfo) {
         const enumId = taGetField(usage, 1)?.v || taGetField(chat, 3)?.v || 0;
         const modelEnum = kv.model_enum || '';
         const usedClaude = kv.used_claude || '';
-        const label = taNormalizeModelLabel({ label: rawLabel, slug, modelEnum, enumId });
-        const pool = taClassifyModelPool({ label, slug, modelEnum, usedClaude });
+        const baseLabel = taNormalizeModelLabel({ label: rawLabel, slug, modelEnum, enumId });
+        const pool = taClassifyModelPool({ label: baseLabel, slug, modelEnum, usedClaude });
 
         const slugLower = String(slug || '').toLowerCase();
-        const labelTrim = String(label || '').trim();
+        const labelTrim = String(baseLabel || '').trim();
+        const planSt = lookupPlanState(refStep);
+        let isOrchestratorPlanning = false;
+        if (slugLower.includes('worker')) {
+          isOrchestratorPlanning = false;
+        } else if (slugLower.includes('orchestrator') || /^orchestrator\b/i.test(labelTrim)) {
+          isOrchestratorPlanning = true;
+        } else if (hasExitPlanStep) {
+          isOrchestratorPlanning = true;
+        } else if (planSt?.orchestrator) {
+          if (planSt.plannerEnum > 0 && planSt.execEnum > 0 && planSt.plannerEnum !== planSt.execEnum) {
+            isOrchestratorPlanning = enumId === planSt.plannerEnum;
+          } else {
+            isOrchestratorPlanning = Boolean(planSt.inPlanPhase);
+          }
+        }
+
         let baseScenario = 'internal';
-        if ((slugLower.includes('orchestrator') && !slugLower.includes('worker')) || /^orchestrator\b/i.test(labelTrim)) {
+        if (isOrchestratorPlanning) {
           baseScenario = 'planning';
         } else if (hasNearbyCompaction || hasMemoryStep) {
           baseScenario = 'memory';
@@ -2871,10 +3049,14 @@ function taParseConversationDetailDb(dbPath, statInfo) {
         if (!firstRootCascadeId && rootCascadeId) firstRootCascadeId = rootCascadeId;
         if (!firstSubagentType && subagentType) firstSubagentType = subagentType;
 
+        const isSubagentCall = Boolean(trajParentId || firstParentCascadeId || subagentType);
+        const finalModelLabel =
+          isOrchestratorPlanning && !isSubagentCall ? taFormatOrchestratorModelLabel(baseLabel) : baseLabel;
+
         // 紧凑缓存项：预结算 baseScenario，不驻留 linkedStepTypes / linkedStepStrings / Protobuf 原始切片（常驻内存缩减 >75%）
         calls.push({
           ts,
-          model: label,
+          model: finalModelLabel,
           pool,
           inTok,
           cacheRead,
@@ -3032,7 +3214,7 @@ async function queryTokenAnalytics(
   );
   for (const { dbPath, sigInfo } of dbEntries) {
     activePaths.add(dbPath);
-    const cached = !force ? tokenAnalyticsDbCache.get(dbPath) : null;
+    const cached = force !== 'hard' ? tokenAnalyticsDbCache.get(dbPath) : null;
     if (cached && cached.sig === sigInfo.sig) {
       cacheHits += 1;
       parsedDbs.push(cached.parsed);
@@ -4632,7 +4814,7 @@ function attachTarget(target, endpoint) {
             } catch {}
             const reqId = String(req?.reqId || '');
             const maxDays = Number(req?.maxDays) > 0 ? Number(req.maxDays) : 365;
-            const force = Boolean(req?.force);
+            const force = req?.force === 'hard' ? 'hard' : Boolean(req?.force);
             void (async () => {
               let out;
               try {
