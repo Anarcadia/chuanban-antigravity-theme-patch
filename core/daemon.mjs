@@ -338,10 +338,12 @@ let activeConfig = {
   darkPreset: 'onyx',
   contextLimit: 256000,
   contextLimitOverride: 0,
+  promptSuggestionModel: 'gemini-3.8-flash-low',
   modules: {
     i18n: true,
     metrics: true,
     tokenAnalytics: true,
+    promptSuggestions: false,
     composerWaxSeal: true,
     deadlockHealer: true,
     coldBootHealer: true,
@@ -362,6 +364,387 @@ let activeConfig = {
   ],
   endpoints: []
 };
+
+// ============================================================================
+// 2.5 输入框下一句预测引擎（常驻 agy stream-json，免 API Key，默认 opt-in）
+// ============================================================================
+const PROMPT_SUGGEST_MAX_TURNS = 40;
+const PROMPT_SUGGEST_WARMUP_TIMEOUT_MS = 75000;
+const PROMPT_SUGGEST_TURN_TIMEOUT_MS = 30000;
+const PROMPT_SUGGEST_CACHE_LIMIT = 100;
+const PROMPT_SUGGEST_SYSTEM_INSTRUCTION = [
+  '你是一个聊天输入框的「下一句提示词预测器」（类似 Claude Code 的 Prompt Suggestions）。',
+  '我会给你一段刚结束的对话片段（用户的上一条消息 + 助手的最新回复）。',
+  '请站在「用户」的视角，预测用户下一步最可能、最自然想发出的那一句简短指令或追问。',
+  '严格遵守以下规则：',
+  '1. 只输出预测的那一句话本身，不要任何前缀、引号、解释、编号、Markdown 标记或换行。',
+  '2. 保持与用户语言一致，控制在 4~28 个字以内，具体且可直接执行。',
+  '3. 如果助手的回复已经是一个完整句号、或上下文没有明显高把握的下一步动作，直接输出 NONE（不要硬编废话）。',
+  '4. 绝对不要调用任何工具，直接输出文本。'
+].join('\n');
+
+const promptSuggestionCache = new Map();
+let promptSuggestionAgyBinCache = undefined;
+
+function resolveAgyCliBinary() {
+  if (promptSuggestionAgyBinCache !== undefined) return promptSuggestionAgyBinCache;
+  const home = os.homedir();
+  const isWin = process.platform === 'win32';
+  const candidates = [
+    process.env.AGY_BIN,
+    ...(isWin
+      ? [
+          path.join(home, '.local', 'bin', 'agy.exe'),
+          path.join(home, '.local', 'bin', 'agy.cmd'),
+          path.join(process.env.LOCALAPPDATA || '', 'Programs', 'Antigravity', 'bin', 'agy.exe')
+        ]
+      : [
+          path.join(home, '.local', 'bin', 'agy'),
+          '/opt/homebrew/bin/agy',
+          '/usr/local/bin/agy'
+        ])
+  ].filter(Boolean);
+
+  for (const c of candidates) {
+    try {
+      if (fs.existsSync(c)) {
+        promptSuggestionAgyBinCache = c;
+        return c;
+      }
+    } catch {}
+  }
+
+  try {
+    const probe = spawnSync(isWin ? 'where' : 'which', ['agy'], {
+      encoding: 'utf8',
+      timeout: 1500,
+      windowsHide: true
+    });
+    const found =
+      probe.status === 0
+        ? String(probe.stdout || '')
+            .split(/\r?\n/)
+            .map((s) => s.trim())
+            .find(Boolean)
+        : '';
+    promptSuggestionAgyBinCache = found || '';
+  } catch {
+    promptSuggestionAgyBinCache = '';
+  }
+  return promptSuggestionAgyBinCache;
+}
+
+function cleanPromptSuggestionText(raw) {
+  if (!raw) return '';
+  let text = String(raw)
+    .replace(/```[\s\S]*?```/g, '')
+    .split(/\r?\n/)
+    .map((s) => s.trim())
+    .find(Boolean);
+  if (!text) return '';
+  text = text
+    .replace(/^["'“”‘’`⟫>:\-\s]+/, '')
+    .replace(/["'“”‘’`]+$/, '')
+    .trim();
+  if (!text || /^none$/i.test(text) || /^无$/i.test(text) || text.length < 2 || text.length > 60) {
+    return '';
+  }
+  return text;
+}
+
+class PersistentPromptSuggestionWorker {
+  constructor() {
+    this.proc = null;
+    this.model = '';
+    this.ready = false;
+    this.warmed = false;
+    this.turns = 0;
+    this.buf = '';
+    this.pending = null;
+    this.queue = [];
+    this.starting = false;
+  }
+
+  ensureStarted(model) {
+    const targetModel = model || 'gemini-3.8-flash-low';
+    if (this.proc && !this.proc.killed && this.proc.exitCode === null) {
+      if (this.model === targetModel) return true;
+      this.stop();
+    }
+    if (this.starting) return true;
+    const bin = resolveAgyCliBinary();
+    if (!bin) return false;
+
+    this.starting = true;
+    this.model = targetModel;
+    this.ready = false;
+    this.warmed = false;
+    this.turns = 0;
+    this.buf = '';
+
+    let proc;
+    try {
+      const extraPath =
+        process.platform === 'win32'
+          ? ''
+          : `${path.join(os.homedir(), '.local', 'bin')}:/opt/homebrew/bin:/usr/local/bin:`;
+      proc = spawn(
+        bin,
+        [
+          '--model',
+          targetModel,
+          '--effort',
+          'low',
+          '--disable-slash-commands',
+          '--input-format',
+          'stream-json',
+          '--output-format',
+          'stream-json'
+        ],
+        {
+          cwd: os.tmpdir(),
+          stdio: ['pipe', 'pipe', 'pipe'],
+          windowsHide: true,
+          env: {
+            ...process.env,
+            PATH: extraPath ? `${extraPath}${process.env.PATH || ''}` : process.env.PATH
+          }
+        }
+      );
+    } catch {
+      this.starting = false;
+      return false;
+    }
+
+    this.proc = proc;
+    this.starting = false;
+
+    proc.stdout.on('data', (chunk) => {
+      this.buf += chunk.toString('utf8');
+      const lines = this.buf.split('\n');
+      this.buf = lines.pop() || '';
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        let evt;
+        try {
+          evt = JSON.parse(line);
+        } catch {
+          continue;
+        }
+        if (evt.event === 'init') {
+          this.ready = true;
+          this.sendWarmup();
+        } else if (evt.event === 'step_update') {
+          const su = evt.step_update;
+          if (su && su.step_type === 'agent_response' && this.pending) {
+            if (su.text_delta) this.pending.chunks.push(String(su.text_delta));
+            if (su.state === 'DONE' && !this.pending.settled && this.pending.chunks.length > 0) {
+              this.pending.settled = true;
+              this.pending.resolve(this.pending.chunks.join('').trim());
+            }
+          }
+        } else if (evt.event === 'result') {
+          const cur = this.pending;
+          this.pending = null;
+          if (cur) {
+            clearTimeout(cur.timer);
+            if (!cur.settled) {
+              cur.settled = true;
+              const raw = String((evt.result && evt.result.response) || cur.chunks.join('') || '').trim();
+              cur.resolve(raw);
+            }
+          }
+          if (!this.warmed) {
+            this.warmed = true;
+          } else {
+            this.turns += 1;
+          }
+          if (this.turns >= PROMPT_SUGGEST_MAX_TURNS) {
+            this.restart();
+          } else {
+            this.drain();
+          }
+        }
+      }
+    });
+
+    proc.on('error', () => {
+      this.stop();
+    });
+
+    proc.on('exit', () => {
+      this.ready = false;
+      this.warmed = false;
+      this.proc = null;
+      if (this.pending) {
+        const cur = this.pending;
+        this.pending = null;
+        clearTimeout(cur.timer);
+        if (!cur.settled) {
+          cur.settled = true;
+          cur.resolve('');
+        }
+      }
+      if (this.queue.length > 0 && activeConfig.enabled && activeConfig.modules.promptSuggestions) {
+        setTimeout(() => this.ensureStarted(activeConfig.promptSuggestionModel), 800);
+      }
+    });
+
+    return true;
+  }
+
+  sendWarmup() {
+    if (this.pending || this.warmed || !this.proc) return;
+    const warmupPrompt = `${PROMPT_SUGGEST_SYSTEM_INSTRUCTION}\n\n收到以上规则请只回复：OK`;
+    const timer = setTimeout(() => {
+      if (this.pending && this.pending.isWarmup) {
+        this.pending = null;
+        this.restart();
+      }
+    }, PROMPT_SUGGEST_WARMUP_TIMEOUT_MS);
+
+    this.pending = {
+      isWarmup: true,
+      settled: true,
+      chunks: [],
+      resolve: () => {},
+      timer
+    };
+
+    try {
+      this.proc.stdin.write(JSON.stringify({ event: 'user', message: { content: warmupPrompt } }) + '\n');
+    } catch {
+      clearTimeout(timer);
+      this.pending = null;
+      this.restart();
+    }
+  }
+
+  stop() {
+    const old = this.proc;
+    this.proc = null;
+    this.ready = false;
+    this.warmed = false;
+    this.turns = 0;
+    if (this.pending) {
+      const cur = this.pending;
+      this.pending = null;
+      clearTimeout(cur.timer);
+      if (!cur.settled) {
+        cur.settled = true;
+        cur.resolve('');
+      }
+    }
+    while (this.queue.length > 0) {
+      const dropped = this.queue.shift();
+      dropped.resolve('');
+    }
+    if (old) {
+      try {
+        old.stdin.end();
+        old.kill('SIGTERM');
+      } catch {}
+    }
+  }
+
+  restart() {
+    this.stop();
+    if (activeConfig.enabled && activeConfig.modules.promptSuggestions) {
+      setTimeout(() => this.ensureStarted(activeConfig.promptSuggestionModel), 300);
+    }
+  }
+
+  predict(promptText) {
+    return new Promise((resolve) => {
+      if (!this.ensureStarted(activeConfig.promptSuggestionModel)) {
+        resolve('');
+        return;
+      }
+      while (this.queue.length > 0) {
+        const dropped = this.queue.shift();
+        dropped.resolve('');
+      }
+      this.queue.push({ promptText, resolve });
+      if (this.warmed) this.drain();
+    });
+  }
+
+  drain() {
+    if (this.pending || !this.warmed || this.queue.length === 0) return;
+    if (!this.proc || this.proc.killed || this.proc.exitCode !== null) {
+      this.ensureStarted(activeConfig.promptSuggestionModel);
+      return;
+    }
+    const item = this.queue.shift();
+    const timer = setTimeout(() => {
+      if (this.pending && this.pending.resolve === item.resolve) {
+        const cur = this.pending;
+        this.pending = null;
+        if (!cur.settled) {
+          cur.settled = true;
+          item.resolve('');
+        }
+        this.restart();
+      }
+    }, PROMPT_SUGGEST_TURN_TIMEOUT_MS);
+
+    this.pending = {
+      isWarmup: false,
+      settled: false,
+      chunks: [],
+      resolve: item.resolve,
+      timer
+    };
+
+    try {
+      this.proc.stdin.write(JSON.stringify({ event: 'user', message: { content: item.promptText } }) + '\n');
+    } catch {
+      clearTimeout(timer);
+      this.pending = null;
+      item.resolve('');
+      this.restart();
+    }
+  }
+}
+
+const promptSuggestionWorker = new PersistentPromptSuggestionWorker();
+
+function syncPromptSuggestionWorkerState() {
+  if (RUN_ONCE || !activeConfig.enabled || !activeConfig.modules.promptSuggestions) {
+    promptSuggestionWorker.stop();
+    return;
+  }
+  promptSuggestionWorker.ensureStarted(activeConfig.promptSuggestionModel);
+}
+
+function shutdownPromptSuggestionWorker() {
+  promptSuggestionWorker.stop();
+}
+
+async function runPromptSuggestionQuery({ fingerprint = '', lastUser = '', lastAssistant = '' } = {}) {
+  if (!lastAssistant) return '';
+  if (fingerprint && promptSuggestionCache.has(fingerprint)) {
+    return promptSuggestionCache.get(fingerprint);
+  }
+  const prompt = [
+    '根据以下刚结束的对话片段，输出用户下一步最可能发的简短指令（4~28字，无解释无引号，若无高把握输出 NONE）：',
+    lastUser ? `用户：${lastUser}` : '',
+    `助手：${lastAssistant}`
+  ]
+    .filter(Boolean)
+    .join('\n');
+
+  const raw = await promptSuggestionWorker.predict(prompt);
+  const suggestion = cleanPromptSuggestionText(raw);
+  if (fingerprint) {
+    if (promptSuggestionCache.size >= PROMPT_SUGGEST_CACHE_LIMIT) {
+      const oldestKey = promptSuggestionCache.keys().next().value;
+      promptSuggestionCache.delete(oldestKey);
+    }
+    promptSuggestionCache.set(fingerprint, suggestion);
+  }
+  return suggestion;
+}
 
 function normalizeOverrideDict(rawObj) {
   if (!rawObj || typeof rawObj !== 'object') return {};
@@ -542,6 +925,7 @@ function rebuildBundleIfNeeded() {
       i18n: true,
       metrics: true,
       tokenAnalytics: true,
+      promptSuggestions: false,
       composerWaxSeal: true,
       deadlockHealer: true,
       coldBootHealer: true,
@@ -679,11 +1063,28 @@ function rebuildBundleIfNeeded() {
 
   const RE_STRIP_TA_CSS = /\/\* __AG_TOKEN_ANALYTICS_CSS_START__ \*\/[\s\S]*?\/\* __AG_TOKEN_ANALYTICS_CSS_END__ \*\//g;
   const RE_STRIP_TA_JS = /\/\* __AG_TOKEN_ANALYTICS_JS_START__ \*\/[\s\S]*?\/\* __AG_TOKEN_ANALYTICS_JS_END__ \*\//g;
+  const RE_STRIP_PS_CSS = /\/\* __AG_PROMPT_SUGGESTIONS_CSS_START__ \*\/[\s\S]*?\/\* __AG_PROMPT_SUGGESTIONS_CSS_END__ \*\//g;
+  const RE_STRIP_PS_JS = /\/\* __AG_PROMPT_SUGGESTIONS_JS_START__ \*\/[\s\S]*?\/\* __AG_PROMPT_SUGGESTIONS_JS_END__ \*\//g;
 
-  const pageCss = modules.tokenAnalytics ? baseCss : baseCss.replace(RE_STRIP_TA_CSS, '');
-  const pageRuntime = modules.tokenAnalytics
+  let pageCss = modules.tokenAnalytics ? baseCss : baseCss.replace(RE_STRIP_TA_CSS, '');
+  if (!modules.promptSuggestions) {
+    pageCss = pageCss.replace(RE_STRIP_PS_CSS, '');
+  }
+  let pageRuntime = modules.tokenAnalytics
     ? runtimeTemplate
     : runtimeTemplate.replace(RE_STRIP_TA_JS, '  cleanupTokenAnalyticsDom();');
+  if (!modules.promptSuggestions) {
+    pageRuntime = pageRuntime.replace(RE_STRIP_PS_JS, '  cleanupPromptSuggestionsDom();');
+  }
+
+  const promptSuggestionModel =
+    typeof userCfg.promptSuggestionModel === 'string' && userCfg.promptSuggestionModel.trim()
+      ? userCfg.promptSuggestionModel.trim()
+      : 'gemini-3.8-flash-low';
+  activeConfig.promptSuggestionModel = promptSuggestionModel;
+  if (typeof syncPromptSuggestionWorkerState === 'function') {
+    syncPromptSuggestionWorkerState();
+  }
 
   const bootPayload = {
     version: cachedPatchVersion,
@@ -715,10 +1116,10 @@ function rebuildBundleIfNeeded() {
 
   cachedInjectScript = pageRuntime.replace('})(__AG_BOOT_PAYLOAD__);', () => `})(${JSON.stringify(bootPayload)});`);
 
-  // Swarm 等跨进程子 iframe 永不承载设置弹窗，固定裁剪 Token 统计 CSS+JS（单 iframe 立减 ~100 KB，且保持同一 version 哈希）
-  const iframeCss = baseCss.replace(RE_STRIP_TA_CSS, '');
-  const iframeRuntime = runtimeTemplate.replace(RE_STRIP_TA_JS, '');
-  const iframeModules = Object.assign({}, modules, { tokenAnalytics: false });
+  // Swarm 等跨进程子 iframe 永不承载设置弹窗与主输入框预测，固定裁剪 Token 统计与预测 CSS+JS
+  const iframeCss = baseCss.replace(RE_STRIP_TA_CSS, '').replace(RE_STRIP_PS_CSS, '');
+  const iframeRuntime = runtimeTemplate.replace(RE_STRIP_TA_JS, '').replace(RE_STRIP_PS_JS, '');
+  const iframeModules = Object.assign({}, modules, { tokenAnalytics: false, promptSuggestions: false });
   const iframePayload = Object.assign({}, bootPayload, {
     cssText: iframeCss,
     modules: iframeModules,
@@ -1055,15 +1456,20 @@ if (!RUN_ONCE) {
         }
       } catch {}
     };
-    process.on('exit', cleanPid);
+    process.on('exit', () => {
+      if (typeof shutdownPromptSuggestionWorker === 'function') shutdownPromptSuggestionWorker();
+      cleanPid();
+    });
     process.on('SIGINT', () => {
       daemonExiting = true;
+      if (typeof shutdownPromptSuggestionWorker === 'function') shutdownPromptSuggestionWorker();
       closeAllBrowserWatchers();
       cleanPid();
       process.exit(0);
     });
     process.on('SIGTERM', () => {
       daemonExiting = true;
+      if (typeof shutdownPromptSuggestionWorker === 'function') shutdownPromptSuggestionWorker();
       closeAllBrowserWatchers();
       cleanPid();
       process.exit(0);
@@ -4409,6 +4815,7 @@ function attachTarget(target, endpoint) {
             await send('Runtime.addBinding', { name: '__agSetDarkPreset' });
             await send('Runtime.addBinding', { name: '__agSyncHostThemeMode' });
             await send('Runtime.addBinding', { name: '__agRequestTokenAnalytics' });
+            await send('Runtime.addBinding', { name: '__agRequestPromptSuggestion' });
           }
         }
         if (ws.readyState !== WebSocket.OPEN || nonHostSettled) {
@@ -4648,6 +5055,45 @@ function attachTarget(target, endpoint) {
                 try {
                   await send('Runtime.evaluate', {
                     expression: `if (typeof window.__ag_on_token_analytics === 'function') { window.__ag_on_token_analytics(${JSON.stringify(reqId)}, ${payloadJson}); }`,
+                    returnByValue: false
+                  });
+                } catch {}
+              }
+            })();
+            return;
+          }
+          if (msg.method === 'Runtime.bindingCalled' && msg.params?.name === '__agRequestPromptSuggestion') {
+            if (
+              !hostConfirmed ||
+              target.type !== 'page' ||
+              !activeConfig.enabled ||
+              !activeConfig.modules.promptSuggestions
+            ) {
+              return;
+            }
+            let req = {};
+            try {
+              req = msg.params.payload ? JSON.parse(String(msg.params.payload)) : {};
+            } catch {}
+            const reqId = String(req?.reqId || '');
+            const fingerprint = String(req?.fingerprint || '').trim();
+            const lastUser = String(req?.lastUser || '').trim().slice(-600);
+            const lastAssistant = String(req?.lastAssistant || '').trim().slice(-1400);
+            void (async () => {
+              let out;
+              try {
+                const suggestion = await runPromptSuggestionQuery({ fingerprint, lastUser, lastAssistant });
+                out = { ok: true, suggestion };
+              } catch (err) {
+                out = { ok: false, suggestion: '', error: err?.message || String(err || 'prompt suggestion failed') };
+              }
+              if (ws.readyState === WebSocket.OPEN) {
+                const payloadJson = JSON.stringify(out)
+                  .replace(/\u2028/g, '\\u2028')
+                  .replace(/\u2029/g, '\\u2029');
+                try {
+                  await send('Runtime.evaluate', {
+                    expression: `if (typeof window.__ag_on_prompt_suggestion === 'function') { window.__ag_on_prompt_suggestion(${JSON.stringify(reqId)}, ${payloadJson}); }`,
                     returnByValue: false
                   });
                 } catch {}
