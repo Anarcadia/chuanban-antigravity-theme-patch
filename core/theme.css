@@ -2527,6 +2527,66 @@ html[data-ag-dark-preset="claude-warm"] body.theme-dark {
 
 #ag-token-analytics-panel .ag-ta-table-wrap {
   overflow-x: auto;
+  overflow-y: hidden;
+}
+
+/* 宿主 .overlay-scrollbars 对后代统一设置 scrollbar-width: none 并隐藏 ::-webkit-scrollbar，
+   这里为会话表与热力图恢复横向滚动条：仅在内容溢出时占位，滑块默认透明，鼠标悬停在表格上才显色
+   （ID 选择器特异性高于宿主的 0,2,1） */
+#ag-token-analytics-panel .ag-ta-table-wrap,
+#ag-token-analytics-panel .ag-ta-hm-scroll {
+  overflow-y: hidden;
+  scrollbar-width: auto;
+  scrollbar-color: auto;
+}
+
+#ag-token-analytics-panel .ag-ta-table-wrap::-webkit-scrollbar,
+#ag-token-analytics-panel .ag-ta-hm-scroll::-webkit-scrollbar {
+  display: block;
+  width: 10px;
+  height: 10px;
+}
+
+#ag-token-analytics-panel .ag-ta-table-wrap::-webkit-scrollbar-track,
+#ag-token-analytics-panel .ag-ta-hm-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+#ag-token-analytics-panel .ag-ta-table-wrap::-webkit-scrollbar-thumb,
+#ag-token-analytics-panel .ag-ta-hm-scroll::-webkit-scrollbar-thumb {
+  background-color: transparent;
+  border: 2px solid transparent;
+  background-clip: content-box;
+  border-radius: 9999px;
+}
+
+#ag-token-analytics-panel .ag-ta-table-wrap:hover::-webkit-scrollbar-thumb,
+#ag-token-analytics-panel .ag-ta-hm-scroll:hover::-webkit-scrollbar-thumb {
+  background-color: color-mix(in srgb, var(--ag-ta-fg) 22%, transparent);
+}
+
+#ag-token-analytics-panel .ag-ta-table-wrap::-webkit-scrollbar-thumb:hover,
+#ag-token-analytics-panel .ag-ta-hm-scroll::-webkit-scrollbar-thumb:hover {
+  background-color: color-mix(in srgb, var(--ag-ta-fg) 38%, transparent);
+}
+
+/* 会话列弹性占满剩余宽度并省略长标题，其余列按内容宽度排布，正常宽度下表格完整显示 */
+#ag-token-analytics-panel .ag-ta-table td.ag-ta-sess-td {
+  width: 100%;
+  min-width: 180px;
+  max-width: 0;
+  overflow: hidden;
+}
+
+#ag-token-analytics-panel .ag-ta-model-td {
+  white-space: nowrap;
+}
+
+#ag-token-analytics-panel .ag-ta-model-cell {
+  max-width: 205px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 #ag-token-analytics-panel table.ag-ta-table {
@@ -2569,7 +2629,8 @@ html[data-ag-dark-preset="claude-warm"] body.theme-dark {
   display: flex;
   align-items: flex-start;
   gap: 5px;
-  max-width: 300px;
+  max-width: 100%;
+  min-width: 0;
 }
 
 #ag-token-analytics-panel .ag-ta-exp-btn {
@@ -2603,7 +2664,7 @@ html[data-ag-dark-preset="claude-warm"] body.theme-dark {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 265px;
+  max-width: 100%;
 }
 
 #ag-token-analytics-panel .ag-ta-sess-tags {
@@ -2612,6 +2673,12 @@ html[data-ag-dark-preset="claude-warm"] body.theme-dark {
   align-items: center;
   gap: 5px;
   margin-top: 4px;
+}
+
+#ag-token-analytics-panel .ag-ta-sess-tags .ag-ta-badge {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 #ag-token-analytics-panel .ag-ta-sub-badge {
@@ -2691,12 +2758,13 @@ html[data-ag-dark-preset="claude-warm"] body.theme-dark {
   line-height: 1.45;
   opacity: 0;
   visibility: hidden;
-  transition: opacity 90ms ease, visibility 90ms ease;
+  transition: none;
 }
 
 #ag-ta-tooltip[data-visible="1"] {
   opacity: 1;
   visibility: visible;
+  transition: opacity 75ms ease;
 }
 
 #ag-ta-tooltip .ag-ta-tt-hdr {
