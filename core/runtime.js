@@ -106,7 +106,7 @@
     }
   }
 
-  const PATCH_VERSION = boot.version || '20261121-v5.5.3';
+  const PATCH_VERSION = boot.version || '20261122-v5.5.4';
   const DETECTED_OS =
     boot.platform || (/Win/i.test(navigator.platform || '') ? 'win32' : /Mac/i.test(navigator.platform || '') ? 'darwin' : 'linux');
   const ENABLED = boot.enabled !== false;
@@ -4556,7 +4556,7 @@
       const NAV_BTN_ID = 'ag-token-nav-btn';
       const PANEL_ID = 'ag-token-analytics-panel';
       const HM_TOOLTIP_ID = 'ag-ta-tooltip';
-      const CACHE_TTL_MS = 15000;
+      const CACHE_TTL_MS = 60000;
       const REQUEST_TIMEOUT_MS = 25000;
 
       /* TOKEN_ANALYTICS_LOGIC_START */
@@ -4624,20 +4624,50 @@
         return `${y}-${m}-${day}`;
       }
 
-      function taParseLocalDay(dateStr) {
-        const parts = String(dateStr || '').split('-').map(Number);
-        if (parts.length !== 3 || !parts[0] || !parts[1] || !parts[2]) return null;
-        return new Date(parts[0], parts[1] - 1, parts[2], 0, 0, 0, 0);
+      function taCalcDateRangeBounds(rangeDays, nowSec) {
+        if (!rangeDays || rangeDays >= 365) return null;
+        const effectiveSec = Math.max(Number(nowSec) || 0, Math.floor(Date.now() / 1000));
+        const end = new Date(effectiveSec * 1000);
+        end.setHours(0, 0, 0, 0);
+        const start = new Date(end.getTime() - (rangeDays - 1) * 86400000);
+        return {
+          minDate: taLocalDateStr(Math.floor(start.getTime() / 1000)),
+          maxDate: taLocalDateStr(Math.floor(end.getTime() / 1000))
+        };
       }
 
-      function taIsDateInRange(dateStr, rangeDays, nowSec) {
+      function taIsDateInRange(dateStr, rangeDays, nowSec, precomputedBounds = undefined) {
         if (!rangeDays || rangeDays >= 365) return true;
-        const target = taParseLocalDay(dateStr);
-        if (!target) return false;
-        const end = new Date((nowSec || Math.floor(Date.now() / 1000)) * 1000);
-        end.setHours(0, 0, 0, 0);
-        const diffDays = Math.round((end.getTime() - target.getTime()) / 86400000);
-        return diffDays >= 0 && diffDays < rangeDays;
+        if (!dateStr) return false;
+        const bounds = precomputedBounds !== undefined ? precomputedBounds : taCalcDateRangeBounds(rangeDays, nowSec);
+        if (!bounds) return true;
+        return dateStr >= bounds.minDate && dateStr <= bounds.maxDate;
+      }
+
+      function taFilterAndSortSessions(baseSessions, state) {
+        if (!Array.isArray(baseSessions) || baseSessions.length === 0) return [];
+        const metric = state?.metric || 'weighted';
+        const searchKw = String(state?.search || '').trim().toLowerCase();
+        const onlyLow = Boolean(state?.onlyLowCache);
+        const sortBy = state?.sort || 'metric';
+        const filtered =
+          !onlyLow && !searchKw
+            ? baseSessions.slice()
+            : baseSessions.filter((s) => {
+                if (onlyLow && !s.lowCacheWarning) return false;
+                if (searchKw && !s._searchHay.includes(searchKw)) return false;
+                return true;
+              });
+        return filtered.sort((a, b) => {
+          if (sortBy === 'total') return b.total - a.total;
+          if (sortBy === 'weighted') return b.weighted - a.weighted;
+          if (sortBy === 'inTok') return b.inTok - a.inTok;
+          if (sortBy === 'outTok') return b.outTok - a.outTok;
+          if (sortBy === 'calls') return b.calls - a.calls;
+          if (sortBy === 'lowCache') return (a.cacheRate ?? 1) - (b.cacheRate ?? 1);
+          if (sortBy === 'recent') return (b.lastTs || 0) - (a.lastTs || 0);
+          return taGetMetricVal(b, metric) - taGetMetricVal(a, metric);
+        });
       }
 
       function taMakeEmptyTotals() {
@@ -4666,8 +4696,10 @@
         acc.billable += f.billable || 0;
       }
 
-      function taBuildHeatmapGrid(dailyMap, { weeks = 26, nowSec, metric = 'weighted', rangeDays = 30, selectedDate = null } = {}) {
-        const end = new Date((nowSec || Math.floor(Date.now() / 1000)) * 1000);
+      function taBuildHeatmapGrid(dailyMap, { weeks = 26, nowSec, metric = 'weighted', rangeDays = 30, selectedDate = null, rangeBounds = undefined } = {}) {
+        const effectiveSec = Math.max(Number(nowSec) || 0, Math.floor(Date.now() / 1000));
+        const bounds = rangeBounds !== undefined ? rangeBounds : taCalcDateRangeBounds(rangeDays, effectiveSec);
+        const end = new Date(effectiveSec * 1000);
         end.setHours(0, 0, 0, 0);
         const endDow = (end.getDay() + 6) % 7;
         const endWeekMonday = new Date(end.getTime() - endDow * 86400000);
@@ -4698,7 +4730,7 @@
             weighted: rec?.weighted || 0,
             billable: rec?.billable || 0,
             topProject: rec?.topProject || '',
-            inRange: taIsDateInRange(date, rangeDays, nowSec),
+            inRange: taIsDateInRange(date, rangeDays, effectiveSec, bounds),
             selected: selectedDate === date,
             level: 0
           };
@@ -4739,17 +4771,18 @@
       }
 
       function taComputeViewModel(payload, state, { heatmapWeeks = 26 } = {}) {
-        const nowSec = payload?.nowSec || Math.floor(Date.now() / 1000);
+        const nowSec = Math.max(Number(payload?.nowSec) || 0, Math.floor(Date.now() / 1000));
         const facts = Array.isArray(payload?.facts) ? payload.facts : [];
         const conversations = payload?.conversations || {};
         const metric = state?.metric || 'weighted';
         const rangeDays = Number(state?.rangeDays || 30);
+        const rangeBounds = taCalcDateRangeBounds(rangeDays, nowSec);
 
         function matchesFact(f, { ignoreDate = false, ignoreRange = false, ignoreProject = false, ignoreModel = false, ignoreScenario = false } = {}) {
           if (!ignoreDate && state?.selectedDate) {
             if (f.date !== state.selectedDate) return false;
-          } else if (!ignoreRange && rangeDays < 365) {
-            if (!taIsDateInRange(f.date, rangeDays, nowSec)) return false;
+          } else if (!ignoreRange && rangeBounds) {
+            if (f.date < rangeBounds.minDate || f.date > rangeBounds.maxDate) return false;
           }
           const c = conversations[f.cid];
           if (!ignoreProject && state?.selectedProject && state.selectedProject !== 'ALL') {
@@ -4832,7 +4865,8 @@
           nowSec,
           metric,
           rangeDays,
-          selectedDate: state?.selectedDate || null
+          selectedDate: state?.selectedDate || null,
+          rangeBounds
         });
         const inRangeActive = heatmap.days.filter((d) => d.inRange && d.total > 0);
         const avgDaily =
@@ -4923,55 +4957,37 @@
           }
         }
 
-        const searchKw = String(state?.search || '').trim().toLowerCase();
-        const sessions = [...rootGroups.values()]
-          .map((g) => {
-            const cacheRate = taCalcCacheRate(g.rolled);
-            const lowCacheWarning = cacheRate !== null && cacheRate < 0.8 && g.rolled.inTok >= 200000;
-            const primaryModel = [...g.modelScores.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || '';
-            const primaryScenario = [...g.scenarioScores.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || 'internal';
-            const children = [...g.childrenMap.values()]
-              .map((ch) => ({
-                ...ch,
-                primaryModel: [...ch.modelScores.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || '',
-                cacheRate: taCalcCacheRate(ch)
-              }))
-              .sort((a, b) => taGetMetricVal(b, metric) - taGetMetricVal(a, metric));
-            return {
-              id: g.id,
-              title: g.title,
-              projectKey: g.projectKey,
-              projectName: g.projectName,
-              source: g.source,
-              lastTs: g.lastTs,
-              primaryModel,
-              primaryScenario,
-              ...g.rolled,
-              cacheRate,
-              lowCacheWarning,
-              children
-            };
-          })
-          .filter((s) => {
-            if (state?.onlyLowCache && !s.lowCacheWarning) return false;
-            if (searchKw) {
-              const childHay = s.children.map((c) => `${c.title} ${c.agentName} ${c.id} ${c.primaryModel}`).join(' ');
-              const hay = `${s.title} ${s.projectName} ${s.id} ${s.primaryModel} ${childHay}`.toLowerCase();
-              if (!hay.includes(searchKw)) return false;
-            }
-            return true;
-          })
-          .sort((a, b) => {
-            const sortBy = state?.sort || 'metric';
-            if (sortBy === 'total') return b.total - a.total;
-            if (sortBy === 'weighted') return b.weighted - a.weighted;
-            if (sortBy === 'inTok') return b.inTok - a.inTok;
-            if (sortBy === 'outTok') return b.outTok - a.outTok;
-            if (sortBy === 'calls') return b.calls - a.calls;
-            if (sortBy === 'lowCache') return (a.cacheRate ?? 1) - (b.cacheRate ?? 1);
-            if (sortBy === 'recent') return (b.lastTs || 0) - (a.lastTs || 0);
-            return taGetMetricVal(b, metric) - taGetMetricVal(a, metric);
-          });
+        const baseSessions = [...rootGroups.values()].map((g) => {
+          const cacheRate = taCalcCacheRate(g.rolled);
+          const lowCacheWarning = cacheRate !== null && cacheRate < 0.8 && g.rolled.inTok >= 200000;
+          const primaryModel = [...g.modelScores.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || '';
+          const primaryScenario = [...g.scenarioScores.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || 'internal';
+          const children = [...g.childrenMap.values()]
+            .map((ch) => ({
+              ...ch,
+              primaryModel: [...ch.modelScores.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || '',
+              cacheRate: taCalcCacheRate(ch)
+            }))
+            .sort((a, b) => taGetMetricVal(b, metric) - taGetMetricVal(a, metric));
+          const childHay = children.map((c) => `${c.title} ${c.agentName} ${c.id} ${c.primaryModel}`).join(' ');
+          const _searchHay = `${g.title} ${g.projectName} ${g.id} ${primaryModel} ${childHay}`.toLowerCase();
+          return {
+            id: g.id,
+            title: g.title,
+            projectKey: g.projectKey,
+            projectName: g.projectName,
+            source: g.source,
+            lastTs: g.lastTs,
+            primaryModel,
+            primaryScenario,
+            ...g.rolled,
+            cacheRate,
+            lowCacheWarning,
+            children,
+            _searchHay
+          };
+        });
+        const sessions = taFilterAndSortSessions(baseSessions, state);
 
         const projMap = new Map();
         for (const f of facts) {
@@ -5024,6 +5040,7 @@
           avgDaily,
           models,
           scenarios,
+          baseSessions,
           sessions,
           projectsSummary
         };
@@ -5042,15 +5059,38 @@
         loading: false,
         error: null,
         fetchedAt: 0,
+        lastMetricsSig: '',
+        modalClosedSinceFetch: false,
         payload: null
       };
       let reqSeq = 0;
       const pendingRequests = new Map();
       let pendingOpenTokenTab = false;
       let pendingOpenTimer = null;
+      let searchDebounceTimer = null;
+      let cachedBaseVm = { key: '', payloadRef: null, vm: null };
       let tabActive = false;
       let syncRaf = null;
       let disposed = false;
+      let hmTooltipVisible = false;
+      let hmGlobalListenersBound = false;
+      let activeHmCell = null;
+      const hmDayByDate = new Map();
+
+      function getOrComputeViewModel() {
+        if (!dataState.payload) return null;
+        const minuteBucket = Math.floor(Date.now() / 60000);
+        const key = `${minuteBucket}|${uiState.metric}|${uiState.rangeDays}|${uiState.selectedDate || ''}|${uiState.selectedProject || 'ALL'}|${uiState.modelGroup || 'model'}|${uiState.selectedModel || ''}|${uiState.selectedScenario || ''}`;
+        if (cachedBaseVm.payloadRef === dataState.payload && cachedBaseVm.key === key && cachedBaseVm.vm) {
+          return {
+            ...cachedBaseVm.vm,
+            sessions: taFilterAndSortSessions(cachedBaseVm.vm.baseSessions, uiState)
+          };
+        }
+        const vm = taComputeViewModel(dataState.payload, uiState, { heatmapWeeks: 26 });
+        cachedBaseVm = { key, payloadRef: dataState.payload, vm };
+        return vm;
+      }
 
       function fmtLastActive(tsSec) {
         if (!tsSec) return '--';
@@ -5087,7 +5127,10 @@
       async function fetchTokenAnalytics(force = false) {
         if (disposed) return;
         const now = Date.now();
-        if (!force && dataState.payload && now - dataState.fetchedAt < CACHE_TTL_MS) {
+        const curMetricsSig = String(window.__ag_last_metrics?.sig || '');
+        const sigChanged = Boolean(curMetricsSig && curMetricsSig !== dataState.lastMetricsSig);
+        const reopenedStale = Boolean(dataState.modalClosedSinceFetch && now - dataState.fetchedAt > 3000);
+        if (!force && !sigChanged && !reopenedStale && dataState.payload && now - dataState.fetchedAt < CACHE_TTL_MS) {
           return;
         }
         if (typeof window.__agRequestTokenAnalytics !== 'function') {
@@ -5100,7 +5143,16 @@
 
         dataState.loading = true;
         dataState.error = null;
-        renderPanel();
+        if (dataState.payload) {
+          const panel = document.getElementById(PANEL_ID);
+          const refreshBtn = panel?.querySelector('#ag-ta-refresh-btn');
+          if (refreshBtn) {
+            refreshBtn.textContent = '刷新中…';
+            refreshBtn.disabled = true;
+          }
+        } else {
+          renderPanel();
+        }
 
         const reqId = `ta-${Date.now()}-${++reqSeq}`;
         try {
@@ -5120,7 +5172,10 @@
           });
           if (disposed) return;
           dataState.payload = data;
+          cachedBaseVm = { key: '', payloadRef: null, vm: null };
           dataState.fetchedAt = Date.now();
+          dataState.lastMetricsSig = String(window.__ag_last_metrics?.sig || '');
+          dataState.modalClosedSinceFetch = false;
           dataState.error = null;
         } catch (err) {
           if (disposed) return;
@@ -5179,9 +5234,106 @@
         return tip;
       }
 
+      function onGlobalDismiss() {
+        if (hmTooltipVisible) hideHmTooltip();
+      }
+      function onGlobalPointerMove(ev) {
+        if (!hmTooltipVisible) return;
+        if (!tabActive || !activeHmCell || !activeHmCell.isConnected) {
+          hideHmTooltip();
+          return;
+        }
+        const t = ev.target;
+        if (!(t instanceof Element) || !t.closest('.ag-ta-hm-cell')) {
+          hideHmTooltip();
+        }
+      }
+      function onGlobalKeyDown(ev) {
+        if (hmTooltipVisible && ev.key === 'Escape') {
+          hideHmTooltip();
+        }
+      }
+      function bindHmGlobalListeners() {
+        if (hmGlobalListenersBound || disposed) return;
+        hmGlobalListenersBound = true;
+        window.addEventListener('scroll', onGlobalDismiss, { capture: true, passive: true });
+        window.addEventListener('wheel', onGlobalDismiss, { capture: true, passive: true });
+        window.addEventListener('resize', onGlobalDismiss, { passive: true });
+        window.addEventListener('blur', onGlobalDismiss);
+        document.addEventListener('pointermove', onGlobalPointerMove, { passive: true });
+        document.addEventListener('keydown', onGlobalKeyDown, true);
+      }
+      function unbindHmGlobalListeners() {
+        if (!hmGlobalListenersBound) return;
+        hmGlobalListenersBound = false;
+        window.removeEventListener('scroll', onGlobalDismiss, true);
+        window.removeEventListener('wheel', onGlobalDismiss, true);
+        window.removeEventListener('resize', onGlobalDismiss);
+        window.removeEventListener('blur', onGlobalDismiss);
+        document.removeEventListener('pointermove', onGlobalPointerMove);
+        document.removeEventListener('keydown', onGlobalKeyDown, true);
+      }
+
       function hideHmTooltip() {
+        hmTooltipVisible = false;
+        activeHmCell = null;
+        unbindHmGlobalListeners();
         const tip = document.getElementById(HM_TOOLTIP_ID);
-        if (tip) tip.setAttribute('data-visible', '0');
+        if (tip && tip.getAttribute('data-visible') !== '0') {
+          tip.setAttribute('data-visible', '0');
+        }
+      }
+
+      function positionHmTooltip(tip, cell) {
+        if (!tip || !cell || !cell.isConnected) {
+          hideHmTooltip();
+          return;
+        }
+        const rect = cell.getBoundingClientRect();
+        if (rect.width === 0 && rect.height === 0) {
+          hideHmTooltip();
+          return;
+        }
+        const tipRect = tip.getBoundingClientRect();
+        const tw = tipRect.width || 225;
+        const th = tipRect.height || 120;
+        const x = Math.max(8, Math.min(window.innerWidth - tw - 8, rect.left + rect.width / 2 - tw / 2));
+        let y = rect.top - th - 8;
+        if (y < 8) {
+          y = Math.min(window.innerHeight - th - 8, rect.bottom + 8);
+        }
+        tip.style.left = `${Math.round(x)}px`;
+        tip.style.top = `${Math.round(y)}px`;
+      }
+
+      function showHmTooltipForCell(cell) {
+        if (!cell || !cell.isConnected || !tabActive) return;
+        const dt = cell.getAttribute('data-hm-date') || '';
+        const d = hmDayByDate.get(dt);
+        if (!d) return;
+        const tip = ensureHmTooltip();
+        if (!tip) return;
+        const cRate = taCalcCacheRate(d);
+        const cRateStr = cRate !== null ? `${(cRate * 100).toFixed(1)}%` : '--';
+        tip.innerHTML =
+          `<div class="ag-ta-tt-hdr ag-ta-mono">` +
+          `  <span>${esc(d.date)}</span>` +
+          `  <span style="color:var(--ag-ta-primary);">${esc(taFormatMetricVal(d, uiState.metric))}</span>` +
+          `</div>` +
+          (d.calls > 0
+            ? `<div class="ag-ta-tt-row"><span>加权等效</span><strong class="ag-ta-mono">${taFormatCompact(d.weighted)}</strong></div>` +
+              `<div class="ag-ta-tt-row"><span>总 Tokens</span><strong class="ag-ta-mono">${taFormatCompact(d.total)}</strong></div>` +
+              `<div class="ag-ta-tt-row"><span>新入 / 缓读 / 出</span><strong class="ag-ta-mono">${taFormatCompact(d.inTok)} / ${taFormatCompact(d.cacheRead)} / ${taFormatCompact(d.outTok)}</strong></div>` +
+              `<div class="ag-ta-tt-row"><span>调用 / 缓存命中</span><strong class="ag-ta-mono">${d.calls} 次 · ${cRateStr}</strong></div>` +
+              (d.topProject
+                ? `<div class="ag-ta-tt-row" style="margin-top:4px;padding-top:4px;border-top:1px solid var(--ag-ta-border);"><span>主力项目</span><strong>${esc(d.topProject)}</strong></div>`
+                : '')
+            : `<div style="color:var(--ag-ta-muted);">当日无本地调用记录</div>`);
+        activeHmCell = cell;
+        hmTooltipVisible = true;
+        bindHmGlobalListeners();
+        tip.setAttribute('data-visible', '1');
+        positionHmTooltip(tip, cell);
       }
 
       function ensurePanelSkeleton(panel) {
@@ -5205,12 +5357,13 @@
               <button type="button" class="ag-ta-seg-btn" data-metric="calls">调用次数</button>
             </div>
             <div class="ag-ta-seg" id="ag-ta-range-sw">
+              <button type="button" class="ag-ta-seg-btn" data-range="1">今日</button>
               <button type="button" class="ag-ta-seg-btn" data-range="7">7天</button>
               <button type="button" class="ag-ta-seg-btn active" data-range="30">30天</button>
               <button type="button" class="ag-ta-seg-btn" data-range="90">90天</button>
               <button type="button" class="ag-ta-seg-btn" data-range="365">全部</button>
             </div>
-            <button type="button" id="ag-ta-refresh-btn" class="ag-ta-refresh">刷新</button>
+            <button type="button" id="ag-ta-refresh-btn" class="ag-ta-refresh" title="点击增量刷新；按住 Shift 点击强制忽略磁盘缓存全量重算">刷新</button>
           </div>
         </div>
 
@@ -5366,7 +5519,11 @@
         });
         panel.querySelectorAll('#ag-ta-range-sw .ag-ta-seg-btn').forEach((btn) => {
           btn.addEventListener('click', () => {
-            uiState.rangeDays = Number(btn.getAttribute('data-range') || 30);
+            const nextRange = Number(btn.getAttribute('data-range') || 30);
+            uiState.rangeDays = nextRange;
+            if (uiState.selectedDate && !taIsDateInRange(uiState.selectedDate, nextRange, dataState.payload?.nowSec)) {
+              uiState.selectedDate = null;
+            }
             renderPanel();
           });
         });
@@ -5389,8 +5546,8 @@
             renderPanel();
           });
         });
-        panel.querySelector('#ag-ta-refresh-btn')?.addEventListener('click', () => {
-          void fetchTokenAnalytics(true);
+        panel.querySelector('#ag-ta-refresh-btn')?.addEventListener('click', (ev) => {
+          void fetchTokenAnalytics(ev?.shiftKey ? 'hard' : true);
         });
         panel.querySelector('#ag-ta-clear-filters')?.addEventListener('click', () => {
           uiState.selectedDate = null;
@@ -5401,7 +5558,11 @@
         });
         panel.querySelector('#ag-ta-search-input')?.addEventListener('input', (e) => {
           uiState.search = e.target.value || '';
-          renderExplorerOnly();
+          if (searchDebounceTimer) clearTimeout(searchDebounceTimer);
+          searchDebounceTimer = setTimeout(() => {
+            searchDebounceTimer = null;
+            renderExplorerOnly();
+          }, 80);
         });
         panel.querySelector('#ag-ta-sort-select')?.addEventListener('change', (e) => {
           uiState.sort = e.target.value || 'metric';
@@ -5411,6 +5572,28 @@
           uiState.onlyLowCache = Boolean(e.target.checked);
           renderExplorerOnly();
         });
+        panel.addEventListener('scroll', hideHmTooltip, { passive: true });
+        panel.addEventListener('wheel', hideHmTooltip, { passive: true });
+        panel.querySelector('#ag-ta-hm-wrap')?.addEventListener('scroll', hideHmTooltip, { passive: true });
+        const hmGrid = panel.querySelector('#ag-ta-hm-grid');
+        if (hmGrid) {
+          hmGrid.addEventListener('pointerover', (ev) => {
+            const cell = ev.target instanceof Element ? ev.target.closest('.ag-ta-hm-cell') : null;
+            if (cell) showHmTooltipForCell(cell);
+            else hideHmTooltip();
+          });
+          hmGrid.addEventListener('pointerleave', hideHmTooltip);
+          hmGrid.addEventListener('mouseleave', hideHmTooltip);
+          hmGrid.addEventListener('click', (ev) => {
+            const cell = ev.target instanceof Element ? ev.target.closest('.ag-ta-hm-cell') : null;
+            if (!cell) return;
+            const dt = cell.getAttribute('data-hm-date');
+            if (!dt) return;
+            hideHmTooltip();
+            uiState.selectedDate = uiState.selectedDate === dt ? null : dt;
+            renderPanel();
+          });
+        }
       }
 
       function syncPanelSwitchers(panel) {
@@ -5488,20 +5671,20 @@
 
               rowsHtml.push(
                 `<tr>` +
-                  `<td><div class="ag-ta-sess-cell">` +
+                  `<td class="ag-ta-sess-td"><div class="ag-ta-sess-cell">` +
                   (hasKids
                     ? `<button type="button" class="ag-ta-exp-btn" data-toggle-sub="${esc(s.id)}">${isExp ? '▾' : '▸'}</button>`
                     : `<span class="ag-ta-exp-pad"></span>`) +
-                  `<div style="min-width:0;">` +
+                  `<div style="min-width:0;flex:1 1 auto;">` +
                   `<div class="ag-ta-sess-title" title="${esc(s.title)}">${esc(s.title)}</div>` +
                   `<div class="ag-ta-sess-tags">` +
-                  `<span class="ag-ta-badge ag-ta-mono">${esc(s.projectName)}</span>` +
+                  `<span class="ag-ta-badge ag-ta-mono" title="${esc(s.projectName)}">${esc(s.projectName)}</span>` +
                   (s.source === 'cli' ? `<span class="ag-ta-badge ag-ta-mono">CLI</span>` : '') +
                   (hasKids ? `<span class="ag-ta-sub-badge">含 ${s.children.length} 个子 Agent</span>` : '') +
                   `<span class="ag-ta-mono" style="color:var(--ag-ta-muted);font-size:11px;">${esc(s.id.slice(0, 8))}</span>` +
                   `</div></div></div></td>` +
-                  `<td style="white-space:nowrap;">` +
-                  `<div>${esc(s.primaryModel || '--')}</div>` +
+                  `<td class="ag-ta-model-td">` +
+                  `<div class="ag-ta-model-cell" title="${esc(s.primaryModel || '--')}">${esc(s.primaryModel || '--')}</div>` +
                   `<div style="color:var(--ag-ta-muted);font-size:11px;margin-top:2px;">${esc(scenLabel)}</div>` +
                   `</td>` +
                   `<td class="ag-ta-num ag-ta-mono">${s.calls}</td>` +
@@ -5523,13 +5706,13 @@
                   const cRate = c.cacheRate !== null ? `${(c.cacheRate * 100).toFixed(1)}%` : '--';
                   rowsHtml.push(
                     `<tr class="ag-ta-subrow">` +
-                      `<td style="padding-left:24px;">` +
-                      `<div style="display:flex;align-items:center;gap:6px;max-width:276px;">` +
+                      `<td class="ag-ta-sess-td" style="padding-left:24px;">` +
+                      `<div style="display:flex;align-items:center;gap:6px;max-width:100%;min-width:0;">` +
                       `<span style="color:var(--ag-ta-muted);">↳</span>` +
                       `<span class="ag-ta-badge ag-ta-mono">${esc(c.agentName)}</span>` +
                       `<span style="color:var(--ag-ta-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${esc(c.title)}">${esc(c.title)}</span>` +
                       `</div></td>` +
-                      `<td style="color:var(--ag-ta-muted);white-space:nowrap;">${esc(c.primaryModel || '--')}</td>` +
+                      `<td class="ag-ta-model-td" style="color:var(--ag-ta-muted);"><div class="ag-ta-model-cell" title="${esc(c.primaryModel || '--')}">${esc(c.primaryModel || '--')}</div></td>` +
                       `<td class="ag-ta-num ag-ta-mono" style="color:var(--ag-ta-muted);">${c.calls}</td>` +
                       `<td class="ag-ta-num ag-ta-mono" style="color:var(--ag-ta-muted);">${esc(taFormatMetricVal(c, uiState.metric))}</td>` +
                       `<td class="ag-ta-num ag-ta-mono" style="color:var(--ag-ta-muted);">${cRate}</td>` +
@@ -5592,7 +5775,8 @@
       function renderExplorerOnly() {
         const panel = document.getElementById(PANEL_ID);
         if (!panel || !dataState.payload) return;
-        const vm = taComputeViewModel(dataState.payload, uiState, { heatmapWeeks: 26 });
+        const vm = getOrComputeViewModel();
+        if (!vm) return;
         renderExplorerSections(panel, vm);
       }
 
@@ -5603,7 +5787,10 @@
         syncPanelSwitchers(panel);
 
         const refreshBtn = panel.querySelector('#ag-ta-refresh-btn');
-        if (refreshBtn) refreshBtn.textContent = dataState.loading ? '刷新中…' : '刷新';
+        if (refreshBtn) {
+          refreshBtn.textContent = dataState.loading ? '刷新中…' : '刷新';
+          refreshBtn.disabled = Boolean(dataState.loading);
+        }
 
         const banner = panel.querySelector('#ag-ta-status-banner');
         if (banner) {
@@ -5658,7 +5845,8 @@
 
         if (!dataState.payload) return;
 
-        const vm = taComputeViewModel(dataState.payload, uiState, { heatmapWeeks: 26 });
+        const vm = getOrComputeViewModel();
+        if (!vm) return;
         const kpi = vm.kpi;
         const metricLabels = {
           weighted: '加权等效消耗（主指标）',
@@ -5699,8 +5887,9 @@
 
         const monthsBar = panel.querySelector('#ag-ta-hm-months');
         const gridEl = panel.querySelector('#ag-ta-hm-grid');
-        const tip = ensureHmTooltip();
         if (monthsBar && gridEl) {
+          hideHmTooltip();
+          hmDayByDate.clear();
           monthsBar.innerHTML = '';
           gridEl.innerHTML = '';
           let lastMonth = -1;
@@ -5729,36 +5918,8 @@
                 (d.selected ? ' selected' : '') +
                 (!d.inRange && !uiState.selectedDate ? ' out-range' : '');
               cell.setAttribute('data-lvl', String(d.level));
-              cell.addEventListener('mouseenter', (ev) => {
-                if (!tip) return;
-                const cRate = taCalcCacheRate(d);
-                const cRateStr = cRate !== null ? `${(cRate * 100).toFixed(1)}%` : '--';
-                tip.innerHTML =
-                  `<div class="ag-ta-tt-hdr ag-ta-mono">` +
-                  `  <span>${esc(d.date)}</span>` +
-                  `  <span style="color:var(--ag-ta-primary);">${esc(taFormatMetricVal(d, uiState.metric))}</span>` +
-                  `</div>` +
-                  (d.calls > 0
-                    ? `<div class="ag-ta-tt-row"><span>加权等效</span><strong class="ag-ta-mono">${taFormatCompact(d.weighted)}</strong></div>` +
-                      `<div class="ag-ta-tt-row"><span>总 Tokens</span><strong class="ag-ta-mono">${taFormatCompact(d.total)}</strong></div>` +
-                      `<div class="ag-ta-tt-row"><span>新入 / 缓读 / 出</span><strong class="ag-ta-mono">${taFormatCompact(d.inTok)} / ${taFormatCompact(d.cacheRead)} / ${taFormatCompact(d.outTok)}</strong></div>` +
-                      `<div class="ag-ta-tt-row"><span>调用 / 缓存命中</span><strong class="ag-ta-mono">${d.calls} 次 · ${cRateStr}</strong></div>` +
-                      (d.topProject
-                        ? `<div class="ag-ta-tt-row" style="margin-top:4px;padding-top:4px;border-top:1px solid var(--ag-ta-border);"><span>主力项目</span><strong>${esc(d.topProject)}</strong></div>`
-                        : '')
-                    : `<div style="color:var(--ag-ta-muted);">当日无本地调用记录</div>`);
-                tip.setAttribute('data-visible', '1');
-                const x = Math.max(8, Math.min(window.innerWidth - 265, ev.clientX + 14));
-                const y = Math.max(8, Math.min(window.innerHeight - 150, ev.clientY - 90));
-                tip.style.left = `${x}px`;
-                tip.style.top = `${y}px`;
-              });
-              cell.addEventListener('mouseleave', hideHmTooltip);
-              cell.addEventListener('click', () => {
-                hideHmTooltip();
-                uiState.selectedDate = uiState.selectedDate === d.date ? null : d.date;
-                renderPanel();
-              });
+              cell.setAttribute('data-hm-date', d.date);
+              hmDayByDate.set(d.date, d);
               col.appendChild(cell);
             }
             gridEl.appendChild(col);
@@ -5838,7 +5999,7 @@
                   `<div class="ag-ta-row-btn ${isSel ? 'active' : ''}" data-model-key="${esc(m.key)}">` +
                   `  <div class="ag-ta-row-top">` +
                   `    <div class="ag-ta-row-name">` +
-                  `      <span>${esc(m.key)}</span>` +
+                  `      <span title="${esc(m.key)}">${esc(m.key)}</span>` +
                   (uiState.modelGroup === 'model' ? `<span class="ag-ta-badge">${esc(m.pool)}</span>` : '') +
                   `    </div>` +
                   `    <div class="ag-ta-row-nums ag-ta-mono">` +
@@ -5889,7 +6050,7 @@
                   `  <div class="ag-ta-row-top">` +
                   `    <div class="ag-ta-row-name">` +
                   `      <span class="ag-ta-swatch" style="background-color:${meta.color};"></span>` +
-                  `      <span class="ag-ta-row-label">${esc(meta.label + extra)}</span>` +
+                  `      <span class="ag-ta-row-label" title="${esc(meta.label + extra)}">${esc(meta.label + extra)}</span>` +
                   `    </div>` +
                   `    <div class="ag-ta-row-nums ag-ta-mono">` +
                   `      <span style="color:var(--ag-ta-muted);">${s.calls}次</span>` +
@@ -5941,9 +6102,10 @@
         if (disposed || !document.body) return;
         const modal = findActiveSettingsModal();
         if (!modal) {
+          if (hmTooltipVisible) hideHmTooltip();
+          if (dataState.fetchedAt > 0) dataState.modalClosedSinceFetch = true;
           if (tabActive) {
             tabActive = false;
-            hideHmTooltip();
           }
           return;
         }
@@ -5980,6 +6142,7 @@
           navSection.querySelector(`#${NAV_BTN_ID}`)?.addEventListener('click', (e) => {
             e.preventDefault();
             e.stopPropagation();
+            if (tabActive && modal.getAttribute('data-ag-token-tab-active') === '1') return;
             setTokenTabActive(modal, true);
           });
         }
@@ -6056,26 +6219,27 @@
         if (settingsBtn) settingsBtn.click();
       };
 
+      const OWN_TOKEN_SEL = '[data-ag-token-ui], [data-ag-metrics-pill], #ag-live-metrics-pill, #ag-live-metrics-tooltip';
+      function isOwnTokenNode(n) {
+        return (
+          n instanceof Element &&
+          (n.id?.startsWith('ag-') || Boolean(n.closest?.(OWN_TOKEN_SEL)))
+        );
+      }
       function isOwnTokenMutation(m) {
-        if (
-          m.target instanceof Element &&
-          m.target.closest?.('[data-ag-token-ui], [data-ag-metrics-pill], #ag-live-metrics-pill, #ag-live-metrics-tooltip')
-        ) {
+        if (m.target instanceof Element && m.target.closest?.(OWN_TOKEN_SEL)) {
           return true;
         }
         if (m.type === 'childList') {
-          const touched = [...m.addedNodes, ...m.removedNodes];
-          if (
-            touched.length > 0 &&
-            touched.every(
-              (n) =>
-                n instanceof Element &&
-                (n.id?.startsWith('ag-') ||
-                  Boolean(
-                    n.closest?.('[data-ag-token-ui], [data-ag-metrics-pill], #ag-live-metrics-pill, #ag-live-metrics-tooltip')
-                  ))
-            )
-          ) {
+          const addedLen = m.addedNodes.length;
+          const removedLen = m.removedNodes.length;
+          if (addedLen + removedLen > 0) {
+            for (let i = 0; i < addedLen; i++) {
+              if (!isOwnTokenNode(m.addedNodes[i])) return false;
+            }
+            for (let i = 0; i < removedLen; i++) {
+              if (!isOwnTokenNode(m.removedNodes[i])) return false;
+            }
             return true;
           }
         }
@@ -6122,10 +6286,10 @@
       }
 
       function isSettingsModalRelevantMutation(m) {
-        if (isOwnTokenMutation(m)) return false;
         const t = m.target;
         if (t instanceof Element && t.closest?.(MODAL_FAST_SKIP_SEL)) return false;
-        if (tabActive || pendingOpenTokenTab) return true;
+        if (isOwnTokenMutation(m)) return false;
+        if (pendingOpenTokenTab || (tabActive && !document.getElementById(PANEL_ID)?.isConnected)) return true;
         if (t instanceof Element && t.closest?.(MODAL_RELEVANT_SEL)) return true;
         if (m.type === 'childList') {
           for (let i = 0; i < m.addedNodes.length; i++) {
@@ -6171,10 +6335,16 @@
 
       window.__ag_cleanup_fns.push(() => {
         disposed = true;
+        unbindHmGlobalListeners();
+        hmDayByDate.clear();
+        activeHmCell = null;
+        hmTooltipVisible = false;
+        cachedBaseVm = { key: '', payloadRef: null, vm: null };
         if (modalObs) modalObs.disconnect();
         if (backdropObs) backdropObs.disconnect();
         if (syncRaf) cancelAnimationFrame(syncRaf);
         if (pendingOpenTimer) clearTimeout(pendingOpenTimer);
+        if (searchDebounceTimer) clearTimeout(searchDebounceTimer);
         for (const entry of pendingRequests.values()) {
           clearTimeout(entry.timer);
         }

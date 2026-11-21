@@ -1,9 +1,9 @@
 ---
 name: chuanban-antigravity-theme-patch
-description: 船板的 Antigravity 2.0 主题、字体与汉化补丁（v5.5.3 · 适配 Antigravity 2.34.0+ / 2.33.0+ macOS / Windows / Linux 单图标 M1+M2 零子进程空闲短路启动接力 + Windows 5 分钟保活与更新后快捷方式自愈 + Browser 级 CDP 事件驱动毫秒级发现 + UI 西文 Google Sans Flex 可变字体引擎 × 中文更纱黑体跨平台零卡顿映射 + 对话正文 Anthropic Serif 衬线 + 昼夜双模式四套预设与外观面板 📖 书卷切换钮 + 宿主独占指纹门禁 + WSL2 双轨只读 SQLite + 1,940 条零冲突词典 + 分屏/支线提问(/btw)/子Agent侧栏独立实时指标胶囊 + 系统设置「本地扩展 → Token 统计」全量分析面板）。采用「core/ 只读内核 + user/ 永不覆盖改装层 + install.mjs CLI」，支持 Agent 一键部署、2.5 秒热重载定制与 --safe-mode 沙箱排障。当用户提到“安装船板 Antigravity 主题”、“升级/修复 Antigravity 汉化与字体”、“定制 Antigravity 界面样式或汉化词条”时触发。
+description: 船板的 Antigravity 2.0 主题、字体与汉化补丁（v5.5.4 · 适配 Antigravity 2.34.0+ / 2.33.0+ macOS / Windows / Linux 单图标 M1+M2 零子进程空闲短路启动接力 + Windows 5 分钟保活与更新后快捷方式自愈 + Browser 级 CDP 事件驱动毫秒级发现 + UI 西文 Google Sans Flex 可变字体引擎 × 中文更纱黑体跨平台零卡顿映射 + 对话正文 Anthropic Serif 衬线 + 昼夜双模式四套预设与外观面板 📖 书卷切换钮 + 宿主独占指纹门禁 + WSL2 异步非阻塞双轨只读 SQLite + 1,940 条零冲突词典 + 分屏/支线提问(/btw)/子Agent侧栏独立实时指标胶囊 + 系统设置「本地扩展 → Token 统计」磁盘持久化毫秒级分析面板）。采用「core/ 只读内核 + user/ 永不覆盖改装层 + install.mjs CLI」，支持 Agent 一键部署、2.5 秒热重载定制与 --safe-mode 沙箱排障。当用户提到“安装船板 Antigravity 主题”、“升级/修复 Antigravity 汉化与字体”、“定制 Antigravity 界面样式或汉化词条”时触发。
 ---
 
-# 船板的 Antigravity 主题、字体与汉化补丁（v5.5.3 · AI Agent 部署与改装契约）
+# 船板的 Antigravity 主题、字体与汉化补丁（v5.5.4 · AI Agent 部署与改装契约）
 
 > **核心摘要（致执行端 AI Agent）**：
 > - **功能边界**：纯运行时本地回环 CDP 注入（不改 `.asar`、不破系统签名、零第三方 npm 依赖），适配 Google Antigravity **`2.34.0+` / `2.33.0+`**：
@@ -57,7 +57,7 @@ chuanban-antigravity-theme-patch/
 ├── README.md                   # 面向用户的项目说明与快速上手指南
 ├── CHANGELOG.md                # 版本演进记录
 ├── core/                       # 【只读内核】随版本升级原子替换，Agent 严禁直接修改
-│   ├── manifest.json           # 版本号（5.5.3）、三端地址与 core/* 四件套 SHA-256 校验清单
+│   ├── manifest.json           # 版本号（5.5.4）、三端地址与 core/* 四件套 SHA-256 校验清单
 │   ├── daemon.mjs              # Node CDP 守护进程（宿主独占指纹门禁、2.33.0+~2.34.0+ M2 冷启动自动接力重启与 Windows .lnk 更新自愈、SingletonLock/lockfile 全平台零子进程空闲短路、BrowserWatcher 83% 轮询降频、SQLite O(1) 增量胶囊与异步分片全量 Token 统计归因、WSL2 双轨只读读取、Swarm 子帧 ~100KB 载荷裁剪注入、2.5s 热重载感知）
 │   ├── runtime.js              # 浏览器端注入引擎（宿主指纹门禁与 0ms 防闪白、昼夜双预设 `preset`/`darkPreset` 与 curtainView/标题栏联动、Google Sans Flex 防脱靶保底与去重、O(1) 观察器自写入短路、设置「本地扩展 → Token 统计」零噪观察器挂载、指标胶囊 rAF 合批防重排、弯引号/省略号双向回退与 DICT_CI 索引）
 │   ├── theme.css               # 五段式样式表（Part I Google Sans Flex × AgSarasaUI 字重桥接、Anthropic Serif 正文、.inline-pill[data-uri] 等宽对齐与 macOS 浅色全域活字润墨平衡 / Part II 白天暖纸三预设 / Part III 独立黑夜双预设 / Part IV 指标胶囊 / Part V 设置 Token 统计面板）

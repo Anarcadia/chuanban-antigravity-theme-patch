@@ -4,6 +4,27 @@
 
 ---
 
+## [v5.5.4] - 2026-11-22
+
+> **适用版本**：Antigravity `2.34.0+` / `2.33.x`（向下完全兼容 `2.32.x` / `2.31.x` / `2.30.0`）  
+> **核验基线**：macOS `2.34.0` (`534` 实机会话库 · `968 MB` SQLite 压测) × Windows 11 `2.34.0.0` (`Node 22.14.0` · `WSL2 UNC` · `CP936` · `DirectWrite` `W554-Check 1 ~ 5` `28/28` 真机全绿) × 内部 `Claude Opus 5.5 High` + `Claude Sonnet 5.5 High` 双轮对抗审阅  
+> **社区致谢**：特别感谢 [@shixiaogaoya](https://github.com/shixiaogaoya)（[PR #28](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/pull/28) 修复 Token 统计面板长标题/模型列溢出与热力图浮层粘滞、新增新版 Orchestrator 规划步归因与 Windows WSL2 休眠免唤醒会话扫描）以及 [@ghang](https://github.com/ghang)（[PR #25](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/pull/25) Token 统计面板底座）的代码贡献！
+
+### Perf & Fixed（「Token 统计」全链路毫秒级加速、磁盘持久化索引、Node 22.14 GC 崩溃根治、Windows WSL2 异步零唤醒探测与双端渲染器零闲置开销）
+- **「Token 统计」SQLite 扫描、Node `22.13~22.14` 崩溃根治、磁盘持久化缓存与归因精度全面升级（`core/daemon.mjs` / `install.mjs`）**：
+  - **92% SQLite 溢出页 I/O 削减、Node `22.14` V8 GC 防崩与活跃会话增量追加**：保留完整 `steps.metadata`（100% 无损保留超大 `metadata` 下的 `f=4` `tool_call` 与 `exit_plan_mode` 规划归因），通过 SQL `CASE` 跳过占总库体积 92% 的 `step_type = 132` 冗余 `step_payload` 溢出页，并统一采用 `.all()` 消除 Node.js `v22.13 ~ v22.14` 下 `StatementSync.iterate()` 链式临时包装器遭 V8 GC 提前析构引发的 `0xC0000005` 原生崩溃（`F-W554-1`）；对 0 调用空库直接短路，对近 24h 活跃库按 `WHERE idx >= ?` 配合冻结行 `hex` 锚点校验（精准防 Undo 重写漏算与 `planTimeline` `idx` 覆盖漂移）仅增量重读尾部新增步骤；
+  - **带 `cacheSalt` 的单飞异步原子磁盘缓存（`.cache/token-analytics-index.json`）**：在 `10 分钟` 空闲内存 GC 或守护进程重启后直接从本地索引秒级恢复（macOS `534` 库重开耗时从 `2,200ms` 压至 **`~20ms`**，Windows 11 `58` 库重开 **`19.3ms`**）；内置 `TA_CACHE_SALT` 算法指纹校验（升级自动失效重算）、损坏 JSON 自动自愈、单飞防抖落盘、Windows Defender 文件锁 `EPERM`/`EBUSY`/`EACCES` 异步退避重试、`runTokenAnalyticsQuery` 悬空 Promise 防崩保护、`--safe-mode` 豁免，以及按住 `Shift` 点击「刷新」强制忽略磁盘缓存全量重算（`uninstall` 自动清理 `.cache/`）；
+  - **精准场景与新模型映射修正**：将 `memory`（记忆与上下文整理）收窄为仅解析工具 JSON 入参中的目标路径字段（`Path` / `TargetFile` / `uri`），彻底消除正文提及关键词导致的 `77.8%` 假阳性；补齐 `gemini-pro-orchestrator-argon`（`M47`）与 `gpt-oss-120b-medium` 映射；合并守护进程内重复 Protobuf 解码器并将 IPC 回包升级为缓存化 `JSON.parse("<escaped>")` V8 快速通道。
+- **Windows WSL2 零阻塞异步探测、空闲零子进程守卫与跨盘 SQLite Staging 基库复用（`core/daemon.mjs`，合入并深度加固 [#28](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/pull/28)）**：
+  - **异步 SWR 探测 + 非 WSL 空闲零子进程 + `Stopped` 休眠零唤醒（`F-W554-2`）**：新增 `inspectWin32WslProbeDemand`（无 `wsl_state.json` 或客户端未挂载窗口时 **`0` 次 `wsl.exe` / `reg.exe` 派生**），将运行态探测（`UTF-16LE` BOM 清洗 + `docker-desktop*` 过滤）与 `Lxss` 注册表枚举（兼容中文 `CP936` 字节流）全面改为异步 `execFile` 单飞刷新，将 `regSig|runSig` 编入缓存键并在 `!runningWsl.ok` 或发行版休眠时严格阻断 UNC 触碰（100% 杜绝冷唤醒 `Stopped` 虚拟机），同时在 WSL 休眠离线或 `400ms` 超时退避期间自动保留既有磁盘/内存缓存中的 WSL 历史统计不闪烁清零；
+  - **WSL P9 UNC 活跃大库 `O(1)` LRU 基库复用与 Checkpoint 一致性校验**：在 `withReadOnlyDb` 中按主 `.db` 签名在 `%TEMP%` 复用基库副本，流式对话期间每拍仅跨 P9 网络拷贝轻量 `-wal`（内置并发 checkpoint 主库重核、`-wal`/`-shm` 即刻清理及进程启动孤儿临时文件清扫）。
+- **前端视图计算 `O(1)` 化、按需全局监听与流式零分配观察器短路（`core/runtime.js` / `core/theme.css`）**：
+  - 将日期窗口过滤从逐条 `new Date()` 构造改为单次预计算 `YYYY-MM-DD` 字符串边界（含跨午夜实时时钟防漂移），缓存预置 `_searchHay` 的 `baseSessions` 视图模型并为搜索框增加 `80ms` 防抖，使搜索/排序/展开子 Agent 时零重复遍历 `facts`；
+  - 将热力图 Tooltip 的 6 个 `window`/`document` 级事件监听器改为悬停显隐时动态挂载/卸载（日常编码与未悬停状态下全局监听器数量为 **`0`**）；
+  - 在设置弹窗观察器中前置 `MODAL_FAST_SKIP_SEL` 短路、消除 `isOwnTokenMutation` 的 `[...addedNodes, ...removedNodes]` 数组展开分配，并收敛 `tabActive` 重绘触发条件；同时用 CSS 层叠特异度替代输入框蜡封样式中的 `:not(:has(...))` 反向子树匹配（保留 100% 双端字体与视觉表现）。
+
+---
+
 ## [v5.5.3] - 2026-11-21
 
 > **适用版本**：Antigravity `2.34.0+` / `2.33.x`（macOS `2.34.0` `CL=1026637980` × Windows 11 `2.34.0.0` `2.34.0-5887025308631040`，向下完全兼容 `2.33.x` / `2.32.x` / `2.31.x` / `2.30.0`）  
