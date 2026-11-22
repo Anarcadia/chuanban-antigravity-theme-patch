@@ -1277,6 +1277,17 @@ function removeCdpLaunchers() {
   }
 }
 
+function inspectWindowsTaskXmlTriggers(rawXml) {
+  const xml = String(rawXml || '').replace(/\0/g, '');
+  const isTriggerEnabled = (block) => !/<Enabled>\s*false\s*<\/Enabled>/i.test(block);
+  const timedBlocks = xml.match(/<(?:TimeTrigger|CalendarTrigger)\b[^>]*>[\s\S]*?<\/(?:TimeTrigger|CalendarTrigger)>/gi) || [];
+  const hasTimedRepetition = timedBlocks.some((block) => isTriggerEnabled(block) && /<Repetition\b/i.test(block));
+  const logonBlocks = xml.match(/<LogonTrigger\b[^>]*>[\s\S]*?<\/LogonTrigger>/gi) || [];
+  const logonHasRepetition = logonBlocks.some((block) => isTriggerEnabled(block) && /<Repetition\b/i.test(block));
+  const legacyLogonOnlyRepetition = logonHasRepetition && !hasTimedRepetition;
+  return { hasTimedRepetition, legacyLogonOnlyRepetition };
+}
+
 function inspectWindowsKeepAliveTask(targetDir) {
   if (process.platform !== 'win32') return null;
   try {
@@ -1332,12 +1343,7 @@ function inspectWindowsKeepAliveTask(targetDir) {
       };
     }
 
-    const xml = String(queryRes.stdout || '').replace(/\0/g, '');
-    const timedBlocks = xml.match(/<(?:TimeTrigger|CalendarTrigger)\b[^>]*>[\s\S]*?<\/(?:TimeTrigger|CalendarTrigger)>/gi) || [];
-    const hasTimedRepetition = timedBlocks.some((block) => /<Repetition\b/i.test(block));
-    const logonBlocks = xml.match(/<LogonTrigger\b[^>]*>[\s\S]*?<\/LogonTrigger>/gi) || [];
-    const logonHasRepetition = logonBlocks.some((block) => /<Repetition\b/i.test(block));
-    const legacyLogonOnlyRepetition = logonHasRepetition && !hasTimedRepetition;
+    const { hasTimedRepetition, legacyLogonOnlyRepetition } = inspectWindowsTaskXmlTriggers(queryRes.stdout);
 
     const installScriptPath = path.join(targetDir || resolveDefaultTargetDir(), 'install.mjs');
     const warning = !hasTimedRepetition
@@ -1828,6 +1834,9 @@ WantedBy=default.target
     let autostartMethod = 'none';
     let scheduledTaskStarted = false;
     let taskSettingsUpdated = false;
+    let taskHasTimedRepetition = null;
+    let taskUpdateError = null;
+    let taskUpdateWarning = null;
     const xmlEsc = (s) =>
       String(s || '')
         .replace(/&/g, '&amp;')
@@ -1913,25 +1922,41 @@ WantedBy=default.target
     try {
       fs.writeFileSync(tmpXmlPath, taskXml, 'utf16le');
       const createRes = spawnSync('schtasks', ['/Create', '/TN', 'AntigravityThemeDaemon', '/XML', tmpXmlPath, '/F'], {
-        stdio: 'ignore',
+        encoding: 'utf8',
         windowsHide: true,
         timeout: 6000
       });
       if (createRes.status === 0) {
         autostartMethod = 'schtasks';
         taskSettingsUpdated = true;
+        taskHasTimedRepetition = true;
       } else {
+        taskUpdateError =
+          String(createRes.stderr || createRes.stdout || '').trim() || `schtasks /Create exited with code ${createRes.status}`;
         // 兼容旧版高完整性创建的无 SDDL 计划任务：若同名任务已存在且指向当前 VBS，直接复用而不降级写 HKCU\Run 制造双路并发
         const queryRes = spawnSync('schtasks', ['/Query', '/TN', 'AntigravityThemeDaemon', '/XML'], {
           encoding: 'utf8',
           windowsHide: true,
           timeout: 4000
         });
-        if (queryRes.status === 0 && String(queryRes.stdout || '').toLowerCase().includes('antigravitythemedaemon.vbs')) {
+        if (
+          queryRes.status === 0 &&
+          String(queryRes.stdout || '')
+            .replace(/\0/g, '')
+            .toLowerCase()
+            .includes('antigravitythemedaemon.vbs')
+        ) {
           autostartMethod = 'schtasks';
+          const triggerCheck = inspectWindowsTaskXmlTriggers(queryRes.stdout);
+          taskHasTimedRepetition = triggerCheck.hasTimedRepetition;
+          if (!triggerCheck.hasTimedRepetition) {
+            const installScriptPath = path.join(targetDir, 'install.mjs');
+            taskUpdateWarning = `未能覆盖更新计划任务 AntigravityThemeDaemon（可能因旧任务由管理员权限创建），且现有任务缺少定时重复触发器（安装后至下次登录前 5 分钟保活不会生效）。请以管理员身份运行 node "${installScriptPath}" install，或先管理员执行 schtasks /Delete /TN AntigravityThemeDaemon /F 后重装。`;
+          }
         }
       }
-    } catch {
+    } catch (err) {
+      taskUpdateError = taskUpdateError || String(err?.message || err);
     } finally {
       try {
         if (fs.existsSync(tmpXmlPath)) fs.unlinkSync(tmpXmlPath);
@@ -2029,6 +2054,9 @@ WantedBy=default.target
       localVbsFile,
       scheduledTask: autostartMethod === 'schtasks' ? 'AntigravityThemeDaemon' : null,
       taskSettingsUpdated,
+      hasTimedRepetition: taskHasTimedRepetition,
+      taskUpdateError,
+      taskUpdateWarning,
       scheduledTaskStarted,
       spawnedPid,
       runningNow: Boolean(scheduledTaskStarted || spawnedPid)
@@ -2222,11 +2250,15 @@ async function runInstall() {
   const live = isCustomSandboxTarget ? { skipped: true, reason: 'custom-target-dir' } : await inspectLiveWindow(postEnv);
   const needsCdpRelaunch =
     !isCustomSandboxTarget && !live.reachable && postEnv.cdpStatus === 'missing_opt_in_flag';
+  const keepAliveUpgradeWarning =
+    !isCustomSandboxTarget && serviceInfo && typeof serviceInfo === 'object' ? serviceInfo.taskUpdateWarning || null : null;
+  const warnings = keepAliveUpgradeWarning ? [keepAliveUpgradeWarning] : [];
+  const installOk = !keepAliveUpgradeWarning;
   console.log(
     '\n[Install Complete]',
     JSON.stringify(
       {
-        ok: true,
+        ok: installOk,
         targetDir,
         backupCreated,
         userSynced: syncUser,
@@ -2234,6 +2266,7 @@ async function runInstall() {
         argvStatus,
         launcherStatus,
         serviceInfo,
+        warnings,
         config: currentCfg,
         cdpStatus: isCustomSandboxTarget ? 'sandbox' : live.reachable ? 'ready' : postEnv.cdpStatus,
         relaunchHint: needsCdpRelaunch
@@ -2245,6 +2278,10 @@ async function runInstall() {
       2
     )
   );
+  if (keepAliveUpgradeWarning) {
+    console.warn(`\n[WARN] ${keepAliveUpgradeWarning}`);
+    process.exitCode = 1;
+  }
 }
 
 function hasRecentActiveConversationWal(channel = 'auto', windowSec = 15) {
