@@ -1912,7 +1912,9 @@ WantedBy=default.target
     let spawnedPid = null;
     if (!scheduledTaskStarted) {
       try {
+        // 固定工作目录为用户主目录，避免后台进程继承调用方终端的 CWD 导致该目录被占用无法删除
         const child = spawn(process.execPath, ['--disable-warning=ExperimentalWarning', wrapperDaemon], {
+          cwd: os.homedir(),
           detached: true,
           stdio: 'ignore',
           windowsHide: true
@@ -2299,6 +2301,7 @@ async function runRelaunch() {
     });
   } else if (launchTarget.exePath) {
     const child = spawn(launchTarget.exePath, ['--remote-debugging-port=0'], {
+      cwd: os.homedir(),
       detached: true,
       stdio: 'ignore',
       windowsHide: false
@@ -2434,6 +2437,7 @@ async function runRollback() {
       if (!restartedViaTask) {
         try {
           const child = spawn(process.execPath, ['--disable-warning=ExperimentalWarning', fs.existsSync(wrapperDaemon) ? wrapperDaemon : realDaemon], {
+            cwd: os.homedir(),
             detached: true,
             stdio: 'ignore',
             windowsHide: true
