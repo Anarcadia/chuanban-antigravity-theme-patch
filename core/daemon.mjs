@@ -944,7 +944,8 @@ const browserWatcherBackoffUntil = new Map(); // `${channel}:${port}` -> timesta
 const attachingTargetIds = new Set();
 const destroyedWhileAttaching = new Set();
 
-rebuildBundleIfNeeded();
+// --keep-alive 健康检查在 daemon 存活时会在下方 PID 锁段直接 exit(0)，无需预先构建注入 bundle
+if (!KEEP_ALIVE_ONLY) rebuildBundleIfNeeded();
 
 const MY_PROC_START_MS = Math.round(Date.now() - process.uptime() * 1000);
 const DAEMON_LOG_FILE = path.join(os.tmpdir(), 'ag-theme-daemon.log');
@@ -1272,6 +1273,9 @@ if (!RUN_ONCE) {
     logDaemonEvent(`PID lock init warning: ${err?.message || err}`);
   }
 }
+
+// --keep-alive 确认原 daemon 已退出、由本进程接管后，再构建注入 bundle
+if (KEEP_ALIVE_ONLY) rebuildBundleIfNeeded();
 
 // ============================================================================
 // 4. SQLite + Protobuf 实时会话指标解析器（读取 ~/.gemini/antigravity/conversations/<id>.db）
