@@ -965,6 +965,15 @@ function logDaemonEvent(msg) {
   } catch {}
 }
 
+// 记录致命异常（含未处理的 Promise rejection）与非零退出码，便于排查 daemon 意外退出；
+// 使用 uncaughtExceptionMonitor 仅旁路观测，不改变 Node 默认的崩溃退出语义（保活任务会按周期重新拉起）
+process.on('uncaughtExceptionMonitor', (err, origin) => {
+  logDaemonEvent(`FATAL ${origin}: ${err?.stack || err}`);
+});
+process.on('exit', (code) => {
+  if (code) logDaemonEvent(`Process exiting with code ${code}`);
+});
+
 function sleepSync(ms) {
   try {
     Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
