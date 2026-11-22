@@ -1,11 +1,12 @@
-# 船板的 Antigravity 主题、字体与汉化补丁 (v5.5.4)
+# 船板的 Antigravity 主题、字体与汉化补丁 (v5.5.5)
 
-[![Version](https://img.shields.io/badge/version-5.5.4-7A1F1A.svg)](https://github.com/Anarcadia/chuanban-antigravity-theme-patch)
+[![Version](https://img.shields.io/badge/version-5.5.5-7A1F1A.svg)](https://github.com/Anarcadia/chuanban-antigravity-theme-patch)
 [![Antigravity](https://img.shields.io/badge/Antigravity-2.34.0%2B-D97757.svg)](https://github.com/Anarcadia/chuanban-antigravity-theme-patch)
 [![Node](https://img.shields.io/badge/node-%3E%3D22.0.0%20(22.13%2B%20Full)-339933.svg)](https://nodejs.org/)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey.svg)](https://github.com/Anarcadia/chuanban-antigravity-theme-patch)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-面向 Google Antigravity（支持最新 **`2.34.0+`**）的非侵入式运行时补丁：提供书卷暖纸与双深色预设、四层中西文排版、1,940 条界面汉化、SQLite 实时会话遥测胶囊与系统设置「Token 统计」多维分析面板。不修改客户端 `.asar` 与系统签名，零第三方 npm 依赖，由 AI Agent 一键部署并通过 `user/` 层实现 `2.5s` 热重载定制。
+面向 Google Antigravity（支持最新 **`2.34.0+`**）的非侵入式运行时补丁：提供书卷暖纸与双深色预设、四层中西文排版、1,942 条界面汉化、SQLite 实时会话遥测胶囊与系统设置「Token 统计」多维分析面板。不修改客户端 `.asar` 与系统签名，零第三方 npm 依赖，由 AI Agent 一键部署并通过 `user/` 层实现 `2.5s` 热重载定制。
 
 > 供 AI Agent 读取的完整部署与改装技术契约位于仓库根目录 **[`SKILL.md`](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/blob/main/SKILL.md)**。
 
@@ -40,11 +41,11 @@
 
 ---
 
-## ✨ 核心特性（v5.5.4）
+## ✨ 核心特性（v5.5.5）
 
 - **昼夜双模式与四套配色预设**：浅色内置高对比暖白（默认）、ClaudeDesktop 净白、复古羊皮纸三套暖纸预设及 macOS 浅色全域活字润墨；深色在客户端外观面板原生嵌入 **📖 书卷按钮**（`[ 🖥️ | ☀️ | 📖 | 🌙 ]`），一键切换官方碳黑（`onyx`）或 Claude 暖纸深夜（`claude-warm`），自动同步 Windows 原生标题栏、启动幕布与 `Swarm` 协作子帧。
 - **四层中西文排版与字重桥接**：UI 西文直连官方 `Google Sans Flex` 可变字体引擎（`wght 350–650`, `wdth 92`，内置 `#ag-google-sans-flex-fonts` 防脱靶保底与去重），中文经 `AgSarasaUI` 精确映射更纱黑体字重（消除 `350` 字重落入 `Light` 发虚与 Windows `FontLink` 微软雅黑替换）；对话正文与 Markdown 保持 `Anthropic Serif` + `Sarasa Mono Slab SC` 衬线（含 Windows `DirectWrite` 子节点 `wght 400/500/600` 还原）；代码、终端与 `.inline-pill[data-uri]` 行内文件芯片采用 `Anthropic Mono` 等宽；主输入框采用打字机板状粗衬线配三态蜡封边框。
-- **1,940 条界面汉化与代码/文件芯片严格隔离**：覆盖主界面、划词浮动交互按钮（`Quote` / `Comment` / `支线提问` 上下文守卫精准翻译）、15+ 设置子页、编排器与对战模式、对话与编辑器新设置项、快捷键方案、内置浏览器管理、`Swarm` 蜂群面板与无括号模型努力度档位动态文案；全词表通过大小写与弯直引号零碰撞校验并支持 `…` ↔ `...` 双向容错查找，基于 `WeakMap` 追踪英文原词支持热还原，严格隔离代码块、Monaco 编辑器、终端、行内文件胶囊及英文历史对话标题。
+- **1,942 条界面汉化与代码/文件芯片严格隔离**：覆盖主界面、划词浮动交互按钮（`Quote` / `Comment` / `支线提问` 上下文守卫精准翻译）、15+ 设置子页、编排器与对战模式、对话与编辑器新设置项、快捷键方案、内置浏览器管理、`Swarm` 蜂群面板与无括号模型努力度档位动态文案；全词表通过大小写与弯直引号零碰撞校验并支持 `…` ↔ `...` 双向容错查找，基于 `WeakMap` 追踪英文原词支持热还原，严格隔离代码块、Monaco 编辑器、终端、行内文件胶囊及英文历史对话标题。
 - **SQLite `O(1)` 实时指标胶囊 + 系统设置「本地扩展 → Token 统计」分析面板**：基于 Node.js `>= 22.13` 原生 `node:sqlite`（兼容本地会话库与 Windows WSL2 默认发行版双轨只读读取），在分屏、`/btw` 与子 Agent 标签页各自独立展示 `tok/s`、`TTFT`、真实模型上下文上限（`256k`–`1M+`）、子 Agent 全树汇总（`+N sub`）与缓存命中率；同时在设置弹窗原生嵌入「Token 统计」Tab（26 周贡献热力图、14 日堆叠趋势、模型/配额池与工具/子 Agent/对话/规划/记忆场景归因、父子会话展开与低缓存预警，异步分片零阻塞且对 Swarm 子帧自动裁剪载荷）。
 - **零侵入单图标启动接力、Windows 保活自愈与 `2.5s` 热重载架构**：针对 Antigravity `2.33.0+` 默认移除调试端口的变更，保持双端**唯一官方原版图标**（Windows/Linux 原地幂等修补快捷方式参数并内置客户端更新后 `.lnk` 自动自愈与 5 分钟计划任务静默保活，全平台守护进程在冷启动 `<=12s` / 更新重启 `<=25s` 自动无感补挂 `--remote-debugging-port=0`，对存量活跃会话 100% 豁免保护），并通过宿主独占指纹门禁豁免内置浏览器本地预览页；`core/` 只读内核与 `user/` 个人配置层物理分离，升级不覆盖个人修改，修改 `user/*` 保存后 `2.5s` 自动热生效。
 
@@ -64,11 +65,11 @@
 > 4. 检查输出中的 `cdpStatus`：若为 `"missing_opt_in_flag"`（Antigravity `2.33.0+` 尚未挂调试端口），**如果你当前正在 Antigravity 内部对话中运行，请勿执行 `--force` 强行重启自断会话**，只需把空闲时执行的命令 `node ~/.gemini/antigravity/theme-patch/install.mjs relaunch`（Windows 为 `node "$HOME\.gemini\antigravity\theme-patch\install.mjs" relaunch`，或提示我直接手动退出重开一次 Antigravity）发给我；如果你在外部独立终端运行且客户端空闲，请直接执行 `node install.mjs relaunch`。
 > 5. 在端口就绪后运行 `node install.mjs verify`，确认 `"ok": true` 且 `"hasStyle": true` 即完成验收。
 
-### 二、老用户升级至 v5.5.4
+### 二、老用户升级至 v5.5.5
 `node install.mjs install` 会自动备份旧版 `core/` 内核、更新系统常驻服务，并完整保留 `~/.gemini/antigravity/theme-patch/user/` 中的个人配置：
 
 > **💬 复制发给 Agent（老用户无缝升级）**：  
-> 请帮我拉取最新的 `https://github.com/Anarcadia/chuanban-antigravity-theme-patch.git`（或读取最新解压目录），阅读其中的 `SKILL.md` 后直接运行 `node install.mjs install` 升级至 `v5.5.4`（若我此前使用的是更早期的单文件版 `antigravity-font-daemon.mjs` 且有自定义字号/配色，请先帮我把自定义项迁移到 `~/.gemini/antigravity/theme-patch/user/`）。若安装后 `cdpStatus` 为 `"missing_opt_in_flag"` 且你正在 Antigravity 内部会话中运行，请勿直接中断当前对话，告诉我空闲时运行 `node ~/.gemini/antigravity/theme-patch/install.mjs relaunch`（或手动重开一次客户端）即可；端口已就绪则直接运行 `node install.mjs verify` 验收。
+> 请帮我拉取最新的 `https://github.com/Anarcadia/chuanban-antigravity-theme-patch.git`（或读取最新解压目录），阅读其中的 `SKILL.md` 后直接运行 `node install.mjs install` 升级至 `v5.5.5`（若我此前使用的是更早期的单文件版 `antigravity-font-daemon.mjs` 且有自定义字号/配色，请先帮我把自定义项迁移到 `~/.gemini/antigravity/theme-patch/user/`）。若安装后 `cdpStatus` 为 `"missing_opt_in_flag"` 且你正在 Antigravity 内部会话中运行，请勿直接中断当前对话，告诉我空闲时运行 `node ~/.gemini/antigravity/theme-patch/install.mjs relaunch`（或手动重开一次客户端）即可；端口已就绪则直接运行 `node install.mjs verify` 验收。
 
 ### 三、后续个性化调整与排障话术
 - **🎨 切换昼夜预设、调整字号或微调样式**：
@@ -83,7 +84,10 @@
 
 ## 🕒 版本演进（完整记录见 [`CHANGELOG.md`](CHANGELOG.md)）
 
-- **v5.5.4（2026-11-22 · 现行版）**
+- **v5.5.5（2026-11-22 · 现行版）**
+  - **Windows 计划任务 `TimeTrigger` 5 分钟保活全时段闭环、健康检查减负与异常/恢复全链路落盘（合入 [@shixiaogaoya](https://github.com/shixiaogaoya) [#30](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/pull/30) & [#32](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/pull/32)）**：将 `AntigravityThemeDaemon` 计划任务的 `PT5M` 周期重复迁移至独立 `<TimeTrigger>` 并补充 `SessionUnlock` 与 `StartWhenAvailable`，消除登录会话内安装/升级后至下次注销前守护进程意外退出无人拉起的盲区，同时在 `doctor` / `install` 增加任务禁用与触发器完整性校验；将 `--keep-alive` 健康检查的 `rebuildBundleIfNeeded()` 延后至 PID 锁接管后执行（消除每 5 分钟空转拼装），固定后台 `detached` 进程 `cwd: os.homedir()` 防止锁目录，并新增致命异常与启动接管事件落盘日志。
+  - **`2.34.0` 编排器漏译补齐与 MIT 开源协议声明**：补齐「系统设置 → 编排器设置」说明文案与模型菜单编排器悬停气泡两处漏译（词典扩充至 **`1,942` 条**），并正式补充根目录 `LICENSE`（MIT）。
+- **v5.5.4（2026-11-22）**
   - **「Token 统计」全链路毫秒级加速、持久化索引、Node 22.14 防崩与新版编排器/记忆归因校准（合入并深度加固 [@shixiaogaoya](https://github.com/shixiaogaoya) [#28](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/pull/28)，致谢 [@ghang](https://github.com/ghang) [#25](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/pull/25) 底座）**：通过 SQL `CASE` 跳过占库体积 92% 的 `step_type=132` 冗余溢出页、修复 Node `22.13~22.14` `StatementSync` V8 GC 崩溃并支持活跃库 `WHERE idx >= ?` 锚点增量追加；新增带 `cacheSalt` 指纹校验、Windows Defender `EPERM` 异步重试与 `Shift+点击刷新` 硬重算的 `.cache/token-analytics-index.json` 持久化索引（`541` 库 `968 MB` 实机空闲 GC 后重开耗时从 `2.2s` 压至 **`~20ms`**）；合入 `2.34.0` 新版 Orchestrator 规划态时间线归因、补齐 `Gemini 4 Argon`（`M47`）与 `GPT-OSS 120B` 映射，并将记忆场景收窄至工具 JSON 路径参数消除误判。
   - **Windows WSL2 异步零唤醒扫描、表格防溢出与双端渲染器零闲置开销（[#28](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/pull/28)）**：新增 `inspectWin32WslProbeDemand` 空闲零子进程守卫，将 `wsl.exe --list --running` 与 `Lxss` 注册表探测改为全异步单飞刷新（100% 杜绝冷唤醒 `Stopped` 休眠虚拟机，离线时自动保留 WSL 历史统计缓存），并在 WSL P9 UNC 活跃库读取中通过 `O(1)` LRU 复用本地 `.db` 基库副本仅复制 `-wal` 增量；修复长会话标题/模型列横向溢出与热力图浮层粘滞（全局监听改为悬停按需动态挂载，平时 **`0` 个全局监听**），实现 `O(1)` 日期边界过滤、`80ms` 搜索防抖、流式观察器零数组展开与蜡封输入框 CSS 层叠减负。
 - **v5.5.3（2026-11-21）**

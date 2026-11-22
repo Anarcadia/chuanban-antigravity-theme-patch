@@ -1938,5 +1938,7 @@
   "Knowledge Generation": "知识生成",
   "Manage fine-grained permissions for GitHub.": "管理 GitHub 细粒度权限。",
   "Collapse Diffs": "折叠 Diff",
-  "Remote Control isn't active on this instance.": "当前实例未启用远程控制。"
+  "Remote Control isn't active on this instance.": "当前实例未启用远程控制。",
+  "Choose the models Orchestrator uses. A larger, smarter orchestrator model with a faster, cheaper executor gives high quality for fewer tokens.": "选择编排器使用的模型组合。将更强的高阶编排模型与更快、更省的执行模型搭配，可在保持高质量的同时消耗更少 Token。",
+  "Offloads routine steps to a faster executor. Same quality, fewer tokens used.": "将常规步骤分流至更快的执行模型。保持同等质量，消耗更少 Token。"
 }

@@ -2,7 +2,7 @@
 /**
  * chuanban-antigravity-theme-patch · CDP Theme & Live Metrics Daemon (core/daemon.mjs)
  *
- * 架构特性（v5.5.4）：
+ * 架构特性（v5.5.5）：
  * 1. 动态 Node 分级：
  *    - Node >= 22.0：完整启用昼夜双模式独立主题（暖纸浅色三预设 + 深色 onyx / claude-warm 双预设）、Google Sans Flex 原生西文引擎 × 更纱黑体 UI 精密字重桥接 + Anthropic Serif 正文、输入框三态、1900条母语级汉化、宿主独占指纹门禁、死锁与冷启动兜底包自愈及 2.33.0+ ~ 2.34.0+ CDP Opt-in 自动接力（M2 · SingletonLock/lockfile 零子进程空闲短路）。
  *    - Node >= 22.13：动态 `await import('node:sqlite')` 解锁底部实时会话指标胶囊（O(1) 增量尾行解析 + WSL2 双轨只读读取）；低版本优雅降级绝不崩溃。
@@ -488,7 +488,7 @@ function resolveActiveChannelEndpoints(channelMode = 'auto', userCfg = {}) {
 // ============================================================================
 // 2. 动态构建注入载荷（支持 core/ + user/ 实时合并与热更新签名）
 // ============================================================================
-const BASE_VERSION = '20261122-v5.5.4';
+const BASE_VERSION = '20261122-v5.5.5';
 let cachedBundleSig = '';
 let cachedInjectScript = '';
 let cachedIframeInjectScript = '';
@@ -944,7 +944,8 @@ const browserWatcherBackoffUntil = new Map(); // `${channel}:${port}` -> timesta
 const attachingTargetIds = new Set();
 const destroyedWhileAttaching = new Set();
 
-rebuildBundleIfNeeded();
+// --keep-alive 健康检查在 daemon 存活时会在下方 PID 锁段直接 exit(0)，无需预先构建注入 bundle
+if (!KEEP_ALIVE_ONLY) rebuildBundleIfNeeded();
 
 const MY_PROC_START_MS = Math.round(Date.now() - process.uptime() * 1000);
 const DAEMON_LOG_FILE = path.join(os.tmpdir(), 'ag-theme-daemon.log');
@@ -964,6 +965,15 @@ function logDaemonEvent(msg) {
     fs.appendFileSync(DAEMON_LOG_FILE, line, 'utf8');
   } catch {}
 }
+
+// 记录致命异常（含未处理的 Promise rejection）与非零退出码，便于排查 daemon 意外退出；
+// 使用 uncaughtExceptionMonitor 仅旁路观测，不改变 Node 默认的崩溃退出语义（保活任务会按周期重新拉起）
+process.on('uncaughtExceptionMonitor', (err, origin) => {
+  logDaemonEvent(`FATAL ${origin}: ${err?.stack || err}`);
+});
+process.on('exit', (code) => {
+  if (code) logDaemonEvent(`Process exiting with code ${code}`);
+});
 
 function sleepSync(ms) {
   try {
@@ -1204,10 +1214,15 @@ function checkPidFileOwnership() {
 
 if (!RUN_ONCE) {
   try {
+    let prevPid = 0;
+    let prevPidState = 'none';
     if (fs.existsSync(PID_FILE)) {
       const { pid: oldPid, startMs: oldStartMs, stopRequested } = parsePidFile(PID_FILE);
+      prevPid = oldPid;
+      prevPidState = stopRequested ? 'stop-requested' : 'self-or-empty';
       if (!stopRequested && oldPid > 0 && oldPid !== process.pid) {
         const pidState = checkDaemonPidState(oldPid, oldStartMs);
+        prevPidState = pidState;
         if (KEEP_ALIVE_ONLY) {
           if (pidState === 'confirmed' || pidState === 'uncertain') {
             process.exit(0);
@@ -1240,6 +1255,9 @@ if (!RUN_ONCE) {
     }
     fs.writeFileSync(PID_FILE, MY_PID_PAYLOAD, 'utf8');
     armPidWatcher();
+    logDaemonEvent(
+      `Daemon started (${BASE_VERSION}, ${KEEP_ALIVE_ONLY ? 'via --keep-alive' : 'direct start'}); previous PID ${prevPid || 'none'} [${prevPidState}]`
+    );
     const cleanPid = () => {
       cleanupWslSqliteStagingCache();
       if (pidWatcher) {
@@ -1272,6 +1290,9 @@ if (!RUN_ONCE) {
     logDaemonEvent(`PID lock init warning: ${err?.message || err}`);
   }
 }
+
+// --keep-alive 确认原 daemon 已退出、由本进程接管后，再构建注入 bundle
+if (KEEP_ALIVE_ONLY) rebuildBundleIfNeeded();
 
 // ============================================================================
 // 4. SQLite + Protobuf 实时会话指标解析器（读取 ~/.gemini/antigravity/conversations/<id>.db）

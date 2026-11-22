@@ -117,7 +117,7 @@ function buildManifest(baseDir = __dirname) {
   }
   const manifest = {
     name: 'chuanban-antigravity-theme-patch',
-    version: '5.5.4',
+    version: '5.5.5',
     minNodeVersion: '22.0.0',
     fullMetricsNodeVersion: '22.13.0',
     distribution: {
@@ -141,6 +141,7 @@ function buildDistZip(baseDir = __dirname) {
   if (fs.existsSync(zipPath)) fs.unlinkSync(zipPath);
 
   const includeItems = [
+    'LICENSE',
     'SKILL.md',
     'README.md',
     'CHANGELOG.md',
@@ -1074,9 +1075,9 @@ function ensureCdpLaunchers(channel = 'auto', options = {}) {
           '  <key>CFBundlePackageType</key>',
           '  <string>APPL</string>',
           '  <key>CFBundleShortVersionString</key>',
-          '  <string>5.5.4</string>',
+          '  <string>5.5.5</string>',
           '  <key>CFBundleVersion</key>',
-          '  <string>554</string>',
+          '  <string>555</string>',
           ...(iconBase ? ['  <key>CFBundleIconFile</key>', `  <string>${iconBase}</string>`] : []),
           '  <key>LSMinimumSystemVersion</key>',
           '  <string>12.0</string>',
@@ -1277,6 +1278,105 @@ function removeCdpLaunchers() {
   }
 }
 
+function inspectWindowsTaskXmlTriggers(rawXml) {
+  const xml = String(rawXml || '').replace(/\0/g, '');
+  const settingsBlock = xml.match(/<Settings\b[^>]*>[\s\S]*?<\/Settings>/i)?.[0] || '';
+  const taskEnabled = !/<Enabled>\s*false\s*<\/Enabled>/i.test(settingsBlock);
+  const isTriggerEnabled = (block) => !/<Enabled>\s*false\s*<\/Enabled>/i.test(block);
+  const hasIntervalRepetition = (block) =>
+    /<Repetition\b[^>]*>[\s\S]*?<Interval>\s*[^<\s]+\s*<\/Interval>[\s\S]*?<\/Repetition>/i.test(block);
+  const timedBlocks = xml.match(/<(?:TimeTrigger|CalendarTrigger)\b[^>]*>[\s\S]*?<\/(?:TimeTrigger|CalendarTrigger)>/gi) || [];
+  const hasTimedRepetition = timedBlocks.some((block) => isTriggerEnabled(block) && hasIntervalRepetition(block));
+  const logonBlocks = xml.match(/<LogonTrigger\b[^>]*>[\s\S]*?<\/LogonTrigger>/gi) || [];
+  const logonHasRepetition = logonBlocks.some((block) => isTriggerEnabled(block) && hasIntervalRepetition(block));
+  const legacyLogonOnlyRepetition = logonHasRepetition && !hasTimedRepetition;
+  return { taskEnabled, hasTimedRepetition, legacyLogonOnlyRepetition };
+}
+
+function inspectWindowsKeepAliveTask(targetDir) {
+  if (process.platform !== 'win32') return null;
+  try {
+    const ps = [
+      "try {",
+      "  $i = Get-ScheduledTaskInfo -TaskName 'AntigravityThemeDaemon' -ErrorAction Stop;",
+      "  [pscustomobject]@{",
+      "    registered=$true;",
+      "    nextRunTime=$(if($i.NextRunTime){$i.NextRunTime.ToString('o')}else{$null});",
+      "    lastRunTime=$(if($i.LastRunTime -and $i.LastRunTime.Year -gt 2000){$i.LastRunTime.ToString('o')}else{$null});",
+      "    lastTaskResult=$i.LastTaskResult",
+      "  } | ConvertTo-Json -Compress",
+      "} catch { '{\"registered\":false}' }"
+    ].join(' ');
+    const infoRes = spawnSync('powershell', ['-NoProfile', '-NonInteractive', '-Command', ps], {
+      encoding: 'utf8',
+      windowsHide: true,
+      timeout: 8000
+    });
+    if (infoRes.status !== 0) {
+      return {
+        registered: null,
+        error: String(infoRes.stderr || infoRes.stdout || `powershell exit ${infoRes.status}`).trim()
+      };
+    }
+    const info = JSON.parse(String(infoRes.stdout || '').trim());
+    if (!info.registered) {
+      return {
+        registered: false,
+        taskEnabled: false,
+        nextRunTime: null,
+        lastRunTime: null,
+        lastTaskResult: null,
+        hasTimedRepetition: false,
+        legacyLogonOnlyRepetition: false,
+        warning: '未找到 AntigravityThemeDaemon 计划任务，daemon 意外退出后不会被自动拉起'
+      };
+    }
+
+    const queryRes = spawnSync('schtasks', ['/Query', '/TN', 'AntigravityThemeDaemon', '/XML'], {
+      encoding: 'utf8',
+      windowsHide: true,
+      timeout: 4000
+    });
+    if (queryRes.status !== 0) {
+      return {
+        registered: true,
+        taskEnabled: null,
+        nextRunTime: info.nextRunTime ?? null,
+        lastRunTime: info.lastRunTime ?? null,
+        lastTaskResult: info.lastTaskResult ?? null,
+        hasTimedRepetition: null,
+        legacyLogonOnlyRepetition: null,
+        warning: `无法读取 AntigravityThemeDaemon 计划任务 XML（exit ${queryRes.status}）`
+      };
+    }
+
+    const { taskEnabled, hasTimedRepetition, legacyLogonOnlyRepetition } = inspectWindowsTaskXmlTriggers(queryRes.stdout);
+
+    const installScriptPath = path.join(targetDir || resolveDefaultTargetDir(), 'install.mjs');
+    const warning = !taskEnabled
+      ? `计划任务 AntigravityThemeDaemon 当前处于禁用状态，保活不会触发；请启用该任务或执行 node "${installScriptPath}" install 重新注册`
+      : !hasTimedRepetition
+      ? `5 分钟保活只挂在登录触发器上，安装后到下次登录前不会重复；请执行 node "${installScriptPath}" install 重新注册`
+      : null;
+
+    return {
+      registered: true,
+      taskEnabled,
+      nextRunTime: info.nextRunTime ?? null,
+      lastRunTime: info.lastRunTime ?? null,
+      lastTaskResult: info.lastTaskResult ?? null,
+      hasTimedRepetition,
+      legacyLogonOnlyRepetition,
+      warning
+    };
+  } catch (err) {
+    return {
+      registered: null,
+      error: String(err?.message || err)
+    };
+  }
+}
+
 async function runDoctor() {
   const channel = getArg('--channel', 'auto');
   const defaultTarget = resolveGlobalInstallDir();
@@ -1354,6 +1454,7 @@ async function runDoctor() {
       clean: integrity.ok,
       modifiedFiles: integrity.modified
     },
+    keepAliveTask: inspectWindowsKeepAliveTask(targetDir),
     liveWindow: live
   };
 
@@ -1743,6 +1844,10 @@ WantedBy=default.target
     let autostartMethod = 'none';
     let scheduledTaskStarted = false;
     let taskSettingsUpdated = false;
+    let taskEnabled = null;
+    let taskHasTimedRepetition = null;
+    let taskUpdateError = null;
+    let taskUpdateWarning = null;
     const xmlEsc = (s) =>
       String(s || '')
         .replace(/&/g, '&amp;')
@@ -1765,6 +1870,12 @@ WantedBy=default.target
     } catch {}
     const principalId = userSid || userAuthor;
     const sddl = `D:(A;;FA;;;BA)(A;;FA;;;SY)(A;;FA;;;IU)${userSid ? `(A;;FA;;;${userSid})` : ''}S:(ML;;NW;;;ME)`;
+    // LogonTrigger 上的 Repetition 要等登录事件发生后才开始，install/升级在登录之后执行，所以下次登录前不会重复；
+    // 改由 TimeTrigger 承载每 5 分钟的重复，不写 Duration 即无限期；
+    // 首次周期触发在 StartBoundary+5min，install 末尾的 /Run 会立即补跑一次。
+    const pad2 = (n) => String(n).padStart(2, '0');
+    const nowLocal = new Date();
+    const startBoundary = `${nowLocal.getFullYear()}-${pad2(nowLocal.getMonth() + 1)}-${pad2(nowLocal.getDate())}T${pad2(nowLocal.getHours())}:${pad2(nowLocal.getMinutes())}:00`;
     const taskXml = [
       '\uFEFF<?xml version="1.0" encoding="UTF-16"?>',
       '<Task version="1.3" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">',
@@ -1784,6 +1895,7 @@ WantedBy=default.target
       '    <MultipleInstancesPolicy>Parallel</MultipleInstancesPolicy>',
       '    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>',
       '    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>',
+      '    <StartWhenAvailable>true</StartWhenAvailable>',
       '    <ExecutionTimeLimit>PT0S</ExecutionTimeLimit>',
       '    <Enabled>true</Enabled>',
       '    <UseUnifiedSchedulingEngine>true</UseUnifiedSchedulingEngine>',
@@ -1792,11 +1904,20 @@ WantedBy=default.target
       '    <LogonTrigger>',
       '      <Enabled>true</Enabled>',
       `      <UserId>${xmlEsc(principalId)}</UserId>`,
+      '    </LogonTrigger>',
+      '    <TimeTrigger>',
       '      <Repetition>',
       '        <Interval>PT5M</Interval>',
       '        <StopAtDurationEnd>false</StopAtDurationEnd>',
       '      </Repetition>',
-      '    </LogonTrigger>',
+      `      <StartBoundary>${startBoundary}</StartBoundary>`,
+      '      <Enabled>true</Enabled>',
+      '    </TimeTrigger>',
+      '    <SessionStateChangeTrigger>',
+      '      <Enabled>true</Enabled>',
+      '      <StateChange>SessionUnlock</StateChange>',
+      `      <UserId>${xmlEsc(principalId)}</UserId>`,
+      '    </SessionStateChangeTrigger>',
       '  </Triggers>',
       '  <Actions Context="Author">',
       '    <Exec>',
@@ -1812,25 +1933,46 @@ WantedBy=default.target
     try {
       fs.writeFileSync(tmpXmlPath, taskXml, 'utf16le');
       const createRes = spawnSync('schtasks', ['/Create', '/TN', 'AntigravityThemeDaemon', '/XML', tmpXmlPath, '/F'], {
-        stdio: 'ignore',
+        encoding: 'utf8',
         windowsHide: true,
         timeout: 6000
       });
       if (createRes.status === 0) {
         autostartMethod = 'schtasks';
         taskSettingsUpdated = true;
+        taskEnabled = true;
+        taskHasTimedRepetition = true;
       } else {
+        taskUpdateError =
+          String(createRes.stderr || createRes.stdout || '').trim() || `schtasks /Create exited with code ${createRes.status}`;
         // 兼容旧版高完整性创建的无 SDDL 计划任务：若同名任务已存在且指向当前 VBS，直接复用而不降级写 HKCU\Run 制造双路并发
         const queryRes = spawnSync('schtasks', ['/Query', '/TN', 'AntigravityThemeDaemon', '/XML'], {
           encoding: 'utf8',
           windowsHide: true,
           timeout: 4000
         });
-        if (queryRes.status === 0 && String(queryRes.stdout || '').toLowerCase().includes('antigravitythemedaemon.vbs')) {
+        if (
+          queryRes.status === 0 &&
+          String(queryRes.stdout || '')
+            .replace(/\0/g, '')
+            .toLowerCase()
+            .includes('antigravitythemedaemon.vbs')
+        ) {
           autostartMethod = 'schtasks';
+          const triggerCheck = inspectWindowsTaskXmlTriggers(queryRes.stdout);
+          taskEnabled = triggerCheck.taskEnabled;
+          taskHasTimedRepetition = triggerCheck.hasTimedRepetition;
+          if (!triggerCheck.taskEnabled || !triggerCheck.hasTimedRepetition) {
+            const installScriptPath = path.join(targetDir, 'install.mjs');
+            const reason = !triggerCheck.taskEnabled
+              ? '现有任务当前处于禁用状态（<Settings><Enabled>false</Enabled>）'
+              : '现有任务缺少定时重复触发器（安装后至下次登录前 5 分钟保活不会生效）';
+            taskUpdateWarning = `未能覆盖更新计划任务 AntigravityThemeDaemon（可能因旧任务由管理员权限创建），且${reason}。请以管理员身份运行 node "${installScriptPath}" install，或先管理员执行 schtasks /Delete /TN AntigravityThemeDaemon /F 后重装。`;
+          }
         }
       }
-    } catch {
+    } catch (err) {
+      taskUpdateError = taskUpdateError || String(err?.message || err);
     } finally {
       try {
         if (fs.existsSync(tmpXmlPath)) fs.unlinkSync(tmpXmlPath);
@@ -1912,7 +2054,9 @@ WantedBy=default.target
     let spawnedPid = null;
     if (!scheduledTaskStarted) {
       try {
+        // 固定工作目录为用户主目录，避免后台进程继承调用方终端的 CWD 导致该目录被占用无法删除
         const child = spawn(process.execPath, ['--disable-warning=ExperimentalWarning', wrapperDaemon], {
+          cwd: os.homedir(),
           detached: true,
           stdio: 'ignore',
           windowsHide: true
@@ -1928,6 +2072,10 @@ WantedBy=default.target
       localVbsFile,
       scheduledTask: autostartMethod === 'schtasks' ? 'AntigravityThemeDaemon' : null,
       taskSettingsUpdated,
+      taskEnabled,
+      hasTimedRepetition: taskHasTimedRepetition,
+      taskUpdateError,
+      taskUpdateWarning,
       scheduledTaskStarted,
       spawnedPid,
       runningNow: Boolean(scheduledTaskStarted || spawnedPid)
@@ -2121,11 +2269,15 @@ async function runInstall() {
   const live = isCustomSandboxTarget ? { skipped: true, reason: 'custom-target-dir' } : await inspectLiveWindow(postEnv);
   const needsCdpRelaunch =
     !isCustomSandboxTarget && !live.reachable && postEnv.cdpStatus === 'missing_opt_in_flag';
+  const keepAliveUpgradeWarning =
+    !isCustomSandboxTarget && serviceInfo && typeof serviceInfo === 'object' ? serviceInfo.taskUpdateWarning || null : null;
+  const warnings = keepAliveUpgradeWarning ? [keepAliveUpgradeWarning] : [];
+  const installOk = !keepAliveUpgradeWarning;
   console.log(
     '\n[Install Complete]',
     JSON.stringify(
       {
-        ok: true,
+        ok: installOk,
         targetDir,
         backupCreated,
         userSynced: syncUser,
@@ -2133,6 +2285,7 @@ async function runInstall() {
         argvStatus,
         launcherStatus,
         serviceInfo,
+        warnings,
         config: currentCfg,
         cdpStatus: isCustomSandboxTarget ? 'sandbox' : live.reachable ? 'ready' : postEnv.cdpStatus,
         relaunchHint: needsCdpRelaunch
@@ -2144,6 +2297,10 @@ async function runInstall() {
       2
     )
   );
+  if (keepAliveUpgradeWarning) {
+    console.warn(`\n[WARN] ${keepAliveUpgradeWarning}`);
+    process.exitCode = 1;
+  }
 }
 
 function hasRecentActiveConversationWal(channel = 'auto', windowSec = 15) {
@@ -2299,6 +2456,7 @@ async function runRelaunch() {
     });
   } else if (launchTarget.exePath) {
     const child = spawn(launchTarget.exePath, ['--remote-debugging-port=0'], {
+      cwd: os.homedir(),
       detached: true,
       stdio: 'ignore',
       windowsHide: false
@@ -2434,6 +2592,7 @@ async function runRollback() {
       if (!restartedViaTask) {
         try {
           const child = spawn(process.execPath, ['--disable-warning=ExperimentalWarning', fs.existsSync(wrapperDaemon) ? wrapperDaemon : realDaemon], {
+            cwd: os.homedir(),
             detached: true,
             stdio: 'ignore',
             windowsHide: true

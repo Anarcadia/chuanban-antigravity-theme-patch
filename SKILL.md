@@ -1,14 +1,14 @@
 ---
 name: chuanban-antigravity-theme-patch
-description: 船板的 Antigravity 2.0 主题、字体与汉化补丁（v5.5.4 · 适配 Antigravity 2.34.0+ / 2.33.0+ macOS / Windows / Linux 单图标 M1+M2 零子进程空闲短路启动接力 + Windows 5 分钟保活与更新后快捷方式自愈 + Browser 级 CDP 事件驱动毫秒级发现 + UI 西文 Google Sans Flex 可变字体引擎 × 中文更纱黑体跨平台零卡顿映射 + 对话正文 Anthropic Serif 衬线 + 昼夜双模式四套预设与外观面板 📖 书卷切换钮 + 宿主独占指纹门禁 + WSL2 异步非阻塞双轨只读 SQLite + 1,940 条零冲突词典 + 分屏/支线提问(/btw)/子Agent侧栏独立实时指标胶囊 + 系统设置「本地扩展 → Token 统计」磁盘持久化毫秒级分析面板）。采用「core/ 只读内核 + user/ 永不覆盖改装层 + install.mjs CLI」，支持 Agent 一键部署、2.5 秒热重载定制与 --safe-mode 沙箱排障。当用户提到“安装船板 Antigravity 主题”、“升级/修复 Antigravity 汉化与字体”、“定制 Antigravity 界面样式或汉化词条”时触发。
+description: 船板的 Antigravity 2.0 主题、字体与汉化补丁（v5.5.5 · 适配 Antigravity 2.34.0+ / 2.33.0+ macOS / Windows / Linux 单图标 M1+M2 零子进程空闲短路启动接力 + Windows TimeTrigger 5 分钟全时段保活与更新后快捷方式自愈 + Browser 级 CDP 事件驱动毫秒级发现 + UI 西文 Google Sans Flex 可变字体引擎 × 中文更纱黑体跨平台零卡顿映射 + 对话正文 Anthropic Serif 衬线 + 昼夜双模式四套预设与外观面板 📖 书卷切换钮 + 宿主独占指纹门禁 + WSL2 异步非阻塞双轨只读 SQLite + 1,942 条零冲突词典 + 分屏/支线提问(/btw)/子Agent侧栏独立实时指标胶囊 + 系统设置「本地扩展 → Token 统计」磁盘持久化毫秒级分析面板）。采用「core/ 只读内核 + user/ 永不覆盖改装层 + install.mjs CLI」，支持 Agent 一键部署、2.5 秒热重载定制与 --safe-mode 沙箱排障。当用户提到“安装船板 Antigravity 主题”、“升级/修复 Antigravity 汉化与字体”、“定制 Antigravity 界面样式或汉化词条”时触发。
 ---
 
-# 船板的 Antigravity 主题、字体与汉化补丁（v5.5.4 · AI Agent 部署与改装契约）
+# 船板的 Antigravity 主题、字体与汉化补丁（v5.5.5 · AI Agent 部署与改装契约）
 
 > **核心摘要（致执行端 AI Agent）**：
 > - **功能边界**：纯运行时本地回环 CDP 注入（不改 `.asar`、不破系统签名、零第三方 npm 依赖），适配 Google Antigravity **`2.34.0+` / `2.33.0+`**：
 >   - **昼夜双模式**：白天模式（`body:not(.dark)`）提供三套暖纸预设（默认 `high-contrast`）与 macOS 浅色全域活字润墨；黑夜模式（`body.dark`）在「系统设置 → 外观界面 → 主题模式」嵌入 **📖 书卷按钮**（`[ 🖥️ | ☀️ | 📖 | 🌙 ]`），支持官方冷碳黑 `"onyx"`（默认）与暖纸深夜 `"claude-warm"`（`#242320` 暖炭底 / `#D97757` 陶土橙）`0ms` 切换并自动持久化至 `user/config.json`；
->   - **四层排版与双层遥测**：UI 西文直连官方 `Google Sans Flex` 可变字体（内置 `#ag-google-sans-flex-fonts` 防脱靶保底与去重）× 中文 `AgSarasaUI` 更纱黑体字重桥接；对话正文采用 `Anthropic Serif` + `Sarasa Mono Slab SC` 衬线；代码与 `.inline-pill[data-uri]` 文件胶囊采用 `Anthropic Mono` 等宽；输入框采用打字机粗衬线配 `1.5px` 三态蜡封边框；内置 `1,940` 条零冲突汉化、多路分屏/`/btw`/子 Agent 侧栏独立 SQLite 实时指标胶囊，以及「系统设置 → 本地扩展 → Token 统计」全量多维归因面板（支持 `modules.tokenAnalytics: false` 动态裁剪 ~100 KB 载荷）。
+>   - **四层排版与双层遥测**：UI 西文直连官方 `Google Sans Flex` 可变字体（内置 `#ag-google-sans-flex-fonts` 防脱靶保底与去重）× 中文 `AgSarasaUI` 更纱黑体字重桥接；对话正文采用 `Anthropic Serif` + `Sarasa Mono Slab SC` 衬线；代码与 `.inline-pill[data-uri]` 文件胶囊采用 `Anthropic Mono` 等宽；输入框采用打字机粗衬线配 `1.5px` 三态蜡封边框；内置 `1,942` 条零冲突汉化、多路分屏/`/btw`/子 Agent 侧栏独立 SQLite 实时指标胶囊，以及「系统设置 → 本地扩展 → Token 统计」全量多维归因面板（支持 `modules.tokenAnalytics: false` 动态裁剪 ~100 KB 载荷）。
 > - **真注入肉眼验真三特征（防 `2.33.0` 原生 `Google Sans Flex` 视觉假象）**：
 >   1. 对话正文与 Markdown 为 `Anthropic Serif` 衬线体（未注入时退化为无衬线体）；
 >   2. 主输入框为打字机板状粗衬线 + `1.5px` 暗红蜡封外框；
@@ -38,7 +38,7 @@ description: 船板的 Antigravity 2.0 主题、字体与汉化补丁（v5.5.4 �
 
 > **多版本环境提示**：若用户电脑装有 `nvm` / `fnm` / `volta` / Homebrew Node，请优先选用 **`Node.js >= 22.13.0`** 执行 `node install.mjs install`（安装器会将当前 `process.execPath` 绝对路径固化写入系统自启服务）。
 
-| 运行时版本 | 昼夜双模式主题 / 蜡封三态 / 四层字体 | 1,940 条汉化 + 原型安全词典 | 死锁/冷启动自愈 + M2 端口接力 + 缩放修复 | SQLite 实时指标胶囊 + 设置「Token 统计」 (`node:sqlite`) |
+| 运行时版本 | 昼夜双模式主题 / 蜡封三态 / 四层字体 | 1,942 条汉化 + 原型安全词典 | 死锁/冷启动自愈 + M2 端口接力 + 缩放修复 | SQLite 实时指标胶囊 + 设置「Token 统计」 (`node:sqlite`) |
 | :--- | :---: | :---: | :---: | :---: |
 | **Node.js `>= 22.13.0`**（推荐） | ✅ 全量启用 | ✅ 全量启用 | ✅ 全量启用 | ✅ **自动启用**（实时胶囊 + 全量多维 Token 归因统计） |
 | **Node.js `22.0.0 ~ 22.12.x`** | ✅ 全量启用 | ✅ 全量启用 | ✅ 全量启用 | ⚠️ 自动优雅关闭（后台零报错） |
@@ -56,12 +56,13 @@ chuanban-antigravity-theme-patch/
 ├── SKILL.md                    # 面向 AI Agent 的部署与二次改装契约（本文件）
 ├── README.md                   # 面向用户的项目说明与快速上手指南
 ├── CHANGELOG.md                # 版本演进记录
+├── LICENSE                     # MIT 开源许可协议
 ├── core/                       # 【只读内核】随版本升级原子替换，Agent 严禁直接修改
-│   ├── manifest.json           # 版本号（5.5.4）、三端地址与 core/* 四件套 SHA-256 校验清单
+│   ├── manifest.json           # 版本号（5.5.5）、三端地址与 core/* 四件套 SHA-256 校验清单
 │   ├── daemon.mjs              # Node CDP 守护进程（宿主独占指纹门禁、2.33.0+~2.34.0+ M2 冷启动自动接力重启与 Windows .lnk 更新自愈、SingletonLock/lockfile 全平台零子进程空闲短路、BrowserWatcher 83% 轮询降频、SQLite O(1) 增量胶囊与异步分片全量 Token 统计归因、WSL2 双轨只读读取、Swarm 子帧 ~100KB 载荷裁剪注入、2.5s 热重载感知）
 │   ├── runtime.js              # 浏览器端注入引擎（宿主指纹门禁与 0ms 防闪白、昼夜双预设 `preset`/`darkPreset` 与 curtainView/标题栏联动、Google Sans Flex 防脱靶保底与去重、O(1) 观察器自写入短路、设置「本地扩展 → Token 统计」零噪观察器挂载、指标胶囊 rAF 合批防重排、弯引号/省略号双向回退与 DICT_CI 索引）
 │   ├── theme.css               # 五段式样式表（Part I Google Sans Flex × AgSarasaUI 字重桥接、Anthropic Serif 正文、.inline-pill[data-uri] 等宽对齐与 macOS 浅色全域活字润墨平衡 / Part II 白天暖纸三预设 / Part III 独立黑夜双预设 / Part IV 指标胶囊 / Part V 设置 Token 统计面板）
-│   └── i18n.json               # 1,940 条零冲突标准 JSON 基准词典（兼容 PowerShell ConvertFrom-Json，挂载至 Object.create(null)）
+│   └── i18n.json               # 1,942 条零冲突标准 JSON 基准词典（兼容 PowerShell ConvertFrom-Json，挂载至 Object.create(null)）
 └── user/                       # 【用户改装层】升级 100% 保留，守护进程每 2.5s 检测 mtimeMs 热重载注入
     ├── config.json             # 开关配置（enabled / channel / preset / darkPreset / contextLimit / contextLimitOverride / modules / themeVars / darkThemeVars）
     ├── custom.css              # 自定义追加 CSS（独立挂载于 #antigravity-user-custom-style）
@@ -114,7 +115,7 @@ node install.mjs install --sync-user
 ```bash
 node install.mjs verify
 ```
-当输出 `"ok": true`、`"bodyReady": true`、`"hasStyle": true`、`"dictCount": 1940` 时，代表主题、字体、汉化与指标胶囊已全部实机生效。
+当输出 `"ok": true`、`"bodyReady": true`、`"hasStyle": true`、`"dictCount": 1942` 时，代表主题、字体、汉化与指标胶囊已全部实机生效。
 
 ---
 

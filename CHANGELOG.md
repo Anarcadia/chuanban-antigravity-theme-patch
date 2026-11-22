@@ -4,6 +4,25 @@
 
 ---
 
+## [v5.5.5] - 2026-11-22
+
+> **适用版本**：Antigravity `2.34.0+` / `2.33.x`（向下完全兼容 `2.32.x` / `2.31.x` / `2.30.0`）  
+> **社区致谢**：特别感谢 [@shixiaogaoya](https://github.com/shixiaogaoya)（[PR #30](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/pull/30) 与 [PR #32](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/pull/32) 修复 Windows 计划任务安装后至下次登录前的 5 分钟保活触发盲区、补齐致命异常/启动恢复落盘日志、削减 `--keep-alive` 健康检查构建开销并解除后台 `spawn` 工作目录锁定）的代码贡献！
+
+### Fixed, Perf & Localization（Windows 5 分钟计划任务保活全时段闭环、健康检查减负、`2.34.0` 编排器汉化补齐与 MIT 开源协议声明）
+- **Windows 计划任务 `TimeTrigger` 5 分钟保活闭环与 `doctor` / `install` 任务完整性自检（`install.mjs`，合入 [#30](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/pull/30)）**：
+  - 将 `AntigravityThemeDaemon` 计划任务的 `PT5M` 周期重复从 `<LogonTrigger>` 独立迁移至 `<TimeTrigger>`（省略 `<Duration>` 无限期重复），修复在已登录会话中执行 `install` / 升级后至下次注销或重启前守护进程意外退出无人拉起的盲区；同步新增 `<SessionStateChangeTrigger>`（`SessionUnlock` 锁屏解锁补拉）与 `<StartWhenAvailable>true</StartWhenAvailable>`；
+  - 新增 `inspectWindowsTaskXmlTriggers` 与 `inspectWindowsKeepAliveTask`：在 `doctor` 诊断报告中输出 `keepAliveTask` 状态，并在旧版管理员创建任务无法覆盖、缺少定时重复触发器或任务被全局禁用（`<Settings><Enabled>false</Enabled>`）时在 `install` 中显式告警并返回非零退出码指引修复。
+- **守护进程 `--keep-alive` 健康检查减负、后台 `spawn` 工作目录脱钩与崩溃/恢复全链路落盘（`core/daemon.mjs` / `install.mjs`，合入 [#30](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/pull/30) & [#32](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/pull/32)）**：
+  - 将 `--keep-alive` 模式下的 `rebuildBundleIfNeeded()` 延后至单实例 PID 锁接管之后执行，消除主守护进程存活时每 5 分钟健康检查无谓拼装 `core/*` 与 `user/*` 的 I/O 空转（单次探测耗时降低约 `12.7%`）；
+  - 为 `install.mjs` 中全部 3 处 `detached: true` 后台进程拉起路径显式指定 `cwd: os.homedir()`，防止长驻进程继承并锁死调用终端所在的临时或项目目录；
+  - 新增 `process.on('uncaughtExceptionMonitor')` 与非零退出码旁路日志记录（不改变原生崩溃退出语义），并在守护进程接管 PID 锁启动时落盘记录启动方式与前任 PID 状态至 `%TEMP%\ag-theme-daemon.log`。
+- **`2.34.0` 编排器漏译补齐与开源协议声明（`core/i18n.json` / `LICENSE`）**：
+  - 补齐「系统设置 → 模型 → 编排器设置」说明文案与对话框模型选择器编排器行悬停气泡两处漏译，基准词典扩充至 **`1,942` 条**；
+  - 仓库根目录与发行包正式补充 **MIT `LICENSE`** 开源许可协议文件。
+
+---
+
 ## [v5.5.4] - 2026-11-22
 
 > **适用版本**：Antigravity `2.34.0+` / `2.33.x`（向下完全兼容 `2.32.x` / `2.31.x` / `2.30.0`）  
