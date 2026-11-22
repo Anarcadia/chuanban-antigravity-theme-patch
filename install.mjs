@@ -1279,13 +1279,17 @@ function removeCdpLaunchers() {
 
 function inspectWindowsTaskXmlTriggers(rawXml) {
   const xml = String(rawXml || '').replace(/\0/g, '');
+  const settingsBlock = xml.match(/<Settings\b[^>]*>[\s\S]*?<\/Settings>/i)?.[0] || '';
+  const taskEnabled = !/<Enabled>\s*false\s*<\/Enabled>/i.test(settingsBlock);
   const isTriggerEnabled = (block) => !/<Enabled>\s*false\s*<\/Enabled>/i.test(block);
+  const hasIntervalRepetition = (block) =>
+    /<Repetition\b[^>]*>[\s\S]*?<Interval>\s*[^<\s]+\s*<\/Interval>[\s\S]*?<\/Repetition>/i.test(block);
   const timedBlocks = xml.match(/<(?:TimeTrigger|CalendarTrigger)\b[^>]*>[\s\S]*?<\/(?:TimeTrigger|CalendarTrigger)>/gi) || [];
-  const hasTimedRepetition = timedBlocks.some((block) => isTriggerEnabled(block) && /<Repetition\b/i.test(block));
+  const hasTimedRepetition = timedBlocks.some((block) => isTriggerEnabled(block) && hasIntervalRepetition(block));
   const logonBlocks = xml.match(/<LogonTrigger\b[^>]*>[\s\S]*?<\/LogonTrigger>/gi) || [];
-  const logonHasRepetition = logonBlocks.some((block) => isTriggerEnabled(block) && /<Repetition\b/i.test(block));
+  const logonHasRepetition = logonBlocks.some((block) => isTriggerEnabled(block) && hasIntervalRepetition(block));
   const legacyLogonOnlyRepetition = logonHasRepetition && !hasTimedRepetition;
-  return { hasTimedRepetition, legacyLogonOnlyRepetition };
+  return { taskEnabled, hasTimedRepetition, legacyLogonOnlyRepetition };
 }
 
 function inspectWindowsKeepAliveTask(targetDir) {
@@ -1317,6 +1321,7 @@ function inspectWindowsKeepAliveTask(targetDir) {
     if (!info.registered) {
       return {
         registered: false,
+        taskEnabled: false,
         nextRunTime: null,
         lastRunTime: null,
         lastTaskResult: null,
@@ -1334,6 +1339,7 @@ function inspectWindowsKeepAliveTask(targetDir) {
     if (queryRes.status !== 0) {
       return {
         registered: true,
+        taskEnabled: null,
         nextRunTime: info.nextRunTime ?? null,
         lastRunTime: info.lastRunTime ?? null,
         lastTaskResult: info.lastTaskResult ?? null,
@@ -1343,15 +1349,18 @@ function inspectWindowsKeepAliveTask(targetDir) {
       };
     }
 
-    const { hasTimedRepetition, legacyLogonOnlyRepetition } = inspectWindowsTaskXmlTriggers(queryRes.stdout);
+    const { taskEnabled, hasTimedRepetition, legacyLogonOnlyRepetition } = inspectWindowsTaskXmlTriggers(queryRes.stdout);
 
     const installScriptPath = path.join(targetDir || resolveDefaultTargetDir(), 'install.mjs');
-    const warning = !hasTimedRepetition
+    const warning = !taskEnabled
+      ? `计划任务 AntigravityThemeDaemon 当前处于禁用状态，保活不会触发；请启用该任务或执行 node "${installScriptPath}" install 重新注册`
+      : !hasTimedRepetition
       ? `5 分钟保活只挂在登录触发器上，安装后到下次登录前不会重复；请执行 node "${installScriptPath}" install 重新注册`
       : null;
 
     return {
       registered: true,
+      taskEnabled,
       nextRunTime: info.nextRunTime ?? null,
       lastRunTime: info.lastRunTime ?? null,
       lastTaskResult: info.lastTaskResult ?? null,
@@ -1834,6 +1843,7 @@ WantedBy=default.target
     let autostartMethod = 'none';
     let scheduledTaskStarted = false;
     let taskSettingsUpdated = false;
+    let taskEnabled = null;
     let taskHasTimedRepetition = null;
     let taskUpdateError = null;
     let taskUpdateWarning = null;
@@ -1929,6 +1939,7 @@ WantedBy=default.target
       if (createRes.status === 0) {
         autostartMethod = 'schtasks';
         taskSettingsUpdated = true;
+        taskEnabled = true;
         taskHasTimedRepetition = true;
       } else {
         taskUpdateError =
@@ -1948,10 +1959,14 @@ WantedBy=default.target
         ) {
           autostartMethod = 'schtasks';
           const triggerCheck = inspectWindowsTaskXmlTriggers(queryRes.stdout);
+          taskEnabled = triggerCheck.taskEnabled;
           taskHasTimedRepetition = triggerCheck.hasTimedRepetition;
-          if (!triggerCheck.hasTimedRepetition) {
+          if (!triggerCheck.taskEnabled || !triggerCheck.hasTimedRepetition) {
             const installScriptPath = path.join(targetDir, 'install.mjs');
-            taskUpdateWarning = `未能覆盖更新计划任务 AntigravityThemeDaemon（可能因旧任务由管理员权限创建），且现有任务缺少定时重复触发器（安装后至下次登录前 5 分钟保活不会生效）。请以管理员身份运行 node "${installScriptPath}" install，或先管理员执行 schtasks /Delete /TN AntigravityThemeDaemon /F 后重装。`;
+            const reason = !triggerCheck.taskEnabled
+              ? '现有任务当前处于禁用状态（<Settings><Enabled>false</Enabled>）'
+              : '现有任务缺少定时重复触发器（安装后至下次登录前 5 分钟保活不会生效）';
+            taskUpdateWarning = `未能覆盖更新计划任务 AntigravityThemeDaemon（可能因旧任务由管理员权限创建），且${reason}。请以管理员身份运行 node "${installScriptPath}" install，或先管理员执行 schtasks /Delete /TN AntigravityThemeDaemon /F 后重装。`;
           }
         }
       }
@@ -2054,6 +2069,7 @@ WantedBy=default.target
       localVbsFile,
       scheduledTask: autostartMethod === 'schtasks' ? 'AntigravityThemeDaemon' : null,
       taskSettingsUpdated,
+      taskEnabled,
       hasTimedRepetition: taskHasTimedRepetition,
       taskUpdateError,
       taskUpdateWarning,
