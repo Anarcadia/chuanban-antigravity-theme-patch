@@ -1277,6 +1277,90 @@ function removeCdpLaunchers() {
   }
 }
 
+function inspectWindowsKeepAliveTask(targetDir) {
+  if (process.platform !== 'win32') return null;
+  try {
+    const ps = [
+      "try {",
+      "  $i = Get-ScheduledTaskInfo -TaskName 'AntigravityThemeDaemon' -ErrorAction Stop;",
+      "  [pscustomobject]@{",
+      "    registered=$true;",
+      "    nextRunTime=$(if($i.NextRunTime){$i.NextRunTime.ToString('o')}else{$null});",
+      "    lastRunTime=$(if($i.LastRunTime -and $i.LastRunTime.Year -gt 2000){$i.LastRunTime.ToString('o')}else{$null});",
+      "    lastTaskResult=$i.LastTaskResult",
+      "  } | ConvertTo-Json -Compress",
+      "} catch { '{\"registered\":false}' }"
+    ].join(' ');
+    const infoRes = spawnSync('powershell', ['-NoProfile', '-NonInteractive', '-Command', ps], {
+      encoding: 'utf8',
+      windowsHide: true,
+      timeout: 8000
+    });
+    if (infoRes.status !== 0) {
+      return {
+        registered: null,
+        error: String(infoRes.stderr || infoRes.stdout || `powershell exit ${infoRes.status}`).trim()
+      };
+    }
+    const info = JSON.parse(String(infoRes.stdout || '').trim());
+    if (!info.registered) {
+      return {
+        registered: false,
+        nextRunTime: null,
+        lastRunTime: null,
+        lastTaskResult: null,
+        hasTimedRepetition: false,
+        legacyLogonOnlyRepetition: false,
+        warning: '未找到 AntigravityThemeDaemon 计划任务，daemon 意外退出后不会被自动拉起'
+      };
+    }
+
+    const queryRes = spawnSync('schtasks', ['/Query', '/TN', 'AntigravityThemeDaemon', '/XML'], {
+      encoding: 'utf8',
+      windowsHide: true,
+      timeout: 4000
+    });
+    if (queryRes.status !== 0) {
+      return {
+        registered: true,
+        nextRunTime: info.nextRunTime ?? null,
+        lastRunTime: info.lastRunTime ?? null,
+        lastTaskResult: info.lastTaskResult ?? null,
+        hasTimedRepetition: null,
+        legacyLogonOnlyRepetition: null,
+        warning: `无法读取 AntigravityThemeDaemon 计划任务 XML（exit ${queryRes.status}）`
+      };
+    }
+
+    const xml = String(queryRes.stdout || '').replace(/\0/g, '');
+    const timedBlocks = xml.match(/<(?:TimeTrigger|CalendarTrigger)\b[^>]*>[\s\S]*?<\/(?:TimeTrigger|CalendarTrigger)>/gi) || [];
+    const hasTimedRepetition = timedBlocks.some((block) => /<Repetition\b/i.test(block));
+    const logonBlocks = xml.match(/<LogonTrigger\b[^>]*>[\s\S]*?<\/LogonTrigger>/gi) || [];
+    const logonHasRepetition = logonBlocks.some((block) => /<Repetition\b/i.test(block));
+    const legacyLogonOnlyRepetition = logonHasRepetition && !hasTimedRepetition;
+
+    const installScriptPath = path.join(targetDir || resolveDefaultTargetDir(), 'install.mjs');
+    const warning = !hasTimedRepetition
+      ? `5 分钟保活只挂在登录触发器上，安装后到下次登录前不会重复；请执行 node "${installScriptPath}" install 重新注册`
+      : null;
+
+    return {
+      registered: true,
+      nextRunTime: info.nextRunTime ?? null,
+      lastRunTime: info.lastRunTime ?? null,
+      lastTaskResult: info.lastTaskResult ?? null,
+      hasTimedRepetition,
+      legacyLogonOnlyRepetition,
+      warning
+    };
+  } catch (err) {
+    return {
+      registered: null,
+      error: String(err?.message || err)
+    };
+  }
+}
+
 async function runDoctor() {
   const channel = getArg('--channel', 'auto');
   const defaultTarget = resolveGlobalInstallDir();
@@ -1354,6 +1438,7 @@ async function runDoctor() {
       clean: integrity.ok,
       modifiedFiles: integrity.modified
     },
+    keepAliveTask: inspectWindowsKeepAliveTask(targetDir),
     liveWindow: live
   };
 
@@ -1765,6 +1850,12 @@ WantedBy=default.target
     } catch {}
     const principalId = userSid || userAuthor;
     const sddl = `D:(A;;FA;;;BA)(A;;FA;;;SY)(A;;FA;;;IU)${userSid ? `(A;;FA;;;${userSid})` : ''}S:(ML;;NW;;;ME)`;
+    // LogonTrigger 上的 Repetition 要等登录事件发生后才开始，install/升级在登录之后执行，所以下次登录前不会重复；
+    // 改由 TimeTrigger 承载每 5 分钟的重复，不写 Duration 即无限期；
+    // 首次周期触发在 StartBoundary+5min，install 末尾的 /Run 会立即补跑一次。
+    const pad2 = (n) => String(n).padStart(2, '0');
+    const nowLocal = new Date();
+    const startBoundary = `${nowLocal.getFullYear()}-${pad2(nowLocal.getMonth() + 1)}-${pad2(nowLocal.getDate())}T${pad2(nowLocal.getHours())}:${pad2(nowLocal.getMinutes())}:00`;
     const taskXml = [
       '\uFEFF<?xml version="1.0" encoding="UTF-16"?>',
       '<Task version="1.3" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">',
@@ -1784,6 +1875,7 @@ WantedBy=default.target
       '    <MultipleInstancesPolicy>Parallel</MultipleInstancesPolicy>',
       '    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>',
       '    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>',
+      '    <StartWhenAvailable>true</StartWhenAvailable>',
       '    <ExecutionTimeLimit>PT0S</ExecutionTimeLimit>',
       '    <Enabled>true</Enabled>',
       '    <UseUnifiedSchedulingEngine>true</UseUnifiedSchedulingEngine>',
@@ -1792,11 +1884,20 @@ WantedBy=default.target
       '    <LogonTrigger>',
       '      <Enabled>true</Enabled>',
       `      <UserId>${xmlEsc(principalId)}</UserId>`,
+      '    </LogonTrigger>',
+      '    <TimeTrigger>',
       '      <Repetition>',
       '        <Interval>PT5M</Interval>',
       '        <StopAtDurationEnd>false</StopAtDurationEnd>',
       '      </Repetition>',
-      '    </LogonTrigger>',
+      `      <StartBoundary>${startBoundary}</StartBoundary>`,
+      '      <Enabled>true</Enabled>',
+      '    </TimeTrigger>',
+      '    <SessionStateChangeTrigger>',
+      '      <Enabled>true</Enabled>',
+      '      <StateChange>SessionUnlock</StateChange>',
+      `      <UserId>${xmlEsc(principalId)}</UserId>`,
+      '    </SessionStateChangeTrigger>',
       '  </Triggers>',
       '  <Actions Context="Author">',
       '    <Exec>',
