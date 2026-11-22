@@ -1205,10 +1205,15 @@ function checkPidFileOwnership() {
 
 if (!RUN_ONCE) {
   try {
+    let prevPid = 0;
+    let prevPidState = 'none';
     if (fs.existsSync(PID_FILE)) {
       const { pid: oldPid, startMs: oldStartMs, stopRequested } = parsePidFile(PID_FILE);
+      prevPid = oldPid;
+      prevPidState = stopRequested ? 'stop-requested' : 'self-or-empty';
       if (!stopRequested && oldPid > 0 && oldPid !== process.pid) {
         const pidState = checkDaemonPidState(oldPid, oldStartMs);
+        prevPidState = pidState;
         if (KEEP_ALIVE_ONLY) {
           if (pidState === 'confirmed' || pidState === 'uncertain') {
             process.exit(0);
@@ -1241,6 +1246,9 @@ if (!RUN_ONCE) {
     }
     fs.writeFileSync(PID_FILE, MY_PID_PAYLOAD, 'utf8');
     armPidWatcher();
+    logDaemonEvent(
+      `Daemon started (${BASE_VERSION}, ${KEEP_ALIVE_ONLY ? 'via --keep-alive' : 'direct start'}); previous PID ${prevPid || 'none'} [${prevPidState}]`
+    );
     const cleanPid = () => {
       cleanupWslSqliteStagingCache();
       if (pidWatcher) {
