@@ -374,9 +374,7 @@ html[data-ag-os="win32"] :is([data-markdown-root], [data-testid="user-message-co
 }
 
 html[data-ag-os="win32"] :is(code, pre, kbd, samp, .font-mono, [class*="language-"], .monaco-editor, .xterm, [data-uri^="file:"], [data-uri^="vscode-"], a.inline-pill[href^="file:"], a.inline-pill[href^="vscode-"], [data-uri^="file:"] .select-text, [data-uri^="vscode-"] .select-text, a.inline-pill[href^="file:"] .select-text, a.inline-pill[href^="vscode-"] .select-text),
-html[data-ag-os="win32"] :is(code, pre, kbd, samp, .font-mono, [class*="language-"], .monaco-editor, .xterm) :is(p, li, blockquote, td, i, em, .italic, strong, b, h1, h2, h3, h4, h5, h6, th, .font-medium, .font-semibold, .font-bold),
-html[data-ag-os="win32"] :is([data-markdown-root], [data-testid="user-message-content"], .agy-user-bubble, .select-text:not([role="dialog"] *), .prose, .markdown, article) :is(code, pre, kbd, samp, .font-mono, [class*="language-"]),
-html[data-ag-os="win32"] :is([data-markdown-root], [data-testid="user-message-content"], .agy-user-bubble, .select-text:not([role="dialog"] *), .prose, .markdown, article) :is(code, pre, kbd, samp, .font-mono, [class*="language-"]) :is(p, li, blockquote, td, i, em, .italic, strong, b, h1, h2, h3, h4, h5, h6, th, .font-medium, .font-semibold, .font-bold) {
+html[data-ag-os="win32"] :is(code, pre, kbd, samp, .font-mono, .monaco-editor, .xterm) :is(span, i, em, .italic, strong, b, .font-semibold, .font-bold) {
   font-variation-settings: normal !important;
 }
 
@@ -515,15 +513,14 @@ body[data-agy-theme][data-newux-theme="onyx"] .surface-composer:focus-within > .
 }
 
 /* 当普通对话存在展开的非空顶部附加栏（如排队消息或引用块）时，仅作底部分隔线而不产生外围套框（兼容 voice-glow-ring 挂载为首子节点） */
-:is(#antigravity\.agentSidePanelInputBox, [id="antigravity.agentSidePanelInputBox"], .surface-composer) > :nth-child(1 of div:not(.surface-composer-card):not([aria-hidden="true"]):not(.voice-glow-ring):not(:empty):not([hidden])) {
+:is(#antigravity\.agentSidePanelInputBox, [id="antigravity.agentSidePanelInputBox"], .surface-composer) > div:nth-child(1 of div:not(.surface-composer-card):not([aria-hidden="true"]):not(.voice-glow-ring):not(:empty):not([hidden])) {
   background-color: var(--ag-composer-tray-bg, #EAE4D8) !important;
   border-bottom: 1px solid var(--ag-composer-tray-divider, rgba(154, 71, 50, 0.15)) !important;
   border-radius: calc(var(--nux-composer-frame-radius, 21px) - var(--ag-composer-bw, 2px)) calc(var(--nux-composer-frame-radius, 21px) - var(--ag-composer-bw, 2px)) 0 0 !important;
 }
 
-/* 新建对话主界面（项目/环境/分支选择顶栏）：保留上部托盘深色底，仅消除中间 1px 水平分界线 */
-html[data-ag-page-type="home"] :is(#antigravity\.agentSidePanelInputBox, [id="antigravity.agentSidePanelInputBox"], .surface-composer) > :nth-child(1 of div:not(.surface-composer-card):not([aria-hidden="true"]):not(.voice-glow-ring):not(:empty):not([hidden])),
-:is(#antigravity\.agentSidePanelInputBox, [id="antigravity.agentSidePanelInputBox"], .surface-composer) > :nth-child(1 of div:not(.surface-composer-card):not([aria-hidden="true"]):not(.voice-glow-ring):not(:empty):not([hidden])):has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [data-testid="branch-pill-trigger"], [data-testid="project-branch-picker"], [aria-label^="Select project"], [aria-label^="选择项目"]) {
+/* 新建对话主界面（项目/环境/分支选择顶栏）：保留上部托盘深色底，仅消除中间 1px 水平分界线（依托 runtime.js 维护的 data-ag-page-type="home"，彻底避免全局 :nth-child():has() 桶拖慢虚拟滚动） */
+html[data-ag-page-type="home"] :is(#antigravity\.agentSidePanelInputBox, [id="antigravity.agentSidePanelInputBox"], .surface-composer) > div:nth-child(1 of div:not(.surface-composer-card):not([aria-hidden="true"]):not(.voice-glow-ring):not(:empty):not([hidden])) {
   border-bottom: 0 solid transparent !important;
 }
 

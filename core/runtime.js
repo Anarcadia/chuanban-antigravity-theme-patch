@@ -572,13 +572,39 @@
       const targetEl = document.body || document.documentElement;
       if (!targetEl || typeof getComputedStyle !== 'function') return;
       const curPreset = document.documentElement ? document.documentElement.getAttribute('data-ag-preset') : '';
-      const defaultLightBg = curPreset === 'native' ? '#FFFFFF' : curPreset === 'absolutely' ? '#F7F5F0' : '#E8E3D9';
-      const fbBg = (customFallbacks && customFallbacks.bg) || (isDark ? '#101417' : defaultLightBg);
-      const fbFg = (customFallbacks && customFallbacks.fg) || (isDark ? '#FAFAFA' : '#24221F');
+      const curDarkPreset = document.documentElement ? document.documentElement.getAttribute('data-ag-dark-preset') : '';
+      const defaultLightBg =
+        curPreset === 'native'
+          ? '#FAFAFA'
+          : curPreset === 'absolutely'
+            ? '#F7F5F0'
+            : curPreset === 'vintage-deep'
+              ? '#E3D9C8'
+              : curPreset === 'claude-desktop-purewhite'
+                ? '#EFECE5'
+                : '#E8E3D9';
+      const defaultDarkBg =
+        curPreset === 'native' ? '#131313' : curDarkPreset === 'claude-warm' ? '#191815' : '#101417';
+      const defaultLightFg =
+        curPreset === 'native'
+          ? '#0A0A0C'
+          : curPreset === 'absolutely' || curPreset === 'claude-desktop-purewhite'
+            ? '#1F1E1D'
+            : curPreset === 'vintage-deep'
+              ? '#26221C'
+              : '#24221F';
+      const defaultDarkFg =
+        curPreset === 'native' ? '#FAFAFA' : curDarkPreset === 'claude-warm' ? '#ECE7D9' : '#E4E8E9';
+      const fbBg = (customFallbacks && customFallbacks.bg) || (isDark ? defaultDarkBg : defaultLightBg);
+      const fbFg = (customFallbacks && customFallbacks.fg) || (isDark ? defaultDarkFg : defaultLightFg);
+      // Windows 11 TitleBarOverlay 物理位于顶栏菜单条最右侧：优先读取顶栏容器实色，其次读侧栏实色，最后回落 CSS 变量与全预设色表
+      const menuItem = document.querySelector('[data-testid="title-menu-bar-item"]');
+      const titleBarEl = menuItem && menuItem.closest ? menuItem.closest('.bg-sidebar, header') : null;
       const sidebarEl = document.querySelector('[data-testid="conversation-list-sidebar"]');
-      const directBgHex = sidebarEl ? parseColorToHex6(getComputedStyle(sidebarEl).backgroundColor) : null;
+      const titleBarBgHex = titleBarEl ? parseColorToHex6(getComputedStyle(titleBarEl).backgroundColor) : null;
+      const sidebarBgHex = sidebarEl ? parseColorToHex6(getComputedStyle(sidebarEl).backgroundColor) : null;
       const directFgHex = parseColorToHex6(getComputedStyle(targetEl).color);
-      const bgHex = directBgHex || resolveCssColorToHex6('--sidebar', targetEl, fbBg);
+      const bgHex = titleBarBgHex || sidebarBgHex || resolveCssColorToHex6('--sidebar', targetEl, fbBg);
       const fgHex = directFgHex || resolveCssColorToHex6('--foreground', targetEl, fbFg);
       const sig = bgHex + '|' + fgHex;
       if (force || window.__ag_last_overlay_sig !== sig) {
@@ -1813,6 +1839,56 @@
         if (htmlEl && htmlEl.style.colorScheme !== swarmMode) {
           htmlEl.style.colorScheme = swarmMode;
           window.__ag_swarm_owned_cs = true;
+        }
+        // 当 Swarm 看板在莫兰迪/自定义主题下首次挂载时，宿主会将父窗口补丁配色快照写入 iframe 的 html.style inline 变量；
+        // 切回「原版配色 (native)」后若不清理这些被补丁污染的 inline 变量，Swarm 会卡死在莫兰迪底色无法回归原版。
+        if (htmlEl && targetPreset === PRESETS.NATIVE) {
+          const curInlineBg = (htmlEl.style.getPropertyValue('--background') || '').trim().toUpperCase();
+          const curInlineFont = (htmlEl.style.getPropertyValue('--editor-font-family') || '').trim();
+          const PATCH_SWARM_BGS = new Set([
+            '#F4F1EA',
+            '#FCFCFB',
+            '#EFE8DC',
+            '#F8F6F1',
+            '#F3EAD8',
+            '#F8F7F4',
+            '#15191C',
+            '#21201D',
+            '#1B1A18'
+          ]);
+          if (PATCH_SWARM_BGS.has(curInlineBg) || /Anthropic Mono/i.test(curInlineFont)) {
+            const propsToClear = [];
+            for (let i = 0; i < htmlEl.style.length; i++) {
+              const prop = htmlEl.style[i];
+              if (prop && prop.startsWith('--')) propsToClear.push(prop);
+            }
+            for (let i = 0; i < propsToClear.length; i++) {
+              htmlEl.style.removeProperty(propsToClear[i]);
+            }
+            if (isDark) {
+              const nativeDarkVars = {
+                '--background': '#131313',
+                '--foreground': '#FAFAFA',
+                '--content': '#131313',
+                '--card': '#1C1C1E',
+                '--sidebar': '#18181A',
+                '--border': 'rgba(255, 255, 255, 0.12)',
+                '--card-border': 'rgba(255, 255, 255, 0.12)',
+                '--secondary': 'rgba(255, 255, 255, 0.08)',
+                '--secondary-foreground': '#E4E4E7',
+                '--muted': 'rgba(255, 255, 255, 0.06)',
+                '--muted-foreground': '#A1A1AA',
+                '--primary': '#2F71E3',
+                '--primary-foreground': '#FFFFFF',
+                '--accent': '#2F71E3',
+                '--vscode-editor-background': '#131313',
+                '--vscode-foreground': '#FAFAFA'
+              };
+              for (const [k, v] of Object.entries(nativeDarkVars)) {
+                htmlEl.style.setProperty(k, v);
+              }
+            }
+          }
         }
       } else {
         const bodyExplicitDark = !!(

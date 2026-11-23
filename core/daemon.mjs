@@ -629,6 +629,36 @@ function broadcastPresetToTargets(kind, normalizedVal, excludeTargetId = null) {
 
 let cfgWriteSeq = 0;
 
+function atomicWriteTextFileSync(tmpPath, targetPath, content) {
+  fs.writeFileSync(tmpPath, content, 'utf8');
+  const maxAttempts = process.platform === 'win32' ? 5 : 1;
+  let lastErr = null;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      fs.renameSync(tmpPath, targetPath);
+      return;
+    } catch (err) {
+      lastErr = err;
+      const code = err && err.code;
+      const retryable = process.platform === 'win32' && (code === 'EPERM' || code === 'EBUSY' || code === 'EACCES');
+      if (!retryable) throw err;
+      if (attempt < maxAttempts - 1) {
+        sleepSync(15 * (attempt + 1));
+      }
+    }
+  }
+  // Windows Defender / 索引器持续持锁时回退直接覆写并清理临时文件，避免配置修改静默丢失
+  try {
+    fs.writeFileSync(targetPath, content, 'utf8');
+    try {
+      if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath);
+    } catch {}
+    return;
+  } catch (fallbackErr) {
+    throw lastErr || fallbackErr;
+  }
+}
+
 function persistDarkPresetToUserConfig(rawDarkPreset) {
   if (SAFE_MODE) return false;
   const nextDarkPreset = normalizeDarkPresetValue(rawDarkPreset);
@@ -673,8 +703,7 @@ function persistDarkPresetToUserConfig(rawDarkPreset) {
     if (!inserted) {
       updatedObj.darkPreset = nextDarkPreset;
     }
-    fs.writeFileSync(tmpPath, `${JSON.stringify(updatedObj, null, 2)}\n`, 'utf8');
-    fs.renameSync(tmpPath, cfgPath);
+    atomicWriteTextFileSync(tmpPath, cfgPath, `${JSON.stringify(updatedObj, null, 2)}\n`);
     if (rebuildBundleIfNeeded({ fromUiPersist: true })) {
       const tasks = [];
       for (const [, entry] of attachedTargets.entries()) {
@@ -732,8 +761,7 @@ function persistLightPresetToUserConfig(rawLightPreset) {
     if (!inserted) {
       updatedObj.preset = nextPreset;
     }
-    fs.writeFileSync(tmpPath, `${JSON.stringify(updatedObj, null, 2)}\n`, 'utf8');
-    fs.renameSync(tmpPath, cfgPath);
+    atomicWriteTextFileSync(tmpPath, cfgPath, `${JSON.stringify(updatedObj, null, 2)}\n`);
     if (rebuildBundleIfNeeded({ fromUiPersist: true })) {
       const tasks = [];
       for (const [, entry] of attachedTargets.entries()) {
@@ -834,8 +862,7 @@ function persistUiLangToUserConfig(rawUiLang, skipNewDocSync = false) {
     if (!inserted) {
       updatedObj.modules = nextModules;
     }
-    fs.writeFileSync(tmpPath, `${JSON.stringify(updatedObj, null, 2)}\n`, 'utf8');
-    fs.renameSync(tmpPath, cfgPath);
+    atomicWriteTextFileSync(tmpPath, cfgPath, `${JSON.stringify(updatedObj, null, 2)}\n`);
     if (rebuildBundleIfNeeded({ fromUiPersist: true }) && !skipNewDocSync) {
       const tasks = [];
       for (const [, entry] of attachedTargets.entries()) {
