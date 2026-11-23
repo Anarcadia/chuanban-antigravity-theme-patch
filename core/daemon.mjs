@@ -580,11 +580,59 @@ const HOST_CONFIG_PATH = path.join(os.homedir(), '.gemini', 'config', 'config.js
 let cachedHostCfgFileSig = '';
 let cachedHostThemeMode = null;
 
+function normalizeDarkPresetValue(rawVal) {
+  const s = String(rawVal || '').trim().toLowerCase();
+  if (s === 'claude-warm' || s === 'warm-paper-night' || s === 'claude-night' || s === '暖炭') {
+    return 'claude-warm';
+  }
+  return 'onyx';
+}
+
+function normalizeLightPresetValue(rawVal) {
+  const s = String(rawVal || '').trim().toLowerCase();
+  if (s === 'native' || s === 'stock' || s === 'original' || s === '原版配色') return 'native';
+  if (s === 'absolutely' || s === 'claude-orange' || s === 'absolutely!' || s === 'absolutely！') {
+    return 'absolutely';
+  }
+  if (s === 'claude-desktop-purewhite' || s === 'claude-desktop-official' || s === 'claudedesktop 净白') {
+    return 'claude-desktop-purewhite';
+  }
+  if (s === 'vintage-deep' || s === 'absoulutely-chuanban' || s === '复古深色') {
+    return 'vintage-deep';
+  }
+  return 'morandi';
+}
+
+function broadcastPresetToTargets(kind, normalizedVal, excludeTargetId = null) {
+  if (!activeConfig.enabled) return;
+  const fnName = kind === 'dark' ? '__ag_set_host_dark_preset' : '__ag_set_host_light_preset';
+  const expr = `window.${fnName} && window.${fnName}(${JSON.stringify(normalizedVal)})`;
+  const tasks = [];
+  for (const [id, entry] of attachedTargets.entries()) {
+    if (!entry?.hostConfirmed) continue;
+    if (excludeTargetId && id === excludeTargetId) {
+      if (entry.updateNewDocScript) tasks.push(entry.updateNewDocScript().catch(() => {}));
+      continue;
+    }
+    if (entry.send) {
+      tasks.push(entry.send('Runtime.evaluate', { expression: expr, returnByValue: false }).catch(() => {}));
+    }
+    if (entry.updateNewDocScript) {
+      tasks.push(entry.updateNewDocScript().catch(() => {}));
+    }
+  }
+  if (tasks.length > 0) {
+    void Promise.allSettled(tasks);
+  }
+}
+
+let cfgWriteSeq = 0;
+
 function persistDarkPresetToUserConfig(rawDarkPreset) {
   if (SAFE_MODE) return false;
-  const nextDarkPreset = String(rawDarkPreset || '').trim().toLowerCase() === 'claude-warm' ? 'claude-warm' : 'onyx';
+  const nextDarkPreset = normalizeDarkPresetValue(rawDarkPreset);
   const cfgPath = path.join(USER_DIR, 'config.json');
-  const tmpPath = `${cfgPath}.tmp-${process.pid}`;
+  const tmpPath = `${cfgPath}.tmp-${process.pid}-dp-${++cfgWriteSeq}`;
   try {
     fs.mkdirSync(USER_DIR, { recursive: true });
     let currentObj = {};
@@ -603,8 +651,7 @@ function persistDarkPresetToUserConfig(rawDarkPreset) {
       }
       currentObj = parsed;
     }
-    const prevNorm =
-      String(currentObj.darkPreset || 'onyx').trim().toLowerCase() === 'claude-warm' ? 'claude-warm' : 'onyx';
+    const prevNorm = normalizeDarkPresetValue(currentObj.darkPreset);
     if (prevNorm === nextDarkPreset && currentObj.darkPreset === nextDarkPreset) {
       return false;
     }
@@ -627,13 +674,14 @@ function persistDarkPresetToUserConfig(rawDarkPreset) {
     }
     fs.writeFileSync(tmpPath, `${JSON.stringify(updatedObj, null, 2)}\n`, 'utf8');
     fs.renameSync(tmpPath, cfgPath);
-    if (rebuildBundleIfNeeded()) {
-      void (async () => {
-        for (const [, entry] of attachedTargets.entries()) {
-          if (!entry?.hostConfirmed) continue;
-          await entry.updateNewDocScript?.();
+    if (rebuildBundleIfNeeded({ fromUiPersist: true })) {
+      const tasks = [];
+      for (const [, entry] of attachedTargets.entries()) {
+        if (entry?.hostConfirmed && entry.updateNewDocScript) {
+          tasks.push(entry.updateNewDocScript().catch(() => {}));
         }
-      })();
+      }
+      if (tasks.length > 0) void Promise.allSettled(tasks);
     }
     return true;
   } catch (err) {
@@ -645,20 +693,11 @@ function persistDarkPresetToUserConfig(rawDarkPreset) {
   }
 }
 
-function normalizeLightPresetValue(rawVal) {
-  const s = String(rawVal || '').trim().toLowerCase();
-  if (s === 'native' || s === 'stock' || s === 'original' || s === '原版配色') return 'native';
-  if (s === 'absolutely' || s === 'claude-orange') return 'absolutely';
-  if (s === 'claude-desktop-purewhite') return 'claude-desktop-purewhite';
-  if (s === 'vintage-deep') return 'vintage-deep';
-  return 'morandi';
-}
-
 function persistLightPresetToUserConfig(rawLightPreset) {
   if (SAFE_MODE) return false;
   const nextPreset = normalizeLightPresetValue(rawLightPreset);
   const cfgPath = path.join(USER_DIR, 'config.json');
-  const tmpPath = `${cfgPath}.tmp-${process.pid}-lp`;
+  const tmpPath = `${cfgPath}.tmp-${process.pid}-lp-${++cfgWriteSeq}`;
   try {
     fs.mkdirSync(USER_DIR, { recursive: true });
     let currentObj = {};
@@ -694,19 +733,14 @@ function persistLightPresetToUserConfig(rawLightPreset) {
     }
     fs.writeFileSync(tmpPath, `${JSON.stringify(updatedObj, null, 2)}\n`, 'utf8');
     fs.renameSync(tmpPath, cfgPath);
-    if (rebuildBundleIfNeeded()) {
-      void (async () => {
-        for (const [, entry] of attachedTargets.entries()) {
-          if (!entry?.hostConfirmed) continue;
-          await entry.updateNewDocScript?.();
-          if (entry.type === 'iframe') {
-            await entry.send?.('Runtime.evaluate', {
-              expression: `window.__ag_set_host_light_preset && window.__ag_set_host_light_preset(${JSON.stringify(nextPreset)})`,
-              returnByValue: false
-            });
-          }
+    if (rebuildBundleIfNeeded({ fromUiPersist: true })) {
+      const tasks = [];
+      for (const [, entry] of attachedTargets.entries()) {
+        if (entry?.hostConfirmed && entry.updateNewDocScript) {
+          tasks.push(entry.updateNewDocScript().catch(() => {}));
         }
-      })();
+      }
+      if (tasks.length > 0) void Promise.allSettled(tasks);
     }
     return true;
   } catch (err) {
@@ -741,7 +775,8 @@ function readHostThemeMode() {
   return cachedHostThemeMode;
 }
 
-function rebuildBundleIfNeeded() {
+function rebuildBundleIfNeeded(opts = {}) {
+  const fromUiPersist = !!(opts && opts.fromUiPersist);
   const coreFiles = [
     path.join(CORE_DIR, 'theme.css'),
     path.join(CORE_DIR, 'i18n.json'),
@@ -768,15 +803,13 @@ function rebuildBundleIfNeeded() {
   const enabled = SAFE_MODE ? true : userCfg.enabled !== false;
   const channel = CLI_CHANNEL || userCfg.channel || 'auto';
   const preset = normalizeLightPresetValue(userCfg.preset);
-  const rawDarkPreset = String(userCfg.darkPreset || 'onyx').trim().toLowerCase();
-  const darkPreset =
-    rawDarkPreset === 'claude-warm' ||
-    rawDarkPreset === 'warm-paper-night' ||
-    rawDarkPreset === 'claude-night' ||
-    rawDarkPreset === '暖炭'
-      ? 'claude-warm'
-      : 'onyx';
-  if (activeConfig && darkPreset !== activeConfig.darkPreset) {
+  const darkPreset = normalizeDarkPresetValue(userCfg.darkPreset);
+  const prevActivePreset = activeConfig ? activeConfig.preset : null;
+  const prevActiveDarkPreset = activeConfig ? activeConfig.darkPreset : null;
+  if (activeConfig && preset !== prevActivePreset) {
+    targetLightPresets.clear();
+  }
+  if (activeConfig && darkPreset !== prevActiveDarkPreset) {
     targetDarkPresets.clear();
   }
   const rawCtxLimit = Number(userCfg.contextLimit);
@@ -926,8 +959,6 @@ function rebuildBundleIfNeeded() {
     .update(customJs)
     .update(
       JSON.stringify({
-        preset,
-        darkPreset,
         metricsMode,
         modules,
         themeVars,
@@ -938,6 +969,15 @@ function rebuildBundleIfNeeded() {
     )
     .digest('hex')
     .slice(0, 8);
+
+  if (!fromUiPersist && enabled) {
+    if (prevActivePreset && preset !== prevActivePreset) {
+      broadcastPresetToTargets('light', preset, null);
+    }
+    if (prevActiveDarkPreset && darkPreset !== prevActiveDarkPreset) {
+      broadcastPresetToTargets('dark', darkPreset, null);
+    }
+  }
 
   const channelTag = channel === 'insiders' ? 'insiders' : 'stable';
   cachedPatchVersion = `${BASE_VERSION}-${channelTag}-${hash}`;
@@ -1003,6 +1043,7 @@ function rebuildBundleIfNeeded() {
 const attachedTargets = new Map();
 const targetThemeModes = new Map();
 const targetDarkPresets = new Map();
+const targetLightPresets = new Map();
 const targetMetaMap = new Map();
 const skippedNonHostTargets = new Map(); // targetId -> { origin, skippedAt }
 const browserWatchers = new Map(); // `${channel}:${port}` -> { ws, wsUrl, port, channel, endpoint, reconnectAfterMs, closing }
@@ -1205,6 +1246,7 @@ function shutdownDaemon(reason, unlinkStopFile = false) {
   destroyedWhileAttaching.clear();
   targetThemeModes.clear();
   targetDarkPresets.clear();
+  targetLightPresets.clear();
   targetMetaMap.clear();
   skippedNonHostTargets.clear();
   process.exit(0);
@@ -4328,7 +4370,7 @@ function resolveParentDarkPreset(target, endpoint) {
 
 function syncDarkPresetToChildIframes(parentTargetId, rawDarkPreset) {
   if (!activeConfig.enabled) return;
-  const nextDarkPreset = String(rawDarkPreset || '').trim().toLowerCase() === 'claude-warm' ? 'claude-warm' : 'onyx';
+  const nextDarkPreset = normalizeDarkPresetValue(rawDarkPreset);
   targetDarkPresets.set(parentTargetId, nextDarkPreset);
   const parentEntry = attachedTargets.get(parentTargetId);
   const parentChannel = parentEntry?.endpoint?.channel || null;
@@ -4338,6 +4380,51 @@ function syncDarkPresetToChildIframes(parentTargetId, rawDarkPreset) {
     entry
       .send('Runtime.evaluate', {
         expression: `window.__ag_set_host_dark_preset && window.__ag_set_host_dark_preset(${JSON.stringify(nextDarkPreset)})`,
+        returnByValue: false
+      })
+      .catch(() => {});
+    if (entry.updateNewDocScript) {
+      entry.updateNewDocScript().catch(() => {});
+    }
+  }
+}
+
+function resolveParentLightPreset(target, endpoint) {
+  let curId = target?.parentId || null;
+  const seen = new Set();
+  while (curId && !seen.has(curId)) {
+    seen.add(curId);
+    if (targetLightPresets.has(curId)) {
+      return targetLightPresets.get(curId);
+    }
+    curId = targetMetaMap.get(curId)?.parentId || null;
+  }
+  const ch = endpoint?.channel || null;
+  for (const [id, entry] of attachedTargets.entries()) {
+    if (
+      entry.hostConfirmed &&
+      entry.type === 'page' &&
+      (!ch || entry.endpoint?.channel === ch) &&
+      targetLightPresets.has(id)
+    ) {
+      return targetLightPresets.get(id);
+    }
+  }
+  return null;
+}
+
+function syncLightPresetToChildIframes(parentTargetId, rawLightPreset) {
+  if (!activeConfig.enabled) return;
+  const nextLightPreset = normalizeLightPresetValue(rawLightPreset);
+  targetLightPresets.set(parentTargetId, nextLightPreset);
+  const parentEntry = attachedTargets.get(parentTargetId);
+  const parentChannel = parentEntry?.endpoint?.channel || null;
+  for (const [, entry] of attachedTargets.entries()) {
+    if (!entry.hostConfirmed || entry.type !== 'iframe') continue;
+    if (!belongsToParentTarget(entry, parentTargetId, parentChannel)) continue;
+    entry
+      .send('Runtime.evaluate', {
+        expression: `window.__ag_set_host_light_preset && window.__ag_set_host_light_preset(${JSON.stringify(nextLightPreset)})`,
         returnByValue: false
       })
       .catch(() => {});
@@ -4639,6 +4726,7 @@ function handleBrowserTargetDestroyed(rawTargetId) {
   }
   targetThemeModes.delete(targetId);
   targetDarkPresets.delete(targetId);
+  targetLightPresets.delete(targetId);
   targetMetaMap.delete(targetId);
   skippedNonHostTargets.delete(targetId);
 }
@@ -4854,6 +4942,7 @@ function attachTarget(target, endpoint) {
           }
           targetThemeModes.delete(target.id);
           targetDarkPresets.delete(target.id);
+          targetLightPresets.delete(target.id);
           targetMetaMap.delete(target.id);
           skippedNonHostTargets.delete(target.id);
           try {
@@ -4896,27 +4985,30 @@ function attachTarget(target, endpoint) {
 
       const buildTargetInjectScript = () => {
         if (target.type !== 'iframe') {
-          return { script: cachedInjectScript, parentMode: '', parentDarkPreset: '' };
+          return { script: cachedInjectScript, parentMode: '', parentDarkPreset: '', parentLightPreset: '' };
         }
         if (!activeConfig.enabled) {
-          return { script: cachedIframeInjectScript, parentMode: '', parentDarkPreset: '' };
+          return { script: cachedIframeInjectScript, parentMode: '', parentDarkPreset: '', parentLightPreset: '' };
         }
         const parentMode = resolveParentThemeMode(target, endpoint) || '';
         const parentDarkPreset = resolveParentDarkPreset(target, endpoint) || '';
+        const parentLightPreset = resolveParentLightPreset(target, endpoint) || '';
         const modeVal = parentMode === 'dark' || parentMode === 'light' ? parentMode : null;
         const darkVal = parentDarkPreset === 'claude-warm' || parentDarkPreset === 'onyx' ? parentDarkPreset : null;
+        const lightVal = parentLightPreset ? normalizeLightPresetValue(parentLightPreset) : null;
         return {
-          script: `window.__ag_host_theme_mode=${modeVal ? JSON.stringify(modeVal) : 'null'};\nwindow.__ag_host_dark_preset=${darkVal ? JSON.stringify(darkVal) : 'null'};\n${cachedIframeInjectScript}`,
+          script: `window.__ag_host_theme_mode=${modeVal ? JSON.stringify(modeVal) : 'null'};\nwindow.__ag_host_dark_preset=${darkVal ? JSON.stringify(darkVal) : 'null'};\nwindow.__ag_host_light_preset=${lightVal ? JSON.stringify(lightVal) : 'null'};\n${cachedIframeInjectScript}`,
           parentMode: modeVal || '',
-          parentDarkPreset: darkVal || ''
+          parentDarkPreset: darkVal || '',
+          parentLightPreset: lightVal || ''
         };
       };
 
       const updateNewDocScript = (force = false) => {
         newDocQueue = newDocQueue
           .then(async () => {
-            const { script, parentMode, parentDarkPreset } = buildTargetInjectScript();
-            const nextSig = `${activeConfig.enabled}|${cachedPatchVersion}|${parentMode}|${parentDarkPreset || ''}`;
+            const { script, parentMode, parentDarkPreset, parentLightPreset } = buildTargetInjectScript();
+            const nextSig = `${activeConfig.enabled}|${cachedPatchVersion}|${activeConfig.preset || ''}|${activeConfig.darkPreset || ''}|${parentMode}|${parentDarkPreset || ''}|${parentLightPreset || ''}`;
             if (!force && evalScriptId && nextSig === lastNewDocSig) return;
             if (evalScriptId) {
               await send('Page.removeScriptToEvaluateOnNewDocument', { identifier: evalScriptId });
@@ -4962,6 +5054,7 @@ function attachTarget(target, endpoint) {
             if (!activeConfig.enabled) {
               targetThemeModes.delete(target.id);
               targetDarkPresets.delete(target.id);
+          targetLightPresets.delete(target.id);
               watchedCascadeIds = [];
               perCascadeState.clear();
             } else {
@@ -5120,6 +5213,7 @@ function attachTarget(target, endpoint) {
               attachedTargets.delete(target.id);
               targetThemeModes.delete(target.id);
               targetDarkPresets.delete(target.id);
+          targetLightPresets.delete(target.id);
             }
             try {
               ws.close();
@@ -5137,7 +5231,9 @@ function attachTarget(target, endpoint) {
                 JSON.stringify(target.type === 'iframe' ? 'iframe' : 'page') +
                 ' === "iframe" ? (window.__ag_host_theme_mode || null) : (window.__ag_resolved_theme_mode || null), darkPreset: ' +
                 JSON.stringify(target.type === 'iframe' ? 'iframe' : 'page') +
-                ' === "iframe" ? (window.__ag_host_dark_preset || window.__ag_runtime_dark_preset || (document.documentElement ? document.documentElement.getAttribute("data-ag-dark-preset") : null)) : (document.documentElement ? document.documentElement.getAttribute("data-ag-dark-preset") : null) })',
+                ' === "iframe" ? (window.__ag_host_dark_preset || window.__ag_runtime_dark_preset || (document.documentElement ? document.documentElement.getAttribute("data-ag-dark-preset") : null)) : (document.documentElement ? document.documentElement.getAttribute("data-ag-dark-preset") : null), lightPreset: ' +
+                JSON.stringify(target.type === 'iframe' ? 'iframe' : 'page') +
+                ' === "iframe" ? (window.__ag_host_light_preset || window.__ag_runtime_light_preset || (document.documentElement ? document.documentElement.getAttribute("data-ag-preset") : null)) : (document.documentElement ? document.documentElement.getAttribute("data-ag-preset") : null) })',
               returnByValue: true
             });
             const checkVal = checkRes?.result?.result?.value;
@@ -5159,9 +5255,18 @@ function attachTarget(target, endpoint) {
                   syncDarkPresetToChildIframes(target.id, checkVal.darkPreset);
                 }
               }
+              if (checkVal.lightPreset) {
+                const normLight = normalizeLightPresetValue(checkVal.lightPreset);
+                const prevLightPreset = targetLightPresets.get(target.id);
+                targetLightPresets.set(target.id, normLight);
+                if (prevLightPreset !== normLight) {
+                  syncLightPresetToChildIframes(target.id, normLight);
+                }
+              }
             } else if (activeConfig.enabled && target.type === 'iframe') {
               const parentMode = resolveParentThemeMode(target, endpoint);
               const parentDarkPreset = resolveParentDarkPreset(target, endpoint);
+              const parentLightPreset = resolveParentLightPreset(target, endpoint);
               let needNewDocUpdate = !evalScriptId;
               if (parentMode && checkVal.mode !== parentMode) {
                 await send('Runtime.evaluate', {
@@ -5173,6 +5278,13 @@ function attachTarget(target, endpoint) {
               if (parentDarkPreset && checkVal.darkPreset !== parentDarkPreset) {
                 await send('Runtime.evaluate', {
                   expression: `window.__ag_set_host_dark_preset && window.__ag_set_host_dark_preset(${JSON.stringify(parentDarkPreset)})`,
+                  returnByValue: false
+                });
+                needNewDocUpdate = true;
+              }
+              if (parentLightPreset && checkVal.lightPreset !== parentLightPreset) {
+                await send('Runtime.evaluate', {
+                  expression: `window.__ag_set_host_light_preset && window.__ag_set_host_light_preset(${JSON.stringify(parentLightPreset)})`,
                   returnByValue: false
                 });
                 needNewDocUpdate = true;
@@ -5189,7 +5301,8 @@ function attachTarget(target, endpoint) {
               skipNonHost: window.__ag_skip_non_host === true,
               kind: ${HOST_PROBE_EXPRESSION},
               mode: window.__ag_resolved_theme_mode || null,
-              darkPreset: document.documentElement ? document.documentElement.getAttribute("data-ag-dark-preset") : null
+              darkPreset: document.documentElement ? document.documentElement.getAttribute("data-ag-dark-preset") : null,
+              lightPreset: document.documentElement ? document.documentElement.getAttribute("data-ag-preset") : null
             })`,
             returnByValue: true
           });
@@ -5221,6 +5334,14 @@ function attachTarget(target, endpoint) {
               targetDarkPresets.set(target.id, state.darkPreset);
               if (prevDarkPreset !== state.darkPreset) {
                 syncDarkPresetToChildIframes(target.id, state.darkPreset);
+              }
+            }
+            if (state.lightPreset) {
+              const normLight = normalizeLightPresetValue(state.lightPreset);
+              const prevLightPreset = targetLightPresets.get(target.id);
+              targetLightPresets.set(target.id, normLight);
+              if (prevLightPreset !== normLight) {
+                syncLightPresetToChildIframes(target.id, normLight);
               }
             }
           }
@@ -5293,6 +5414,7 @@ function attachTarget(target, endpoint) {
           attachedTargets.delete(target.id);
           targetThemeModes.delete(target.id);
           targetDarkPresets.delete(target.id);
+          targetLightPresets.delete(target.id);
         }
         clearTimeout(attachTimeout);
         try {
@@ -5360,6 +5482,7 @@ function attachTarget(target, endpoint) {
             attachedTargets.delete(target.id);
             targetThemeModes.delete(target.id);
             targetDarkPresets.delete(target.id);
+          targetLightPresets.delete(target.id);
           }
           clearTimeout(attachTimeout);
           try {
@@ -5391,6 +5514,7 @@ function attachTarget(target, endpoint) {
               attachedTargets.delete(target.id);
               targetThemeModes.delete(target.id);
               targetDarkPresets.delete(target.id);
+          targetLightPresets.delete(target.id);
             }
             clearTimeout(attachTimeout);
             try {
@@ -5534,9 +5658,11 @@ function attachTarget(target, endpoint) {
             if (!hostConfirmed || target.type !== 'page' || !activeConfig.enabled) {
               return;
             }
-            syncDarkPresetToChildIframes(target.id, msg.params.payload);
+            const normDark = normalizeDarkPresetValue(msg.params.payload);
+            syncDarkPresetToChildIframes(target.id, normDark);
+            broadcastPresetToTargets('dark', normDark, target.id);
             if (!SAFE_MODE) {
-              persistDarkPresetToUserConfig(msg.params.payload);
+              persistDarkPresetToUserConfig(normDark);
             }
             return;
           }
@@ -5544,8 +5670,11 @@ function attachTarget(target, endpoint) {
             if (!hostConfirmed || target.type !== 'page' || !activeConfig.enabled) {
               return;
             }
+            const normLight = normalizeLightPresetValue(msg.params.payload);
+            syncLightPresetToChildIframes(target.id, normLight);
+            broadcastPresetToTargets('light', normLight, target.id);
             if (!SAFE_MODE) {
-              persistLightPresetToUserConfig(msg.params.payload);
+              persistLightPresetToUserConfig(normLight);
             }
             return;
           }
@@ -5639,6 +5768,7 @@ function attachTarget(target, endpoint) {
           attachedTargets.delete(target.id);
           targetThemeModes.delete(target.id);
           targetDarkPresets.delete(target.id);
+          targetLightPresets.delete(target.id);
         }
         finishAttach(false);
       };
@@ -6497,6 +6627,7 @@ async function sync() {
     if (!activeConfig.enabled) {
       targetThemeModes.clear();
       targetDarkPresets.clear();
+      targetLightPresets.clear();
     }
     if (!isEventDiscoveryEnabled()) {
       closeAllBrowserWatchers();
@@ -6667,6 +6798,7 @@ async function sync() {
         attachedTargets.delete(id);
         targetThemeModes.delete(id);
         targetDarkPresets.delete(id);
+        targetLightPresets.delete(id);
       }
     }
     if (fullScannedChannels.size > 0) {

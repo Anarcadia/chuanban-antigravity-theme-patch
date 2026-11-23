@@ -581,27 +581,15 @@
     }
     try {
       document.querySelectorAll('button[data-ag-warm-night-btn], button[data-ag-morandi-btn]').forEach((el) => el.remove());
+      document.querySelectorAll('svg[data-ag-agy-logo="1"], svg[data-ag-claude-spark="1"]').forEach((el) => el.remove());
       document.querySelectorAll('button[data-ag-native-theme-slot="system"]').forEach((btn) => {
-        if (btn.__ag_orig_sys_svg_el) {
-          const curSvg = btn.querySelector('svg[data-ag-agy-logo="1"]');
-          if (curSvg && curSvg.parentNode) {
-            curSvg.parentNode.replaceChild(btn.__ag_orig_sys_svg_el, curSvg);
-          }
-          btn.__ag_orig_sys_svg_el = null;
-        }
+        btn.removeAttribute('data-ag-grad-id');
         if (typeof btn.__ag_orig_sys_aria === 'string') {
           if (btn.__ag_orig_sys_aria) btn.setAttribute('aria-label', btn.__ag_orig_sys_aria);
           else btn.removeAttribute('aria-label');
         }
       });
       document.querySelectorAll('button[data-ag-native-theme-slot="light"]').forEach((btn) => {
-        if (btn.__ag_orig_light_svg_el) {
-          const curSvg = btn.querySelector('svg[data-ag-claude-spark="1"]');
-          if (curSvg && curSvg.parentNode) {
-            curSvg.parentNode.replaceChild(btn.__ag_orig_light_svg_el, curSvg);
-          }
-          btn.__ag_orig_light_svg_el = null;
-        }
         if (typeof btn.__ag_orig_light_aria === 'string') {
           if (btn.__ag_orig_light_aria) btn.setAttribute('aria-label', btn.__ag_orig_light_aria);
           else btn.removeAttribute('aria-label');
@@ -609,6 +597,7 @@
       });
       document.querySelectorAll('[data-ag-theme-toggle-group]').forEach((g) => {
         g.removeAttribute('data-ag-theme-toggle-group');
+        g.removeAttribute('data-ag-active-slot');
         g.removeAttribute('data-ag-active-night');
         g.removeAttribute('data-ag-active-light');
         g.removeAttribute('data-ag-active-native');
@@ -617,11 +606,42 @@
         b.removeAttribute('data-ag-native-theme-slot');
       });
     } catch (e) {}
+    if (window.__ag_tt_guard_interval) {
+      try {
+        clearInterval(window.__ag_tt_guard_interval);
+      } catch (e) {}
+      window.__ag_tt_guard_interval = null;
+    }
+    window.__ag_tt_global_dismiss_fn = null;
     if (window.__ag_surface_sync_raf) {
       try {
         cancelAnimationFrame(window.__ag_surface_sync_raf);
       } catch (e) {}
       window.__ag_surface_sync_raf = null;
+    }
+    if (window.__ag_mode_obs_raf) {
+      try {
+        cancelAnimationFrame(window.__ag_mode_obs_raf);
+      } catch (e) {}
+      window.__ag_mode_obs_raf = null;
+    }
+    if (window.__ag_mode_obs_timer) {
+      try {
+        clearTimeout(window.__ag_mode_obs_timer);
+      } catch (e) {}
+      window.__ag_mode_obs_timer = null;
+    }
+    if (window.__ag_appearance_scan_raf) {
+      try {
+        cancelAnimationFrame(window.__ag_appearance_scan_raf);
+      } catch (e) {}
+      window.__ag_appearance_scan_raf = null;
+    }
+    if (window.__ag_appearance_scan_timer) {
+      try {
+        clearTimeout(window.__ag_appearance_scan_timer);
+      } catch (e) {}
+      window.__ag_appearance_scan_timer = null;
     }
     if (window.__ag_persist_preset_timer) {
       try {
@@ -629,11 +649,13 @@
       } catch (e) {}
       window.__ag_persist_preset_timer = null;
     }
+    window.__ag_pending_persist_map = null;
     window.__ag_set_dark_preset_fn = null;
     window.__ag_set_light_preset_fn = null;
     window.__ag_set_host_light_preset = null;
     window.__ag_handle_native_theme_btn_click = null;
     window.__ag_handle_native_theme_btn_hover = null;
+    window.__ag_handle_custom_theme_btn_click = null;
     window.__ag_sync_warm_night_btn_fn = null;
     window.__ag_ensure_warm_night_btn_fn = null;
     if (window.__ag_i18n_observer) {
@@ -694,6 +716,7 @@
     window.__ag_sync_preset_fn = null;
     window.__ag_host_theme_mode = null;
     window.__ag_host_dark_preset = null;
+    window.__ag_host_light_preset = null;
     window.__ag_set_host_theme_mode = null;
     window.__ag_set_host_dark_preset = null;
     window.__ag_resolved_theme_mode = null;
@@ -1517,7 +1540,7 @@
     if (s === PRESETS.NATIVE || s === 'stock' || s === 'original' || s === '原版配色') {
       return PRESETS.NATIVE;
     }
-    if (s === PRESETS.ABSOLUTELY || s === 'claude-orange' || s === 'absolutely!') {
+    if (s === PRESETS.ABSOLUTELY || s === 'claude-orange' || s === 'absolutely!' || s === 'absolutely！') {
       return PRESETS.ABSOLUTELY;
     }
     if (s === PRESETS.CLAUDE_PUREWHITE || s === PRESETS.LEGACY_OFFICIAL || s === 'claudedesktop 净白') {
@@ -1529,16 +1552,37 @@
     return PRESETS.MORANDI;
   }
 
-  // 当用户在 user/config.json 中修改了 preset / darkPreset 时，同步刷新 localStorage 中的预设标记
-  const normalizedBootPreset = resolveNormalizedLightPreset(DEFAULT_PRESET);
-  if (normalizedBootPreset !== PRESETS.NATIVE && !window.__ag_last_non_native_light) {
-    window.__ag_last_non_native_light = normalizedBootPreset;
-  }
-  if (normalizedBootPreset && window.__ag_last_boot_preset !== normalizedBootPreset) {
-    window.__ag_last_boot_preset = normalizedBootPreset;
-    window.__ag_runtime_light_preset = normalizedBootPreset;
+  if (!window.__ag_last_non_native_light) {
     try {
-      Storage.prototype.setItem.call(localStorage, 'theme-color-flavor', normalizedBootPreset);
+      const savedNonNative = Storage.prototype.getItem.call(localStorage, 'theme-last-non-native-light');
+      if (savedNonNative) {
+        const normSaved = resolveNormalizedLightPreset(savedNonNative);
+        if (normSaved !== PRESETS.NATIVE) {
+          window.__ag_last_non_native_light = normSaved;
+        }
+      }
+    } catch (e) {}
+  }
+
+  // 当用户在 user/config.json 中修改了 preset / darkPreset 时，同步刷新 localStorage 中的预设标记（跳过处于防抖待提交窗口内的页面防回滚）
+  const hasPendingLightPersist =
+    !!window.__ag_persist_preset_timer ||
+    !!(window.__ag_pending_persist_map && window.__ag_pending_persist_map.light !== undefined);
+  const hasPendingDarkPersist =
+    !!window.__ag_persist_preset_timer ||
+    !!(window.__ag_pending_persist_map && window.__ag_pending_persist_map.dark !== undefined);
+
+  const effectiveBootLightPreset = resolveNormalizedLightPreset(
+    IS_SWARM_PLUGIN_FRAME && window.__ag_host_light_preset ? window.__ag_host_light_preset : DEFAULT_PRESET
+  );
+  if (effectiveBootLightPreset !== PRESETS.NATIVE && !window.__ag_last_non_native_light) {
+    window.__ag_last_non_native_light = effectiveBootLightPreset;
+  }
+  if (!hasPendingLightPersist && effectiveBootLightPreset && window.__ag_last_boot_preset !== effectiveBootLightPreset) {
+    window.__ag_last_boot_preset = effectiveBootLightPreset;
+    window.__ag_runtime_light_preset = effectiveBootLightPreset;
+    try {
+      Storage.prototype.setItem.call(localStorage, 'theme-color-flavor', effectiveBootLightPreset);
     } catch (e) {}
   }
   const effectiveBootDarkPreset =
@@ -1546,7 +1590,7 @@
     (window.__ag_host_dark_preset === DARK_PRESETS.CLAUDE_WARM || window.__ag_host_dark_preset === DARK_PRESETS.ONYX)
       ? window.__ag_host_dark_preset
       : DEFAULT_DARK_PRESET;
-  if (effectiveBootDarkPreset && window.__ag_last_boot_dark_preset !== effectiveBootDarkPreset) {
+  if (!hasPendingDarkPersist && effectiveBootDarkPreset && window.__ag_last_boot_dark_preset !== effectiveBootDarkPreset) {
     window.__ag_last_boot_dark_preset = effectiveBootDarkPreset;
     window.__ag_runtime_dark_preset = effectiveBootDarkPreset;
     try {
@@ -1586,7 +1630,10 @@
         } catch (e) {}
       }
 
+      const liveHostLightPreset =
+        IS_SWARM_PLUGIN_FRAME && window.__ag_host_light_preset ? window.__ag_host_light_preset : null;
       const flavor =
+        liveHostLightPreset ||
         window.__ag_runtime_light_preset ||
         Storage.prototype.getItem.call(localStorage, 'theme-color-flavor') ||
         DEFAULT_PRESET ||
@@ -1600,7 +1647,12 @@
         document.documentElement.setAttribute('data-ag-preset', targetPreset);
       }
       if (targetPreset !== PRESETS.NATIVE) {
-        window.__ag_last_non_native_light = targetPreset;
+        if (window.__ag_last_non_native_light !== targetPreset) {
+          window.__ag_last_non_native_light = targetPreset;
+          try {
+            Storage.prototype.setItem.call(localStorage, 'theme-last-non-native-light', targetPreset);
+          } catch (e) {}
+        }
       }
       syncThemeStyleSheetEnabled(targetPreset === PRESETS.NATIVE);
 
@@ -1766,6 +1818,13 @@
     }
   };
   window.__ag_set_host_dark_preset = (nextDarkPreset) => {
+    if (
+      !IS_SWARM_PLUGIN_FRAME &&
+      (window.__ag_persist_preset_timer ||
+        (window.__ag_pending_persist_map && window.__ag_pending_persist_map.dark !== undefined))
+    ) {
+      return;
+    }
     window.__ag_runtime_dark_preset = resolveNormalizedDarkPreset(nextDarkPreset);
     if (IS_SWARM_PLUGIN_FRAME) {
       window.__ag_host_dark_preset = window.__ag_runtime_dark_preset;
@@ -1778,7 +1837,17 @@
     }
   };
   window.__ag_set_host_light_preset = (nextLightPreset) => {
+    if (
+      !IS_SWARM_PLUGIN_FRAME &&
+      (window.__ag_persist_preset_timer ||
+        (window.__ag_pending_persist_map && window.__ag_pending_persist_map.light !== undefined))
+    ) {
+      return;
+    }
     window.__ag_runtime_light_preset = resolveNormalizedLightPreset(nextLightPreset);
+    if (IS_SWARM_PLUGIN_FRAME) {
+      window.__ag_host_light_preset = window.__ag_runtime_light_preset;
+    }
     try {
       Storage.prototype.setItem.call(localStorage, 'theme-color-flavor', window.__ag_runtime_light_preset);
     } catch (e) {}
@@ -1831,13 +1900,36 @@
     } catch (e) {}
     window.__ag_theme_mode_observer = null;
   }
+  if (window.__ag_mode_obs_raf) {
+    try {
+      cancelAnimationFrame(window.__ag_mode_obs_raf);
+    } catch (e) {}
+    window.__ag_mode_obs_raf = null;
+  }
+  if (window.__ag_mode_obs_timer) {
+    try {
+      clearTimeout(window.__ag_mode_obs_timer);
+    } catch (e) {}
+    window.__ag_mode_obs_timer = null;
+  }
   if (typeof MutationObserver !== 'undefined') {
     try {
-      const modeObs = new MutationObserver(() => {
-        if (typeof window.__ag_sync_preset_fn === 'function') {
-          window.__ag_sync_preset_fn();
+      const scheduleModeSync = () => {
+        if (document.hidden || typeof requestAnimationFrame !== 'function') {
+          if (!window.__ag_mode_obs_timer) {
+            window.__ag_mode_obs_timer = setTimeout(() => {
+              window.__ag_mode_obs_timer = null;
+              if (typeof window.__ag_sync_preset_fn === 'function') window.__ag_sync_preset_fn();
+            }, 0);
+          }
+        } else if (!window.__ag_mode_obs_raf) {
+          window.__ag_mode_obs_raf = requestAnimationFrame(() => {
+            window.__ag_mode_obs_raf = null;
+            if (typeof window.__ag_sync_preset_fn === 'function') window.__ag_sync_preset_fn();
+          });
         }
-      });
+      };
+      const modeObs = new MutationObserver(scheduleModeSync);
       if (document.body) {
         modeObs.observe(document.body, { attributes: true, attributeFilter: ['class'] });
       }
@@ -1875,6 +1967,12 @@
       'M557.69-570.15v-52.61q32.62-15.15 68.27-22.73T700-653.08q24.08,0 46.77,3.42t45.54,9.04v50.15q-22.46-7.85-44.65-11.38T700-605.39q-38.38,0-74.35,9.12t-67.96,26.12Zm0,219.23v-53.38q31.85-15.15 68.08-22.73T700-434.61q24.08,0 46.77,3.42t45.54,9.04V-372q-22.46-7.85-44.65-11.38T700-386.92q-38.38,0-74.35,9.19t-67.96,26.81Zm0-109.23v-53.38q32.62-15.15 68.27-22.73T700-543.85q24.08,0 46.77,3.42t45.54,9.04v50.15q-22.46-7.85-44.65-11.38T700-496.15q-38.38,0-74.35,9.5t-67.96,26.5ZM260-319.23q49.69,0 96.69,11.27T450-272.61V-665.85q-42.15-27.46-91.23-41.19T260-720.77q-36,0-67.27,5.65t-64.27,18.5q-4.62,1.54-6.54,4.42T120-685.85v378.31q0,5.39 3.85,7.89t8.46,0.58q28.46-9.69 60.08-14.92T260-319.23Zm250,46.62q46.31-24.08 93.31-35.35T700-319.23q36,0 67.62,5.23t60.08,14.92q4.62,1.92 8.46-0.58t3.85-7.89V-685.85q0-3.46-1.92-6.15t-6.54-4.62q-33-12.85-64.27-18.5T700-720.77q-49.69,0-98.77,13.73T510-665.85v393.23Zm-30,88q-48.38-35.69-104.38-55.15T260-259.23q-36.61,0-71.92,8.12T120-227.23q-21.38,9.85-40.69-3.12T60-267.08v-434.3q0-12.92 6.65-24.27T85.85-742q40.61-19.77 84.65-29.27t89.5-9.5q58.38,0 114.08,15.96T480-717.69q50.23-31.15 105.92-47.12T700-780.77q45.46,0 89.5,9.5T874.15-742q12.54,5 19.19,16.35T900-701.38v434.3q0,23.77-20.08,36.35T837.69-228q-32.38-15.38-67.11-23.31T700-259.23q-59.62,0-115.62,19.46T480-184.62ZM285-496.69Z';
 
     function hideThemeBtnTooltip() {
+      if (window.__ag_tt_guard_interval) {
+        try {
+          clearInterval(window.__ag_tt_guard_interval);
+        } catch (e) {}
+        window.__ag_tt_guard_interval = null;
+      }
       if (document.documentElement && document.documentElement.hasAttribute('data-ag-suppress-native-tt')) {
         document.documentElement.removeAttribute('data-ag-suppress-native-tt');
       }
@@ -1890,11 +1988,39 @@
       }
     }
 
-    function scheduleThemeBtnTooltip(anchorBtn, text) {
+    window.__ag_tt_global_dismiss_fn = hideThemeBtnTooltip;
+    if (!window.__ag_tt_global_listener_installed && typeof window.addEventListener === 'function') {
+      window.__ag_tt_global_listener_installed = true;
+      const onDismiss = () => {
+        if (typeof window.__ag_tt_global_dismiss_fn === 'function') {
+          window.__ag_tt_global_dismiss_fn();
+        }
+      };
+      window.addEventListener('pointerdown', onDismiss, true);
+      window.addEventListener('keydown', onDismiss, true);
+      window.addEventListener('blur', onDismiss);
+    }
+
+    function scheduleThemeBtnTooltip(anchorBtn, text, suppressNative = false) {
       hideThemeBtnTooltip();
+      if (suppressNative && document.documentElement) {
+        document.documentElement.setAttribute('data-ag-suppress-native-tt', '1');
+        window.__ag_tt_guard_interval = setInterval(() => {
+          if (
+            !anchorBtn ||
+            !anchorBtn.isConnected ||
+            (typeof anchorBtn.matches === 'function' && !anchorBtn.matches(':hover, :focus-visible'))
+          ) {
+            hideThemeBtnTooltip();
+          }
+        }, 500);
+      }
       window.__ag_theme_btn_tt_timer = setTimeout(() => {
         window.__ag_theme_btn_tt_timer = null;
-        if (!anchorBtn || !anchorBtn.isConnected || !document.body) return;
+        if (!anchorBtn || !anchorBtn.isConnected || !document.body) {
+          hideThemeBtnTooltip();
+          return;
+        }
         let tt = document.getElementById('ag-theme-btn-tooltip');
         if (!tt) {
           tt = document.createElement('div');
@@ -2024,83 +2150,61 @@
     function syncAppearanceWarmNightToggle() {
       const currentPreset = document.documentElement.getAttribute('data-ag-preset') || PRESETS.MORANDI;
       const isNativePreset = currentPreset === PRESETS.NATIVE;
-      const isMorandiLight =
-        !isNativePreset && currentPreset !== PRESETS.ABSOLUTELY;
       const isWarmNight = document.documentElement.getAttribute('data-ag-dark-preset') === DARK_PRESETS.CLAUDE_WARM;
       const isDarkNow =
         document.documentElement.getAttribute('data-ag-theme-mode') === 'dark' ||
         !!(document.body && document.body.classList.contains('dark'));
+
+      // 单一真值源：5 选 1 互斥穷举，从根源上消除双高亮或全灭
+      let activeSlot = PRESETS.MORANDI;
+      if (isNativePreset) {
+        activeSlot = PRESETS.NATIVE;
+      } else if (isDarkNow) {
+        activeSlot = isWarmNight ? DARK_PRESETS.CLAUDE_WARM : DARK_PRESETS.ONYX;
+      } else {
+        activeSlot = currentPreset === PRESETS.ABSOLUTELY ? PRESETS.ABSOLUTELY : PRESETS.MORANDI;
+      }
+
       const groups = document.querySelectorAll('[data-slot="toggle-group"][data-ag-theme-toggle-group="1"]');
       for (let i = 0; i < groups.length; i++) {
         const group = groups[i];
+        if (group.getAttribute('data-ag-active-slot') !== activeSlot) {
+          group.setAttribute('data-ag-active-slot', activeSlot);
+        }
         const sysBtn = group.querySelector('button[data-ag-native-theme-slot="system"]');
-        const lightBtn = group.querySelector('button[data-ag-native-theme-slot="light"]');
         const morandiBtn = group.querySelector('button[data-ag-morandi-btn="1"]');
         const bookBtn = group.querySelector('button[data-ag-warm-night-btn="1"]');
-        const darkBtn = group.querySelector('button[data-ag-native-theme-slot="dark"]');
 
-        const isSysSelected =
-          !!(sysBtn && (sysBtn.hasAttribute('data-pressed') || sysBtn.getAttribute('aria-pressed') === 'true'));
-        const isExplicitLightSelected =
-          !!(lightBtn && (lightBtn.hasAttribute('data-pressed') || lightBtn.getAttribute('aria-pressed') === 'true'));
-
-        if (lightBtn && morandiBtn) {
-          const moActive =
-            !isNativePreset &&
-            !isDarkNow &&
-            isMorandiLight &&
-            (isExplicitLightSelected || isSysSelected);
-          if (moActive) {
+        if (morandiBtn) {
+          const moOn = activeSlot === PRESETS.MORANDI;
+          if (moOn) {
             if (!morandiBtn.hasAttribute('data-pressed')) morandiBtn.setAttribute('data-pressed', '');
             if (morandiBtn.getAttribute('aria-pressed') !== 'true') morandiBtn.setAttribute('aria-pressed', 'true');
-            if (group.getAttribute('data-ag-active-light') !== PRESETS.MORANDI) {
-              group.setAttribute('data-ag-active-light', PRESETS.MORANDI);
-            }
           } else {
             if (morandiBtn.hasAttribute('data-pressed')) morandiBtn.removeAttribute('data-pressed');
             if (morandiBtn.getAttribute('aria-pressed') !== 'false') morandiBtn.setAttribute('aria-pressed', 'false');
-            if (group.hasAttribute('data-ag-active-light')) {
-              group.removeAttribute('data-ag-active-light');
-            }
           }
         }
 
-        // 更新第 1 格 Antigravity 图标填充与跨状态回退保护：原版配色激活时立即点亮实例专属渐变
-        if (sysBtn) {
-          if (isNativePreset) {
-            if (!isSysSelected) {
-              group.setAttribute('data-ag-active-native', '1');
-            } else if (group.hasAttribute('data-ag-active-native')) {
-              group.removeAttribute('data-ag-active-native');
-            }
-          } else if (group.hasAttribute('data-ag-active-native')) {
-            group.removeAttribute('data-ag-active-native');
+        if (bookBtn) {
+          const bookOn = activeSlot === DARK_PRESETS.CLAUDE_WARM;
+          if (bookOn) {
+            if (!bookBtn.hasAttribute('data-pressed')) bookBtn.setAttribute('data-pressed', '');
+            if (bookBtn.getAttribute('aria-pressed') !== 'true') bookBtn.setAttribute('aria-pressed', 'true');
+          } else {
+            if (bookBtn.hasAttribute('data-pressed')) bookBtn.removeAttribute('data-pressed');
+            if (bookBtn.getAttribute('aria-pressed') !== 'false') bookBtn.setAttribute('aria-pressed', 'false');
           }
+        }
+
+        if (sysBtn) {
           const agyGlyph = sysBtn.querySelector('path[data-ag-agy-glyph="1"]');
           const gradId = sysBtn.getAttribute('data-ag-grad-id');
           if (agyGlyph) {
-            const wantFill = isNativePreset && gradId ? `url(#${gradId})` : 'currentColor';
+            const wantFill = activeSlot === PRESETS.NATIVE && gradId ? `url(#${gradId})` : 'currentColor';
             if (agyGlyph.getAttribute('fill') !== wantFill) {
               agyGlyph.setAttribute('fill', wantFill);
             }
-          }
-        }
-
-        if (!bookBtn || !darkBtn) continue;
-        const isExplicitDarkSelected =
-          darkBtn.hasAttribute('data-pressed') || darkBtn.getAttribute('aria-pressed') === 'true';
-        const bookActive = !isNativePreset && isExplicitDarkSelected && isWarmNight;
-        if (bookActive) {
-          if (!bookBtn.hasAttribute('data-pressed')) bookBtn.setAttribute('data-pressed', '');
-          if (bookBtn.getAttribute('aria-pressed') !== 'true') bookBtn.setAttribute('aria-pressed', 'true');
-          if (group.getAttribute('data-ag-active-night') !== DARK_PRESETS.CLAUDE_WARM) {
-            group.setAttribute('data-ag-active-night', DARK_PRESETS.CLAUDE_WARM);
-          }
-        } else {
-          if (bookBtn.hasAttribute('data-pressed')) bookBtn.removeAttribute('data-pressed');
-          if (bookBtn.getAttribute('aria-pressed') !== 'false') bookBtn.setAttribute('aria-pressed', 'false');
-          if (group.hasAttribute('data-ag-active-night')) {
-            group.removeAttribute('data-ag-active-night');
           }
         }
       }
@@ -2112,29 +2216,78 @@
         return;
       }
       if (slot === 'system') {
-        document.documentElement.setAttribute('data-ag-suppress-native-tt', '1');
-        scheduleThemeBtnTooltip(btn, '原版配色');
+        scheduleThemeBtnTooltip(btn, '原版配色', true);
       } else if (slot === 'light') {
-        document.documentElement.setAttribute('data-ag-suppress-native-tt', '1');
-        scheduleThemeBtnTooltip(btn, 'Absolutely！');
+        scheduleThemeBtnTooltip(btn, 'Absolutely！', true);
       }
     };
 
-    window.__ag_handle_native_theme_btn_click = (slot) => {
+    window.__ag_handle_native_theme_btn_click = (ev, btn, slot) => {
+      if (slot === 'light' && window.__ag_internal_sun_click) return;
+      if (slot === 'dark' && window.__ag_internal_moon_click) return;
       hideThemeBtnTooltip();
+
+      // 若目标原生按钮已处于按下态（如 MO->Absolutely! 或 📖->🌙），拦截多余 click 防 Base UI 反选取消
+      const alreadyPressed =
+        !!(btn && (btn.hasAttribute('data-pressed') || btn.getAttribute('aria-pressed') === 'true'));
+      if (alreadyPressed && ev) {
+        ev.preventDefault();
+        ev.stopPropagation();
+      }
+
       if (slot === 'system') {
-        if (window.__ag_internal_sys_click) return;
         setRuntimeLightPreset(PRESETS.NATIVE, true);
       } else if (slot === 'light') {
-        if (window.__ag_internal_sun_click) return;
-        window.__ag_last_non_native_light = PRESETS.ABSOLUTELY;
         setRuntimeLightPreset(PRESETS.ABSOLUTELY, true);
       } else if (slot === 'dark') {
-        if (window.__ag_internal_moon_click) return;
         if (document.documentElement.getAttribute('data-ag-preset') === PRESETS.NATIVE) {
           setRuntimeLightPreset(window.__ag_last_non_native_light || PRESETS.MORANDI, true);
         }
         setRuntimeDarkPreset(DARK_PRESETS.ONYX, true);
+      }
+      requestAnimationFrame(() => {
+        if (typeof window.__ag_sync_warm_night_btn_fn === 'function') {
+          window.__ag_sync_warm_night_btn_fn();
+        }
+      });
+    };
+
+    window.__ag_handle_custom_theme_btn_click = (ev, group, kind) => {
+      if (ev) {
+        ev.preventDefault();
+        ev.stopPropagation();
+      }
+      hideThemeBtnTooltip();
+      if (!group) return;
+      if (kind === PRESETS.MORANDI) {
+        setRuntimeLightPreset(PRESETS.MORANDI, true);
+        const liveLightBtn = group.querySelector('button[data-ag-native-theme-slot="light"]');
+        const sunPressed =
+          !!(liveLightBtn && (liveLightBtn.hasAttribute('data-pressed') || liveLightBtn.getAttribute('aria-pressed') === 'true'));
+        if (liveLightBtn && !sunPressed) {
+          window.__ag_internal_sun_click = true;
+          try {
+            liveLightBtn.click();
+          } finally {
+            window.__ag_internal_sun_click = false;
+          }
+        }
+      } else if (kind === DARK_PRESETS.CLAUDE_WARM) {
+        if (document.documentElement.getAttribute('data-ag-preset') === PRESETS.NATIVE) {
+          setRuntimeLightPreset(window.__ag_last_non_native_light || PRESETS.MORANDI, true);
+        }
+        setRuntimeDarkPreset(DARK_PRESETS.CLAUDE_WARM, true);
+        const liveDarkBtn = group.querySelector('button[data-ag-native-theme-slot="dark"]');
+        const moonPressed =
+          !!(liveDarkBtn && (liveDarkBtn.hasAttribute('data-pressed') || liveDarkBtn.getAttribute('aria-pressed') === 'true'));
+        if (liveDarkBtn && !moonPressed) {
+          window.__ag_internal_moon_click = true;
+          try {
+            liveDarkBtn.click();
+          } finally {
+            window.__ag_internal_moon_click = false;
+          }
+        }
       }
       requestAnimationFrame(() => {
         if (typeof window.__ag_sync_warm_night_btn_fn === 'function') {
@@ -2154,11 +2307,10 @@
 
       const svgNS = 'http://www.w3.org/2000/svg';
 
-      // 将第 1 格 System(🖥) 按钮改装为 Antigravity 图标，悬浮提示「原版配色」（一键退回原版颜色与字体）
+      // 第 1 格：无损保留 React 原生 svg（由 CSS 隐藏），追加 Antigravity 官方流线 A 形标志
       if (!sysBtn.querySelector('svg[data-ag-agy-logo="1"]')) {
         const origSysSvg = sysBtn.querySelector('svg');
         if (origSysSvg && origSysSvg.parentNode) {
-          sysBtn.__ag_orig_sys_svg_el = origSysSvg;
           if (sysBtn.__ag_orig_sys_aria === undefined) {
             sysBtn.__ag_orig_sys_aria = sysBtn.getAttribute('aria-label') || '';
           }
@@ -2199,17 +2351,16 @@
           glyphPath.setAttribute('fill', 'currentColor');
           agySvg.appendChild(defs);
           agySvg.appendChild(glyphPath);
-          origSysSvg.parentNode.replaceChild(agySvg, origSysSvg);
+          origSysSvg.parentNode.appendChild(agySvg);
         }
       }
       sysBtn.setAttribute('aria-label', '原版配色');
       if (sysBtn.hasAttribute('title')) sysBtn.removeAttribute('title');
 
-      // 将第 2 格 Light(☀️) 按钮改装为船板专属「Absolutely！」仿 Claude 放射性星芒标志
+      // 第 2 格：无损保留 React 原生 svg（由 CSS 隐藏），追加「Absolutely！」仿 Claude 放射性星芒标志
       if (!lightBtn.querySelector('svg[data-ag-claude-spark="1"]')) {
         const origSvg = lightBtn.querySelector('svg');
         if (origSvg && origSvg.parentNode) {
-          lightBtn.__ag_orig_light_svg_el = origSvg;
           if (lightBtn.__ag_orig_light_aria === undefined) {
             lightBtn.__ag_orig_light_aria = lightBtn.getAttribute('aria-label') || '';
           }
@@ -2233,7 +2384,7 @@
           raysPath.setAttribute('stroke-linecap', 'round');
           sparkSvg.appendChild(coreCircle);
           sparkSvg.appendChild(raysPath);
-          origSvg.parentNode.replaceChild(sparkSvg, origSvg);
+          origSvg.parentNode.appendChild(sparkSvg);
         }
       }
       lightBtn.setAttribute('aria-label', 'Absolutely！');
@@ -2241,8 +2392,8 @@
 
       // 统一动态委托事件，杜绝热更新后旧闭包残留与重复绑定
       const bindNativeSlotOnce = (btn, slot) => {
-        if (btn.__ag_delegated_slot_v2) return;
-        btn.__ag_delegated_slot_v2 = true;
+        if (btn.__ag_delegated_slot_v3) return;
+        btn.__ag_delegated_slot_v3 = true;
         if (slot === 'system' || slot === 'light') {
           btn.addEventListener('mouseenter', () => {
             window.__ag_handle_native_theme_btn_hover?.(btn, slot, true);
@@ -2259,8 +2410,8 @@
         }
         btn.addEventListener(
           'click',
-          () => {
-            window.__ag_handle_native_theme_btn_click?.(slot);
+          (ev) => {
+            window.__ag_handle_native_theme_btn_click?.(ev, btn, slot);
           },
           true
         );
@@ -2286,7 +2437,7 @@
         } catch (e) {}
       }
 
-      // 在原本书卷的位置 (order: 3) 新添「MO」按钮（默认激活：莫兰迪色）
+      // 第 3 格：在原本书卷的位置新添「MO」按钮（默认激活：莫兰迪色）
       let morandiBtn = group.querySelector('button[data-ag-morandi-btn="1"]');
       if (!morandiBtn) {
         morandiBtn = document.createElement('button');
@@ -2316,40 +2467,21 @@
         morandiBtn.appendChild(moSpan);
 
         morandiBtn.addEventListener('mouseenter', () => {
-          scheduleThemeBtnTooltip(morandiBtn, '莫兰迪色');
+          scheduleThemeBtnTooltip(morandiBtn, '莫兰迪色', false);
         });
         morandiBtn.addEventListener('mouseleave', hideThemeBtnTooltip);
         morandiBtn.addEventListener('focus', () => {
-          scheduleThemeBtnTooltip(morandiBtn, '莫兰迪色');
+          scheduleThemeBtnTooltip(morandiBtn, '莫兰迪色', false);
         });
         morandiBtn.addEventListener('blur', hideThemeBtnTooltip);
         morandiBtn.addEventListener('click', (ev) => {
-          ev.preventDefault();
-          ev.stopPropagation();
-          hideThemeBtnTooltip();
-          window.__ag_last_non_native_light = PRESETS.MORANDI;
-          if (typeof window.__ag_set_light_preset_fn === 'function') {
-            window.__ag_set_light_preset_fn(PRESETS.MORANDI, true);
-          }
-          const sunPressed = lightBtn.hasAttribute('data-pressed') || lightBtn.getAttribute('aria-pressed') === 'true';
-          if (!sunPressed) {
-            window.__ag_internal_sun_click = true;
-            try {
-              lightBtn.click();
-            } finally {
-              window.__ag_internal_sun_click = false;
-            }
-          }
-          requestAnimationFrame(() => {
-            if (typeof window.__ag_sync_warm_night_btn_fn === 'function') {
-              window.__ag_sync_warm_night_btn_fn();
-            }
-          });
+          window.__ag_handle_custom_theme_btn_click?.(ev, group, PRESETS.MORANDI);
         });
 
         group.appendChild(morandiBtn);
       }
 
+      // 第 4 格：书卷「暖纸深色」按钮
       let bookBtn = group.querySelector('button[data-ag-warm-night-btn="1"]');
       if (!bookBtn) {
         bookBtn = document.createElement('button');
@@ -2375,39 +2507,15 @@
         bookBtn.appendChild(spanWrap);
 
         bookBtn.addEventListener('mouseenter', () => {
-          scheduleThemeBtnTooltip(bookBtn, '暖纸深色');
+          scheduleThemeBtnTooltip(bookBtn, '暖纸深色', false);
         });
         bookBtn.addEventListener('mouseleave', hideThemeBtnTooltip);
         bookBtn.addEventListener('focus', () => {
-          scheduleThemeBtnTooltip(bookBtn, '暖纸深色');
+          scheduleThemeBtnTooltip(bookBtn, '暖纸深色', false);
         });
         bookBtn.addEventListener('blur', hideThemeBtnTooltip);
         bookBtn.addEventListener('click', (ev) => {
-          ev.preventDefault();
-          ev.stopPropagation();
-          hideThemeBtnTooltip();
-          if (document.documentElement.getAttribute('data-ag-preset') === PRESETS.NATIVE) {
-            if (typeof window.__ag_set_light_preset_fn === 'function') {
-              window.__ag_set_light_preset_fn(window.__ag_last_non_native_light || PRESETS.MORANDI, true);
-            }
-          }
-          if (typeof window.__ag_set_dark_preset_fn === 'function') {
-            window.__ag_set_dark_preset_fn(DARK_PRESETS.CLAUDE_WARM, true);
-          }
-          const moonPressed = darkBtn.hasAttribute('data-pressed') || darkBtn.getAttribute('aria-pressed') === 'true';
-          if (!moonPressed) {
-            window.__ag_internal_moon_click = true;
-            try {
-              darkBtn.click();
-            } finally {
-              window.__ag_internal_moon_click = false;
-            }
-          }
-          requestAnimationFrame(() => {
-            if (typeof window.__ag_sync_warm_night_btn_fn === 'function') {
-              window.__ag_sync_warm_night_btn_fn();
-            }
-          });
+          window.__ag_handle_custom_theme_btn_click?.(ev, group, DARK_PRESETS.CLAUDE_WARM);
         });
 
         // 物理挂载在末尾（不干扰 React 前 3 个按钮的 nextSibling 链），由 CSS order 排位
@@ -2420,11 +2528,11 @@
       if (!document.body) return;
       const scope = root && root.nodeType === 1 ? root : document;
       let mountedAny = false;
-      if (scope.matches && scope.matches('[data-slot="toggle-group"]')) {
+      if (scope.matches && scope.matches('[data-slot="toggle-group"]:not([data-ag-theme-toggle-group])')) {
         if (mountWarmNightBtnOnGroup(scope)) mountedAny = true;
       }
       if (scope.querySelectorAll) {
-        const groups = scope.querySelectorAll('[data-slot="toggle-group"]');
+        const groups = scope.querySelectorAll('[data-slot="toggle-group"]:not([data-ag-theme-toggle-group])');
         for (let i = 0; i < groups.length; i++) {
           if (mountWarmNightBtnOnGroup(groups[i])) mountedAny = true;
         }
@@ -2444,6 +2552,18 @@
         window.__ag_appearance_btn_attr_observer.disconnect();
       } catch (e) {}
     }
+    if (window.__ag_appearance_scan_raf) {
+      try {
+        cancelAnimationFrame(window.__ag_appearance_scan_raf);
+      } catch (e) {}
+      window.__ag_appearance_scan_raf = null;
+    }
+    if (window.__ag_appearance_scan_timer) {
+      try {
+        clearTimeout(window.__ag_appearance_scan_timer);
+      } catch (e) {}
+      window.__ag_appearance_scan_timer = null;
+    }
     if (typeof MutationObserver !== 'undefined') {
       window.__ag_appearance_btn_attr_observer = new MutationObserver(() => {
         syncAppearanceWarmNightToggle();
@@ -2455,6 +2575,21 @@
       }
       const APPEARANCE_SKIP_SELECTOR =
         '[data-markdown-root], [data-testid="user-message-content"], .agy-user-bubble, .prose, .markdown, pre, code, .monaco-editor, .xterm, #ag-live-metrics-pill, .ag-live-metrics-pill, [data-ag-metrics-pill], [data-testid="conversation-list-sidebar"], [data-testid="conversation-row-sidebar"], [data-testid="conversation-row-history"]';
+      const scheduleAppearanceGroupScan = () => {
+        if (document.hidden || typeof requestAnimationFrame !== 'function') {
+          if (!window.__ag_appearance_scan_timer) {
+            window.__ag_appearance_scan_timer = setTimeout(() => {
+              window.__ag_appearance_scan_timer = null;
+              ensureAppearanceWarmNightToggle(document);
+            }, 0);
+          }
+        } else if (!window.__ag_appearance_scan_raf) {
+          window.__ag_appearance_scan_raf = requestAnimationFrame(() => {
+            window.__ag_appearance_scan_raf = null;
+            ensureAppearanceWarmNightToggle(document);
+          });
+        }
+      };
       window.__ag_appearance_toggle_observer = new MutationObserver((mutations) => {
         for (let i = 0; i < mutations.length; i++) {
           const m = mutations[i];
@@ -2465,12 +2600,8 @@
             const n = m.addedNodes[j];
             if (!n || n.nodeType !== 1) continue;
             if (n.matches && n.matches(APPEARANCE_SKIP_SELECTOR)) continue;
-            if (
-              (n.matches && n.matches('[data-slot="toggle-group"]')) ||
-              (n.firstElementChild && n.querySelector && n.querySelector('[data-slot="toggle-group"]'))
-            ) {
-              ensureAppearanceWarmNightToggle(n);
-            }
+            scheduleAppearanceGroupScan();
+            return;
           }
         }
       });

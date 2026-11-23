@@ -1,7 +1,7 @@
 {
   "enabled": true,
   "channel": "auto",
-  "preset": "high-contrast",
+  "preset": "morandi",
   "darkPreset": "onyx",
   "contextLimit": 256000,
   "modules": {
