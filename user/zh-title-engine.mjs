@@ -135,6 +135,16 @@ function isAlreadyStructuredTitle(str) {
   return Boolean(left && right && containsCjk(`${left}${right}`));
 }
 
+function looksLikePromptTitle(str) {
+  const s = String(str || '').trim();
+  if (!s || isPlaceholderTitle(s)) return true;
+  if (s.length >= 34) return true;
+  if (/(?:\.\.\.|…)$/.test(s)) return true;
+  if (/["'\\/\r\n]|https?:\/\//i.test(s)) return true;
+  if (/[？?。！!]/.test(s)) return true;
+  return false;
+}
+
 function formatShanghaiDate(msOrIso) {
   if (msOrIso === null || msOrIso === undefined || msOrIso === '') return null;
   const d = typeof msOrIso === 'number' ? new Date(msOrIso) : new Date(String(msOrIso));
@@ -823,6 +833,10 @@ export function createZhTitleController({
             }
           }
           if (src === 'user_locked') {
+            if (!isAlreadyStructuredTitle(nextEntry.displayTitle) && looksLikePromptTitle(nextEntry.originalNativeTitle)) {
+              pruned = true;
+              continue;
+            }
             const cleanedDisplay = stripAllEmojis(nextEntry.displayTitle);
             const cleanedRaw = stripAllEmojis(nextEntry.rawTitle);
             if (cleanedDisplay !== nextEntry.displayTitle || cleanedRaw !== nextEntry.rawTitle) {
@@ -1171,17 +1185,29 @@ export function createZhTitleController({
       return dirty;
     }
 
-    // 情况 C：新建对话稍后到达的原生英文自动标题（记录原标题并触发重新持久化覆盖）
-    if (!existing.originalNativeTitle && !containsCjk(trimmedNative)) {
+    // 情况 C：新建对话稍后到达的原生自动标题（无论英文还是中文无「｜」标题，都不覆盖既有「项目｜事项」格式）
+    const isUnstructuredLateAutoTitle =
+      existing.source === 'llm' &&
+      !existing.locked &&
+      !isAlreadyStructuredTitle(trimmedNative) &&
+      !DATE_PREFIX_RE.test(trimmedNative) &&
+      (!existing.originalNativeTitle ||
+        !containsCjk(trimmedNative) ||
+        looksLikePromptTitle(existing.originalNativeTitle) ||
+        existing.awaitingNativeSummary === true ||
+        Date.now() - (existing.updatedAt || 0) < 300000);
+
+    if (isUnstructuredLateAutoTitle) {
       existing.originalNativeTitle = trimmedNative;
       existing.seenNativeTitle = trimmedNative;
       existing.nativeTitle = rawNative;
       existing.nativePersisted = false;
+      existing.awaitingNativeSummary = looksLikePromptTitle(trimmedNative);
       existing.updatedAt = Date.now();
       return true;
     }
 
-    // 情况 D：用户在侧边栏真正手动改名
+    // 情况 D：用户在侧边栏真正手动改名（含显式自定义标题）
     existing.rawTitle = trimmedNative;
     existing.locked = true;
     existing.source = 'user_locked';
@@ -1314,7 +1340,8 @@ export function createZhTitleController({
       !isPlaceholderTitle(postExisting.seenNativeTitle) &&
       !isPlaceholderTitle(finalTrimmedNative) &&
       finalTrimmedNative !== postExisting.seenNativeTitle &&
-      finalTrimmedNative !== llmResult.displayTitle
+      finalTrimmedNative !== llmResult.displayTitle &&
+      isAlreadyStructuredTitle(finalTrimmedNative)
     ) {
       return { changed: false, status: 'renamed_during_flight' };
     }
@@ -1322,12 +1349,13 @@ export function createZhTitleController({
     const seenNative = !isPlaceholderTitle(finalTrimmedNative) ? finalTrimmedNative : '';
     const prevOrig = postExisting?.originalNativeTitle || '';
     const origNative =
-      prevOrig ||
-      (seenNative && seenNative !== llmResult.displayTitle
+      prevOrig && !looksLikePromptTitle(prevOrig)
+        ? prevOrig
+        : seenNative && seenNative !== llmResult.displayTitle
         ? seenNative
         : hasTitle && trimmedNative !== llmResult.displayTitle
         ? trimmedNative
-        : '');
+        : prevOrig;
     const persistedNow = readAnnotationTitle(id) === llmResult.displayTitle;
     state.titles[id] = {
       displayTitle: llmResult.displayTitle,
@@ -1336,6 +1364,7 @@ export function createZhTitleController({
       seenNativeTitle: seenNative,
       nativeTitle: finalRawNative,
       originalNativeTitle: origNative,
+      awaitingNativeSummary: looksLikePromptTitle(origNative),
       nativePersisted: persistedNow,
       projectHint: effectiveHint || ctx.projectHint || postExisting?.projectHint || '',
       project: llmResult.project,
