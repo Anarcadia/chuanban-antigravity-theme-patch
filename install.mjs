@@ -3,7 +3,7 @@
  * chuanban-antigravity-theme-patch · 一键安装、自检、CDP 接力重启、安全模式验证、打包与回滚 CLI (install.mjs)
  *
  * 支持子命令：
- *   node install.mjs install  [--channel auto|stable|insiders] [--preset high-contrast|claude-desktop-purewhite|vintage-deep] [--dark-preset onyx|claude-warm] [--sync-user] [--with-launcher] [--target-dir <dir>]
+ *   node install.mjs install  [--channel auto|stable|insiders] [--preset native|morandi|absolutely|claude-desktop-purewhite|vintage-deep] [--dark-preset onyx|claude-warm] [--sync-user] [--with-launcher] [--target-dir <dir>]
  *   node install.mjs relaunch [--channel auto|stable|insiders] [--force] [--target-dir <dir>]
  *   node install.mjs install-fonts --from <font-folder-path>
  *   node install.mjs doctor   [--channel auto|stable|insiders] [--target-dir <dir>]
@@ -917,6 +917,7 @@ async function inspectLiveWindow(portFileOrEnv, fallbackPort = 9222) {
                   hasUserStyle: !!document.getElementById('antigravity-user-custom-style'),
                   preset: document.documentElement ? document.documentElement.getAttribute('data-ag-preset') : null,
                   darkPreset: document.documentElement ? document.documentElement.getAttribute('data-ag-dark-preset') : null,
+                  uiLang: document.documentElement ? document.documentElement.getAttribute('data-ag-lang') : null,
                   themeMode: document.documentElement ? document.documentElement.getAttribute('data-ag-theme-mode') : null,
                   pageType: document.documentElement ? document.documentElement.getAttribute('data-ag-page-type') : null,
                   waxSeal: document.documentElement ? document.documentElement.getAttribute('data-ag-wax-seal') : null,
@@ -1383,6 +1384,7 @@ async function runDoctor() {
   const targetDir = path.resolve(getArg('--target-dir', resolveDefaultTargetDir()));
   const isCustomSandboxTarget =
     hasFlag('--target-dir') && !isSameTargetPath(targetDir, defaultTarget) && !hasFlag('--register-service');
+
   const env = await detectEnvironment(channel);
   const integrity = verifyCoreIntegrity(targetDir);
   const live = await inspectLiveWindow(env);
@@ -2096,6 +2098,26 @@ async function runInstall() {
   const isCustomSandboxTarget =
     hasFlag('--target-dir') && !isSameTargetPath(targetDir, defaultTarget) && !hasFlag('--register-service');
 
+  const VALID_LIGHT_PRESETS = new Set([
+    'native',
+    'morandi',
+    'absolutely',
+    'high-contrast',
+    'claude-desktop-purewhite',
+    'vintage-deep'
+  ]);
+  const VALID_DARK_PRESETS = new Set(['onyx', 'claude-warm']);
+  if (preset && !VALID_LIGHT_PRESETS.has(preset)) {
+    console.error(
+      `[ERROR] Invalid --preset "${preset}". Expected one of: native, morandi, absolutely, claude-desktop-purewhite, vintage-deep.`
+    );
+    process.exit(1);
+  }
+  if (darkPreset && !VALID_DARK_PRESETS.has(darkPreset)) {
+    console.error(`[ERROR] Invalid --dark-preset "${darkPreset}". Expected one of: onyx, claude-warm.`);
+    process.exit(1);
+  }
+
   const env = await detectEnvironment(channel);
   if (!env.nodeBasicOk) {
     console.error(`[ERROR] Node.js >= 22.0.0 is required (current: ${env.nodeVer}).`);
@@ -2188,9 +2210,9 @@ async function runInstall() {
     currentCfg.channel = 'auto';
   }
   if (preset) {
-    currentCfg.preset = preset;
-  } else if (!currentCfg.preset) {
-    currentCfg.preset = 'high-contrast';
+    currentCfg.preset = preset === 'high-contrast' ? 'morandi' : preset;
+  } else if (!currentCfg.preset || currentCfg.preset === 'high-contrast') {
+    currentCfg.preset = 'morandi';
   }
   if (darkPreset) {
     currentCfg.darkPreset = darkPreset;
@@ -2513,6 +2535,7 @@ async function runVerify() {
   if (channel && channel !== 'auto') daemonArgs.push('--channel', channel);
 
   spawnSync(process.execPath, daemonArgs, { stdio: 'inherit' });
+
   const env = await detectEnvironment(channel);
   const live = await inspectLiveWindow(env);
   const ok = Boolean(live.reachable && (live.state?.hasStyle || live.pages === 0));
@@ -3049,7 +3072,7 @@ switch (subcommand) {
     break;
   default:
     console.log(`Usage:
-  node install.mjs install          [--channel auto|stable|insiders] [--preset high-contrast|claude-desktop-purewhite|vintage-deep] [--dark-preset onyx|claude-warm] [--sync-user] [--with-launcher]
+  node install.mjs install          [--channel auto|stable|insiders] [--preset native|morandi|absolutely|claude-desktop-purewhite|vintage-deep] [--dark-preset onyx|claude-warm] [--sync-user] [--with-launcher]
   node install.mjs relaunch         [--channel auto|stable|insiders] [--force]
   node install.mjs install-fonts    --from <font-folder-path> [--retire-super-ttc]
   node install.mjs retire-super-ttc [--force]

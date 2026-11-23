@@ -131,10 +131,91 @@
     boot.modules || {}
   );
 
-  const DEFAULT_PRESET = boot.preset || 'high-contrast';
+  const DEFAULT_PRESET = boot.preset || 'morandi';
   const DEFAULT_DARK_PRESET = boot.darkPreset || 'onyx';
+  const RAW_INSTALLED_LOCALE = String(boot.installedLocale || 'zh-CN').trim() || 'zh-CN';
+  // 当前第一阶段仅实装 zh-CN 词典与无词典 none；非法预留值统一回落至 zh-CN 防按钮与词典语言错配
+  const INSTALLED_LOCALE = RAW_INSTALLED_LOCALE === 'none' || RAW_INSTALLED_LOCALE === 'zh-CN' ? RAW_INSTALLED_LOCALE : 'zh-CN';
+  const HAS_LOCALE_PACK =
+    INSTALLED_LOCALE !== 'none' &&
+    !!(boot.i18nDict && typeof boot.i18nDict === 'object' && Object.keys(boot.i18nDict).length > 0);
+
+  // 预留多语种单选扩展元数据表（当前阶段使用 zh-CN；下一版本支持安装期单选 ja 或 none）
+  const LOCALE_META = {
+    'zh-CN': {
+      btnLabel: '中文',
+      tooltip: '简体中文',
+      rowLabel: '界面语言',
+      enTooltip: '英文原版',
+      themeTooltips: {
+        native: '原版配色',
+        absolutely: 'Absolutely！',
+        morandi: '莫兰迪色',
+        warmDark: '暖纸深色',
+        onyx: '深色'
+      },
+      extHeading: '本地扩展',
+      tokenTab: 'Token 统计'
+    },
+    ja: {
+      btnLabel: '日本語',
+      tooltip: '日本語',
+      rowLabel: '表示言語',
+      enTooltip: 'Original English',
+      themeTooltips: {
+        native: '純正テーマ',
+        absolutely: 'Absolutely!',
+        morandi: 'モランディ',
+        warmDark: '暖色ダーク',
+        onyx: 'ダーク'
+      },
+      extHeading: 'ローカル拡張',
+      tokenTab: 'Token 統計'
+    }
+  };
+  const EN_UI_STRINGS = {
+    rowLabel: 'Language',
+    enTooltip: 'Original English',
+    themeTooltips: {
+      native: 'Original Theme',
+      absolutely: 'Absolutely!',
+      morandi: 'Morandi',
+      warmDark: 'Warm Dark',
+      onyx: 'Dark'
+    },
+    extHeading: 'Local Extensions',
+    tokenTab: 'Token Analytics'
+  };
+
+  if (
+    !window.__ag_persist_preset_timer &&
+    !(window.__ag_pending_persist_map && window.__ag_pending_persist_map.uiLang !== undefined)
+  ) {
+    if (!HAS_LOCALE_PACK) {
+      window.__ag_runtime_ui_lang = 'en';
+    } else if (window.__ag_host_ui_lang === 'en' || window.__ag_host_ui_lang === 'target') {
+      window.__ag_runtime_ui_lang = window.__ag_host_ui_lang;
+    } else {
+      window.__ag_runtime_ui_lang = MODULES.i18n === false ? 'en' : 'target';
+    }
+  } else if (!HAS_LOCALE_PACK) {
+    window.__ag_runtime_ui_lang = 'en';
+  }
+
+  function isUiEnglish() {
+    return !HAS_LOCALE_PACK || window.__ag_runtime_ui_lang === 'en';
+  }
+
+  function getSelfUiStrings() {
+    return isUiEnglish() ? EN_UI_STRINGS : LOCALE_META[INSTALLED_LOCALE] || LOCALE_META['zh-CN'];
+  }
+
+  if (ENABLED && document.documentElement) {
+    document.documentElement.setAttribute('data-ag-lang', isUiEnglish() ? 'en' : INSTALLED_LOCALE);
+  }
+
   const DEFAULT_EXCLUDE_I18N =
-    'code, pre, kbd, samp, textarea, input, style, script, noscript, [contenteditable="true"], [data-markdown-root], [data-testid="user-message-content"], .agy-user-bubble, .monaco-editor, .monaco-diff-editor, .xterm, [class*="onyx-key"], .prose, .markdown, [class*="chat-message"], [class*="group/file-title"], [data-uri^="file:"], [data-uri^="vscode-"], a.inline-pill[href^="file:"], a.inline-pill[href^="vscode-"], [data-testid="conversation-row-sidebar"] a[href^="/c/"], [data-testid="conversation-row-sidebar"] span.truncate, [data-testid="conversation-row-history"] a[href^="/c/"], [data-testid="conversation-row-history"] span.truncate, [data-testid="conversation-navigator-turn"], .msg-body, #raw, [data-testid="swarm-raw"], #swarm-title, #ag-live-metrics-pill, .ag-live-metrics-pill, [data-ag-metrics-pill], #ag-live-metrics-tooltip, #ag-token-nav-section, #ag-token-analytics-panel, #ag-ta-tooltip, [data-ag-token-ui]';
+    'code, pre, kbd, samp, textarea, input, style, script, noscript, [contenteditable="true"], [data-markdown-root], [data-testid="user-message-content"], .agy-user-bubble, .monaco-editor, .monaco-diff-editor, .xterm, [class*="onyx-key"], .prose, .markdown, [class*="chat-message"], [class*="group/file-title"], [data-uri^="file:"], [data-uri^="vscode-"], a.inline-pill[href^="file:"], a.inline-pill[href^="vscode-"], [data-testid="conversation-row-sidebar"] a[href^="/c/"], [data-testid="conversation-row-sidebar"] span.truncate, [data-testid="conversation-row-history"] a[href^="/c/"], [data-testid="conversation-row-history"] span.truncate, [data-testid="conversation-navigator-turn"], .msg-body, #raw, [data-testid="swarm-raw"], #swarm-title, #ag-live-metrics-pill, .ag-live-metrics-pill, [data-ag-metrics-pill], #ag-live-metrics-tooltip, #ag-token-nav-section, #ag-token-analytics-panel, #ag-ta-tooltip, [data-ag-token-ui], [data-ag-lang-row="1"]';
 
   function cleanupTokenAnalyticsDom() {
     try {
@@ -351,12 +432,12 @@
       }
       if (lightDecls.length > 0) {
         blocks.push(
-          `html[data-ag-os][data-ag-wax-seal]:not([data-ag-theme-mode="dark"]):not(:has(> body.dark)), html[data-ag-os][data-ag-wax-seal]:not([data-ag-theme-mode="dark"]) body:not(.dark) { ${lightDecls.join(' ')} }`
+          `html[data-ag-os][data-ag-wax-seal]:not([data-ag-theme-mode="dark"]), html[data-ag-os][data-ag-wax-seal]:not([data-ag-theme-mode="dark"]) body:not(.dark) { ${lightDecls.join(' ')} }`
         );
       }
       if (darkDecls.length > 0) {
         blocks.push(
-          `html[data-ag-os][data-ag-wax-seal]:not([data-ag-disabled])[data-ag-theme-mode="dark"], html[data-ag-os][data-ag-wax-seal]:not([data-ag-disabled])[data-ag-theme-mode="dark"] body, html[data-ag-os][data-ag-wax-seal]:not([data-ag-disabled]):has(> body.dark), html[data-ag-os][data-ag-wax-seal]:not([data-ag-disabled]) body.dark { ${darkDecls.join(' ')} }`
+          `html[data-ag-os][data-ag-wax-seal]:not([data-ag-disabled])[data-ag-theme-mode="dark"], html[data-ag-os][data-ag-wax-seal]:not([data-ag-disabled])[data-ag-theme-mode="dark"] body, html[data-ag-os][data-ag-wax-seal]:not([data-ag-disabled]) body.dark { ${darkDecls.join(' ')} }`
         );
       }
       const nextCss = blocks.join('\n');
@@ -490,10 +571,41 @@
       if (typeof setOverlay !== 'function') return;
       const targetEl = document.body || document.documentElement;
       if (!targetEl || typeof getComputedStyle !== 'function') return;
-      const fbBg = (customFallbacks && customFallbacks.bg) || (isDark ? '#111114' : '#F7F5F0');
-      const fbFg = (customFallbacks && customFallbacks.fg) || (isDark ? '#FAFAFA' : '#1F1E1D');
-      const bgHex = resolveCssColorToHex6('--sidebar', targetEl, fbBg);
-      const fgHex = resolveCssColorToHex6('--foreground', targetEl, fbFg);
+      const curPreset = document.documentElement ? document.documentElement.getAttribute('data-ag-preset') : '';
+      const curDarkPreset = document.documentElement ? document.documentElement.getAttribute('data-ag-dark-preset') : '';
+      const defaultLightBg =
+        curPreset === 'native'
+          ? '#FAFAFA'
+          : curPreset === 'absolutely'
+            ? '#F7F5F0'
+            : curPreset === 'vintage-deep'
+              ? '#E3D9C8'
+              : curPreset === 'claude-desktop-purewhite'
+                ? '#EFECE5'
+                : '#E8E3D9';
+      const defaultDarkBg =
+        curPreset === 'native' ? '#131313' : curDarkPreset === 'claude-warm' ? '#191815' : '#101417';
+      const defaultLightFg =
+        curPreset === 'native'
+          ? '#0A0A0C'
+          : curPreset === 'absolutely' || curPreset === 'claude-desktop-purewhite'
+            ? '#1F1E1D'
+            : curPreset === 'vintage-deep'
+              ? '#26221C'
+              : '#24221F';
+      const defaultDarkFg =
+        curPreset === 'native' ? '#FAFAFA' : curDarkPreset === 'claude-warm' ? '#ECE7D9' : '#E4E8E9';
+      const fbBg = (customFallbacks && customFallbacks.bg) || (isDark ? defaultDarkBg : defaultLightBg);
+      const fbFg = (customFallbacks && customFallbacks.fg) || (isDark ? defaultDarkFg : defaultLightFg);
+      // Windows 11 TitleBarOverlay 物理位于顶栏菜单条最右侧：优先读取顶栏容器实色，其次读侧栏实色，最后回落 CSS 变量与全预设色表
+      const menuItem = document.querySelector('[data-testid="title-menu-bar-item"]');
+      const titleBarEl = menuItem && menuItem.closest ? menuItem.closest('.bg-sidebar, header') : null;
+      const sidebarEl = document.querySelector('[data-testid="conversation-list-sidebar"]');
+      const titleBarBgHex = titleBarEl ? parseColorToHex6(getComputedStyle(titleBarEl).backgroundColor) : null;
+      const sidebarBgHex = sidebarEl ? parseColorToHex6(getComputedStyle(sidebarEl).backgroundColor) : null;
+      const directFgHex = parseColorToHex6(getComputedStyle(targetEl).color);
+      const bgHex = titleBarBgHex || sidebarBgHex || resolveCssColorToHex6('--sidebar', targetEl, fbBg);
+      const fgHex = directFgHex || resolveCssColorToHex6('--foreground', targetEl, fbFg);
       const sig = bgHex + '|' + fgHex;
       if (force || window.__ag_last_overlay_sig !== sig) {
         window.__ag_last_overlay_sig = sig;
@@ -510,9 +622,9 @@
       const targetEl = document.body || document.documentElement;
       if (!targetEl || typeof getComputedStyle !== 'function') return;
       const cs = getComputedStyle(targetEl);
-      let hex = resolveCssColorToHex6('--background', targetEl, null);
+      let hex = parseColorToHex6(cs.backgroundColor);
       if (!hex) {
-        hex = parseColorToHex6(cs.backgroundColor);
+        hex = resolveCssColorToHex6('--background', targetEl, null);
       }
       if (hex && (force || window.__ag_last_curtain_hex !== hex)) {
         window.__ag_last_curtain_hex = hex;
@@ -523,8 +635,14 @@
 
   // 若用户在 user/config.json 中将 enabled 设为 false，执行无损卸载还原
   if (!ENABLED) {
+    const s0f = document.getElementById('ag-font-faces');
+    if (s0f) s0f.remove();
     const s1 = document.getElementById('ag-custom-fonts');
     if (s1) s1.remove();
+    const s1w = document.getElementById('ag-ui-widgets');
+    if (s1w) s1w.remove();
+    const s1v = document.getElementById('ag-user-theme-vars');
+    if (s1v) s1v.remove();
     const s2 = document.getElementById('antigravity-user-custom-style');
     if (s2) s2.remove();
     const sSwarmFont = document.getElementById('ag-swarm-google-fonts');
@@ -574,16 +692,95 @@
       window.__ag_appearance_btn_attr_observer = null;
     }
     try {
-      document.querySelectorAll('button[data-ag-warm-night-btn]').forEach((el) => el.remove());
+      document.querySelectorAll('[data-ag-lang-row="1"]').forEach((el) => el.remove());
+      if (document.documentElement) document.documentElement.removeAttribute('data-ag-lang');
+      document.querySelectorAll('button[data-ag-warm-night-btn], button[data-ag-morandi-btn]').forEach((el) => el.remove());
+      document.querySelectorAll('svg[data-ag-agy-logo="1"], svg[data-ag-claude-spark="1"]').forEach((el) => el.remove());
+      document.querySelectorAll('button[data-ag-native-theme-slot="system"]').forEach((btn) => {
+        btn.removeAttribute('data-ag-grad-id');
+        if (typeof btn.__ag_orig_sys_aria === 'string') {
+          if (btn.__ag_orig_sys_aria) btn.setAttribute('aria-label', btn.__ag_orig_sys_aria);
+          else btn.removeAttribute('aria-label');
+        }
+      });
+      document.querySelectorAll('button[data-ag-native-theme-slot="light"]').forEach((btn) => {
+        if (typeof btn.__ag_orig_light_aria === 'string') {
+          if (btn.__ag_orig_light_aria) btn.setAttribute('aria-label', btn.__ag_orig_light_aria);
+          else btn.removeAttribute('aria-label');
+        }
+      });
+      document.querySelectorAll('button[data-ag-native-theme-slot="dark"]').forEach((btn) => {
+        if (typeof btn.__ag_orig_dark_aria === 'string') {
+          if (btn.__ag_orig_dark_aria) btn.setAttribute('aria-label', btn.__ag_orig_dark_aria);
+          else btn.removeAttribute('aria-label');
+        }
+      });
       document.querySelectorAll('[data-ag-theme-toggle-group]').forEach((g) => {
         g.removeAttribute('data-ag-theme-toggle-group');
+        g.removeAttribute('data-ag-active-slot');
         g.removeAttribute('data-ag-active-night');
+        g.removeAttribute('data-ag-active-light');
+        g.removeAttribute('data-ag-active-native');
       });
       document.querySelectorAll('[data-ag-native-theme-slot]').forEach((b) => {
         b.removeAttribute('data-ag-native-theme-slot');
       });
     } catch (e) {}
+    if (window.__ag_tt_guard_interval) {
+      try {
+        clearInterval(window.__ag_tt_guard_interval);
+      } catch (e) {}
+      window.__ag_tt_guard_interval = null;
+    }
+    window.__ag_tt_suppressed_btn = null;
+    if (document.documentElement && document.documentElement.hasAttribute('data-ag-suppress-native-tt')) {
+      document.documentElement.removeAttribute('data-ag-suppress-native-tt');
+    }
+    window.__ag_tt_global_dismiss_fn = null;
+    window.__ag_tt_global_dismiss_v2_fn = null;
+    if (window.__ag_surface_sync_raf) {
+      try {
+        cancelAnimationFrame(window.__ag_surface_sync_raf);
+      } catch (e) {}
+      window.__ag_surface_sync_raf = null;
+    }
+    if (window.__ag_mode_obs_raf) {
+      try {
+        cancelAnimationFrame(window.__ag_mode_obs_raf);
+      } catch (e) {}
+      window.__ag_mode_obs_raf = null;
+    }
+    if (window.__ag_mode_obs_timer) {
+      try {
+        clearTimeout(window.__ag_mode_obs_timer);
+      } catch (e) {}
+      window.__ag_mode_obs_timer = null;
+    }
+    if (window.__ag_appearance_scan_raf) {
+      try {
+        cancelAnimationFrame(window.__ag_appearance_scan_raf);
+      } catch (e) {}
+      window.__ag_appearance_scan_raf = null;
+    }
+    if (window.__ag_appearance_scan_timer) {
+      try {
+        clearTimeout(window.__ag_appearance_scan_timer);
+      } catch (e) {}
+      window.__ag_appearance_scan_timer = null;
+    }
+    if (window.__ag_persist_preset_timer) {
+      try {
+        clearTimeout(window.__ag_persist_preset_timer);
+      } catch (e) {}
+      window.__ag_persist_preset_timer = null;
+    }
+    window.__ag_pending_persist_map = null;
     window.__ag_set_dark_preset_fn = null;
+    window.__ag_set_light_preset_fn = null;
+    window.__ag_set_host_light_preset = null;
+    window.__ag_handle_native_theme_btn_click = null;
+    window.__ag_handle_native_theme_btn_hover = null;
+    window.__ag_handle_custom_theme_btn_click = null;
     window.__ag_sync_warm_night_btn_fn = null;
     window.__ag_ensure_warm_night_btn_fn = null;
     if (window.__ag_i18n_observer) {
@@ -644,6 +841,7 @@
     window.__ag_sync_preset_fn = null;
     window.__ag_host_theme_mode = null;
     window.__ag_host_dark_preset = null;
+    window.__ag_host_light_preset = null;
     window.__ag_set_host_theme_mode = null;
     window.__ag_set_host_dark_preset = null;
     window.__ag_resolved_theme_mode = null;
@@ -655,6 +853,7 @@
     document.documentElement.removeAttribute('data-ag-theme-mode');
     document.documentElement.removeAttribute('data-ag-page-type');
     document.documentElement.removeAttribute('data-ag-wax-seal');
+    document.documentElement.removeAttribute('data-ag-suppress-native-tt');
     document.documentElement.removeAttribute('data-ag-os');
     const restoreNativeSurfaces = () => {
       syncCurtainSurfaceColor(true);
@@ -779,15 +978,62 @@
     } catch (e) {}
   }
 
+  // 三段式物理隔离：
+  // 1) #ag-font-faces（纯 @font-face 注册表，常驻永不 disabled，杜绝切换时销毁重建 CSSFontFace / Skia 字形纹理缓存引发的缺字空白）
+  // 2) #ag-custom-fonts（纯主题色彩与字体选择器规则，点「原版配色」时一键 disabled=true 零开销退回原版）
+  // 3) #ag-ui-widgets（五段式胶囊按钮、底部圆环小胶囊、Token 统计面板，常驻在线）
+  const THEME_RULES_SPLIT_MARKER = '/* __AG_THEME_RULES_START__ */';
+  const WIDGETS_CSS_SPLIT_MARKER = '/* __AG_WIDGETS_CSS_START__ */';
+  const rulesSplitIdx = CSS_TEXT.indexOf(THEME_RULES_SPLIT_MARKER);
+  const widgetsSplitIdx = CSS_TEXT.indexOf(WIDGETS_CSS_SPLIT_MARKER);
+  const FONT_FACES_ONLY_CSS = rulesSplitIdx >= 0 ? CSS_TEXT.slice(0, rulesSplitIdx) : '';
+  const THEME_ONLY_CSS =
+    rulesSplitIdx >= 0
+      ? widgetsSplitIdx >= 0
+        ? CSS_TEXT.slice(rulesSplitIdx, widgetsSplitIdx)
+        : CSS_TEXT.slice(rulesSplitIdx)
+      : widgetsSplitIdx >= 0
+        ? CSS_TEXT.slice(0, widgetsSplitIdx)
+        : CSS_TEXT;
+  const WIDGETS_ONLY_CSS = widgetsSplitIdx >= 0 ? CSS_TEXT.slice(widgetsSplitIdx) : '';
+
+  if (FONT_FACES_ONLY_CSS) {
+    let ffStyle = document.getElementById('ag-font-faces');
+    if (!ffStyle) {
+      ffStyle = document.createElement('style');
+      ffStyle.id = 'ag-font-faces';
+      if (headTarget) headTarget.appendChild(ffStyle);
+    }
+    if (ffStyle.textContent !== FONT_FACES_ONLY_CSS) {
+      ffStyle.textContent = FONT_FACES_ONLY_CSS;
+    }
+    if (ffStyle.disabled) ffStyle.disabled = false;
+  }
+
   let style = document.getElementById('ag-custom-fonts');
   if (!style) {
     style = document.createElement('style');
     style.id = 'ag-custom-fonts';
     if (headTarget) headTarget.appendChild(style);
   }
-  if (style && style.textContent !== CSS_TEXT) {
-    style.textContent = CSS_TEXT;
+  if (style && style.textContent !== THEME_ONLY_CSS) {
+    style.textContent = THEME_ONLY_CSS;
     window.__ag_style_rev = (window.__ag_style_rev || 0) + 1;
+  }
+
+  let widgetStyle = document.getElementById('ag-ui-widgets');
+  if (WIDGETS_ONLY_CSS) {
+    if (!widgetStyle) {
+      widgetStyle = document.createElement('style');
+      widgetStyle.id = 'ag-ui-widgets';
+      if (headTarget) headTarget.appendChild(widgetStyle);
+    }
+    if (widgetStyle.textContent !== WIDGETS_ONLY_CSS) {
+      widgetStyle.textContent = WIDGETS_ONLY_CSS;
+      window.__ag_style_rev = (window.__ag_style_rev || 0) + 1;
+    }
+  } else if (widgetStyle) {
+    widgetStyle.remove();
   }
 
   document.documentElement.setAttribute('data-ag-wax-seal', MODULES.composerWaxSeal === false ? 'off' : 'on');
@@ -811,6 +1057,35 @@
     window.__ag_style_rev = (window.__ag_style_rev || 0) + 1;
   }
 
+  function syncThemeStyleSheetEnabled(isNative) {
+    const off = !!isNative;
+    const sheetIds = ['ag-custom-fonts', 'ag-user-theme-vars', 'antigravity-user-custom-style'];
+    for (let i = 0; i < sheetIds.length; i++) {
+      const el = document.getElementById(sheetIds[i]);
+      if (!el) continue;
+      if (el.disabled !== off) el.disabled = off;
+      if (el.sheet && el.sheet.disabled !== off) {
+        try {
+          el.sheet.disabled = off;
+        } catch (e) {}
+      }
+    }
+    // 始终保持 Google Sans Flex 字体定义常驻，切勿翻转 @font-face 样式表的 disabled 状态以防清空 Skia 字形纹理缓存
+    const gsfFallback = document.getElementById('ag-google-sans-flex-fonts');
+    if (gsfFallback && gsfFallback.disabled) {
+      gsfFallback.disabled = false;
+    }
+    if (off) {
+      document.documentElement.setAttribute('data-ag-wax-seal', 'off');
+      document.documentElement.removeAttribute('data-ag-custom-font-size');
+    } else {
+      document.documentElement.setAttribute('data-ag-wax-seal', MODULES.composerWaxSeal === false ? 'off' : 'on');
+      if (THEME_VARS && THEME_VARS['--ag-chat-font-size']) {
+        document.documentElement.setAttribute('data-ag-custom-font-size', 'true');
+      }
+    }
+  }
+
   function ensureStylesAtEndOfHead() {
     dedupFallbackGoogleFontsLink();
     const h = document.head || document.getElementsByTagName('head')[0];
@@ -821,6 +1096,8 @@
     if (!needsMove) {
       for (let sib = base.nextElementSibling; sib; sib = sib.nextElementSibling) {
         if (
+          sib.id !== 'ag-font-faces' &&
+          sib.id !== 'ag-ui-widgets' &&
           sib.id !== 'ag-user-theme-vars' &&
           sib.id !== 'antigravity-user-custom-style' &&
           (sib.tagName === 'LINK' || sib.tagName === 'STYLE')
@@ -831,10 +1108,13 @@
       }
     }
     if (needsMove) {
-      for (const id of ['ag-custom-fonts', 'ag-user-theme-vars', 'antigravity-user-custom-style']) {
+      // 注意：切勿移动常驻的 #ag-font-faces，防止重建 CSSFontFace 实例
+      for (const id of ['ag-custom-fonts', 'ag-ui-widgets', 'ag-user-theme-vars', 'antigravity-user-custom-style']) {
         const el = document.getElementById(id);
         if (el) h.appendChild(el);
       }
+      // 节点移动会触发 Chromium 重建 CSSStyleSheet 实例并重置 disabled=false，立即回锁状态
+      syncThemeStyleSheetEnabled(document.documentElement.getAttribute('data-ag-preset') === 'native');
     }
   }
   ensureStylesAtEndOfHead();
@@ -1362,6 +1642,9 @@
   // 3. 专属色彩预设状态联动（支持 user/config.json 热重载切换）与防白屏崩溃保护
   // ============================================================================
   const PRESETS = {
+    NATIVE: 'native',
+    MORANDI: 'morandi',
+    ABSOLUTELY: 'absolutely',
     HIGH_CONTRAST: 'high-contrast',
     CLAUDE_PUREWHITE: 'claude-desktop-purewhite',
     VINTAGE_DEEP: 'vintage-deep',
@@ -1377,11 +1660,54 @@
 
   const ALL_CUSTOM_PRESET_NAMES = new Set(Object.values(PRESETS));
 
-  // 当用户在 user/config.json 中修改了 preset / darkPreset 时，同步刷新 localStorage 中的预设标记
-  if (DEFAULT_PRESET && window.__ag_last_boot_preset !== DEFAULT_PRESET) {
-    window.__ag_last_boot_preset = DEFAULT_PRESET;
+  function resolveNormalizedLightPreset(rawVal) {
+    const s = String(rawVal || '').trim().toLowerCase();
+    if (s === PRESETS.NATIVE || s === 'stock' || s === 'original' || s === '原版配色') {
+      return PRESETS.NATIVE;
+    }
+    if (s === PRESETS.ABSOLUTELY || s === 'claude-orange' || s === 'absolutely!' || s === 'absolutely！') {
+      return PRESETS.ABSOLUTELY;
+    }
+    if (s === PRESETS.CLAUDE_PUREWHITE || s === PRESETS.LEGACY_OFFICIAL || s === 'claudedesktop 净白') {
+      return PRESETS.CLAUDE_PUREWHITE;
+    }
+    if (s === PRESETS.VINTAGE_DEEP || s === PRESETS.LEGACY_CHUANBAN || s === '复古深色') {
+      return PRESETS.VINTAGE_DEEP;
+    }
+    return PRESETS.MORANDI;
+  }
+
+  if (!window.__ag_last_non_native_light) {
     try {
-      Storage.prototype.setItem.call(localStorage, 'theme-color-flavor', DEFAULT_PRESET);
+      const savedNonNative = Storage.prototype.getItem.call(localStorage, 'theme-last-non-native-light');
+      if (savedNonNative) {
+        const normSaved = resolveNormalizedLightPreset(savedNonNative);
+        if (normSaved !== PRESETS.NATIVE) {
+          window.__ag_last_non_native_light = normSaved;
+        }
+      }
+    } catch (e) {}
+  }
+
+  // 当用户在 user/config.json 中修改了 preset / darkPreset 时，同步刷新 localStorage 中的预设标记（跳过处于防抖待提交窗口内的页面防回滚）
+  const hasPendingLightPersist =
+    !!window.__ag_persist_preset_timer ||
+    !!(window.__ag_pending_persist_map && window.__ag_pending_persist_map.light !== undefined);
+  const hasPendingDarkPersist =
+    !!window.__ag_persist_preset_timer ||
+    !!(window.__ag_pending_persist_map && window.__ag_pending_persist_map.dark !== undefined);
+
+  const effectiveBootLightPreset = resolveNormalizedLightPreset(
+    IS_SWARM_PLUGIN_FRAME && window.__ag_host_light_preset ? window.__ag_host_light_preset : DEFAULT_PRESET
+  );
+  if (effectiveBootLightPreset !== PRESETS.NATIVE && !window.__ag_last_non_native_light) {
+    window.__ag_last_non_native_light = effectiveBootLightPreset;
+  }
+  if (!hasPendingLightPersist && effectiveBootLightPreset && window.__ag_last_boot_preset !== effectiveBootLightPreset) {
+    window.__ag_last_boot_preset = effectiveBootLightPreset;
+    window.__ag_runtime_light_preset = effectiveBootLightPreset;
+    try {
+      Storage.prototype.setItem.call(localStorage, 'theme-color-flavor', effectiveBootLightPreset);
     } catch (e) {}
   }
   const effectiveBootDarkPreset =
@@ -1389,7 +1715,7 @@
     (window.__ag_host_dark_preset === DARK_PRESETS.CLAUDE_WARM || window.__ag_host_dark_preset === DARK_PRESETS.ONYX)
       ? window.__ag_host_dark_preset
       : DEFAULT_DARK_PRESET;
-  if (effectiveBootDarkPreset && window.__ag_last_boot_dark_preset !== effectiveBootDarkPreset) {
+  if (!hasPendingDarkPersist && effectiveBootDarkPreset && window.__ag_last_boot_dark_preset !== effectiveBootDarkPreset) {
     window.__ag_last_boot_dark_preset = effectiveBootDarkPreset;
     window.__ag_runtime_dark_preset = effectiveBootDarkPreset;
     try {
@@ -1429,26 +1755,31 @@
         } catch (e) {}
       }
 
+      const liveHostLightPreset =
+        IS_SWARM_PLUGIN_FRAME && window.__ag_host_light_preset ? window.__ag_host_light_preset : null;
       const flavor =
-        Storage.prototype.getItem.call(localStorage, 'theme-color-flavor') || DEFAULT_PRESET || PRESETS.HIGH_CONTRAST;
+        liveHostLightPreset ||
+        window.__ag_runtime_light_preset ||
+        Storage.prototype.getItem.call(localStorage, 'theme-color-flavor') ||
+        DEFAULT_PRESET ||
+        PRESETS.MORANDI;
 
-      let targetPreset = PRESETS.HIGH_CONTRAST;
-      if (flavor === PRESETS.HIGH_CONTRAST || flavor === PRESETS.LEGACY_WARM_WHITE || flavor === '高对比版') {
-        targetPreset = PRESETS.HIGH_CONTRAST;
-      } else if (
-        flavor === PRESETS.CLAUDE_PUREWHITE ||
-        flavor === PRESETS.LEGACY_OFFICIAL ||
-        flavor === 'ClaudeDesktop 净白'
-      ) {
-        targetPreset = PRESETS.CLAUDE_PUREWHITE;
-      } else if (flavor === PRESETS.VINTAGE_DEEP || flavor === PRESETS.LEGACY_CHUANBAN || flavor === '复古深色') {
-        targetPreset = PRESETS.VINTAGE_DEEP;
-      }
+      const targetPreset = resolveNormalizedLightPreset(flavor);
 
       const prevPreset = document.documentElement.getAttribute('data-ag-preset');
-      if (prevPreset !== targetPreset) {
+      const lightPresetChanged = prevPreset !== targetPreset;
+      if (lightPresetChanged) {
         document.documentElement.setAttribute('data-ag-preset', targetPreset);
       }
+      if (targetPreset !== PRESETS.NATIVE) {
+        if (window.__ag_last_non_native_light !== targetPreset) {
+          window.__ag_last_non_native_light = targetPreset;
+          try {
+            Storage.prototype.setItem.call(localStorage, 'theme-last-non-native-light', targetPreset);
+          } catch (e) {}
+        }
+      }
+      syncThemeStyleSheetEnabled(targetPreset === PRESETS.NATIVE);
 
       let storedDarkFlavor = null;
       try {
@@ -1508,6 +1839,56 @@
         if (htmlEl && htmlEl.style.colorScheme !== swarmMode) {
           htmlEl.style.colorScheme = swarmMode;
           window.__ag_swarm_owned_cs = true;
+        }
+        // 当 Swarm 看板在莫兰迪/自定义主题下首次挂载时，宿主会将父窗口补丁配色快照写入 iframe 的 html.style inline 变量；
+        // 切回「原版配色 (native)」后若不清理这些被补丁污染的 inline 变量，Swarm 会卡死在莫兰迪底色无法回归原版。
+        if (htmlEl && targetPreset === PRESETS.NATIVE) {
+          const curInlineBg = (htmlEl.style.getPropertyValue('--background') || '').trim().toUpperCase();
+          const curInlineFont = (htmlEl.style.getPropertyValue('--editor-font-family') || '').trim();
+          const PATCH_SWARM_BGS = new Set([
+            '#F4F1EA',
+            '#FCFCFB',
+            '#EFE8DC',
+            '#F8F6F1',
+            '#F3EAD8',
+            '#F8F7F4',
+            '#15191C',
+            '#21201D',
+            '#1B1A18'
+          ]);
+          if (PATCH_SWARM_BGS.has(curInlineBg) || /Anthropic Mono/i.test(curInlineFont)) {
+            const propsToClear = [];
+            for (let i = 0; i < htmlEl.style.length; i++) {
+              const prop = htmlEl.style[i];
+              if (prop && prop.startsWith('--')) propsToClear.push(prop);
+            }
+            for (let i = 0; i < propsToClear.length; i++) {
+              htmlEl.style.removeProperty(propsToClear[i]);
+            }
+            if (isDark) {
+              const nativeDarkVars = {
+                '--background': '#131313',
+                '--foreground': '#FAFAFA',
+                '--content': '#131313',
+                '--card': '#1C1C1E',
+                '--sidebar': '#18181A',
+                '--border': 'rgba(255, 255, 255, 0.12)',
+                '--card-border': 'rgba(255, 255, 255, 0.12)',
+                '--secondary': 'rgba(255, 255, 255, 0.08)',
+                '--secondary-foreground': '#E4E4E7',
+                '--muted': 'rgba(255, 255, 255, 0.06)',
+                '--muted-foreground': '#A1A1AA',
+                '--primary': '#2F71E3',
+                '--primary-foreground': '#FFFFFF',
+                '--accent': '#2F71E3',
+                '--vscode-editor-background': '#131313',
+                '--vscode-foreground': '#FAFAFA'
+              };
+              for (const [k, v] of Object.entries(nativeDarkVars)) {
+                htmlEl.style.setProperty(k, v);
+              }
+            }
+          }
         }
       } else {
         const bodyExplicitDark = !!(
@@ -1574,13 +1955,28 @@
         }
       }
       const bodyStateFlag = bodyEl ? (bodyEl.hasAttribute('data-agy-theme') || bodyEl.hasAttribute('data-newux-theme') ? 2 : 1) : 0;
+      const surfaceForce = darkPresetChanged || lightPresetChanged;
       const surfaceSyncKey = `${targetMode}|${targetPreset}|${targetDarkPreset}|${bodyStateFlag}|${window.__ag_style_rev || 0}`;
-      if (darkPresetChanged || window.__ag_last_surface_sync_key !== surfaceSyncKey) {
+      if (surfaceForce || window.__ag_last_surface_sync_key !== surfaceSyncKey) {
         if (bodyEl) {
           window.__ag_last_surface_sync_key = surfaceSyncKey;
         }
-        syncWinTitleBarOverlay(isDark, darkPresetChanged);
-        syncCurtainSurfaceColor(darkPresetChanged);
+        window.__ag_pending_surface_dark = isDark;
+        window.__ag_pending_surface_force = !!(window.__ag_pending_surface_force || surfaceForce);
+        if (!window.__ag_surface_sync_raf && typeof requestAnimationFrame === 'function') {
+          window.__ag_surface_sync_raf = requestAnimationFrame(() => {
+            window.__ag_surface_sync_raf = null;
+            const dFlag = !!window.__ag_pending_surface_dark;
+            const fFlag = !!window.__ag_pending_surface_force;
+            window.__ag_pending_surface_force = false;
+            syncWinTitleBarOverlay(dFlag, fFlag);
+            syncCurtainSurfaceColor(fFlag);
+          });
+        } else if (typeof requestAnimationFrame !== 'function') {
+          window.__ag_pending_surface_force = false;
+          syncWinTitleBarOverlay(isDark, surfaceForce);
+          syncCurtainSurfaceColor(surfaceForce);
+        }
       }
       if (typeof window.__ag_sync_warm_night_btn_fn === 'function') {
         window.__ag_sync_warm_night_btn_fn();
@@ -1597,6 +1993,13 @@
     }
   };
   window.__ag_set_host_dark_preset = (nextDarkPreset) => {
+    if (
+      !IS_SWARM_PLUGIN_FRAME &&
+      window.__ag_pending_persist_map &&
+      window.__ag_pending_persist_map.dark !== undefined
+    ) {
+      return;
+    }
     window.__ag_runtime_dark_preset = resolveNormalizedDarkPreset(nextDarkPreset);
     if (IS_SWARM_PLUGIN_FRAME) {
       window.__ag_host_dark_preset = window.__ag_runtime_dark_preset;
@@ -1606,6 +2009,50 @@
     } catch (e) {}
     if (typeof window.__ag_sync_preset_fn === 'function') {
       window.__ag_sync_preset_fn();
+    }
+  };
+  window.__ag_set_host_light_preset = (nextLightPreset) => {
+    if (
+      !IS_SWARM_PLUGIN_FRAME &&
+      window.__ag_pending_persist_map &&
+      window.__ag_pending_persist_map.light !== undefined
+    ) {
+      return;
+    }
+    window.__ag_runtime_light_preset = resolveNormalizedLightPreset(nextLightPreset);
+    if (IS_SWARM_PLUGIN_FRAME) {
+      window.__ag_host_light_preset = window.__ag_runtime_light_preset;
+    }
+    try {
+      Storage.prototype.setItem.call(localStorage, 'theme-color-flavor', window.__ag_runtime_light_preset);
+    } catch (e) {}
+    if (typeof window.__ag_sync_preset_fn === 'function') {
+      window.__ag_sync_preset_fn();
+    }
+  };
+  window.__ag_set_host_ui_lang = (nextUiLang) => {
+    if (
+      !IS_SWARM_PLUGIN_FRAME &&
+      window.__ag_pending_persist_map &&
+      window.__ag_pending_persist_map.uiLang !== undefined
+    ) {
+      return;
+    }
+    const norm = !HAS_LOCALE_PACK || String(nextUiLang || '').trim().toLowerCase() === 'en' ? 'en' : 'target';
+    window.__ag_host_ui_lang = norm;
+    if (typeof window.__ag_set_ui_lang_fn === 'function') {
+      window.__ag_set_ui_lang_fn(norm, false);
+    } else {
+      window.__ag_runtime_ui_lang = norm;
+      if (document.documentElement) {
+        document.documentElement.setAttribute('data-ag-lang', isUiEnglish() ? 'en' : INSTALLED_LOCALE);
+      }
+      if (typeof window.__ag_apply_i18n_dom_state === 'function') {
+        window.__ag_apply_i18n_dom_state();
+      }
+      if (typeof window.__ag_refresh_self_ui_lang === 'function') {
+        window.__ag_refresh_self_ui_lang();
+      }
     }
   };
 
@@ -1653,13 +2100,36 @@
     } catch (e) {}
     window.__ag_theme_mode_observer = null;
   }
+  if (window.__ag_mode_obs_raf) {
+    try {
+      cancelAnimationFrame(window.__ag_mode_obs_raf);
+    } catch (e) {}
+    window.__ag_mode_obs_raf = null;
+  }
+  if (window.__ag_mode_obs_timer) {
+    try {
+      clearTimeout(window.__ag_mode_obs_timer);
+    } catch (e) {}
+    window.__ag_mode_obs_timer = null;
+  }
   if (typeof MutationObserver !== 'undefined') {
     try {
-      const modeObs = new MutationObserver(() => {
-        if (typeof window.__ag_sync_preset_fn === 'function') {
-          window.__ag_sync_preset_fn();
+      const scheduleModeSync = () => {
+        if (document.hidden || typeof requestAnimationFrame !== 'function') {
+          if (!window.__ag_mode_obs_timer) {
+            window.__ag_mode_obs_timer = setTimeout(() => {
+              window.__ag_mode_obs_timer = null;
+              if (typeof window.__ag_sync_preset_fn === 'function') window.__ag_sync_preset_fn();
+            }, 0);
+          }
+        } else if (!window.__ag_mode_obs_raf) {
+          window.__ag_mode_obs_raf = requestAnimationFrame(() => {
+            window.__ag_mode_obs_raf = null;
+            if (typeof window.__ag_sync_preset_fn === 'function') window.__ag_sync_preset_fn();
+          });
         }
-      });
+      };
+      const modeObs = new MutationObserver(scheduleModeSync);
       if (document.body) {
         modeObs.observe(document.body, { attributes: true, attributeFilter: ['class'] });
       }
@@ -1696,7 +2166,45 @@
     const MENU_BOOK_SVG_PATH =
       'M557.69-570.15v-52.61q32.62-15.15 68.27-22.73T700-653.08q24.08,0 46.77,3.42t45.54,9.04v50.15q-22.46-7.85-44.65-11.38T700-605.39q-38.38,0-74.35,9.12t-67.96,26.12Zm0,219.23v-53.38q31.85-15.15 68.08-22.73T700-434.61q24.08,0 46.77,3.42t45.54,9.04V-372q-22.46-7.85-44.65-11.38T700-386.92q-38.38,0-74.35,9.19t-67.96,26.81Zm0-109.23v-53.38q32.62-15.15 68.27-22.73T700-543.85q24.08,0 46.77,3.42t45.54,9.04v50.15q-22.46-7.85-44.65-11.38T700-496.15q-38.38,0-74.35,9.5t-67.96,26.5ZM260-319.23q49.69,0 96.69,11.27T450-272.61V-665.85q-42.15-27.46-91.23-41.19T260-720.77q-36,0-67.27,5.65t-64.27,18.5q-4.62,1.54-6.54,4.42T120-685.85v378.31q0,5.39 3.85,7.89t8.46,0.58q28.46-9.69 60.08-14.92T260-319.23Zm250,46.62q46.31-24.08 93.31-35.35T700-319.23q36,0 67.62,5.23t60.08,14.92q4.62,1.92 8.46-0.58t3.85-7.89V-685.85q0-3.46-1.92-6.15t-6.54-4.62q-33-12.85-64.27-18.5T700-720.77q-49.69,0-98.77,13.73T510-665.85v393.23Zm-30,88q-48.38-35.69-104.38-55.15T260-259.23q-36.61,0-71.92,8.12T120-227.23q-21.38,9.85-40.69-3.12T60-267.08v-434.3q0-12.92 6.65-24.27T85.85-742q40.61-19.77 84.65-29.27t89.5-9.5q58.38,0 114.08,15.96T480-717.69q50.23-31.15 105.92-47.12T700-780.77q45.46,0 89.5,9.5T874.15-742q12.54,5 19.19,16.35T900-701.38v434.3q0,23.77-20.08,36.35T837.69-228q-32.38-15.38-67.11-23.31T700-259.23q-59.62,0-115.62,19.46T480-184.62ZM285-496.69Z';
 
-    function hideThemeBtnTooltip() {
+    function releaseNativeTooltipSuppress() {
+      if (window.__ag_tt_guard_interval) {
+        try {
+          clearInterval(window.__ag_tt_guard_interval);
+        } catch (e) {}
+        window.__ag_tt_guard_interval = null;
+      }
+      window.__ag_tt_suppressed_btn = null;
+      if (document.documentElement && document.documentElement.hasAttribute('data-ag-suppress-native-tt')) {
+        document.documentElement.removeAttribute('data-ag-suppress-native-tt');
+      }
+    }
+
+    function keepSuppressNativeTooltip(anchorBtn) {
+      if (!anchorBtn || !document.documentElement) return;
+      if (window.__ag_tt_guard_interval) {
+        try {
+          clearInterval(window.__ag_tt_guard_interval);
+        } catch (e) {}
+        window.__ag_tt_guard_interval = null;
+      }
+      window.__ag_tt_suppressed_btn = anchorBtn;
+      document.documentElement.setAttribute('data-ag-suppress-native-tt', '1');
+      window.__ag_tt_guard_interval = setInterval(() => {
+        const btn = window.__ag_tt_suppressed_btn;
+        const stillActive =
+          !!(
+            btn &&
+            btn.isConnected &&
+            typeof btn.matches === 'function' &&
+            btn.matches(':hover, :focus-visible')
+          );
+        if (!stillActive) {
+          hideThemeBtnTooltip(false);
+        }
+      }, 350);
+    }
+
+    function hideThemeBtnTooltip(keepSuppressIfHovered = false) {
       if (window.__ag_theme_btn_tt_timer) {
         try {
           clearTimeout(window.__ag_theme_btn_tt_timer);
@@ -1707,13 +2215,60 @@
       if (tt) {
         tt.removeAttribute('data-visible');
       }
+      if (keepSuppressIfHovered === true) {
+        const btn = window.__ag_tt_suppressed_btn;
+        const stillActive =
+          !!(
+            btn &&
+            btn.isConnected &&
+            typeof btn.matches === 'function' &&
+            (btn.matches(':hover, :focus-visible') || document.activeElement === btn)
+          );
+        if (stillActive) return;
+      }
+      releaseNativeTooltipSuppress();
     }
 
-    function scheduleThemeBtnTooltip(anchorBtn, text) {
-      hideThemeBtnTooltip();
+    // 废弃早期无参全局监听回调，交由带事件参数的 v2 监听统一分派，避免热重载后点击按钮提前解除原生气泡压制
+    window.__ag_tt_global_dismiss_fn = null;
+    window.__ag_tt_global_dismiss_v2_fn = (ev) => {
+      if (ev && ev.type === 'pointerdown') {
+        const target = ev.target;
+        const slotBtn =
+          target && typeof target.closest === 'function'
+            ? target.closest('button[data-ag-native-theme-slot]')
+            : null;
+        if (slotBtn) {
+          keepSuppressNativeTooltip(slotBtn);
+          hideThemeBtnTooltip(true);
+          return;
+        }
+      }
+      hideThemeBtnTooltip(false);
+    };
+    if (!window.__ag_tt_global_listener_v2_installed && typeof window.addEventListener === 'function') {
+      window.__ag_tt_global_listener_v2_installed = true;
+      const onDismissV2 = (ev) => {
+        if (typeof window.__ag_tt_global_dismiss_v2_fn === 'function') {
+          window.__ag_tt_global_dismiss_v2_fn(ev);
+        }
+      };
+      window.addEventListener('pointerdown', onDismissV2, true);
+      window.addEventListener('keydown', onDismissV2, true);
+      window.addEventListener('blur', onDismissV2);
+    }
+
+    function scheduleThemeBtnTooltip(anchorBtn, text, suppressNative = false) {
+      hideThemeBtnTooltip(false);
+      if (suppressNative && document.documentElement) {
+        keepSuppressNativeTooltip(anchorBtn);
+      }
       window.__ag_theme_btn_tt_timer = setTimeout(() => {
         window.__ag_theme_btn_tt_timer = null;
-        if (!anchorBtn || !anchorBtn.isConnected || !document.body) return;
+        if (!anchorBtn || !anchorBtn.isConnected || !document.body) {
+          hideThemeBtnTooltip(false);
+          return;
+        }
         let tt = document.getElementById('ag-theme-btn-tooltip');
         if (!tt) {
           tt = document.createElement('div');
@@ -1730,6 +2285,67 @@
       }, 260);
     }
 
+    function schedulePresetPersist(kind, val) {
+      if (!window.__ag_pending_persist_map) {
+        window.__ag_pending_persist_map = {};
+      }
+      window.__ag_pending_persist_map[kind] = val;
+      if (window.__ag_persist_preset_timer) {
+        clearTimeout(window.__ag_persist_preset_timer);
+      }
+      window.__ag_persist_preset_timer = setTimeout(() => {
+        window.__ag_persist_preset_timer = null;
+        const map = window.__ag_pending_persist_map || {};
+        window.__ag_pending_persist_map = {};
+        if (map.light !== undefined && typeof window.__agSetLightPreset === 'function') {
+          try {
+            window.__agSetLightPreset(map.light);
+          } catch (e) {}
+        }
+        if (map.dark !== undefined && typeof window.__agSetDarkPreset === 'function') {
+          try {
+            window.__agSetDarkPreset(map.dark);
+          } catch (e) {}
+        }
+        if (map.uiLang !== undefined && typeof window.__agSetUiLang === 'function') {
+          try {
+            window.__agSetUiLang(map.uiLang);
+          } catch (e) {}
+        }
+      }, 120);
+    }
+
+    function refreshSelfOwnedUiLang() {
+      if (typeof window.__ag_sync_warm_night_btn_fn === 'function') {
+        window.__ag_sync_warm_night_btn_fn();
+      }
+      if (typeof window.__ag_rerender_token_analytics_lang === 'function') {
+        try {
+          window.__ag_rerender_token_analytics_lang();
+        } catch (e) {}
+      }
+    }
+    window.__ag_refresh_self_ui_lang = refreshSelfOwnedUiLang;
+
+    function setRuntimeUiLang(nextUiLang, persist = true) {
+      const normalized = !HAS_LOCALE_PACK || String(nextUiLang || '').trim().toLowerCase() === 'en' ? 'en' : 'target';
+      const prev = isUiEnglish() ? 'en' : 'target';
+      window.__ag_runtime_ui_lang = normalized;
+      window.__ag_host_ui_lang = normalized;
+      if (document.documentElement) {
+        document.documentElement.setAttribute('data-ag-lang', isUiEnglish() ? 'en' : INSTALLED_LOCALE);
+      }
+      hideThemeBtnTooltip(false);
+      if (prev !== normalized && typeof window.__ag_apply_i18n_dom_state === 'function') {
+        window.__ag_apply_i18n_dom_state();
+      }
+      refreshSelfOwnedUiLang();
+      if (persist) {
+        schedulePresetPersist('uiLang', normalized);
+      }
+    }
+    window.__ag_set_ui_lang_fn = setRuntimeUiLang;
+
     function setRuntimeDarkPreset(nextPreset, persist = true) {
       const normalized = resolveNormalizedDarkPreset(nextPreset);
       window.__ag_runtime_dark_preset = normalized;
@@ -1740,19 +2356,47 @@
       if (typeof window.__ag_sync_warm_night_btn_fn === 'function') {
         window.__ag_sync_warm_night_btn_fn();
       }
-      if (persist && typeof window.__agSetDarkPreset === 'function') {
-        try {
-          window.__agSetDarkPreset(normalized);
-        } catch (e) {}
+      if (persist) {
+        schedulePresetPersist('dark', normalized);
       }
     }
+
+    function setRuntimeLightPreset(nextPreset, persist = true) {
+      const normalized = resolveNormalizedLightPreset(nextPreset);
+      window.__ag_runtime_light_preset = normalized;
+      try {
+        Storage.prototype.setItem.call(localStorage, 'theme-color-flavor', normalized);
+      } catch (e) {}
+      syncChuanbanPreset();
+      if (typeof window.__ag_sync_warm_night_btn_fn === 'function') {
+        window.__ag_sync_warm_night_btn_fn();
+      }
+      if (persist) {
+        schedulePresetPersist('light', normalized);
+      }
+    }
+
+    // Antigravity 官方流线 A 形标志、仿 Claude 近似放射性星芒与 MO 徽标路径
+    const AGY_BRAND_GLYPH_PATH =
+      'M12 3.55C9.45 3.55 7.95 7.85 6.85 12.35C5.95 16.05 4.85 17.65 3.55 18.95C3.05 19.45 3.45 20.3 4.2 20.2C5.45 20.05 6.65 18.45 7.95 15.95C9.2 13.55 10.4 12.4 12 12.4C13.6 12.4 14.8 13.55 16.05 15.95C17.35 18.45 18.55 20.05 19.8 20.2C20.55 20.3 20.95 19.45 20.45 18.95C19.15 17.65 18.05 16.05 17.15 12.35C16.05 7.85 14.55 3.55 12 3.55Z';
+    const CLAUDE_SPARK_RAYS_PATH =
+      'M12 9.7L12 2.6M13.12 10.08L16.1 5.35M13.92 10.92L20.15 7.6M14.2 12.06L19.85 12.26M13.88 13.18L19.9 17.1M13.02 13.94L15.48 18.52M11.94 14.2L11.8 21.25M10.82 13.88L7.76 18.5M10.06 13.06L3.9 16.32M9.8 11.94L4.25 11.74M10.12 10.82L4.1 7.0M10.94 10.06L8.38 5.45';
+    const MO_BADGE_PATH_M =
+      'M1.35 12.45V3.55h1.9l2.75 5.35 2.75-5.35h1.9v8.9H9.0V6.5L6.52 11.3H5.48L3.0 6.5v5.95H1.35Z';
+    const MO_BADGE_PATH_O =
+      'M16.55 3.4c2.48 0 4.18 1.9 4.18 4.6s-1.7 4.6-4.18 4.6-4.18-1.9-4.18-4.6 1.7-4.6 4.18-4.6Zm0 1.6c-1.42 0-2.42 1.2-2.42 3.0s1.0 3.0 2.42 3.0 2.42-1.2 2.42-3.0-1.0-3.0-2.42-3.0Z';
 
     function identifyNativeThemeButtons(group) {
       if (!group || group.nodeType !== 1) return null;
       const nativeBtns = [];
       for (let i = 0; i < group.children.length; i++) {
         const ch = group.children[i];
-        if (ch && ch.tagName === 'BUTTON' && !ch.hasAttribute('data-ag-warm-night-btn')) {
+        if (
+          ch &&
+          ch.tagName === 'BUTTON' &&
+          !ch.hasAttribute('data-ag-warm-night-btn') &&
+          !ch.hasAttribute('data-ag-morandi-btn')
+        ) {
           nativeBtns.push(ch);
         }
       }
@@ -1763,9 +2407,35 @@
         const pathEl = btn.querySelector('svg path');
         const d = pathEl ? String(pathEl.getAttribute('d') || '') : '';
         const aria = String(btn.getAttribute('aria-label') || '').trim().toLowerCase();
-        if (d.startsWith('M263.85-140') || aria === 'system' || aria === '跟随系统') return 'system';
-        if (d.startsWith('M565-395') || aria === 'light' || aria === '浅色' || aria === '浅色主题') return 'light';
-        if (d.startsWith('M481.15-140') || aria === 'dark' || aria === '深色' || aria === '深色主题') return 'dark';
+        if (
+          d.startsWith('M263.85-140') ||
+          aria === 'system' ||
+          aria === '跟随系统' ||
+          aria === '原版配色' ||
+          aria === 'original theme' ||
+          aria === '純正テーマ'
+        ) {
+          return 'system';
+        }
+        if (
+          d.startsWith('M565-395') ||
+          aria === 'light' ||
+          aria === '浅色' ||
+          aria === '浅色主题' ||
+          aria === 'absolutely！' ||
+          aria === 'absolutely!'
+        ) {
+          return 'light';
+        }
+        if (
+          d.startsWith('M481.15-140') ||
+          aria === 'dark' ||
+          aria === '深色' ||
+          aria === '深色主题' ||
+          aria === 'ダーク'
+        ) {
+          return 'dark';
+        }
         return null;
       };
       const k0 = classifyBtn(nativeBtns[0]);
@@ -1778,75 +2448,361 @@
     }
 
     function syncAppearanceWarmNightToggle() {
+      const currentPreset = document.documentElement.getAttribute('data-ag-preset') || PRESETS.MORANDI;
+      const isNativePreset = currentPreset === PRESETS.NATIVE;
       const isWarmNight = document.documentElement.getAttribute('data-ag-dark-preset') === DARK_PRESETS.CLAUDE_WARM;
+      const isDarkNow =
+        document.documentElement.getAttribute('data-ag-theme-mode') === 'dark' ||
+        !!(document.body && document.body.classList.contains('dark'));
+
+      // 单一真值源：5 选 1 互斥穷举，从根源上消除双高亮或全灭
+      let activeSlot = PRESETS.MORANDI;
+      if (isNativePreset) {
+        activeSlot = PRESETS.NATIVE;
+      } else if (isDarkNow) {
+        activeSlot = isWarmNight ? DARK_PRESETS.CLAUDE_WARM : DARK_PRESETS.ONYX;
+      } else {
+        activeSlot = currentPreset === PRESETS.ABSOLUTELY ? PRESETS.ABSOLUTELY : PRESETS.MORANDI;
+      }
+
       const groups = document.querySelectorAll('[data-slot="toggle-group"][data-ag-theme-toggle-group="1"]');
       for (let i = 0; i < groups.length; i++) {
         const group = groups[i];
+        if (group.getAttribute('data-ag-active-slot') !== activeSlot) {
+          group.setAttribute('data-ag-active-slot', activeSlot);
+        }
+        const sysBtn = group.querySelector('button[data-ag-native-theme-slot="system"]');
+        const morandiBtn = group.querySelector('button[data-ag-morandi-btn="1"]');
         const bookBtn = group.querySelector('button[data-ag-warm-night-btn="1"]');
-        const darkBtn = group.querySelector('button[data-ag-native-theme-slot="dark"]');
-        if (!bookBtn || !darkBtn) continue;
-        const isExplicitDarkSelected =
-          darkBtn.hasAttribute('data-pressed') || darkBtn.getAttribute('aria-pressed') === 'true';
-        const bookActive = isExplicitDarkSelected && isWarmNight;
-        if (bookActive) {
-          if (!bookBtn.hasAttribute('data-pressed')) bookBtn.setAttribute('data-pressed', '');
-          if (bookBtn.getAttribute('aria-pressed') !== 'true') bookBtn.setAttribute('aria-pressed', 'true');
-          if (group.getAttribute('data-ag-active-night') !== DARK_PRESETS.CLAUDE_WARM) {
-            group.setAttribute('data-ag-active-night', DARK_PRESETS.CLAUDE_WARM);
+
+        if (morandiBtn) {
+          const moOn = activeSlot === PRESETS.MORANDI;
+          if (moOn) {
+            if (!morandiBtn.hasAttribute('data-pressed')) morandiBtn.setAttribute('data-pressed', '');
+            if (morandiBtn.getAttribute('aria-pressed') !== 'true') morandiBtn.setAttribute('aria-pressed', 'true');
+          } else {
+            if (morandiBtn.hasAttribute('data-pressed')) morandiBtn.removeAttribute('data-pressed');
+            if (morandiBtn.getAttribute('aria-pressed') !== 'false') morandiBtn.setAttribute('aria-pressed', 'false');
           }
-        } else {
-          if (bookBtn.hasAttribute('data-pressed')) bookBtn.removeAttribute('data-pressed');
-          if (bookBtn.getAttribute('aria-pressed') !== 'false') bookBtn.setAttribute('aria-pressed', 'false');
-          if (group.hasAttribute('data-ag-active-night')) {
-            group.removeAttribute('data-ag-active-night');
+        }
+
+        if (bookBtn) {
+          const bookOn = activeSlot === DARK_PRESETS.CLAUDE_WARM;
+          if (bookOn) {
+            if (!bookBtn.hasAttribute('data-pressed')) bookBtn.setAttribute('data-pressed', '');
+            if (bookBtn.getAttribute('aria-pressed') !== 'true') bookBtn.setAttribute('aria-pressed', 'true');
+          } else {
+            if (bookBtn.hasAttribute('data-pressed')) bookBtn.removeAttribute('data-pressed');
+            if (bookBtn.getAttribute('aria-pressed') !== 'false') bookBtn.setAttribute('aria-pressed', 'false');
+          }
+        }
+
+        if (sysBtn) {
+          const wantSysAria = getSelfUiStrings().themeTooltips.native;
+          if (sysBtn.getAttribute('aria-label') !== wantSysAria) {
+            sysBtn.setAttribute('aria-label', wantSysAria);
+          }
+          const agyGlyph = sysBtn.querySelector('path[data-ag-agy-glyph="1"]');
+          const gradId = sysBtn.getAttribute('data-ag-grad-id');
+          if (agyGlyph) {
+            const wantFill = activeSlot === PRESETS.NATIVE && gradId ? `url(#${gradId})` : 'currentColor';
+            if (agyGlyph.getAttribute('fill') !== wantFill) {
+              agyGlyph.setAttribute('fill', wantFill);
+            }
+          }
+        }
+        const lightBtn = group.querySelector('button[data-ag-native-theme-slot="light"]');
+        if (lightBtn) {
+          const wantLightAria = getSelfUiStrings().themeTooltips.absolutely;
+          if (lightBtn.getAttribute('aria-label') !== wantLightAria) {
+            lightBtn.setAttribute('aria-label', wantLightAria);
+          }
+        }
+        if (morandiBtn) {
+          const wantMoAria = getSelfUiStrings().themeTooltips.morandi;
+          if (morandiBtn.getAttribute('aria-label') !== wantMoAria) {
+            morandiBtn.setAttribute('aria-label', wantMoAria);
+          }
+        }
+        if (bookBtn) {
+          const wantBookAria = getSelfUiStrings().themeTooltips.warmDark;
+          if (bookBtn.getAttribute('aria-label') !== wantBookAria) {
+            bookBtn.setAttribute('aria-label', wantBookAria);
+          }
+        }
+        const darkBtn = group.querySelector('button[data-ag-native-theme-slot="dark"]');
+        if (darkBtn) {
+          const wantDarkAria = getSelfUiStrings().themeTooltips.onyx;
+          if (darkBtn.getAttribute('aria-label') !== wantDarkAria) {
+            darkBtn.setAttribute('aria-label', wantDarkAria);
+          }
+        }
+      }
+
+      const activeLangSlot = isUiEnglish() ? 'en' : 'target';
+      const wantRowLabel = getSelfUiStrings().rowLabel;
+      const langRows = document.querySelectorAll('[data-ag-lang-row="1"]');
+      for (let i = 0; i < langRows.length; i++) {
+        const row = langRows[i];
+        const lbl = row.querySelector('[data-ag-lang-row-label="1"]');
+        if (lbl && lbl.textContent !== wantRowLabel) {
+          lbl.textContent = wantRowLabel;
+        }
+        const lGroup = row.querySelector('[data-ag-lang-toggle-group="1"]');
+        if (lGroup) {
+          if (lGroup.getAttribute('data-ag-active-lang') !== activeLangSlot) {
+            lGroup.setAttribute('data-ag-active-lang', activeLangSlot);
+          }
+          const enBtn = lGroup.querySelector('button[data-ag-lang-btn="en"]');
+          const tgtBtn = lGroup.querySelector('button[data-ag-lang-btn="target"]');
+          if (enBtn) {
+            const enOn = activeLangSlot === 'en';
+            const wantEnAria = getSelfUiStrings().enTooltip;
+            if (enBtn.getAttribute('aria-label') !== wantEnAria) enBtn.setAttribute('aria-label', wantEnAria);
+            if (enBtn.getAttribute('aria-pressed') !== String(enOn)) enBtn.setAttribute('aria-pressed', String(enOn));
+          }
+          if (tgtBtn) {
+            const tgtOn = activeLangSlot === 'target';
+            if (tgtBtn.getAttribute('aria-pressed') !== String(tgtOn)) tgtBtn.setAttribute('aria-pressed', String(tgtOn));
           }
         }
       }
     }
 
+    window.__ag_handle_native_theme_btn_hover = (btn, slot, entering) => {
+      if (!entering) {
+        hideThemeBtnTooltip(false);
+        return;
+      }
+      if (slot === 'system') {
+        scheduleThemeBtnTooltip(btn, getSelfUiStrings().themeTooltips.native, true);
+      } else if (slot === 'light') {
+        scheduleThemeBtnTooltip(btn, getSelfUiStrings().themeTooltips.absolutely, true);
+      } else if (slot === 'dark') {
+        scheduleThemeBtnTooltip(btn, getSelfUiStrings().themeTooltips.onyx, true);
+      }
+    };
+
+    window.__ag_handle_native_theme_btn_click = (ev, btn, slot) => {
+      if (typeof ev === 'string') {
+        slot = ev;
+        ev = null;
+        btn = null;
+      }
+      if (slot === 'light' && window.__ag_internal_sun_click) return;
+      if (slot === 'dark' && window.__ag_internal_moon_click) return;
+      if (btn) {
+        keepSuppressNativeTooltip(btn);
+        hideThemeBtnTooltip(true);
+      } else {
+        hideThemeBtnTooltip(false);
+      }
+
+      // 若目标原生按钮已处于按下态（如 MO->Absolutely! 或 📖->🌙），拦截多余 click 防 Base UI 反选取消
+      const alreadyPressed =
+        !!(btn && (btn.hasAttribute('data-pressed') || btn.getAttribute('aria-pressed') === 'true'));
+      if (alreadyPressed && ev) {
+        ev.preventDefault();
+        ev.stopPropagation();
+      }
+
+      if (slot === 'system') {
+        setRuntimeLightPreset(PRESETS.NATIVE, true);
+      } else if (slot === 'light') {
+        setRuntimeLightPreset(PRESETS.ABSOLUTELY, true);
+      } else if (slot === 'dark') {
+        if (document.documentElement.getAttribute('data-ag-preset') === PRESETS.NATIVE) {
+          setRuntimeLightPreset(window.__ag_last_non_native_light || PRESETS.MORANDI, true);
+        }
+        setRuntimeDarkPreset(DARK_PRESETS.ONYX, true);
+      }
+      requestAnimationFrame(() => {
+        if (typeof window.__ag_sync_warm_night_btn_fn === 'function') {
+          window.__ag_sync_warm_night_btn_fn();
+        }
+      });
+    };
+
+    window.__ag_handle_custom_theme_btn_click = (ev, group, kind) => {
+      if (ev) {
+        ev.preventDefault();
+        ev.stopPropagation();
+      }
+      hideThemeBtnTooltip();
+      if (!group) return;
+      if (kind === PRESETS.MORANDI) {
+        setRuntimeLightPreset(PRESETS.MORANDI, true);
+        const liveLightBtn = group.querySelector('button[data-ag-native-theme-slot="light"]');
+        const sunPressed =
+          !!(liveLightBtn && (liveLightBtn.hasAttribute('data-pressed') || liveLightBtn.getAttribute('aria-pressed') === 'true'));
+        if (liveLightBtn && !sunPressed) {
+          window.__ag_internal_sun_click = true;
+          try {
+            liveLightBtn.click();
+          } finally {
+            window.__ag_internal_sun_click = false;
+          }
+        }
+      } else if (kind === DARK_PRESETS.CLAUDE_WARM) {
+        if (document.documentElement.getAttribute('data-ag-preset') === PRESETS.NATIVE) {
+          setRuntimeLightPreset(window.__ag_last_non_native_light || PRESETS.MORANDI, true);
+        }
+        setRuntimeDarkPreset(DARK_PRESETS.CLAUDE_WARM, true);
+        const liveDarkBtn = group.querySelector('button[data-ag-native-theme-slot="dark"]');
+        const moonPressed =
+          !!(liveDarkBtn && (liveDarkBtn.hasAttribute('data-pressed') || liveDarkBtn.getAttribute('aria-pressed') === 'true'));
+        if (liveDarkBtn && !moonPressed) {
+          window.__ag_internal_moon_click = true;
+          try {
+            liveDarkBtn.click();
+          } finally {
+            window.__ag_internal_moon_click = false;
+          }
+        }
+      }
+      requestAnimationFrame(() => {
+        if (typeof window.__ag_sync_warm_night_btn_fn === 'function') {
+          window.__ag_sync_warm_night_btn_fn();
+        }
+      });
+    };
+
     function mountWarmNightBtnOnGroup(group) {
       const slots = identifyNativeThemeButtons(group);
-      if (!slots) return false;
+      if (!slots) {
+        group.setAttribute('data-ag-theme-toggle-group', '0');
+        return false;
+      }
       const { sysBtn, lightBtn, darkBtn } = slots;
       group.setAttribute('data-ag-theme-toggle-group', '1');
       sysBtn.setAttribute('data-ag-native-theme-slot', 'system');
       lightBtn.setAttribute('data-ag-native-theme-slot', 'light');
       darkBtn.setAttribute('data-ag-native-theme-slot', 'dark');
 
-      if (!darkBtn.__ag_warm_night_hooked) {
-        darkBtn.__ag_warm_night_hooked = true;
-        darkBtn.addEventListener(
-          'click',
-          () => {
-            if (window.__ag_internal_moon_click) return;
-            if (typeof window.__ag_set_dark_preset_fn === 'function') {
-              window.__ag_set_dark_preset_fn(DARK_PRESETS.ONYX, true);
-            }
-            requestAnimationFrame(() => {
-              if (typeof window.__ag_sync_warm_night_btn_fn === 'function') {
-                window.__ag_sync_warm_night_btn_fn();
-              }
+      const svgNS = 'http://www.w3.org/2000/svg';
+
+      // 第 1 格：无损保留 React 原生 svg（由 CSS 隐藏），追加 Antigravity 官方流线 A 形标志
+      if (!sysBtn.querySelector('svg[data-ag-agy-logo="1"]')) {
+        const origSysSvg = sysBtn.querySelector('svg');
+        if (origSysSvg && origSysSvg.parentNode) {
+          if (sysBtn.__ag_orig_sys_aria === undefined) {
+            sysBtn.__ag_orig_sys_aria = sysBtn.getAttribute('aria-label') || '';
+          }
+          const gradId = 'ag-agy-grad-' + Math.random().toString(36).slice(2, 9);
+          sysBtn.setAttribute('data-ag-grad-id', gradId);
+          const agySvg = document.createElementNS(svgNS, 'svg');
+          agySvg.setAttribute('xmlns', svgNS);
+          agySvg.setAttribute('data-ag-agy-logo', '1');
+          agySvg.setAttribute('width', '16');
+          agySvg.setAttribute('height', '16');
+          agySvg.setAttribute('viewBox', '0 0 24 24');
+          agySvg.setAttribute('fill', 'none');
+          agySvg.setAttribute('aria-hidden', 'true');
+          const defs = document.createElementNS(svgNS, 'defs');
+          const grad = document.createElementNS(svgNS, 'linearGradient');
+          grad.setAttribute('id', gradId);
+          grad.setAttribute('x1', '4');
+          grad.setAttribute('y1', '20');
+          grad.setAttribute('x2', '18');
+          grad.setAttribute('y2', '4');
+          grad.setAttribute('gradientUnits', 'userSpaceOnUse');
+          const stops = [
+            ['0%', '#3B82F6'],
+            ['46%', '#34A853'],
+            ['78%', '#FBBC05'],
+            ['100%', '#EA4335']
+          ];
+          for (let s = 0; s < stops.length; s++) {
+            const st = document.createElementNS(svgNS, 'stop');
+            st.setAttribute('offset', stops[s][0]);
+            st.setAttribute('stop-color', stops[s][1]);
+            grad.appendChild(st);
+          }
+          defs.appendChild(grad);
+          const glyphPath = document.createElementNS(svgNS, 'path');
+          glyphPath.setAttribute('data-ag-agy-glyph', '1');
+          glyphPath.setAttribute('d', AGY_BRAND_GLYPH_PATH);
+          glyphPath.setAttribute('fill', 'currentColor');
+          agySvg.appendChild(defs);
+          agySvg.appendChild(glyphPath);
+          origSysSvg.parentNode.appendChild(agySvg);
+        }
+      }
+      sysBtn.setAttribute('aria-label', getSelfUiStrings().themeTooltips.native);
+      if (sysBtn.hasAttribute('title')) sysBtn.removeAttribute('title');
+
+      // 第 2 格：无损保留 React 原生 svg（由 CSS 隐藏），追加「Absolutely！」仿 Claude 放射性星芒标志
+      if (!lightBtn.querySelector('svg[data-ag-claude-spark="1"]')) {
+        const origSvg = lightBtn.querySelector('svg');
+        if (origSvg && origSvg.parentNode) {
+          if (lightBtn.__ag_orig_light_aria === undefined) {
+            lightBtn.__ag_orig_light_aria = lightBtn.getAttribute('aria-label') || '';
+          }
+          const sparkSvg = document.createElementNS(svgNS, 'svg');
+          sparkSvg.setAttribute('xmlns', svgNS);
+          sparkSvg.setAttribute('data-ag-claude-spark', '1');
+          sparkSvg.setAttribute('width', '16');
+          sparkSvg.setAttribute('height', '16');
+          sparkSvg.setAttribute('viewBox', '0 0 24 24');
+          sparkSvg.setAttribute('fill', 'none');
+          sparkSvg.setAttribute('aria-hidden', 'true');
+          const coreCircle = document.createElementNS(svgNS, 'circle');
+          coreCircle.setAttribute('cx', '12');
+          coreCircle.setAttribute('cy', '12');
+          coreCircle.setAttribute('r', '2.3');
+          coreCircle.setAttribute('fill', 'currentColor');
+          const raysPath = document.createElementNS(svgNS, 'path');
+          raysPath.setAttribute('d', CLAUDE_SPARK_RAYS_PATH);
+          raysPath.setAttribute('stroke', 'currentColor');
+          raysPath.setAttribute('stroke-width', '1.95');
+          raysPath.setAttribute('stroke-linecap', 'round');
+          sparkSvg.appendChild(coreCircle);
+          sparkSvg.appendChild(raysPath);
+          origSvg.parentNode.appendChild(sparkSvg);
+        }
+      }
+      lightBtn.setAttribute('aria-label', getSelfUiStrings().themeTooltips.absolutely);
+      if (lightBtn.hasAttribute('title')) lightBtn.removeAttribute('title');
+
+      // 第 5 格：统一深色槽位多语无障碍标签与自定义提示气泡（兼容 EN / 目标语实时切换与卸载还原）
+      if (darkBtn.__ag_orig_dark_aria === undefined) {
+        darkBtn.__ag_orig_dark_aria = darkBtn.getAttribute('aria-label') || '';
+      }
+      darkBtn.setAttribute('aria-label', getSelfUiStrings().themeTooltips.onyx);
+      if (darkBtn.hasAttribute('title')) darkBtn.removeAttribute('title');
+
+      // 统一动态委托事件，杜绝热更新后旧闭包残留与重复绑定
+      const bindNativeSlotOnce = (btn, slot) => {
+        if (!btn.__ag_delegated_hover_v4 && (slot === 'system' || slot === 'light' || slot === 'dark')) {
+          btn.__ag_delegated_hover_v4 = true;
+          if (!btn.__ag_delegated_slot_v3 || slot === 'dark') {
+            btn.addEventListener('mouseenter', () => {
+              window.__ag_handle_native_theme_btn_hover?.(btn, slot, true);
             });
+            btn.addEventListener('mouseleave', () => {
+              window.__ag_handle_native_theme_btn_hover?.(btn, slot, false);
+            });
+            btn.addEventListener('focus', () => {
+              window.__ag_handle_native_theme_btn_hover?.(btn, slot, true);
+            });
+            btn.addEventListener('blur', () => {
+              window.__ag_handle_native_theme_btn_hover?.(btn, slot, false);
+            });
+          }
+        }
+        if (btn.__ag_delegated_slot_v3) return;
+        btn.__ag_delegated_slot_v3 = true;
+        btn.addEventListener(
+          'click',
+          (ev) => {
+            window.__ag_handle_native_theme_btn_click?.(ev, btn, slot);
           },
           true
         );
-      }
-      for (const otherBtn of [sysBtn, lightBtn]) {
-        if (!otherBtn.__ag_warm_night_hooked) {
-          otherBtn.__ag_warm_night_hooked = true;
-          otherBtn.addEventListener(
-            'click',
-            () => {
-              requestAnimationFrame(() => {
-                if (typeof window.__ag_sync_warm_night_btn_fn === 'function') {
-                  window.__ag_sync_warm_night_btn_fn();
-                }
-              });
-            },
-            true
-          );
-        }
-      }
+      };
+      bindNativeSlotOnce(sysBtn, 'system');
+      bindNativeSlotOnce(lightBtn, 'light');
+      bindNativeSlotOnce(darkBtn, 'dark');
 
       if (window.__ag_appearance_btn_attr_observer) {
         try {
@@ -1865,18 +2821,62 @@
         } catch (e) {}
       }
 
+      // 第 3 格：在原本书卷的位置新添「MO」按钮（默认激活：莫兰迪色）
+      let morandiBtn = group.querySelector('button[data-ag-morandi-btn="1"]');
+      if (!morandiBtn) {
+        morandiBtn = document.createElement('button');
+        morandiBtn.type = 'button';
+        morandiBtn.setAttribute('data-ag-morandi-btn', '1');
+        morandiBtn.setAttribute('aria-label', getSelfUiStrings().themeTooltips.morandi);
+        morandiBtn.setAttribute('aria-pressed', 'false');
+        morandiBtn.className = lightBtn.className;
+
+        const moSpan = document.createElement('span');
+        moSpan.className = 'shrink-0 flex items-center';
+        const moSvg = document.createElementNS(svgNS, 'svg');
+        moSvg.setAttribute('xmlns', svgNS);
+        moSvg.setAttribute('width', '18');
+        moSvg.setAttribute('height', '16');
+        moSvg.setAttribute('viewBox', '0 0 22 16');
+        moSvg.setAttribute('fill', 'currentColor');
+        moSvg.setAttribute('aria-hidden', 'true');
+        const pathM = document.createElementNS(svgNS, 'path');
+        pathM.setAttribute('d', MO_BADGE_PATH_M);
+        const pathO = document.createElementNS(svgNS, 'path');
+        pathO.setAttribute('d', MO_BADGE_PATH_O);
+        pathO.setAttribute('fill-rule', 'evenodd');
+        moSvg.appendChild(pathM);
+        moSvg.appendChild(pathO);
+        moSpan.appendChild(moSvg);
+        morandiBtn.appendChild(moSpan);
+
+        morandiBtn.addEventListener('mouseenter', () => {
+          scheduleThemeBtnTooltip(morandiBtn, getSelfUiStrings().themeTooltips.morandi, false);
+        });
+        morandiBtn.addEventListener('mouseleave', hideThemeBtnTooltip);
+        morandiBtn.addEventListener('focus', () => {
+          scheduleThemeBtnTooltip(morandiBtn, getSelfUiStrings().themeTooltips.morandi, false);
+        });
+        morandiBtn.addEventListener('blur', hideThemeBtnTooltip);
+        morandiBtn.addEventListener('click', (ev) => {
+          window.__ag_handle_custom_theme_btn_click?.(ev, group, PRESETS.MORANDI);
+        });
+
+        group.appendChild(morandiBtn);
+      }
+
+      // 第 4 格：书卷「暖纸深色」按钮
       let bookBtn = group.querySelector('button[data-ag-warm-night-btn="1"]');
       if (!bookBtn) {
         bookBtn = document.createElement('button');
         bookBtn.type = 'button';
         bookBtn.setAttribute('data-ag-warm-night-btn', '1');
-        bookBtn.setAttribute('aria-label', '暖纸深色');
+        bookBtn.setAttribute('aria-label', getSelfUiStrings().themeTooltips.warmDark);
         bookBtn.setAttribute('aria-pressed', 'false');
         bookBtn.className = lightBtn.className;
 
         const spanWrap = document.createElement('span');
         spanWrap.className = 'shrink-0 flex items-center';
-        const svgNS = 'http://www.w3.org/2000/svg';
         const svgEl = document.createElementNS(svgNS, 'svg');
         svgEl.setAttribute('xmlns', svgNS);
         svgEl.setAttribute('width', '16');
@@ -1891,51 +2891,101 @@
         bookBtn.appendChild(spanWrap);
 
         bookBtn.addEventListener('mouseenter', () => {
-          scheduleThemeBtnTooltip(bookBtn, '暖纸深色');
+          scheduleThemeBtnTooltip(bookBtn, getSelfUiStrings().themeTooltips.warmDark, false);
         });
         bookBtn.addEventListener('mouseleave', hideThemeBtnTooltip);
         bookBtn.addEventListener('focus', () => {
-          scheduleThemeBtnTooltip(bookBtn, '暖纸深色');
+          scheduleThemeBtnTooltip(bookBtn, getSelfUiStrings().themeTooltips.warmDark, false);
         });
         bookBtn.addEventListener('blur', hideThemeBtnTooltip);
         bookBtn.addEventListener('click', (ev) => {
-          ev.preventDefault();
-          ev.stopPropagation();
-          hideThemeBtnTooltip();
-          if (typeof window.__ag_set_dark_preset_fn === 'function') {
-            window.__ag_set_dark_preset_fn(DARK_PRESETS.CLAUDE_WARM, true);
-          }
-          const moonPressed = darkBtn.hasAttribute('data-pressed') || darkBtn.getAttribute('aria-pressed') === 'true';
-          if (!moonPressed) {
-            window.__ag_internal_moon_click = true;
-            try {
-              darkBtn.click();
-            } finally {
-              window.__ag_internal_moon_click = false;
-            }
-          }
-          requestAnimationFrame(() => {
-            if (typeof window.__ag_sync_warm_night_btn_fn === 'function') {
-              window.__ag_sync_warm_night_btn_fn();
-            }
-          });
+          window.__ag_handle_custom_theme_btn_click?.(ev, group, DARK_PRESETS.CLAUDE_WARM);
         });
 
-        // 物理挂载在末尾（不干扰 React 前 3 个按钮的 nextSibling 链），由 CSS order: 3 排入太阳与月亮正中间
+        // 物理挂载在末尾（不干扰 React 前 3 个按钮的 nextSibling 链），由 CSS order 排位
         group.appendChild(bookBtn);
+      }
+
+      // 外观卡片独立「界面语言 / Language」二元切换行（严格限定挂载在 .agy-card 内，零侵入 React 子节点顺序；预留 installedLocale 映射）
+      if (HAS_LOCALE_PACK) {
+        const themeRow = group.closest ? group.closest('.agy-card > div') : null;
+        const card = themeRow ? themeRow.parentElement : null;
+        if (card && !card.querySelector('[data-ag-lang-row="1"]')) {
+          const localeInfo = LOCALE_META[INSTALLED_LOCALE] || LOCALE_META['zh-CN'];
+          const langRow = document.createElement('div');
+          langRow.setAttribute('data-ag-lang-row', '1');
+          langRow.className =
+            themeRow.className || 'py-2 px-3 w-full bg-transparent flex justify-between gap-4 items-center';
+
+          const leftCol = document.createElement('div');
+          leftCol.className = 'flex-1 flex flex-col gap-0.5';
+          const labelInner = document.createElement('div');
+          labelInner.className = 'flex items-center gap-1.5';
+          const labelSpan = document.createElement('span');
+          labelSpan.setAttribute('data-ag-lang-row-label', '1');
+          labelSpan.textContent = getSelfUiStrings().rowLabel;
+          labelInner.appendChild(labelSpan);
+          leftCol.appendChild(labelInner);
+
+          const rightCol = document.createElement('div');
+          rightCol.className = 'shrink-0';
+          const langGroup = document.createElement('div');
+          langGroup.setAttribute('data-orientation', 'horizontal');
+          langGroup.setAttribute('aria-orientation', 'horizontal');
+          langGroup.setAttribute('role', 'group');
+          langGroup.setAttribute('data-slot', 'toggle-group');
+          langGroup.setAttribute('data-ag-theme-toggle-group', '0');
+          langGroup.setAttribute('data-ag-lang-toggle-group', '1');
+          langGroup.setAttribute('data-ag-active-lang', isUiEnglish() ? 'en' : 'target');
+          langGroup.className = group.className;
+
+          const mkLangBtn = (slotVal, labelText, getTipFn) => {
+            const b = document.createElement('button');
+            b.type = 'button';
+            b.setAttribute('data-ag-lang-btn', slotVal);
+            b.setAttribute('aria-label', getTipFn());
+            b.setAttribute('aria-pressed', String((isUiEnglish() ? 'en' : 'target') === slotVal));
+            b.className = lightBtn.className;
+            b.textContent = labelText;
+            b.addEventListener('mouseenter', () => {
+              scheduleThemeBtnTooltip(b, getTipFn(), false);
+            });
+            b.addEventListener('mouseleave', hideThemeBtnTooltip);
+            b.addEventListener('focus', () => {
+              scheduleThemeBtnTooltip(b, getTipFn(), false);
+            });
+            b.addEventListener('blur', hideThemeBtnTooltip);
+            b.addEventListener('click', (ev) => {
+              ev.preventDefault();
+              ev.stopPropagation();
+              window.__ag_set_ui_lang_fn?.(slotVal, true);
+            });
+            return b;
+          };
+
+          langGroup.appendChild(mkLangBtn('en', 'EN', () => getSelfUiStrings().enTooltip));
+          langGroup.appendChild(mkLangBtn('target', localeInfo.btnLabel, () => localeInfo.tooltip));
+          rightCol.appendChild(langGroup);
+          langRow.appendChild(leftCol);
+          langRow.appendChild(rightCol);
+          card.appendChild(langRow);
+        }
       }
       return true;
     }
 
-    function ensureAppearanceWarmNightToggle(root) {
+    function ensureAppearanceWarmNightToggle(root, forceRemount = false) {
       if (!document.body) return;
       const scope = root && root.nodeType === 1 ? root : document;
+      const selector = forceRemount
+        ? '[data-slot="toggle-group"]:not([data-ag-theme-toggle-group="0"])'
+        : '[data-slot="toggle-group"]:not([data-ag-theme-toggle-group])';
       let mountedAny = false;
-      if (scope.matches && scope.matches('[data-slot="toggle-group"]')) {
+      if (scope.matches && scope.matches(selector)) {
         if (mountWarmNightBtnOnGroup(scope)) mountedAny = true;
       }
       if (scope.querySelectorAll) {
-        const groups = scope.querySelectorAll('[data-slot="toggle-group"]');
+        const groups = scope.querySelectorAll(selector);
         for (let i = 0; i < groups.length; i++) {
           if (mountWarmNightBtnOnGroup(groups[i])) mountedAny = true;
         }
@@ -1946,6 +2996,7 @@
     }
 
     window.__ag_set_dark_preset_fn = setRuntimeDarkPreset;
+    window.__ag_set_light_preset_fn = setRuntimeLightPreset;
     window.__ag_sync_warm_night_btn_fn = syncAppearanceWarmNightToggle;
     window.__ag_ensure_warm_night_btn_fn = ensureAppearanceWarmNightToggle;
 
@@ -1953,6 +3004,18 @@
       try {
         window.__ag_appearance_btn_attr_observer.disconnect();
       } catch (e) {}
+    }
+    if (window.__ag_appearance_scan_raf) {
+      try {
+        cancelAnimationFrame(window.__ag_appearance_scan_raf);
+      } catch (e) {}
+      window.__ag_appearance_scan_raf = null;
+    }
+    if (window.__ag_appearance_scan_timer) {
+      try {
+        clearTimeout(window.__ag_appearance_scan_timer);
+      } catch (e) {}
+      window.__ag_appearance_scan_timer = null;
     }
     if (typeof MutationObserver !== 'undefined') {
       window.__ag_appearance_btn_attr_observer = new MutationObserver(() => {
@@ -1964,7 +3027,22 @@
         } catch (e) {}
       }
       const APPEARANCE_SKIP_SELECTOR =
-        '[data-markdown-root], [data-testid="user-message-content"], .agy-user-bubble, .prose, .markdown, pre, code, .monaco-editor, .xterm, #ag-live-metrics-pill, .ag-live-metrics-pill, [data-ag-metrics-pill], [data-testid="conversation-row-history"]';
+        '[data-markdown-root], [data-testid="user-message-content"], .agy-user-bubble, .prose, .markdown, pre, code, .monaco-editor, .xterm, #ag-live-metrics-pill, .ag-live-metrics-pill, [data-ag-metrics-pill], [data-testid="conversation-list-sidebar"], [data-testid="conversation-row-sidebar"], [data-testid="conversation-row-history"]';
+      const scheduleAppearanceGroupScan = () => {
+        if (document.hidden || typeof requestAnimationFrame !== 'function') {
+          if (!window.__ag_appearance_scan_timer) {
+            window.__ag_appearance_scan_timer = setTimeout(() => {
+              window.__ag_appearance_scan_timer = null;
+              ensureAppearanceWarmNightToggle(document);
+            }, 0);
+          }
+        } else if (!window.__ag_appearance_scan_raf) {
+          window.__ag_appearance_scan_raf = requestAnimationFrame(() => {
+            window.__ag_appearance_scan_raf = null;
+            ensureAppearanceWarmNightToggle(document);
+          });
+        }
+      };
       window.__ag_appearance_toggle_observer = new MutationObserver((mutations) => {
         for (let i = 0; i < mutations.length; i++) {
           const m = mutations[i];
@@ -1975,12 +3053,8 @@
             const n = m.addedNodes[j];
             if (!n || n.nodeType !== 1) continue;
             if (n.matches && n.matches(APPEARANCE_SKIP_SELECTOR)) continue;
-            if (
-              (n.matches && n.matches('[data-slot="toggle-group"]')) ||
-              (n.firstElementChild && n.querySelector && n.querySelector('[data-slot="toggle-group"]'))
-            ) {
-              ensureAppearanceWarmNightToggle(n);
-            }
+            scheduleAppearanceGroupScan();
+            return;
           }
         }
       });
@@ -1989,7 +3063,7 @@
       }
     }
 
-    ensureAppearanceWarmNightToggle(document);
+    ensureAppearanceWarmNightToggle(document, true);
     syncAppearanceWarmNightToggle();
   }
 
@@ -3105,7 +4179,7 @@
     attributeFilter: ['title', 'aria-label', 'placeholder']
   };
 
-  if (MODULES.i18n) {
+  if (HAS_LOCALE_PACK) {
     function splitTopLevelSelectors(selStr) {
       const parts = [];
       let cur = '';
@@ -3307,6 +4381,13 @@
     const RE_SEE_ALL = /^See all\s*\((\d+)\)$/i;
     const RE_SHOW_BREAKDOWNS = /^Show\s+(\d+)\s+breakdowns?$/i;
     const RE_SHOW_MORE_SUBAGENTS = /^Show\s+(\d+)\s+more\s+subagents?$/i;
+    const RE_SWARM_WORKER_ROLE = /^Swarm\s+Worker\s*\(([^()\r\n]{1,100})\)(?:\s*\(([^()\r\n]{1,40})\))?$/i;
+    const RE_OPEN_SUBAGENT = /^Open\s+Subagent:\s*(.+)$/i;
+    const RE_INVOKED_SUBAGENT = /^Invoked\s+subagent:\s*(.+)$/i;
+    const RE_BROWSER_TASK = /^Browser\s+task:\s*(.+)$/i;
+    const RE_SUBAGENTS_COUNT = /^(\d+)\s+subagents?$/i;
+    const RE_PAREN_SUBAGENTS = /^\((\d+)\s+subagents?\)$/i;
+    const RE_ARIA_PANE_HEADER = /^(.+?)\s+header$/i;
     const RE_SHOW_EARLIER_STEPS = /^Show\s+(\d+)\s+earlier\s+steps?$/i;
     const RE_SORT_FILTER_ACTIVE = /^Sort and filter conversations\s*\((\d+)\s+active\)$/i;
     const RE_STILL_THINKING_SEC = /^Still thinking,\s*(\d+)\s*seconds?$/i;
@@ -3530,7 +4611,28 @@
       return !!(el && el.closest && el.closest('header, [data-testid="breadcrumb-segment"]'));
     }
 
-    function computeTextTranslation(raw, contextEl) {
+    const SUBAGENT_BUILTIN_LABEL_MAP = {
+      subagent: '子 Agent',
+      'browser subagent': '浏览器子 Agent',
+      'browser task': '浏览器任务',
+      'research subagent': '调研子 Agent',
+      'swarm worker': '蜂群协作者'
+    };
+
+    function translateSubagentLabel(rawLabel) {
+      const s = String(rawLabel || '').trim();
+      if (!s) return s;
+      const mapped = SUBAGENT_BUILTIN_LABEL_MAP[s.toLowerCase()];
+      if (mapped) return mapped;
+      if (RE_SWARM_WORKER_ROLE.test(s)) {
+        return s.replace(RE_SWARM_WORKER_ROLE, (_, name, suffix) =>
+          suffix ? '蜂群协作者 (' + name + ') (' + suffix + ')' : '蜂群协作者 (' + name + ')'
+        );
+      }
+      return s;
+    }
+
+    function computeTextTranslation(raw, contextEl, textNode = null) {
       if (!raw) return null;
       const trimmed = raw.trim();
       if (!trimmed) return null;
@@ -3584,6 +4686,7 @@
         if (RE_PINNED_COUNT.test(trimmed)) return raw.replace(RE_PINNED_COUNT, '$1 个已固定标签页');
         if (RE_MODELS_SELECTED.test(trimmed)) return raw.replace(RE_MODELS_SELECTED, '已选择 $1 个模型');
         if (RE_BROWSER_STEPS.test(trimmed)) return raw.replace(RE_BROWSER_STEPS, '$1 个浏览器步骤');
+        if (RE_SUBAGENTS_COUNT.test(trimmed)) return raw.replace(RE_SUBAGENTS_COUNT, '$1 个子 Agent');
         const mMediaAtt = trimmed.match(RE_MEDIA_ATTACHMENTS);
         if (mMediaAtt) {
           const mediaMap = { image: '图片', audio: '音频', video: '视频' };
@@ -3670,7 +4773,35 @@
           return raw.replace(RE_SWARM_YOU_SUFFIX, '$1（您）');
         }
       }
+      if (c0 === 40) {
+        if (RE_PAREN_SUBAGENTS.test(trimmed)) {
+          return raw.replace(RE_PAREN_SUBAGENTS, '（$1 个子 Agent）');
+        }
+      }
+      if (
+        (raw === ' subagent' || raw === 's') &&
+        contextEl &&
+        contextEl.closest &&
+        contextEl.closest('[data-testid="subagent-node"]')
+      ) {
+        if (raw === ' subagent') return ' 个子 Agent';
+        if (raw === 's') {
+          if (textNode && textNode.previousSibling && textNode.previousSibling.nodeType === 3) {
+            const prevNode = textNode.previousSibling;
+            const prevOrig = (origTextMap.get(prevNode)?.origRaw || prevNode.nodeValue || '').trim();
+            const prevCur = (prevNode.nodeValue || '').trim();
+            if (/^subagent$/i.test(prevOrig) || /个子 Agent$/.test(prevCur)) return '';
+          } else if (/\(\d+\s*(?:subagent|个子 Agent)s?\)/i.test(contextEl.textContent || '')) {
+            return '';
+          }
+        }
+      }
       if (firstUpper === 'S') {
+        if (RE_SWARM_WORKER_ROLE.test(trimmed)) {
+          return raw.replace(RE_SWARM_WORKER_ROLE, (_, name, suffix) =>
+            suffix ? '蜂群协作者 (' + name + ') (' + suffix + ')' : '蜂群协作者 (' + name + ')'
+          );
+        }
         if (RE_SEE_ALL.test(trimmed)) return raw.replace(RE_SEE_ALL, '查看全部 ($1)');
         if (RE_SHOW_BREAKDOWNS.test(trimmed)) return raw.replace(RE_SHOW_BREAKDOWNS, '展开明细 ($1 项)');
         if (RE_SHOW_MORE_SUBAGENTS.test(trimmed)) return raw.replace(RE_SHOW_MORE_SUBAGENTS, '显示另外 $1 个子 Agent');
@@ -3829,6 +4960,32 @@
       } else if (firstUpper === 'O') {
         if (RE_ORCHESTRATOR_MODEL.test(trimmed)) {
           return raw.replace(RE_ORCHESTRATOR_MODEL, '编排器 ($1)');
+        }
+        const mOpenSub = trimmed.match(RE_OPEN_SUBAGENT);
+        if (mOpenSub) {
+          const innerZh = translateSubagentLabel(mOpenSub[1]);
+          return raw.replace(trimmed, () => '打开子 Agent：' + innerZh);
+        }
+        if (
+          contextEl &&
+          contextEl.closest &&
+          contextEl.closest('[data-testid="subagent-permission-source"]') &&
+          /^Open\s+(.+)$/i.test(trimmed)
+        ) {
+          const inner = trimmed.replace(/^Open\s+/i, '').trim();
+          const innerZh = translateSubagentLabel(inner);
+          return raw.replace(trimmed, () => '打开 ' + innerZh);
+        }
+      } else if (firstUpper === 'I') {
+        const mInvSub = trimmed.match(RE_INVOKED_SUBAGENT);
+        if (mInvSub) {
+          const innerZh = translateSubagentLabel(mInvSub[1]);
+          return raw.replace(trimmed, () => '已调用子 Agent：' + innerZh);
+        }
+      } else if (firstUpper === 'B') {
+        const mBrTask = trimmed.match(RE_BROWSER_TASK);
+        if (mBrTask) {
+          return raw.replace(trimmed, () => '浏览器任务：' + mBrTask[1].trim());
         }
       } else if (firstUpper === 'C') {
         if (
@@ -4034,7 +5191,7 @@
       }
       const origRaw = rec && rec.lastVal === currentVal ? rec.origRaw : currentVal;
 
-      const nextVal = computeTextTranslation(origRaw, node.parentElement);
+      const nextVal = computeTextTranslation(origRaw, node.parentElement, node);
       if (nextVal !== null) {
         origTextMap.set(node, { origRaw, lastVal: nextVal, ver: PATCH_VERSION });
         if (node.nodeValue !== nextVal) {
@@ -4182,6 +5339,23 @@
       const mOpenPlugin = atrim.match(RE_OPEN_PLUGIN_NAME);
       if (mOpenPlugin) {
         return '打开 ' + mOpenPlugin[1].trim() + ' 插件';
+      }
+      const mOpenSubAttr = atrim.match(RE_OPEN_SUBAGENT);
+      if (mOpenSubAttr) {
+        const innerZh = translateSubagentLabel(mOpenSubAttr[1]);
+        return '打开子 Agent：' + innerZh;
+      }
+      const mPaneHdr = atrim.match(RE_ARIA_PANE_HEADER);
+      if (
+        mPaneHdr &&
+        el &&
+        el.closest &&
+        el.closest('[data-testid*="pane"], [role="region"], header')
+      ) {
+        const baseZh = dictLookup(mPaneHdr[1].trim());
+        if (typeof baseZh === 'string') {
+          return baseZh + (/[A-Za-z0-9]$/.test(baseZh) ? ' 标题栏' : '标题栏');
+        }
       }
       const mEditSq = atrim.match(RE_EDIT_SIDE_Q_TITLE);
       if (mEditSq) {
@@ -4336,19 +5510,22 @@
     }
 
     scanBodyFn = scanAndTranslate;
-    if (document.body) {
-      scanAndTranslate(document.body);
-    }
 
     const dirtyRoots = new Set();
     let pending = false;
     let fallbackTimer = null;
+    let flushRafId = null;
 
     function flushTranslations() {
       pending = false;
+      flushRafId = null;
       if (fallbackTimer) {
         clearTimeout(fallbackTimer);
         fallbackTimer = null;
+      }
+      if (isUiEnglish()) {
+        dirtyRoots.clear();
+        return;
       }
       if (dirtyRoots.size === 0) return;
 
@@ -4395,13 +5572,14 @@
     }
 
     function scheduleFlush() {
-      if (pending) return;
+      if (pending || isUiEnglish()) return;
       pending = true;
-      requestAnimationFrame(flushTranslations);
+      flushRafId = requestAnimationFrame(flushTranslations);
       fallbackTimer = setTimeout(flushTranslations, 80);
     }
 
     window.__ag_i18n_observer = new MutationObserver((mutations) => {
+      if (isUiEnglish()) return;
       const batchSafeSet = new Set();
       for (let i = 0; i < mutations.length; i++) {
         const m = mutations[i];
@@ -4465,12 +5643,54 @@
       }
     });
 
-    if (document.body) {
-      window.__ag_i18n_observer.observe(document.body, I18N_OBS_OPTS);
+    function applyI18nDomState() {
+      if (!document.body) return;
+      if (isUiEnglish()) {
+        dirtyRoots.clear();
+        pending = false;
+        if (flushRafId) {
+          try {
+            cancelAnimationFrame(flushRafId);
+          } catch (e) {}
+          flushRafId = null;
+        }
+        if (fallbackTimer) {
+          clearTimeout(fallbackTimer);
+          fallbackTimer = null;
+        }
+        if (window.__ag_i18n_observer) {
+          try {
+            window.__ag_i18n_observer.disconnect();
+          } catch (e) {}
+        }
+        restoreAllTranslations(document.body);
+      } else {
+        try {
+          scanAndTranslate(document.body);
+        } catch (e) {}
+        if (window.__ag_i18n_observer) {
+          try {
+            window.__ag_i18n_observer.disconnect();
+            window.__ag_i18n_observer.observe(document.body, I18N_OBS_OPTS);
+          } catch (e) {}
+        }
+      }
+      if (typeof window.__ag_sync_warm_night_btn_fn === 'function') {
+        window.__ag_sync_warm_night_btn_fn();
+      }
     }
-  } else if (document.body) {
-    // 若用户在配置中关闭了 i18n 模块，实时将已翻译的文本与属性还原为原始英文
-    restoreAllTranslations(document.body);
+    window.__ag_apply_i18n_dom_state = applyI18nDomState;
+
+    if (document.body) {
+      applyI18nDomState();
+    }
+  } else {
+    window.__ag_apply_i18n_dom_state = () => {
+      if (document.body) restoreAllTranslations(document.body);
+    };
+    if (document.body) {
+      restoreAllTranslations(document.body);
+    }
   }
 
   // 若由 Page.addScriptToEvaluateOnNewDocument 在 <head> 早期触发（此时 document.body === null），
@@ -4524,19 +5744,9 @@
           window.__ag_sync_token_analytics_fn();
         } catch (e) {}
       }
-      if (MODULES.i18n && document.body) {
-        if (typeof scanBodyFn === 'function') {
-          try {
-            scanBodyFn(document.body);
-          } catch (e) {}
-        }
-        if (window.__ag_i18n_observer) {
-          try {
-            window.__ag_i18n_observer.disconnect();
-            window.__ag_i18n_observer.observe(document.body, I18N_OBS_OPTS);
-          } catch (e) {}
-        }
-      } else if (!MODULES.i18n && document.body) {
+      if (typeof window.__ag_apply_i18n_dom_state === 'function' && document.body) {
+        window.__ag_apply_i18n_dom_state();
+      } else if (document.body) {
         restoreAllTranslations(document.body);
       }
       window.__ag_body_ready = true;
@@ -6124,19 +7334,20 @@
 
         let navSection = document.getElementById(NAV_SECTION_ID);
         if (!navSection) {
+          const uiStr = getSelfUiStrings();
           navSection = document.createElement('div');
           navSection.id = NAV_SECTION_ID;
           navSection.setAttribute('data-ag-token-ui', '1');
           navSection.innerHTML =
             `<div class="ag-ta-nav-divider"></div>` +
-            `<div class="ag-ta-nav-heading">本地扩展</div>` +
+            `<div class="ag-ta-nav-heading" data-ag-ta-nav-heading="1">${uiStr.extHeading}</div>` +
             `<div class="relative mx-2">` +
             `  <button type="button" id="${NAV_BTN_ID}" data-ag-token-tab="1" data-active="0">` +
             `    <svg class="ag-ta-nav-icon" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">` +
             `      <path d="M3 3v18h18"/><rect x="7" y="10" width="3" height="7" rx="1"/>` +
             `      <rect x="12" y="6" width="3" height="11" rx="1"/><rect x="17" y="13" width="3" height="4" rx="1"/>` +
             `    </svg>` +
-            `    <span>Token 统计</span>` +
+            `    <span data-ag-ta-nav-btn-label="1">${uiStr.tokenTab}</span>` +
             `  </button>` +
             `</div>`;
           navSection.querySelector(`#${NAV_BTN_ID}`)?.addEventListener('click', (e) => {
@@ -6145,7 +7356,23 @@
             if (tabActive && modal.getAttribute('data-ag-token-tab-active') === '1') return;
             setTokenTabActive(modal, true);
           });
+        } else {
+          const uiStr = getSelfUiStrings();
+          const hEl = navSection.querySelector('[data-ag-ta-nav-heading="1"], .ag-ta-nav-heading');
+          const bEl = navSection.querySelector('[data-ag-ta-nav-btn-label="1"], #ag-token-nav-btn span');
+          if (hEl && hEl.textContent !== uiStr.extHeading) hEl.textContent = uiStr.extHeading;
+          if (bEl && bEl.textContent !== uiStr.tokenTab) bEl.textContent = uiStr.tokenTab;
         }
+        // 第一阶段双语切换仅同步设置侧栏分类标题与入口按钮名；Token 统计面板内部报表文案留待第二阶段多语言解耦统一抽离
+        window.__ag_rerender_token_analytics_lang = () => {
+          const sec = document.getElementById(NAV_SECTION_ID);
+          if (!sec) return;
+          const uiStr = getSelfUiStrings();
+          const hEl = sec.querySelector('[data-ag-ta-nav-heading="1"], .ag-ta-nav-heading');
+          const bEl = sec.querySelector('[data-ag-ta-nav-btn-label="1"], #ag-token-nav-btn span');
+          if (hEl && hEl.textContent !== uiStr.extHeading) hEl.textContent = uiStr.extHeading;
+          if (bEl && bEl.textContent !== uiStr.tokenTab) bEl.textContent = uiStr.tokenTab;
+        };
         if (navSection.parentElement !== navContainer) {
           navContainer.appendChild(navSection);
         }

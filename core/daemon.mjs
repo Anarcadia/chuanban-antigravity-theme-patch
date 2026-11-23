@@ -533,8 +533,9 @@ function setIncrementalMetrics(dbPath, state) {
 let activeConfig = {
   enabled: true,
   channel: 'auto',
-  preset: 'high-contrast',
+  preset: 'morandi',
   darkPreset: 'onyx',
+  installedLocale: 'zh-CN',
   metricsMode: 'compact',
   contextLimit: 256000,
   contextLimitOverride: 0,
@@ -580,11 +581,89 @@ const HOST_CONFIG_PATH = path.join(os.homedir(), '.gemini', 'config', 'config.js
 let cachedHostCfgFileSig = '';
 let cachedHostThemeMode = null;
 
+function normalizeDarkPresetValue(rawVal) {
+  const s = String(rawVal || '').trim().toLowerCase();
+  if (s === 'claude-warm' || s === 'warm-paper-night' || s === 'claude-night' || s === '暖炭') {
+    return 'claude-warm';
+  }
+  return 'onyx';
+}
+
+function normalizeLightPresetValue(rawVal) {
+  const s = String(rawVal || '').trim().toLowerCase();
+  if (s === 'native' || s === 'stock' || s === 'original' || s === '原版配色') return 'native';
+  if (s === 'absolutely' || s === 'claude-orange' || s === 'absolutely!' || s === 'absolutely！') {
+    return 'absolutely';
+  }
+  if (s === 'claude-desktop-purewhite' || s === 'claude-desktop-official' || s === 'claudedesktop 净白') {
+    return 'claude-desktop-purewhite';
+  }
+  if (s === 'vintage-deep' || s === 'absoulutely-chuanban' || s === '复古深色') {
+    return 'vintage-deep';
+  }
+  return 'morandi';
+}
+
+function broadcastPresetToTargets(kind, normalizedVal, excludeTargetId = null) {
+  if (!activeConfig.enabled) return;
+  const fnName = kind === 'dark' ? '__ag_set_host_dark_preset' : '__ag_set_host_light_preset';
+  const expr = `window.${fnName} && window.${fnName}(${JSON.stringify(normalizedVal)})`;
+  const tasks = [];
+  for (const [id, entry] of attachedTargets.entries()) {
+    if (!entry?.hostConfirmed) continue;
+    if (excludeTargetId && id === excludeTargetId) {
+      if (entry.updateNewDocScript) tasks.push(entry.updateNewDocScript().catch(() => {}));
+      continue;
+    }
+    if (entry.send) {
+      tasks.push(entry.send('Runtime.evaluate', { expression: expr, returnByValue: false }).catch(() => {}));
+    }
+    if (entry.updateNewDocScript) {
+      tasks.push(entry.updateNewDocScript().catch(() => {}));
+    }
+  }
+  if (tasks.length > 0) {
+    void Promise.allSettled(tasks);
+  }
+}
+
+let cfgWriteSeq = 0;
+
+function atomicWriteTextFileSync(tmpPath, targetPath, content) {
+  fs.writeFileSync(tmpPath, content, 'utf8');
+  const maxAttempts = process.platform === 'win32' ? 5 : 1;
+  let lastErr = null;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      fs.renameSync(tmpPath, targetPath);
+      return;
+    } catch (err) {
+      lastErr = err;
+      const code = err && err.code;
+      const retryable = process.platform === 'win32' && (code === 'EPERM' || code === 'EBUSY' || code === 'EACCES');
+      if (!retryable) throw err;
+      if (attempt < maxAttempts - 1) {
+        sleepSync(15 * (attempt + 1));
+      }
+    }
+  }
+  // Windows Defender / 索引器持续持锁时回退直接覆写并清理临时文件，避免配置修改静默丢失
+  try {
+    fs.writeFileSync(targetPath, content, 'utf8');
+    try {
+      if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath);
+    } catch {}
+    return;
+  } catch (fallbackErr) {
+    throw lastErr || fallbackErr;
+  }
+}
+
 function persistDarkPresetToUserConfig(rawDarkPreset) {
   if (SAFE_MODE) return false;
-  const nextDarkPreset = String(rawDarkPreset || '').trim().toLowerCase() === 'claude-warm' ? 'claude-warm' : 'onyx';
+  const nextDarkPreset = normalizeDarkPresetValue(rawDarkPreset);
   const cfgPath = path.join(USER_DIR, 'config.json');
-  const tmpPath = `${cfgPath}.tmp-${process.pid}`;
+  const tmpPath = `${cfgPath}.tmp-${process.pid}-dp-${++cfgWriteSeq}`;
   try {
     fs.mkdirSync(USER_DIR, { recursive: true });
     let currentObj = {};
@@ -603,8 +682,7 @@ function persistDarkPresetToUserConfig(rawDarkPreset) {
       }
       currentObj = parsed;
     }
-    const prevNorm =
-      String(currentObj.darkPreset || 'onyx').trim().toLowerCase() === 'claude-warm' ? 'claude-warm' : 'onyx';
+    const prevNorm = normalizeDarkPresetValue(currentObj.darkPreset);
     if (prevNorm === nextDarkPreset && currentObj.darkPreset === nextDarkPreset) {
       return false;
     }
@@ -625,29 +703,15 @@ function persistDarkPresetToUserConfig(rawDarkPreset) {
     if (!inserted) {
       updatedObj.darkPreset = nextDarkPreset;
     }
-    fs.writeFileSync(tmpPath, `${JSON.stringify(updatedObj, null, 2)}\n`, 'utf8');
-    fs.renameSync(tmpPath, cfgPath);
-    if (rebuildBundleIfNeeded()) {
-      void (async () => {
-        const pageEntries = [];
-        const iframeEntries = [];
-        for (const [, entry] of attachedTargets.entries()) {
-          if (!entry?.hostConfirmed) continue;
-          if (entry.type === 'iframe') iframeEntries.push(entry);
-          else pageEntries.push(entry);
+    atomicWriteTextFileSync(tmpPath, cfgPath, `${JSON.stringify(updatedObj, null, 2)}\n`);
+    if (rebuildBundleIfNeeded({ fromUiPersist: true })) {
+      const tasks = [];
+      for (const [, entry] of attachedTargets.entries()) {
+        if (entry?.hostConfirmed && entry.updateNewDocScript) {
+          tasks.push(entry.updateNewDocScript().catch(() => {}));
         }
-        for (const batch of [pageEntries, iframeEntries]) {
-          await Promise.allSettled(
-            batch.map(async (entry) => {
-              await entry.updateNewDocScript?.();
-              await entry.inject?.();
-              if (entry.type === 'page') {
-                await entry.syncMetricsForSession?.(true);
-              }
-            })
-          );
-        }
-      })();
+      }
+      if (tasks.length > 0) void Promise.allSettled(tasks);
     }
     return true;
   } catch (err) {
@@ -655,6 +719,165 @@ function persistDarkPresetToUserConfig(rawDarkPreset) {
       if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath);
     } catch {}
     logDaemonEvent(`persistDarkPreset error: ${err?.message || err}`);
+    return false;
+  }
+}
+
+function persistLightPresetToUserConfig(rawLightPreset) {
+  if (SAFE_MODE) return false;
+  const nextPreset = normalizeLightPresetValue(rawLightPreset);
+  const cfgPath = path.join(USER_DIR, 'config.json');
+  const tmpPath = `${cfgPath}.tmp-${process.pid}-lp-${++cfgWriteSeq}`;
+  try {
+    fs.mkdirSync(USER_DIR, { recursive: true });
+    let currentObj = {};
+    if (fs.existsSync(cfgPath)) {
+      let parsed = null;
+      try {
+        const rawText = fs.readFileSync(cfgPath, 'utf8').replace(/^\uFEFF/, '');
+        parsed = JSON.parse(rawText);
+      } catch (parseErr) {
+        logDaemonEvent(`persistLightPreset skipped: user/config.json unreadable (${parseErr?.message || parseErr})`);
+        return false;
+      }
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        return false;
+      }
+      currentObj = parsed;
+    }
+    if (currentObj.preset === nextPreset) {
+      return false;
+    }
+    const updatedObj = {};
+    let inserted = false;
+    for (const [k, v] of Object.entries(currentObj)) {
+      if (k === 'preset') {
+        updatedObj.preset = nextPreset;
+        inserted = true;
+      } else {
+        updatedObj[k] = v;
+      }
+    }
+    if (!inserted) {
+      updatedObj.preset = nextPreset;
+    }
+    atomicWriteTextFileSync(tmpPath, cfgPath, `${JSON.stringify(updatedObj, null, 2)}\n`);
+    if (rebuildBundleIfNeeded({ fromUiPersist: true })) {
+      const tasks = [];
+      for (const [, entry] of attachedTargets.entries()) {
+        if (entry?.hostConfirmed && entry.updateNewDocScript) {
+          tasks.push(entry.updateNewDocScript().catch(() => {}));
+        }
+      }
+      if (tasks.length > 0) void Promise.allSettled(tasks);
+    }
+    return true;
+  } catch (err) {
+    try {
+      if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath);
+    } catch {}
+    logDaemonEvent(`persistLightPreset error: ${err?.message || err}`);
+    return false;
+  }
+}
+
+function normalizeUiLangValue(rawVal) {
+  const s = String(rawVal || '').trim().toLowerCase();
+  if (s === 'en' || s === 'en-us' || s === 'english' || s === 'off' || s === 'false' || s === '0') {
+    return 'en';
+  }
+  return 'target';
+}
+
+function broadcastUiLangToTargets(rawUiLang, excludeTargetId = null) {
+  if (!activeConfig.enabled) return;
+  const normLang = normalizeUiLangValue(rawUiLang);
+  const wantI18n = normLang !== 'en';
+  if (activeConfig.modules && typeof activeConfig.modules === 'object') {
+    activeConfig.modules.i18n = wantI18n;
+    metricsConfigEpoch += 1;
+  }
+  const expr = `window.__ag_set_host_ui_lang && window.__ag_set_host_ui_lang(${JSON.stringify(normLang)})`;
+  const tasks = [];
+  for (const [id, entry] of attachedTargets.entries()) {
+    if (!entry?.hostConfirmed) continue;
+    if (entry.updateNewDocScript) {
+      tasks.push(entry.updateNewDocScript().catch(() => {}));
+    }
+    if (!excludeTargetId || id !== excludeTargetId) {
+      if (entry.send) {
+        tasks.push(entry.send('Runtime.evaluate', { expression: expr, returnByValue: false }).catch(() => {}));
+      }
+    }
+    if (entry.type !== 'iframe' && entry.syncMetricsForSession) {
+      tasks.push(entry.syncMetricsForSession(true).catch(() => {}));
+    }
+  }
+  if (tasks.length > 0) {
+    void Promise.allSettled(tasks);
+  }
+}
+
+function persistUiLangToUserConfig(rawUiLang, skipNewDocSync = false) {
+  if (SAFE_MODE) return false;
+  const normLang = normalizeUiLangValue(rawUiLang);
+  const wantI18n = normLang !== 'en';
+  const cfgPath = path.join(USER_DIR, 'config.json');
+  const tmpPath = `${cfgPath}.tmp-${process.pid}-ul-${++cfgWriteSeq}`;
+  try {
+    fs.mkdirSync(USER_DIR, { recursive: true });
+    let currentObj = {};
+    if (fs.existsSync(cfgPath)) {
+      let parsed = null;
+      try {
+        const rawText = fs.readFileSync(cfgPath, 'utf8').replace(/^\uFEFF/, '');
+        parsed = JSON.parse(rawText);
+      } catch (parseErr) {
+        logDaemonEvent(`persistUiLang skipped: user/config.json unreadable (${parseErr?.message || parseErr})`);
+        return false;
+      }
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        return false;
+      }
+      currentObj = parsed;
+    }
+    const curModules =
+      currentObj.modules && typeof currentObj.modules === 'object' && !Array.isArray(currentObj.modules)
+        ? currentObj.modules
+        : {};
+    if (curModules.i18n === wantI18n && 'i18n' in curModules) {
+      return true;
+    }
+    const nextModules = Object.assign({ i18n: wantI18n }, curModules, { i18n: wantI18n });
+    const updatedObj = {};
+    let inserted = false;
+    for (const [k, v] of Object.entries(currentObj)) {
+      if (k === 'modules') {
+        updatedObj.modules = nextModules;
+        inserted = true;
+      } else {
+        updatedObj[k] = v;
+      }
+    }
+    if (!inserted) {
+      updatedObj.modules = nextModules;
+    }
+    atomicWriteTextFileSync(tmpPath, cfgPath, `${JSON.stringify(updatedObj, null, 2)}\n`);
+    if (rebuildBundleIfNeeded({ fromUiPersist: true }) && !skipNewDocSync) {
+      const tasks = [];
+      for (const [, entry] of attachedTargets.entries()) {
+        if (entry?.hostConfirmed && entry.updateNewDocScript) {
+          tasks.push(entry.updateNewDocScript().catch(() => {}));
+        }
+      }
+      if (tasks.length > 0) void Promise.allSettled(tasks);
+    }
+    return true;
+  } catch (err) {
+    try {
+      if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath);
+    } catch {}
+    logDaemonEvent(`persistUiLang error: ${err?.message || err}`);
     return false;
   }
 }
@@ -682,7 +905,8 @@ function readHostThemeMode() {
   return cachedHostThemeMode;
 }
 
-function rebuildBundleIfNeeded() {
+function rebuildBundleIfNeeded(opts = {}) {
+  const fromUiPersist = !!(opts && opts.fromUiPersist);
   const coreFiles = [
     path.join(CORE_DIR, 'theme.css'),
     path.join(CORE_DIR, 'i18n.json'),
@@ -708,16 +932,19 @@ function rebuildBundleIfNeeded() {
   const userCfg = SAFE_MODE ? {} : readJsonSafe(path.join(USER_DIR, 'config.json'), {});
   const enabled = SAFE_MODE ? true : userCfg.enabled !== false;
   const channel = CLI_CHANNEL || userCfg.channel || 'auto';
-  const preset = userCfg.preset || 'high-contrast';
-  const rawDarkPreset = String(userCfg.darkPreset || 'onyx').trim().toLowerCase();
+  const preset = SAFE_MODE && activeConfig ? activeConfig.preset : normalizeLightPresetValue(userCfg.preset);
   const darkPreset =
-    rawDarkPreset === 'claude-warm' ||
-    rawDarkPreset === 'warm-paper-night' ||
-    rawDarkPreset === 'claude-night' ||
-    rawDarkPreset === '暖炭'
-      ? 'claude-warm'
-      : 'onyx';
-  if (activeConfig && darkPreset !== activeConfig.darkPreset) {
+    SAFE_MODE && activeConfig ? activeConfig.darkPreset : normalizeDarkPresetValue(userCfg.darkPreset);
+  const rawInstalledLocale = String(userCfg.installedLocale || 'zh-CN').trim() || 'zh-CN';
+  const installedLocale =
+    rawInstalledLocale === 'none' || rawInstalledLocale === 'zh-CN' ? rawInstalledLocale : 'zh-CN';
+  const prevActivePreset = activeConfig ? activeConfig.preset : null;
+  const prevActiveDarkPreset = activeConfig ? activeConfig.darkPreset : null;
+  const prevActiveI18nEnabled = activeConfig?.modules ? activeConfig.modules.i18n !== false : null;
+  if (activeConfig && preset !== prevActivePreset) {
+    targetLightPresets.clear();
+  }
+  if (activeConfig && darkPreset !== prevActiveDarkPreset) {
     targetDarkPresets.clear();
   }
   const rawCtxLimit = Number(userCfg.contextLimit);
@@ -758,6 +985,9 @@ function rebuildBundleIfNeeded() {
     },
     rawModules
   );
+  if (SAFE_MODE && activeConfig?.modules && typeof activeConfig.modules.i18n === 'boolean') {
+    modules.i18n = activeConfig.modules.i18n;
+  }
   if (!DatabaseSync) {
     modules.metrics = false;
     modules.tokenAnalytics = false;
@@ -833,6 +1063,7 @@ function rebuildBundleIfNeeded() {
     channel,
     preset,
     darkPreset,
+    installedLocale,
     metricsMode,
     contextLimit,
     contextLimitOverride,
@@ -849,14 +1080,19 @@ function rebuildBundleIfNeeded() {
   const baseCss = readTextSafe(path.join(CORE_DIR, 'theme.css'), '');
   const customCss = !SAFE_MODE && modules.customCss ? readTextSafe(path.join(USER_DIR, 'custom.css'), '') : '';
 
-  const baseDict = readJsonSafe(path.join(CORE_DIR, 'i18n.json'), {});
-  const rawOverrideDict = !SAFE_MODE ? readJsonSafe(path.join(USER_DIR, 'i18n.override.json'), {}) : {};
-  const overrideDict = normalizeOverrideDict(rawOverrideDict);
-  const mergedDict = Object.assign({}, baseDict, overrideDict);
+  const mergedDict =
+    installedLocale === 'none'
+      ? {}
+      : Object.assign(
+          {},
+          readJsonSafe(path.join(CORE_DIR, 'i18n.json'), {}),
+          !SAFE_MODE ? normalizeOverrideDict(readJsonSafe(path.join(USER_DIR, 'i18n.override.json'), {})) : {}
+        );
 
   const customJs = !SAFE_MODE && modules.customJs ? readTextSafe(path.join(USER_DIR, 'custom.js'), '') : '';
   const runtimeTemplate = readTextSafe(path.join(CORE_DIR, 'runtime.js'), '');
 
+  const { i18n: _omitI18nFromHash, ...hashModules } = modules;
   const hash = crypto
     .createHash('sha256')
     .update(String(enabled))
@@ -867,10 +1103,9 @@ function rebuildBundleIfNeeded() {
     .update(customJs)
     .update(
       JSON.stringify({
-        preset,
-        darkPreset,
+        installedLocale,
         metricsMode,
-        modules,
+        modules: hashModules,
         themeVars,
         darkThemeVars,
         selectors: activeConfig.selectors,
@@ -879,6 +1114,18 @@ function rebuildBundleIfNeeded() {
     )
     .digest('hex')
     .slice(0, 8);
+
+  if (!fromUiPersist && enabled) {
+    if (prevActivePreset && preset !== prevActivePreset) {
+      broadcastPresetToTargets('light', preset, null);
+    }
+    if (prevActiveDarkPreset && darkPreset !== prevActiveDarkPreset) {
+      broadcastPresetToTargets('dark', darkPreset, null);
+    }
+    if (prevActiveI18nEnabled !== null && (modules.i18n !== false) !== prevActiveI18nEnabled) {
+      broadcastUiLangToTargets(modules.i18n === false ? 'en' : 'target', null);
+    }
+  }
 
   const channelTag = channel === 'insiders' ? 'insiders' : 'stable';
   cachedPatchVersion = `${BASE_VERSION}-${channelTag}-${hash}`;
@@ -898,6 +1145,7 @@ function rebuildBundleIfNeeded() {
     enabled,
     preset,
     darkPreset,
+    installedLocale,
     cssText: pageCss,
     customCss,
     themeVars,
@@ -910,6 +1158,7 @@ function rebuildBundleIfNeeded() {
       channel,
       preset,
       darkPreset,
+      installedLocale,
       contextLimit,
       contextLimitOverride,
       modules,
@@ -944,6 +1193,7 @@ function rebuildBundleIfNeeded() {
 const attachedTargets = new Map();
 const targetThemeModes = new Map();
 const targetDarkPresets = new Map();
+const targetLightPresets = new Map();
 const targetMetaMap = new Map();
 const skippedNonHostTargets = new Map(); // targetId -> { origin, skippedAt }
 const browserWatchers = new Map(); // `${channel}:${port}` -> { ws, wsUrl, port, channel, endpoint, reconnectAfterMs, closing }
@@ -1146,6 +1396,7 @@ function shutdownDaemon(reason, unlinkStopFile = false) {
   destroyedWhileAttaching.clear();
   targetThemeModes.clear();
   targetDarkPresets.clear();
+  targetLightPresets.clear();
   targetMetaMap.clear();
   skippedNonHostTargets.clear();
   process.exit(0);
@@ -2349,7 +2600,8 @@ function parseConversationMetrics(cascadeId, endpointOrDir, precomputedState = n
   const conversationsDir = path.dirname(dbPath);
   const childSnap =
     precomputedChildSnap || getCompositeChildSnapshot(cascadeId, conversationsDir, state.rawSig || sig);
-  const compositeSig = childSnap?.sig || sig;
+  const isEnMetrics = activeConfig.modules?.i18n === false || activeConfig.installedLocale === 'none';
+  const compositeSig = `${childSnap?.sig || sig}|${isEnMetrics ? 'en' : 'zh'}`;
 
   const cached = metricsCache.get(dbPath);
   if (cached && cached.sig === compositeSig && !childSnap?.isDraining && !childSnap?.partialStale) {
@@ -2628,6 +2880,7 @@ function parseConversationMetrics(cascadeId, endpointOrDir, precomputedState = n
     const remainCtx = Math.max(0, contextLimitTokens - last.ctx);
 
     const zhWarnActive =
+      !isEnMetrics &&
       process.platform === 'darwin' &&
       (zhTitleStatus.state === 'tcc_blocked' || zhTitleStatus.state === 'stale_inode');
     const zhWarnInlineHtml = zhWarnActive
@@ -2663,34 +2916,58 @@ function parseConversationMetrics(cascadeId, endpointOrDir, precomputedState = n
 
       const turnRowHtml =
         turnSteps > 1
-          ? `<div class="ag-tt-row"><span class="ag-tt-lbl">本轮合计 (${turnSteps}步)</span><span class="ag-tt-val">输出 ${fmtNum(turnOut)} (思考 ${fmtNum(turnThink)} + 响应 ${fmtNum(turnResp)}) | 耗时 ${turnDur.toFixed(1)}s</span></div>`
+          ? isEnMetrics
+            ? `<div class="ag-tt-row"><span class="ag-tt-lbl">Turn Total (${turnSteps} steps)</span><span class="ag-tt-val">Out ${fmtNum(turnOut)} (Think ${fmtNum(turnThink)} + Resp ${fmtNum(turnResp)}) | ${turnDur.toFixed(1)}s</span></div>`
+            : `<div class="ag-tt-row"><span class="ag-tt-lbl">本轮合计 (${turnSteps}步)</span><span class="ag-tt-val">输出 ${fmtNum(turnOut)} (思考 ${fmtNum(turnThink)} + 响应 ${fmtNum(turnResp)}) | 耗时 ${turnDur.toFixed(1)}s</span></div>`
           : '';
       const combinedOut = totalOut + childOut;
       const subRowHtml =
         childCount > 0
-          ? `<div class="ag-tt-row"><span class="ag-tt-lbl">子 Agent (${childCount}${subSyncing ? ' · 同步中' : ''})</span><span class="ag-tt-val">${childCalls} 次 · 新增 ${fmtTok(childIn)} + 缓存 ${fmtTok(childCache)} · 输出 ${fmtTok(childOut)}</span></div>`
+          ? isEnMetrics
+            ? `<div class="ag-tt-row"><span class="ag-tt-lbl">Subagents (${childCount}${subSyncing ? ' · syncing' : ''})</span><span class="ag-tt-val">${childCalls} calls · New ${fmtTok(childIn)} + Cache ${fmtTok(childCache)} · Out ${fmtTok(childOut)}</span></div>`
+            : `<div class="ag-tt-row"><span class="ag-tt-lbl">子 Agent (${childCount}${subSyncing ? ' · 同步中' : ''})</span><span class="ag-tt-val">${childCalls} 次 · 新增 ${fmtTok(childIn)} + 缓存 ${fmtTok(childCache)} · 输出 ${fmtTok(childOut)}</span></div>`
           : descendantIds.length > 0 && subSyncing
-            ? `<div class="ag-tt-row"><span class="ag-tt-lbl">子 Agent (同步中)</span><span class="ag-tt-val">正在索引 ${descendantIds.length} 个子会话…</span></div>`
+            ? isEnMetrics
+              ? `<div class="ag-tt-row"><span class="ag-tt-lbl">Subagents (syncing)</span><span class="ag-tt-val">Indexing ${descendantIds.length} sub-sessions…</span></div>`
+              : `<div class="ag-tt-row"><span class="ag-tt-lbl">子 Agent (同步中)</span><span class="ag-tt-val">正在索引 ${descendantIds.length} 个子会话…</span></div>`
             : '';
       const outputRowHtml =
         childCount > 0
-          ? `<div class="ag-tt-row"><span class="ag-tt-lbl">累计输出量</span><span class="ag-tt-val">总计 ${fmtTok(combinedOut)} (主 ${fmtTok(totalOut)} + 子 ${fmtTok(childOut)})</span></div>`
-          : `<div class="ag-tt-row"><span class="ag-tt-lbl">累计输出量</span><span class="ag-tt-val">总计 ${fmtTok(totalOut)} (思考链 ${fmtTok(totalThink)} + 正文/工具 ${fmtTok(totalResp)})</span></div>`;
+          ? isEnMetrics
+            ? `<div class="ag-tt-row"><span class="ag-tt-lbl">Total Output</span><span class="ag-tt-val">Total ${fmtTok(combinedOut)} (Main ${fmtTok(totalOut)} + Sub ${fmtTok(childOut)})</span></div>`
+            : `<div class="ag-tt-row"><span class="ag-tt-lbl">累计输出量</span><span class="ag-tt-val">总计 ${fmtTok(combinedOut)} (主 ${fmtTok(totalOut)} + 子 ${fmtTok(childOut)})</span></div>`
+          : isEnMetrics
+            ? `<div class="ag-tt-row"><span class="ag-tt-lbl">Total Output</span><span class="ag-tt-val">Total ${fmtTok(totalOut)} (Think ${fmtTok(totalThink)} + Resp ${fmtTok(totalResp)})</span></div>`
+            : `<div class="ag-tt-row"><span class="ag-tt-lbl">累计输出量</span><span class="ag-tt-val">总计 ${fmtTok(totalOut)} (思考链 ${fmtTok(totalThink)} + 正文/工具 ${fmtTok(totalResp)})</span></div>`;
 
-      tooltipHtml = [
-        `<div class="ag-tt-hdr">本轮最新调用 (Gen #${last.idx + 1})</div>`,
-        `<div class="ag-tt-row"><span class="ag-tt-lbl">生成速度</span><span class="ag-tt-val">${useStream ? `流式 ${rawStreamTps.toFixed(1)} tok/s | ` : ''}端到端（含等待） ${e2eTps.toFixed(1)} tok/s</span></div>`,
-        `<div class="ag-tt-row"><span class="ag-tt-lbl">响应耗时</span><span class="ag-tt-val">${useStream ? `TTFT ${last.ttft.toFixed(2)}s | 流式 ${last.stream.toFixed(2)}s | 总计 ${last.totDur.toFixed(2)}s` : `等待 ${last.ttft.toFixed(2)}s | 刷出 ${last.stream.toFixed(2)}s | 总计 ${last.totDur.toFixed(2)}s`}</span></div>`,
-        `<div class="ag-tt-row"><span class="ag-tt-lbl">当前上下文</span><span class="ag-tt-val">${fmtNum(last.ctx)} (新增 ${fmtNum(last.inTok)} + 缓存 ${fmtNum(last.cacheRead)}, ${lastCacheRate}%)</span></div>`,
-        `<div class="ag-tt-row"><span class="ag-tt-lbl">本步输出量</span><span class="ag-tt-val">${fmtNum(last.outTok)} (思考链 ${fmtNum(last.thinkTok)} + 正文/工具 ${fmtNum(last.respTok)})</span></div>`,
-        turnRowHtml,
-        `<div class="ag-tt-hdr ag-tt-sec">当前会话累计 (${userStepsCount} 轮提问 / ${valid.length} 次有效调用)</div>`,
-        `<div class="ag-tt-row"><span class="ag-tt-lbl">压缩水位线</span><span class="ag-tt-val">${fmtTok(last.ctx)} / ${limitStr} (${ctxPct}%) · 距压缩余 ${fmtTok(remainCtx)}</span></div>`,
-        `<div class="ag-tt-row"><span class="ag-tt-lbl">累计输入量</span><span class="ag-tt-val">新增 ${fmtTok(totalIn)} + 缓存读取 ${fmtTok(totalCache)} (命中率 ${sessionCacheRate}%)</span></div>`,
-        subRowHtml,
-        outputRowHtml,
-        zhWarnRowHtml
-      ].join('');
+      tooltipHtml = isEnMetrics
+        ? [
+            `<div class="ag-tt-hdr">Latest Call (Gen #${last.idx + 1})</div>`,
+            `<div class="ag-tt-row"><span class="ag-tt-lbl">Throughput</span><span class="ag-tt-val">${useStream ? `Stream ${rawStreamTps.toFixed(1)} tok/s | ` : ''}E2E ${e2eTps.toFixed(1)} tok/s</span></div>`,
+            `<div class="ag-tt-row"><span class="ag-tt-lbl">Latency</span><span class="ag-tt-val">${useStream ? `TTFT ${last.ttft.toFixed(2)}s | Stream ${last.stream.toFixed(2)}s | Total ${last.totDur.toFixed(2)}s` : `Wait ${last.ttft.toFixed(2)}s | Flush ${last.stream.toFixed(2)}s | Total ${last.totDur.toFixed(2)}s`}</span></div>`,
+            `<div class="ag-tt-row"><span class="ag-tt-lbl">Context</span><span class="ag-tt-val">${fmtNum(last.ctx)} (New ${fmtNum(last.inTok)} + Cache ${fmtNum(last.cacheRead)}, ${lastCacheRate}%)</span></div>`,
+            `<div class="ag-tt-row"><span class="ag-tt-lbl">Step Output</span><span class="ag-tt-val">${fmtNum(last.outTok)} (Think ${fmtNum(last.thinkTok)} + Resp ${fmtNum(last.respTok)})</span></div>`,
+            turnRowHtml,
+            `<div class="ag-tt-hdr ag-tt-sec">Session Total (${userStepsCount} turns / ${valid.length} calls)</div>`,
+            `<div class="ag-tt-row"><span class="ag-tt-lbl">Compaction</span><span class="ag-tt-val">${fmtTok(last.ctx)} / ${limitStr} (${ctxPct}%) · ${fmtTok(remainCtx)} left</span></div>`,
+            `<div class="ag-tt-row"><span class="ag-tt-lbl">Total Input</span><span class="ag-tt-val">New ${fmtTok(totalIn)} + Cache ${fmtTok(totalCache)} (${sessionCacheRate}% hit)</span></div>`,
+            subRowHtml,
+            outputRowHtml
+          ].join('')
+        : [
+            `<div class="ag-tt-hdr">本轮最新调用 (Gen #${last.idx + 1})</div>`,
+            `<div class="ag-tt-row"><span class="ag-tt-lbl">生成速度</span><span class="ag-tt-val">${useStream ? `流式 ${rawStreamTps.toFixed(1)} tok/s | ` : ''}端到端（含等待） ${e2eTps.toFixed(1)} tok/s</span></div>`,
+            `<div class="ag-tt-row"><span class="ag-tt-lbl">响应耗时</span><span class="ag-tt-val">${useStream ? `TTFT ${last.ttft.toFixed(2)}s | 流式 ${last.stream.toFixed(2)}s | 总计 ${last.totDur.toFixed(2)}s` : `等待 ${last.ttft.toFixed(2)}s | 刷出 ${last.stream.toFixed(2)}s | 总计 ${last.totDur.toFixed(2)}s`}</span></div>`,
+            `<div class="ag-tt-row"><span class="ag-tt-lbl">当前上下文</span><span class="ag-tt-val">${fmtNum(last.ctx)} (新增 ${fmtNum(last.inTok)} + 缓存 ${fmtNum(last.cacheRead)}, ${lastCacheRate}%)</span></div>`,
+            `<div class="ag-tt-row"><span class="ag-tt-lbl">本步输出量</span><span class="ag-tt-val">${fmtNum(last.outTok)} (思考链 ${fmtNum(last.thinkTok)} + 正文/工具 ${fmtNum(last.respTok)})</span></div>`,
+            turnRowHtml,
+            `<div class="ag-tt-hdr ag-tt-sec">当前会话累计 (${userStepsCount} 轮提问 / ${valid.length} 次有效调用)</div>`,
+            `<div class="ag-tt-row"><span class="ag-tt-lbl">压缩水位线</span><span class="ag-tt-val">${fmtTok(last.ctx)} / ${limitStr} (${ctxPct}%) · 距压缩余 ${fmtTok(remainCtx)}</span></div>`,
+            `<div class="ag-tt-row"><span class="ag-tt-lbl">累计输入量</span><span class="ag-tt-val">新增 ${fmtTok(totalIn)} + 缓存读取 ${fmtTok(totalCache)} (命中率 ${sessionCacheRate}%)</span></div>`,
+            subRowHtml,
+            outputRowHtml,
+            zhWarnRowHtml
+          ].join('');
     } else {
       const clampedPct = Math.max(0, Math.min(100, ctxPct));
       const ringVisualPct = last.ctx > 0 && clampedPct < 5 ? 5 : clampedPct;
@@ -2724,16 +3001,26 @@ function parseConversationMetrics(cascadeId, endpointOrDir, precomputedState = n
       const sessionCacheTier = resolveCacheTier(Number(sessionCacheRate) || 0);
       const ctxVolTier = last.ctx > 400000 ? 'bad' : last.ctx >= 200000 ? 'fair' : 'good';
 
-      tooltipHtml = [
-        `<div class="ag-tt-hdr"><span>当前轮次</span><span class="ag-tt-hdr-meta">第${turnDisplayNum}轮 总${effectiveTurnSteps}步 共耗时${turnDurStr}</span></div>`,
-        `<div class="ag-tt-row"><span class="ag-tt-lbl">生成速度</span><span class="ag-tt-val">${useStream ? `流式 ${rawStreamTps.toFixed(1)} tok/s | ` : ''}端到端 ${e2eTps.toFixed(1)} tok/s</span></div>`,
-        `<div class="ag-tt-row"><span class="ag-tt-lbl">响应耗时</span><span class="ag-tt-val">${useStream ? `TTFT ${last.ttft.toFixed(2)}s | 流式 ${last.stream.toFixed(2)}s | 总计 ${last.totDur.toFixed(2)}s` : `等待 ${last.ttft.toFixed(2)}s | 刷出 ${last.stream.toFixed(2)}s | 总计 ${last.totDur.toFixed(2)}s`}</span></div>`,
-        `<div class="ag-tt-row ag-tt-row-merged"><span class="ag-tt-lbl">本轮净增</span><span class="ag-tt-compact-right"><span class="ag-tt-val">+${fmtTok(effectiveTurnIn)}</span><span class="ag-tt-cache-tag ag-cache-${lastCacheTier}">缓存率 ${lastCacheRate}%</span></span></div>`,
-        `<div class="ag-tt-row ag-tt-row-merged"><span class="ag-tt-lbl">输出比例</span><span class="ag-tt-split-group"><span class="ag-tt-split-ratio ag-tt-think-lbl">思维链 ${thinkRatioPct}%</span><span class="ag-tt-split-track"><span class="ag-tt-split-think" style="width:${thinkRatioPct}%"></span><span class="ag-tt-split-resp" style="width:${respRatioPct}%"></span></span><span class="ag-tt-split-ratio ag-tt-resp-lbl">正文/工具 ${respRatioPct}%</span></span></div>`,
-        `<div class="ag-tt-hdr ag-tt-sec"><span>会话总计</span><span class="ag-tt-hdr-meta">${userStepsCount} 轮提问 / ${valid.length} 次调用</span></div>`,
-        `<div class="ag-tt-row ag-tt-row-merged"><span class="ag-tt-bar-group"><span class="ag-tt-ctx-bar"><span class="ag-tt-ctx-fill ${ctxClass}" style="width:${clampedPct}%"></span></span><span class="ag-tt-bar-lbl ag-tt-num-${ctxVolTier}">${fmtTok(last.ctx)}/${limitStr} (${ctxPct}%)</span></span><span class="ag-tt-nowrap"><span class="ag-tt-lbl">全轮次平均缓存 </span><span class="ag-tt-val ag-tt-num-${sessionCacheTier}">${sessionCacheRate}%</span></span></div>`,
-        zhWarnRowHtml
-      ].join('');
+      tooltipHtml = isEnMetrics
+        ? [
+            `<div class="ag-tt-hdr"><span>Current Turn</span><span class="ag-tt-hdr-meta">Turn #${turnDisplayNum} · ${effectiveTurnSteps} ${effectiveTurnSteps === 1 ? 'step' : 'steps'} · ${turnDurStr}</span></div>`,
+            `<div class="ag-tt-row"><span class="ag-tt-lbl">Throughput</span><span class="ag-tt-val">${useStream ? `Stream ${rawStreamTps.toFixed(1)} tok/s | ` : ''}E2E ${e2eTps.toFixed(1)} tok/s</span></div>`,
+            `<div class="ag-tt-row"><span class="ag-tt-lbl">Latency</span><span class="ag-tt-val">${useStream ? `TTFT ${last.ttft.toFixed(2)}s | Stream ${last.stream.toFixed(2)}s | Total ${last.totDur.toFixed(2)}s` : `Wait ${last.ttft.toFixed(2)}s | Flush ${last.stream.toFixed(2)}s | Total ${last.totDur.toFixed(2)}s`}</span></div>`,
+            `<div class="ag-tt-row ag-tt-row-merged"><span class="ag-tt-lbl">Net Input</span><span class="ag-tt-compact-right"><span class="ag-tt-val">+${fmtTok(effectiveTurnIn)}</span><span class="ag-tt-cache-tag ag-cache-${lastCacheTier}">Cache ${lastCacheRate}%</span></span></div>`,
+            `<div class="ag-tt-row ag-tt-row-merged"><span class="ag-tt-lbl">Output Split</span><span class="ag-tt-split-group"><span class="ag-tt-split-ratio ag-tt-think-lbl">Think ${thinkRatioPct}%</span><span class="ag-tt-split-track"><span class="ag-tt-split-think" style="width:${thinkRatioPct}%"></span><span class="ag-tt-split-resp" style="width:${respRatioPct}%"></span></span><span class="ag-tt-split-ratio ag-tt-resp-lbl">Resp ${respRatioPct}%</span></span></div>`,
+            `<div class="ag-tt-hdr ag-tt-sec"><span>Session Total</span><span class="ag-tt-hdr-meta">${userStepsCount} turns / ${valid.length} calls</span></div>`,
+            `<div class="ag-tt-row ag-tt-row-merged"><span class="ag-tt-bar-group"><span class="ag-tt-ctx-bar"><span class="ag-tt-ctx-fill ${ctxClass}" style="width:${clampedPct}%"></span></span><span class="ag-tt-bar-lbl ag-tt-num-${ctxVolTier}">${fmtTok(last.ctx)}/${limitStr} (${ctxPct}%)</span></span><span class="ag-tt-nowrap"><span class="ag-tt-lbl">Avg Cache </span><span class="ag-tt-val ag-tt-num-${sessionCacheTier}">${sessionCacheRate}%</span></span></div>`
+          ].join('')
+        : [
+            `<div class="ag-tt-hdr"><span>当前轮次</span><span class="ag-tt-hdr-meta">第${turnDisplayNum}轮 总${effectiveTurnSteps}步 共耗时${turnDurStr}</span></div>`,
+            `<div class="ag-tt-row"><span class="ag-tt-lbl">生成速度</span><span class="ag-tt-val">${useStream ? `流式 ${rawStreamTps.toFixed(1)} tok/s | ` : ''}端到端 ${e2eTps.toFixed(1)} tok/s</span></div>`,
+            `<div class="ag-tt-row"><span class="ag-tt-lbl">响应耗时</span><span class="ag-tt-val">${useStream ? `TTFT ${last.ttft.toFixed(2)}s | 流式 ${last.stream.toFixed(2)}s | 总计 ${last.totDur.toFixed(2)}s` : `等待 ${last.ttft.toFixed(2)}s | 刷出 ${last.stream.toFixed(2)}s | 总计 ${last.totDur.toFixed(2)}s`}</span></div>`,
+            `<div class="ag-tt-row ag-tt-row-merged"><span class="ag-tt-lbl">本轮净增</span><span class="ag-tt-compact-right"><span class="ag-tt-val">+${fmtTok(effectiveTurnIn)}</span><span class="ag-tt-cache-tag ag-cache-${lastCacheTier}">缓存率 ${lastCacheRate}%</span></span></div>`,
+            `<div class="ag-tt-row ag-tt-row-merged"><span class="ag-tt-lbl">输出比例</span><span class="ag-tt-split-group"><span class="ag-tt-split-ratio ag-tt-think-lbl">思维链 ${thinkRatioPct}%</span><span class="ag-tt-split-track"><span class="ag-tt-split-think" style="width:${thinkRatioPct}%"></span><span class="ag-tt-split-resp" style="width:${respRatioPct}%"></span></span><span class="ag-tt-split-ratio ag-tt-resp-lbl">正文/工具 ${respRatioPct}%</span></span></div>`,
+            `<div class="ag-tt-hdr ag-tt-sec"><span>会话总计</span><span class="ag-tt-hdr-meta">${userStepsCount} 轮提问 / ${valid.length} 次调用</span></div>`,
+            `<div class="ag-tt-row ag-tt-row-merged"><span class="ag-tt-bar-group"><span class="ag-tt-ctx-bar"><span class="ag-tt-ctx-fill ${ctxClass}" style="width:${clampedPct}%"></span></span><span class="ag-tt-bar-lbl ag-tt-num-${ctxVolTier}">${fmtTok(last.ctx)}/${limitStr} (${ctxPct}%)</span></span><span class="ag-tt-nowrap"><span class="ag-tt-lbl">全轮次平均缓存 </span><span class="ag-tt-val ag-tt-num-${sessionCacheTier}">${sessionCacheRate}%</span></span></div>`,
+            zhWarnRowHtml
+          ].join('');
     }
 
     const uncBackoffActive = Boolean(
@@ -4269,7 +4556,7 @@ function resolveParentDarkPreset(target, endpoint) {
 
 function syncDarkPresetToChildIframes(parentTargetId, rawDarkPreset) {
   if (!activeConfig.enabled) return;
-  const nextDarkPreset = String(rawDarkPreset || '').trim().toLowerCase() === 'claude-warm' ? 'claude-warm' : 'onyx';
+  const nextDarkPreset = normalizeDarkPresetValue(rawDarkPreset);
   targetDarkPresets.set(parentTargetId, nextDarkPreset);
   const parentEntry = attachedTargets.get(parentTargetId);
   const parentChannel = parentEntry?.endpoint?.channel || null;
@@ -4279,6 +4566,51 @@ function syncDarkPresetToChildIframes(parentTargetId, rawDarkPreset) {
     entry
       .send('Runtime.evaluate', {
         expression: `window.__ag_set_host_dark_preset && window.__ag_set_host_dark_preset(${JSON.stringify(nextDarkPreset)})`,
+        returnByValue: false
+      })
+      .catch(() => {});
+    if (entry.updateNewDocScript) {
+      entry.updateNewDocScript().catch(() => {});
+    }
+  }
+}
+
+function resolveParentLightPreset(target, endpoint) {
+  let curId = target?.parentId || null;
+  const seen = new Set();
+  while (curId && !seen.has(curId)) {
+    seen.add(curId);
+    if (targetLightPresets.has(curId)) {
+      return targetLightPresets.get(curId);
+    }
+    curId = targetMetaMap.get(curId)?.parentId || null;
+  }
+  const ch = endpoint?.channel || null;
+  for (const [id, entry] of attachedTargets.entries()) {
+    if (
+      entry.hostConfirmed &&
+      entry.type === 'page' &&
+      (!ch || entry.endpoint?.channel === ch) &&
+      targetLightPresets.has(id)
+    ) {
+      return targetLightPresets.get(id);
+    }
+  }
+  return null;
+}
+
+function syncLightPresetToChildIframes(parentTargetId, rawLightPreset) {
+  if (!activeConfig.enabled) return;
+  const nextLightPreset = normalizeLightPresetValue(rawLightPreset);
+  targetLightPresets.set(parentTargetId, nextLightPreset);
+  const parentEntry = attachedTargets.get(parentTargetId);
+  const parentChannel = parentEntry?.endpoint?.channel || null;
+  for (const [, entry] of attachedTargets.entries()) {
+    if (!entry.hostConfirmed || entry.type !== 'iframe') continue;
+    if (!belongsToParentTarget(entry, parentTargetId, parentChannel)) continue;
+    entry
+      .send('Runtime.evaluate', {
+        expression: `window.__ag_set_host_light_preset && window.__ag_set_host_light_preset(${JSON.stringify(nextLightPreset)})`,
         returnByValue: false
       })
       .catch(() => {});
@@ -4580,6 +4912,7 @@ function handleBrowserTargetDestroyed(rawTargetId) {
   }
   targetThemeModes.delete(targetId);
   targetDarkPresets.delete(targetId);
+  targetLightPresets.delete(targetId);
   targetMetaMap.delete(targetId);
   skippedNonHostTargets.delete(targetId);
 }
@@ -4795,6 +5128,7 @@ function attachTarget(target, endpoint) {
           }
           targetThemeModes.delete(target.id);
           targetDarkPresets.delete(target.id);
+          targetLightPresets.delete(target.id);
           targetMetaMap.delete(target.id);
           skippedNonHostTargets.delete(target.id);
           try {
@@ -4836,28 +5170,41 @@ function attachTarget(target, endpoint) {
       let lastNewDocSig = '';
 
       const buildTargetInjectScript = () => {
+        const uiLangVal = activeConfig.modules?.i18n === false ? 'en' : 'target';
         if (target.type !== 'iframe') {
-          return { script: cachedInjectScript, parentMode: '', parentDarkPreset: '' };
+          return {
+            script: activeConfig.enabled
+              ? `window.__ag_host_ui_lang=${JSON.stringify(uiLangVal)};\n${cachedInjectScript}`
+              : cachedInjectScript,
+            parentMode: '',
+            parentDarkPreset: '',
+            parentLightPreset: '',
+            uiLangVal
+          };
         }
         if (!activeConfig.enabled) {
-          return { script: cachedIframeInjectScript, parentMode: '', parentDarkPreset: '' };
+          return { script: cachedIframeInjectScript, parentMode: '', parentDarkPreset: '', parentLightPreset: '', uiLangVal };
         }
         const parentMode = resolveParentThemeMode(target, endpoint) || '';
         const parentDarkPreset = resolveParentDarkPreset(target, endpoint) || '';
+        const parentLightPreset = resolveParentLightPreset(target, endpoint) || '';
         const modeVal = parentMode === 'dark' || parentMode === 'light' ? parentMode : null;
         const darkVal = parentDarkPreset === 'claude-warm' || parentDarkPreset === 'onyx' ? parentDarkPreset : null;
+        const lightVal = parentLightPreset ? normalizeLightPresetValue(parentLightPreset) : null;
         return {
-          script: `window.__ag_host_theme_mode=${modeVal ? JSON.stringify(modeVal) : 'null'};\nwindow.__ag_host_dark_preset=${darkVal ? JSON.stringify(darkVal) : 'null'};\n${cachedIframeInjectScript}`,
+          script: `window.__ag_host_theme_mode=${modeVal ? JSON.stringify(modeVal) : 'null'};\nwindow.__ag_host_dark_preset=${darkVal ? JSON.stringify(darkVal) : 'null'};\nwindow.__ag_host_light_preset=${lightVal ? JSON.stringify(lightVal) : 'null'};\nwindow.__ag_host_ui_lang=${JSON.stringify(uiLangVal)};\n${cachedIframeInjectScript}`,
           parentMode: modeVal || '',
-          parentDarkPreset: darkVal || ''
+          parentDarkPreset: darkVal || '',
+          parentLightPreset: lightVal || '',
+          uiLangVal
         };
       };
 
       const updateNewDocScript = (force = false) => {
         newDocQueue = newDocQueue
           .then(async () => {
-            const { script, parentMode, parentDarkPreset } = buildTargetInjectScript();
-            const nextSig = `${activeConfig.enabled}|${cachedPatchVersion}|${parentMode}|${parentDarkPreset || ''}`;
+            const { script, parentMode, parentDarkPreset, parentLightPreset, uiLangVal } = buildTargetInjectScript();
+            const nextSig = `${activeConfig.enabled}|${cachedPatchVersion}|${activeConfig.preset || ''}|${activeConfig.darkPreset || ''}|${uiLangVal || ''}|${parentMode}|${parentDarkPreset || ''}|${parentLightPreset || ''}`;
             if (!force && evalScriptId && nextSig === lastNewDocSig) return;
             if (evalScriptId) {
               await send('Page.removeScriptToEvaluateOnNewDocument', { identifier: evalScriptId });
@@ -4903,6 +5250,7 @@ function attachTarget(target, endpoint) {
             if (!activeConfig.enabled) {
               targetThemeModes.delete(target.id);
               targetDarkPresets.delete(target.id);
+          targetLightPresets.delete(target.id);
               watchedCascadeIds = [];
               perCascadeState.clear();
             } else {
@@ -5061,6 +5409,7 @@ function attachTarget(target, endpoint) {
               attachedTargets.delete(target.id);
               targetThemeModes.delete(target.id);
               targetDarkPresets.delete(target.id);
+          targetLightPresets.delete(target.id);
             }
             try {
               ws.close();
@@ -5078,7 +5427,9 @@ function attachTarget(target, endpoint) {
                 JSON.stringify(target.type === 'iframe' ? 'iframe' : 'page') +
                 ' === "iframe" ? (window.__ag_host_theme_mode || null) : (window.__ag_resolved_theme_mode || null), darkPreset: ' +
                 JSON.stringify(target.type === 'iframe' ? 'iframe' : 'page') +
-                ' === "iframe" ? (window.__ag_host_dark_preset || window.__ag_runtime_dark_preset || (document.documentElement ? document.documentElement.getAttribute("data-ag-dark-preset") : null)) : (document.documentElement ? document.documentElement.getAttribute("data-ag-dark-preset") : null) })',
+                ' === "iframe" ? (window.__ag_host_dark_preset || window.__ag_runtime_dark_preset || (document.documentElement ? document.documentElement.getAttribute("data-ag-dark-preset") : null)) : (document.documentElement ? document.documentElement.getAttribute("data-ag-dark-preset") : null), lightPreset: ' +
+                JSON.stringify(target.type === 'iframe' ? 'iframe' : 'page') +
+                ' === "iframe" ? (window.__ag_host_light_preset || window.__ag_runtime_light_preset || (document.documentElement ? document.documentElement.getAttribute("data-ag-preset") : null)) : (document.documentElement ? document.documentElement.getAttribute("data-ag-preset") : null) })',
               returnByValue: true
             });
             const checkVal = checkRes?.result?.result?.value;
@@ -5100,9 +5451,18 @@ function attachTarget(target, endpoint) {
                   syncDarkPresetToChildIframes(target.id, checkVal.darkPreset);
                 }
               }
+              if (checkVal.lightPreset) {
+                const normLight = normalizeLightPresetValue(checkVal.lightPreset);
+                const prevLightPreset = targetLightPresets.get(target.id);
+                targetLightPresets.set(target.id, normLight);
+                if (prevLightPreset !== normLight) {
+                  syncLightPresetToChildIframes(target.id, normLight);
+                }
+              }
             } else if (activeConfig.enabled && target.type === 'iframe') {
               const parentMode = resolveParentThemeMode(target, endpoint);
               const parentDarkPreset = resolveParentDarkPreset(target, endpoint);
+              const parentLightPreset = resolveParentLightPreset(target, endpoint);
               let needNewDocUpdate = !evalScriptId;
               if (parentMode && checkVal.mode !== parentMode) {
                 await send('Runtime.evaluate', {
@@ -5114,6 +5474,13 @@ function attachTarget(target, endpoint) {
               if (parentDarkPreset && checkVal.darkPreset !== parentDarkPreset) {
                 await send('Runtime.evaluate', {
                   expression: `window.__ag_set_host_dark_preset && window.__ag_set_host_dark_preset(${JSON.stringify(parentDarkPreset)})`,
+                  returnByValue: false
+                });
+                needNewDocUpdate = true;
+              }
+              if (parentLightPreset && checkVal.lightPreset !== parentLightPreset) {
+                await send('Runtime.evaluate', {
+                  expression: `window.__ag_set_host_light_preset && window.__ag_set_host_light_preset(${JSON.stringify(parentLightPreset)})`,
                   returnByValue: false
                 });
                 needNewDocUpdate = true;
@@ -5130,7 +5497,8 @@ function attachTarget(target, endpoint) {
               skipNonHost: window.__ag_skip_non_host === true,
               kind: ${HOST_PROBE_EXPRESSION},
               mode: window.__ag_resolved_theme_mode || null,
-              darkPreset: document.documentElement ? document.documentElement.getAttribute("data-ag-dark-preset") : null
+              darkPreset: document.documentElement ? document.documentElement.getAttribute("data-ag-dark-preset") : null,
+              lightPreset: document.documentElement ? document.documentElement.getAttribute("data-ag-preset") : null
             })`,
             returnByValue: true
           });
@@ -5162,6 +5530,14 @@ function attachTarget(target, endpoint) {
               targetDarkPresets.set(target.id, state.darkPreset);
               if (prevDarkPreset !== state.darkPreset) {
                 syncDarkPresetToChildIframes(target.id, state.darkPreset);
+              }
+            }
+            if (state.lightPreset) {
+              const normLight = normalizeLightPresetValue(state.lightPreset);
+              const prevLightPreset = targetLightPresets.get(target.id);
+              targetLightPresets.set(target.id, normLight);
+              if (prevLightPreset !== normLight) {
+                syncLightPresetToChildIframes(target.id, normLight);
               }
             }
           }
@@ -5234,6 +5610,7 @@ function attachTarget(target, endpoint) {
           attachedTargets.delete(target.id);
           targetThemeModes.delete(target.id);
           targetDarkPresets.delete(target.id);
+          targetLightPresets.delete(target.id);
         }
         clearTimeout(attachTimeout);
         try {
@@ -5271,6 +5648,8 @@ function attachTarget(target, endpoint) {
             await send('Runtime.addBinding', { name: '__agRequestMetrics' });
             await send('Runtime.addBinding', { name: '__agRequestHardReload' });
             await send('Runtime.addBinding', { name: '__agSetDarkPreset' });
+            await send('Runtime.addBinding', { name: '__agSetLightPreset' });
+            await send('Runtime.addBinding', { name: '__agSetUiLang' });
             await send('Runtime.addBinding', { name: '__agSyncHostThemeMode' });
             await send('Runtime.addBinding', { name: '__agRequestTokenAnalytics' });
           }
@@ -5300,6 +5679,7 @@ function attachTarget(target, endpoint) {
             attachedTargets.delete(target.id);
             targetThemeModes.delete(target.id);
             targetDarkPresets.delete(target.id);
+          targetLightPresets.delete(target.id);
           }
           clearTimeout(attachTimeout);
           try {
@@ -5331,6 +5711,7 @@ function attachTarget(target, endpoint) {
               attachedTargets.delete(target.id);
               targetThemeModes.delete(target.id);
               targetDarkPresets.delete(target.id);
+          targetLightPresets.delete(target.id);
             }
             clearTimeout(attachTimeout);
             try {
@@ -5474,9 +5855,34 @@ function attachTarget(target, endpoint) {
             if (!hostConfirmed || target.type !== 'page' || !activeConfig.enabled) {
               return;
             }
-            syncDarkPresetToChildIframes(target.id, msg.params.payload);
+            const normDark = normalizeDarkPresetValue(msg.params.payload);
+            syncDarkPresetToChildIframes(target.id, normDark);
+            broadcastPresetToTargets('dark', normDark, target.id);
             if (!SAFE_MODE) {
-              persistDarkPresetToUserConfig(msg.params.payload);
+              persistDarkPresetToUserConfig(normDark);
+            }
+            return;
+          }
+          if (msg.method === 'Runtime.bindingCalled' && msg.params?.name === '__agSetLightPreset') {
+            if (!hostConfirmed || target.type !== 'page' || !activeConfig.enabled) {
+              return;
+            }
+            const normLight = normalizeLightPresetValue(msg.params.payload);
+            syncLightPresetToChildIframes(target.id, normLight);
+            broadcastPresetToTargets('light', normLight, target.id);
+            if (!SAFE_MODE) {
+              persistLightPresetToUserConfig(normLight);
+            }
+            return;
+          }
+          if (msg.method === 'Runtime.bindingCalled' && msg.params?.name === '__agSetUiLang') {
+            if (!hostConfirmed || target.type !== 'page' || !activeConfig.enabled) {
+              return;
+            }
+            const normLang = normalizeUiLangValue(msg.params.payload);
+            const persistedOk = SAFE_MODE ? true : persistUiLangToUserConfig(normLang, true);
+            if (persistedOk) {
+              broadcastUiLangToTargets(normLang, target.id);
             }
             return;
           }
@@ -5570,6 +5976,7 @@ function attachTarget(target, endpoint) {
           attachedTargets.delete(target.id);
           targetThemeModes.delete(target.id);
           targetDarkPresets.delete(target.id);
+          targetLightPresets.delete(target.id);
         }
         finishAttach(false);
       };
@@ -6428,6 +6835,7 @@ async function sync() {
     if (!activeConfig.enabled) {
       targetThemeModes.clear();
       targetDarkPresets.clear();
+      targetLightPresets.clear();
     }
     if (!isEventDiscoveryEnabled()) {
       closeAllBrowserWatchers();
@@ -6598,6 +7006,7 @@ async function sync() {
         attachedTargets.delete(id);
         targetThemeModes.delete(id);
         targetDarkPresets.delete(id);
+        targetLightPresets.delete(id);
       }
     }
     if (fullScannedChannels.size > 0) {

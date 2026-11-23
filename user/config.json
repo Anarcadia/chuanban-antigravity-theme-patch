@@ -1,8 +1,9 @@
 {
   "enabled": true,
   "channel": "auto",
-  "preset": "high-contrast",
+  "preset": "morandi",
   "darkPreset": "onyx",
+  "installedLocale": "zh-CN",
   "contextLimit": 256000,
   "modules": {
     "i18n": true,
