@@ -4,6 +4,29 @@
 
 ---
 
+## [v6.0.0] - 2026-11-23
+
+> **适用版本**：Antigravity `2.34.0+` / `2.33.x`（向下完全兼容 `2.32.x` / `2.31.x` / `2.30.0`）  
+> **核验基线**：macOS `2.34.0` × Windows 11 `2.34.0.0`（`2.4x` HiDPI `DirectWrite` · PowerShell `5.1` · `W-Exp-Final-Check 1 ~ 5` 双端真机全绿）× 内部 `Claude Opus 5.5 High` 架构与代码级多轮对抗审阅
+
+### Added, Changed & Perf（默认「莫兰迪古典矿物」全 UI 配色体系、外观五段式主题秒切、独立 `[ EN | 中文 ]` 二元语言切换、单层合并矿物输入框与跨端渲染/写盘加固）
+- **全新默认「莫兰迪古典矿物（`morandi`）」全 UI 配色与单层合并 `2px` 对话框（`core/theme.css` / `user/config.json` / `install.mjs`）**：
+  - 全域采用「暖宣纸灰画布 `#F4F1EA` + 亚麻石膏侧栏 `#E8E3D9` + 烟岚石青/青瓷/藤赭古典矿物语义色」冷暖互补体系；安装与旧版 `"high-contrast"` 升级自动平滑对齐至默认 `"morandi"`；
+  - 重构主对话、新建对话首页与子 Agent 侧栏输入框：彻底移除内外双层套框，合并为单层 `2px` 同心内曲率粗线（`MO` 下未聚焦雾霭青灰 `#A3B5BA` → 聚焦 100% 实色烟岚石青 `#3D6470` 配深石青主按钮；`Absolutely！` 下保留 `#DFAC98 → #A64229` 暖橙火漆框与 `#D97757` 按钮；新建对话主界面保留深色顶栏底色并消除中间 `1px` 分界线）；
+  - 升级底部实时指标胶囊为上下文圆环进度与精简 4 行矿石色悬停卡片。
+- **外观界面原生五段式主题胶囊 `[ A | ✳️ | MO | 📖 | 🌙 ]` 与 `<1ms` 原版旁路（`core/runtime.js` / `core/theme.css`）**：
+  - 在「系统设置 → 外观界面」集成 `A 原版配色`（Antigravity 流线四色渐变标）、`✳️ Absolutely！`、`MO 莫兰迪色`、`📖 暖纸深色`、`🌙 深色` 五段唯一高亮胶囊，内置点击后指针停留原生英文气泡防逃逸压制；
+  - 将 `@font-face` 抽离至永不卸载的 `#ag-font-faces` 常驻样式表，切入 `A 原版配色` 时直接通过 `style.disabled = true` 硬件级旁路主题与字体覆盖（切换耗时 `<1ms`，根治 Skia/DirectWrite 字形图集重建缺字），并自动清理 `Swarm` 插件子帧残留内联变量恢复官方原貌。
+- **外观界面独立 `[ EN | 中文 ]` 零重刷二元语言热切换与 `1,965` 条零碰撞汉化（`core/runtime.js` / `core/daemon.mjs` / `core/i18n.json`）**：
+  - 在外观 `.agy-card` 新增「界面语言 / Language」`[ EN | 中文 ]` 切换行（预留 `installedLocale` 扩展槽位）：切至 `EN` 即刻断开 `MutationObserver` 实现常时零监听开销、无损还原全页文本与属性并同步指标胶囊/`Swarm` 子帧；切回 `中文` 毫秒级全量重扫恢复，无需重新编译注入包；
+  - 补齐子 Agent 全视图、蜂群协作者（`Swarm Worker`）、最大化面板等副栏文案至 **`1,965` 条**（通过 Windows PowerShell `5.1` `ConvertFrom-Json` 零碰撞校验），修复 `subagent-node` 复数 `'s'` 剥离对 `(12s)` 耗时的误伤并保护用户自定义子 Agent 名称不被误翻。
+- **双端渲染性能与系统稳健性收口（`core/theme.css` / `core/daemon.mjs` / `core/runtime.js`）**：
+  - 全面清除 `body:has()` 与全局 `:nth-child():has()` 桶并为侧栏虚拟滚动容器补齐不透明实色底，根治快速上下滚动白屏闪烁并将单帧样式重算峰值再降 `40%`；
+  - 收敛 `--nux-focus-ring` 与下拉菜单 `Esc` `returnFocus` 伪焦点橙框（保留纯键盘柔和底色提示），将胶囊容器改为 `overflow-x: clip; overflow-y: visible` 防描边裁切；
+  - 为 Windows 配置落盘抽象 `atomicWriteTextFileSync`（`EPERM`/`EBUSY` 5 次短退避重试与兜底写盘），升级 Windows 11 顶栏菜单实色优先 `TitleBarOverlay` 五态同步。
+
+---
+
 ## [v5.5.5] - 2026-11-22
 
 > **适用版本**：Antigravity `2.34.0+` / `2.33.x`（向下完全兼容 `2.32.x` / `2.31.x` / `2.30.0`）  
