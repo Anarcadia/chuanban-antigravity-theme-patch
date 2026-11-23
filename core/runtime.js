@@ -133,7 +133,9 @@
 
   const DEFAULT_PRESET = boot.preset || 'morandi';
   const DEFAULT_DARK_PRESET = boot.darkPreset || 'onyx';
-  const INSTALLED_LOCALE = String(boot.installedLocale || 'zh-CN').trim() || 'zh-CN';
+  const RAW_INSTALLED_LOCALE = String(boot.installedLocale || 'zh-CN').trim() || 'zh-CN';
+  // 当前第一阶段仅实装 zh-CN 词典与无词典 none；非法预留值统一回落至 zh-CN 防按钮与词典语言错配
+  const INSTALLED_LOCALE = RAW_INSTALLED_LOCALE === 'none' || RAW_INSTALLED_LOCALE === 'zh-CN' ? RAW_INSTALLED_LOCALE : 'zh-CN';
   const HAS_LOCALE_PACK =
     INSTALLED_LOCALE !== 'none' &&
     !!(boot.i18nDict && typeof boot.i18nDict === 'object' && Object.keys(boot.i18nDict).length > 0);
@@ -1917,8 +1919,8 @@
   window.__ag_set_host_dark_preset = (nextDarkPreset) => {
     if (
       !IS_SWARM_PLUGIN_FRAME &&
-      (window.__ag_persist_preset_timer ||
-        (window.__ag_pending_persist_map && window.__ag_pending_persist_map.dark !== undefined))
+      window.__ag_pending_persist_map &&
+      window.__ag_pending_persist_map.dark !== undefined
     ) {
       return;
     }
@@ -1936,8 +1938,8 @@
   window.__ag_set_host_light_preset = (nextLightPreset) => {
     if (
       !IS_SWARM_PLUGIN_FRAME &&
-      (window.__ag_persist_preset_timer ||
-        (window.__ag_pending_persist_map && window.__ag_pending_persist_map.light !== undefined))
+      window.__ag_pending_persist_map &&
+      window.__ag_pending_persist_map.light !== undefined
     ) {
       return;
     }
@@ -1955,8 +1957,8 @@
   window.__ag_set_host_ui_lang = (nextUiLang) => {
     if (
       !IS_SWARM_PLUGIN_FRAME &&
-      (window.__ag_persist_preset_timer ||
-        (window.__ag_pending_persist_map && window.__ag_pending_persist_map.uiLang !== undefined))
+      window.__ag_pending_persist_map &&
+      window.__ag_pending_persist_map.uiLang !== undefined
     ) {
       return;
     }
@@ -2253,10 +2255,11 @@
       const normalized = !HAS_LOCALE_PACK || String(nextUiLang || '').trim().toLowerCase() === 'en' ? 'en' : 'target';
       const prev = isUiEnglish() ? 'en' : 'target';
       window.__ag_runtime_ui_lang = normalized;
+      window.__ag_host_ui_lang = normalized;
       if (document.documentElement) {
         document.documentElement.setAttribute('data-ag-lang', isUiEnglish() ? 'en' : INSTALLED_LOCALE);
       }
-      hideThemeBtnTooltip();
+      hideThemeBtnTooltip(false);
       if (prev !== normalized && typeof window.__ag_apply_i18n_dom_state === 'function') {
         window.__ag_apply_i18n_dom_state();
       }
@@ -2328,7 +2331,14 @@
         const pathEl = btn.querySelector('svg path');
         const d = pathEl ? String(pathEl.getAttribute('d') || '') : '';
         const aria = String(btn.getAttribute('aria-label') || '').trim().toLowerCase();
-        if (d.startsWith('M263.85-140') || aria === 'system' || aria === '跟随系统' || aria === '原版配色') {
+        if (
+          d.startsWith('M263.85-140') ||
+          aria === 'system' ||
+          aria === '跟随系统' ||
+          aria === '原版配色' ||
+          aria === 'original theme' ||
+          aria === '純正テーマ'
+        ) {
           return 'system';
         }
         if (
@@ -2336,11 +2346,20 @@
           aria === 'light' ||
           aria === '浅色' ||
           aria === '浅色主题' ||
-          aria === 'absolutely！'
+          aria === 'absolutely！' ||
+          aria === 'absolutely!'
         ) {
           return 'light';
         }
-        if (d.startsWith('M481.15-140') || aria === 'dark' || aria === '深色' || aria === '深色主题') return 'dark';
+        if (
+          d.startsWith('M481.15-140') ||
+          aria === 'dark' ||
+          aria === '深色' ||
+          aria === '深色主题' ||
+          aria === 'ダーク'
+        ) {
+          return 'dark';
+        }
         return null;
       };
       const k0 = classifyBtn(nativeBtns[0]);
@@ -2732,7 +2751,7 @@
         morandiBtn = document.createElement('button');
         morandiBtn.type = 'button';
         morandiBtn.setAttribute('data-ag-morandi-btn', '1');
-        morandiBtn.setAttribute('aria-label', '莫兰迪色');
+        morandiBtn.setAttribute('aria-label', getSelfUiStrings().themeTooltips.morandi);
         morandiBtn.setAttribute('aria-pressed', 'false');
         morandiBtn.className = lightBtn.className;
 
@@ -2811,11 +2830,9 @@
         group.appendChild(bookBtn);
       }
 
-      // 外观卡片独立「界面语言 / Language」二元切换行（挂载在 .agy-card 末尾，零侵入 React 子节点顺序；预留 installedLocale 映射）
+      // 外观卡片独立「界面语言 / Language」二元切换行（严格限定挂载在 .agy-card 内，零侵入 React 子节点顺序；预留 installedLocale 映射）
       if (HAS_LOCALE_PACK) {
-        const themeRow =
-          (group.closest && group.closest('.agy-card > div')) ||
-          (group.parentElement ? group.parentElement.parentElement : null);
+        const themeRow = group.closest ? group.closest('.agy-card > div') : null;
         const card = themeRow ? themeRow.parentElement : null;
         if (card && !card.querySelector('[data-ag-lang-row="1"]')) {
           const localeInfo = LOCALE_META[INSTALLED_LOCALE] || LOCALE_META['zh-CN'];
@@ -4518,7 +4535,28 @@
       return !!(el && el.closest && el.closest('header, [data-testid="breadcrumb-segment"]'));
     }
 
-    function computeTextTranslation(raw, contextEl) {
+    const SUBAGENT_BUILTIN_LABEL_MAP = {
+      subagent: '子 Agent',
+      'browser subagent': '浏览器子 Agent',
+      'browser task': '浏览器任务',
+      'research subagent': '调研子 Agent',
+      'swarm worker': '蜂群协作者'
+    };
+
+    function translateSubagentLabel(rawLabel) {
+      const s = String(rawLabel || '').trim();
+      if (!s) return s;
+      const mapped = SUBAGENT_BUILTIN_LABEL_MAP[s.toLowerCase()];
+      if (mapped) return mapped;
+      if (RE_SWARM_WORKER_ROLE.test(s)) {
+        return s.replace(RE_SWARM_WORKER_ROLE, (_, name, suffix) =>
+          suffix ? '蜂群协作者 (' + name + ') (' + suffix + ')' : '蜂群协作者 (' + name + ')'
+        );
+      }
+      return s;
+    }
+
+    function computeTextTranslation(raw, contextEl, textNode = null) {
       if (!raw) return null;
       const trimmed = raw.trim();
       if (!trimmed) return null;
@@ -4671,8 +4709,16 @@
         contextEl.closest('[data-testid="subagent-node"]')
       ) {
         if (raw === ' subagent') return ' 个子 Agent';
-        const pTxt = contextEl.textContent || '';
-        if (raw === 's' && pTxt.startsWith('(') && pTxt.endsWith(')')) return '';
+        if (raw === 's') {
+          if (textNode && textNode.previousSibling && textNode.previousSibling.nodeType === 3) {
+            const prevNode = textNode.previousSibling;
+            const prevOrig = (origTextMap.get(prevNode)?.origRaw || prevNode.nodeValue || '').trim();
+            const prevCur = (prevNode.nodeValue || '').trim();
+            if (/^subagent$/i.test(prevOrig) || /个子 Agent$/.test(prevCur)) return '';
+          } else if (/\(\d+\s*(?:subagent|个子 Agent)s?\)/i.test(contextEl.textContent || '')) {
+            return '';
+          }
+        }
       }
       if (firstUpper === 'S') {
         if (RE_SWARM_WORKER_ROLE.test(trimmed)) {
@@ -4841,8 +4887,7 @@
         }
         const mOpenSub = trimmed.match(RE_OPEN_SUBAGENT);
         if (mOpenSub) {
-          const inner = mOpenSub[1].trim();
-          const innerZh = computeTextTranslation(inner, contextEl) || dictLookup(inner) || inner;
+          const innerZh = translateSubagentLabel(mOpenSub[1]);
           return raw.replace(trimmed, () => '打开子 Agent：' + innerZh);
         }
         if (
@@ -4852,14 +4897,13 @@
           /^Open\s+(.+)$/i.test(trimmed)
         ) {
           const inner = trimmed.replace(/^Open\s+/i, '').trim();
-          const innerZh = computeTextTranslation(inner, contextEl) || dictLookup(inner) || inner;
+          const innerZh = translateSubagentLabel(inner);
           return raw.replace(trimmed, () => '打开 ' + innerZh);
         }
       } else if (firstUpper === 'I') {
         const mInvSub = trimmed.match(RE_INVOKED_SUBAGENT);
         if (mInvSub) {
-          const inner = mInvSub[1].trim();
-          const innerZh = computeTextTranslation(inner, contextEl) || dictLookup(inner) || inner;
+          const innerZh = translateSubagentLabel(mInvSub[1]);
           return raw.replace(trimmed, () => '已调用子 Agent：' + innerZh);
         }
       } else if (firstUpper === 'B') {
@@ -5071,7 +5115,7 @@
       }
       const origRaw = rec && rec.lastVal === currentVal ? rec.origRaw : currentVal;
 
-      const nextVal = computeTextTranslation(origRaw, node.parentElement);
+      const nextVal = computeTextTranslation(origRaw, node.parentElement, node);
       if (nextVal !== null) {
         origTextMap.set(node, { origRaw, lastVal: nextVal, ver: PATCH_VERSION });
         if (node.nodeValue !== nextVal) {
@@ -5222,14 +5266,20 @@
       }
       const mOpenSubAttr = atrim.match(RE_OPEN_SUBAGENT);
       if (mOpenSubAttr) {
-        const inner = mOpenSubAttr[1].trim();
-        const innerZh = computeTextTranslation(inner, el) || dictLookup(inner) || inner;
+        const innerZh = translateSubagentLabel(mOpenSubAttr[1]);
         return '打开子 Agent：' + innerZh;
       }
       const mPaneHdr = atrim.match(RE_ARIA_PANE_HEADER);
-      if (mPaneHdr) {
+      if (
+        mPaneHdr &&
+        el &&
+        el.closest &&
+        el.closest('[data-testid*="pane"], [role="region"], header')
+      ) {
         const baseZh = dictLookup(mPaneHdr[1].trim());
-        if (typeof baseZh === 'string') return baseZh + '标题栏';
+        if (typeof baseZh === 'string') {
+          return baseZh + (/[A-Za-z0-9]$/.test(baseZh) ? ' 标题栏' : '标题栏');
+        }
       }
       const mEditSq = atrim.match(RE_EDIT_SIDE_Q_TITLE);
       if (mEditSq) {
@@ -7237,6 +7287,7 @@
           if (hEl && hEl.textContent !== uiStr.extHeading) hEl.textContent = uiStr.extHeading;
           if (bEl && bEl.textContent !== uiStr.tokenTab) bEl.textContent = uiStr.tokenTab;
         }
+        // 第一阶段双语切换仅同步设置侧栏分类标题与入口按钮名；Token 统计面板内部报表文案留待第二阶段多语言解耦统一抽离
         window.__ag_rerender_token_analytics_lang = () => {
           const sec = document.getElementById(NAV_SECTION_ID);
           if (!sec) return;

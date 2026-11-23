@@ -459,6 +459,7 @@ html[data-ag-os="darwin"]:not([data-ag-theme-mode="dark"]) body:not(.dark):not(.
 
 /* 输入框单层合并蜡封粗线几何（消除原 p-px 灰底夹层与内卡片二次描边的双层套框视觉） */
 :is(#antigravity\.agentSidePanelInputBox, [id="antigravity.agentSidePanelInputBox"], .surface-composer, .surface-composer.bg-card-border) {
+  --ag-composer-bw: 2px;
   padding: 0 !important;
   background-color: var(--ag-composer-card-bg, #FAF8F3) !important;
   outline: none !important;
@@ -482,9 +483,10 @@ html:not([data-ag-wax-seal="off"]) :is(#antigravity\.agentSidePanelInputBox, [id
   box-shadow: var(--ag-seal-chat-focus-shadow, 0 6px 20px -4px rgba(138, 63, 45, 0.12)) !important;
 }
 
-/* 显式关闭蜡封模块时回退 1px 标准单线描边 */
+/* 显式关闭蜡封模块时回退 1px 标准单线描边，并同步内曲率偏移量 */
 html[data-ag-wax-seal="off"] :is(#antigravity\.agentSidePanelInputBox, [id="antigravity.agentSidePanelInputBox"], .surface-composer, .surface-composer.bg-card-border),
 html[data-ag-wax-seal="off"] :is(#antigravity\.agentSidePanelInputBox, [id="antigravity.agentSidePanelInputBox"], .surface-composer, .surface-composer.bg-card-border):is(:hover, :focus-within) {
+  --ag-composer-bw: 1px;
   border: 1px solid var(--ag-seal-off-border, rgba(31, 30, 29, 0.18)) !important;
   box-shadow: none !important;
 }
@@ -504,24 +506,24 @@ body[data-agy-theme][data-newux-theme="onyx"] .surface-composer:focus-within > .
   border: 0 solid transparent !important;
   box-shadow: none !important;
   outline: none !important;
-  border-radius: calc(var(--nux-composer-frame-radius, 21px) - 2px) !important;
+  border-radius: calc(var(--nux-composer-frame-radius, 21px) - var(--ag-composer-bw, 2px)) !important;
 }
 
-:is(#antigravity\.agentSidePanelInputBox, [id="antigravity.agentSidePanelInputBox"], .surface-composer) > div:not(.surface-composer-card):not([aria-hidden="true"]):not(.voice-glow-ring) ~ .surface-composer-card {
+:is(#antigravity\.agentSidePanelInputBox, [id="antigravity.agentSidePanelInputBox"], .surface-composer) > div:not(.surface-composer-card):not([aria-hidden="true"]):not(.voice-glow-ring):not(:empty):not([hidden]) ~ .surface-composer-card {
   border-top-left-radius: 0 !important;
   border-top-right-radius: 0 !important;
 }
 
-/* 当普通对话存在展开的顶部附加栏（如排队消息或引用块）时，仅作底部分隔线而不产生外围套框 */
-:is(#antigravity\.agentSidePanelInputBox, [id="antigravity.agentSidePanelInputBox"], .surface-composer) > div:first-child:not(.surface-composer-card):not([aria-hidden="true"]):not(.voice-glow-ring) {
+/* 当普通对话存在展开的非空顶部附加栏（如排队消息或引用块）时，仅作底部分隔线而不产生外围套框 */
+:is(#antigravity\.agentSidePanelInputBox, [id="antigravity.agentSidePanelInputBox"], .surface-composer) > div:first-child:not(.surface-composer-card):not([aria-hidden="true"]):not(.voice-glow-ring):not(:empty):not([hidden]) {
   background-color: var(--ag-composer-tray-bg, #EAE4D8) !important;
   border-bottom: 1px solid var(--ag-composer-tray-divider, rgba(154, 71, 50, 0.15)) !important;
-  border-radius: calc(var(--nux-composer-frame-radius, 21px) - 2px) calc(var(--nux-composer-frame-radius, 21px) - 2px) 0 0 !important;
+  border-radius: calc(var(--nux-composer-frame-radius, 21px) - var(--ag-composer-bw, 2px)) calc(var(--nux-composer-frame-radius, 21px) - var(--ag-composer-bw, 2px)) 0 0 !important;
 }
 
 /* 新建对话主界面（项目/环境/分支选择顶栏）：保留上部托盘深色底，仅消除中间 1px 水平分界线 */
-html[data-ag-page-type="home"] :is(#antigravity\.agentSidePanelInputBox, [id="antigravity.agentSidePanelInputBox"], .surface-composer) > div:first-child:not(.surface-composer-card):not([aria-hidden="true"]):not(.voice-glow-ring),
-:is(#antigravity\.agentSidePanelInputBox, [id="antigravity.agentSidePanelInputBox"], .surface-composer) > div:first-child:not(.surface-composer-card):not([aria-hidden="true"]):not(.voice-glow-ring):has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [data-testid="branch-pill-trigger"], [data-testid="project-branch-picker"], [aria-label^="Select project"], [aria-label^="选择项目"]) {
+html[data-ag-page-type="home"] :is(#antigravity\.agentSidePanelInputBox, [id="antigravity.agentSidePanelInputBox"], .surface-composer) > div:first-child:not(.surface-composer-card):not([aria-hidden="true"]):not(.voice-glow-ring):not(:empty):not([hidden]),
+:is(#antigravity\.agentSidePanelInputBox, [id="antigravity.agentSidePanelInputBox"], .surface-composer) > div:first-child:not(.surface-composer-card):not([aria-hidden="true"]):not(.voice-glow-ring):not(:empty):not([hidden]):has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [data-testid="branch-pill-trigger"], [data-testid="project-branch-picker"], [aria-label^="Select project"], [aria-label^="选择项目"]) {
   border-bottom: 0 solid transparent !important;
 }
 
@@ -621,6 +623,11 @@ body[data-agy-theme] :is(#antigravity\.agentSidePanelInputBox, [id="antigravity.
 body[data-agy-theme] :is([data-testid="model-selector-trigger"], [data-testid="worked-for-collapsible"]):is(:focus-visible, :focus-visible:not(.no-focus-ring)),
 :is([data-testid="model-selector-trigger"], [data-testid="worked-for-collapsible"]):focus-visible {
   box-shadow: none !important;
+}
+
+/* 为输入框工具栏非发送按钮提供柔和背景底色键盘焦点提示（不产生外扩描边环，防止 Esc 关闭菜单 returnFocus 出现橙框） */
+:is(#antigravity\.agentSidePanelInputBox, [id="antigravity.agentSidePanelInputBox"]) button:not([data-testid="send-button"]):not([data-testid="input-cancel-button"]):not(.agy-send-button):focus-visible {
+  background-color: var(--ag-composer-top-hover-bg, rgba(63, 110, 122, 0.09)) !important;
 }
 
 /* 保护 voice-live-pill 内部状态显隐 */

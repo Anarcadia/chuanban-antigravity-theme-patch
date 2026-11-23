@@ -766,12 +766,8 @@ function broadcastUiLangToTargets(rawUiLang, excludeTargetId = null) {
   const normLang = normalizeUiLangValue(rawUiLang);
   const wantI18n = normLang !== 'en';
   if (activeConfig.modules && typeof activeConfig.modules === 'object') {
-    if (activeConfig.modules.i18n !== wantI18n) {
-      activeConfig.modules.i18n = wantI18n;
-      metricsConfigEpoch += 1;
-    } else {
-      metricsConfigEpoch += 1;
-    }
+    activeConfig.modules.i18n = wantI18n;
+    metricsConfigEpoch += 1;
   }
   const expr = `window.__ag_set_host_ui_lang && window.__ag_set_host_ui_lang(${JSON.stringify(normLang)})`;
   const tasks = [];
@@ -794,7 +790,7 @@ function broadcastUiLangToTargets(rawUiLang, excludeTargetId = null) {
   }
 }
 
-function persistUiLangToUserConfig(rawUiLang) {
+function persistUiLangToUserConfig(rawUiLang, skipNewDocSync = false) {
   if (SAFE_MODE) return false;
   const normLang = normalizeUiLangValue(rawUiLang);
   const wantI18n = normLang !== 'en';
@@ -822,7 +818,7 @@ function persistUiLangToUserConfig(rawUiLang) {
         ? currentObj.modules
         : {};
     if (curModules.i18n === wantI18n && 'i18n' in curModules) {
-      return false;
+      return true;
     }
     const nextModules = Object.assign({ i18n: wantI18n }, curModules, { i18n: wantI18n });
     const updatedObj = {};
@@ -840,7 +836,7 @@ function persistUiLangToUserConfig(rawUiLang) {
     }
     fs.writeFileSync(tmpPath, `${JSON.stringify(updatedObj, null, 2)}\n`, 'utf8');
     fs.renameSync(tmpPath, cfgPath);
-    if (rebuildBundleIfNeeded({ fromUiPersist: true })) {
+    if (rebuildBundleIfNeeded({ fromUiPersist: true }) && !skipNewDocSync) {
       const tasks = [];
       for (const [, entry] of attachedTargets.entries()) {
         if (entry?.hostConfirmed && entry.updateNewDocScript) {
@@ -909,9 +905,12 @@ function rebuildBundleIfNeeded(opts = {}) {
   const userCfg = SAFE_MODE ? {} : readJsonSafe(path.join(USER_DIR, 'config.json'), {});
   const enabled = SAFE_MODE ? true : userCfg.enabled !== false;
   const channel = CLI_CHANNEL || userCfg.channel || 'auto';
-  const preset = normalizeLightPresetValue(userCfg.preset);
-  const darkPreset = normalizeDarkPresetValue(userCfg.darkPreset);
-  const installedLocale = String(userCfg.installedLocale || 'zh-CN').trim() || 'zh-CN';
+  const preset = SAFE_MODE && activeConfig ? activeConfig.preset : normalizeLightPresetValue(userCfg.preset);
+  const darkPreset =
+    SAFE_MODE && activeConfig ? activeConfig.darkPreset : normalizeDarkPresetValue(userCfg.darkPreset);
+  const rawInstalledLocale = String(userCfg.installedLocale || 'zh-CN').trim() || 'zh-CN';
+  const installedLocale =
+    rawInstalledLocale === 'none' || rawInstalledLocale === 'zh-CN' ? rawInstalledLocale : 'zh-CN';
   const prevActivePreset = activeConfig ? activeConfig.preset : null;
   const prevActiveDarkPreset = activeConfig ? activeConfig.darkPreset : null;
   const prevActiveI18nEnabled = activeConfig?.modules ? activeConfig.modules.i18n !== false : null;
@@ -959,6 +958,9 @@ function rebuildBundleIfNeeded(opts = {}) {
     },
     rawModules
   );
+  if (SAFE_MODE && activeConfig?.modules && typeof activeConfig.modules.i18n === 'boolean') {
+    modules.i18n = activeConfig.modules.i18n;
+  }
   if (!DatabaseSync) {
     modules.metrics = false;
     modules.tokenAnalytics = false;
@@ -1051,10 +1053,14 @@ function rebuildBundleIfNeeded(opts = {}) {
   const baseCss = readTextSafe(path.join(CORE_DIR, 'theme.css'), '');
   const customCss = !SAFE_MODE && modules.customCss ? readTextSafe(path.join(USER_DIR, 'custom.css'), '') : '';
 
-  const baseDict = readJsonSafe(path.join(CORE_DIR, 'i18n.json'), {});
-  const rawOverrideDict = !SAFE_MODE ? readJsonSafe(path.join(USER_DIR, 'i18n.override.json'), {}) : {};
-  const overrideDict = normalizeOverrideDict(rawOverrideDict);
-  const mergedDict = Object.assign({}, baseDict, overrideDict);
+  const mergedDict =
+    installedLocale === 'none'
+      ? {}
+      : Object.assign(
+          {},
+          readJsonSafe(path.join(CORE_DIR, 'i18n.json'), {}),
+          !SAFE_MODE ? normalizeOverrideDict(readJsonSafe(path.join(USER_DIR, 'i18n.override.json'), {})) : {}
+        );
 
   const customJs = !SAFE_MODE && modules.customJs ? readTextSafe(path.join(USER_DIR, 'custom.js'), '') : '';
   const runtimeTemplate = readTextSafe(path.join(CORE_DIR, 'runtime.js'), '');
@@ -5847,9 +5853,9 @@ function attachTarget(target, endpoint) {
               return;
             }
             const normLang = normalizeUiLangValue(msg.params.payload);
-            broadcastUiLangToTargets(normLang, target.id);
-            if (!SAFE_MODE) {
-              persistUiLangToUserConfig(normLang);
+            const persistedOk = SAFE_MODE ? true : persistUiLangToUserConfig(normLang, true);
+            if (persistedOk) {
+              broadcastUiLangToTargets(normLang, target.id);
             }
             return;
           }
