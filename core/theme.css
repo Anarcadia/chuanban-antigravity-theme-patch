@@ -1298,7 +1298,8 @@ html[data-ag-theme-mode="dark"] #ag-theme-btn-tooltip {
 }
 
 :is(#ag-live-metrics-pill, .ag-live-metrics-pill) :is(#ag-live-metrics-text, .ag-live-metrics-text) {
-  display: block;
+  display: inline-flex;
+  align-items: center;
   flex: 0 1 auto !important;
   width: auto !important;
   min-width: 0;
@@ -1311,6 +1312,35 @@ html[data-ag-theme-mode="dark"] #ag-theme-btn-tooltip {
   font-weight: 500 !important;
   letter-spacing: -0.025em !important;
   color: inherit !important;
+}
+
+:is(#ag-live-metrics-pill, .ag-live-metrics-pill) .ag-ctx-ring {
+  flex: 0 0 auto;
+  display: inline-block;
+  vertical-align: middle;
+  margin-right: 4px;
+  overflow: visible;
+}
+
+:is(#ag-live-metrics-pill, .ag-live-metrics-pill) .ag-ctx-ring-track {
+  stroke: rgba(63, 110, 122, 0.20);
+}
+
+:is(#ag-live-metrics-pill, .ag-live-metrics-pill) .ag-ctx-ring-fill {
+  stroke: #3F6E7A;
+  transition: stroke-dashoffset 200ms ease, stroke 160ms ease;
+}
+
+:is(#ag-live-metrics-pill, .ag-live-metrics-pill) .ag-ctx-ring.ag-ctx-warn .ag-ctx-ring-fill {
+  stroke: #B8843B !important;
+}
+
+:is(#ag-live-metrics-pill, .ag-live-metrics-pill) .ag-ctx-ring.ag-ctx-crit .ag-ctx-ring-fill {
+  stroke: #DC2626 !important;
+}
+
+:is(#ag-live-metrics-pill, .ag-live-metrics-pill) .ag-ring-after {
+  display: inline-block;
 }
 
 :is(#antigravity\.agentSidePanelInputBox, [id="antigravity.agentSidePanelInputBox"]) :is(#ag-live-metrics-pill, .ag-live-metrics-pill) .ag-sep,
@@ -1427,8 +1457,8 @@ html[data-ag-theme-mode="dark"] #ag-theme-btn-tooltip {
 #ag-live-metrics-tooltip {
   position: fixed;
   z-index: 2147483647;
-  min-width: 340px;
-  max-width: 450px;
+  min-width: 350px;
+  max-width: 480px;
   padding: 10px 12px;
   border-radius: 8px;
   background-color: var(--card, #F9F7F2) !important;
@@ -1677,6 +1707,294 @@ html[data-ag-theme-mode="dark"] #ag-theme-btn-tooltip {
 :is(html[data-ag-dark-preset="claude-warm"][data-ag-theme-mode="dark"] body, html[data-ag-dark-preset="claude-warm"] body.dark) #ag-live-metrics-tooltip .ag-tt-copy-btn:hover {
   background-color: rgba(223, 175, 95, 0.24) !important;
   border-color: rgba(223, 175, 95, 0.55) !important;
+}
+
+/* 精简版圆环与上浮胶囊图像化进度条扩展（莫兰迪古典矿物冷暖互补色系，保留极限大红警告） */
+:is(html[data-ag-theme-mode="dark"] body, body.dark) :is(#ag-live-metrics-pill, .ag-live-metrics-pill) .ag-ctx-ring-track {
+  stroke: rgba(122, 166, 178, 0.22) !important;
+}
+
+:is(html[data-ag-theme-mode="dark"] body, body.dark) :is(#ag-live-metrics-pill, .ag-live-metrics-pill) .ag-ctx-ring-fill {
+  stroke: #7AA6B2 !important;
+}
+
+:is(html[data-ag-theme-mode="dark"] body, body.dark) :is(#ag-live-metrics-pill, .ag-live-metrics-pill) .ag-ctx-ring.ag-ctx-warn .ag-ctx-ring-fill {
+  stroke: #D6B475 !important;
+}
+
+:is(html[data-ag-theme-mode="dark"] body, body.dark) :is(#ag-live-metrics-pill, .ag-live-metrics-pill) .ag-ctx-ring.ag-ctx-crit .ag-ctx-ring-fill {
+  stroke: #F87171 !important;
+}
+
+#ag-live-metrics-tooltip .ag-tt-hdr-meta {
+  font-weight: 500 !important;
+  font-size: 10.5px !important;
+  color: #57534E !important;
+  margin-left: 10px;
+}
+
+#ag-live-metrics-tooltip .ag-tt-row-merged {
+  align-items: center;
+  margin-top: 2px;
+  gap: 12px;
+}
+
+#ag-live-metrics-tooltip .ag-tt-nowrap {
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+#ag-live-metrics-tooltip .ag-tt-compact-left,
+#ag-live-metrics-tooltip .ag-tt-compact-right {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+#ag-live-metrics-tooltip .ag-tt-cache-tag {
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 10px !important;
+  font-weight: 600 !important;
+  line-height: 1.35 !important;
+  border: 1px solid transparent;
+}
+
+/* 古典矿物四阶徽标色：青瓷松石 (good) -> 古铜藤赭 (fair) -> 暖赤陶褐 (low) -> 极限大红保留 (bad) */
+#ag-live-metrics-tooltip .ag-tt-cache-tag.ag-cache-good {
+  background-color: rgba(53, 108, 97, 0.13) !important;
+  border-color: rgba(53, 108, 97, 0.27) !important;
+  color: #2B5E53 !important;
+}
+
+#ag-live-metrics-tooltip .ag-tt-cache-tag.ag-cache-fair {
+  background-color: rgba(166, 124, 62, 0.14) !important;
+  border-color: rgba(166, 124, 62, 0.29) !important;
+  color: #8A6228 !important;
+}
+
+#ag-live-metrics-tooltip .ag-tt-cache-tag.ag-cache-low {
+  background-color: rgba(217, 119, 87, 0.15) !important;
+  border-color: rgba(217, 119, 87, 0.31) !important;
+  color: #9A482B !important;
+}
+
+#ag-live-metrics-tooltip .ag-tt-cache-tag.ag-cache-bad {
+  background-color: rgba(185, 28, 28, 0.15) !important;
+  border-color: rgba(185, 28, 28, 0.30) !important;
+  color: #B91C1C !important;
+}
+
+#ag-live-metrics-tooltip .ag-tt-split-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+
+#ag-live-metrics-tooltip .ag-tt-split-track {
+  display: inline-flex;
+  width: 92px;
+  height: 6.5px;
+  border-radius: 999px;
+  overflow: hidden;
+  background-color: rgba(0, 0, 0, 0.10);
+  flex-shrink: 0;
+}
+
+#ag-live-metrics-tooltip .ag-tt-split-think {
+  height: 100%;
+  background-color: #D97757;
+}
+
+#ag-live-metrics-tooltip .ag-tt-split-resp {
+  height: 100%;
+  background-color: #3F6E7A;
+}
+
+#ag-live-metrics-tooltip .ag-tt-split-ratio {
+  font-size: 10.5px !important;
+  font-weight: 500 !important;
+  color: #44403C !important;
+  white-space: nowrap;
+}
+
+#ag-live-metrics-tooltip .ag-tt-think-lbl {
+  color: #9A482B !important;
+}
+
+#ag-live-metrics-tooltip .ag-tt-resp-lbl {
+  color: #2E5661 !important;
+}
+
+#ag-live-metrics-tooltip .ag-tt-bar-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+#ag-live-metrics-tooltip .ag-tt-ctx-bar {
+  display: inline-block;
+  width: 88px;
+  height: 7px;
+  border-radius: 999px;
+  overflow: hidden;
+  background-color: rgba(196, 114, 82, 0.13);
+  border: 1px solid rgba(196, 114, 82, 0.25);
+  flex-shrink: 0;
+}
+
+#ag-live-metrics-tooltip .ag-tt-ctx-fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #CFA063 0%, #D97757 100%);
+  transition: width 200ms ease;
+}
+
+#ag-live-metrics-tooltip .ag-tt-ctx-fill.ag-ctx-crit {
+  background: linear-gradient(90deg, #EF4444 0%, #DC2626 100%) !important;
+}
+
+#ag-live-metrics-tooltip .ag-tt-bar-lbl {
+  font-weight: 600 !important;
+  color: #0A0A0A !important;
+  white-space: nowrap;
+}
+
+/* 纯数字无背景四档古典矿物语义变色（保留极限大红警告不变） */
+#ag-live-metrics-tooltip .ag-tt-num-good {
+  color: #2B5E53 !important;
+  font-weight: 600 !important;
+}
+
+#ag-live-metrics-tooltip .ag-tt-num-fair {
+  color: #8A6228 !important;
+  font-weight: 600 !important;
+}
+
+#ag-live-metrics-tooltip .ag-tt-num-low {
+  color: #9A482B !important;
+  font-weight: 600 !important;
+}
+
+#ag-live-metrics-tooltip .ag-tt-num-bad {
+  color: #DC2626 !important;
+  font-weight: 600 !important;
+}
+
+:is(html[data-ag-theme-mode="dark"] body, body.dark) #ag-live-metrics-tooltip .ag-tt-hdr-meta,
+:is(html[data-ag-theme-mode="dark"] body, body.dark) #ag-live-metrics-tooltip .ag-tt-split-ratio {
+  color: #9EA0AC !important;
+}
+
+:is(html[data-ag-theme-mode="dark"] body, body.dark) #ag-live-metrics-tooltip .ag-tt-think-lbl {
+  color: #E5A48B !important;
+}
+
+:is(html[data-ag-theme-mode="dark"] body, body.dark) #ag-live-metrics-tooltip .ag-tt-resp-lbl {
+  color: #8EB6C2 !important;
+}
+
+:is(html[data-ag-theme-mode="dark"] body, body.dark) #ag-live-metrics-tooltip .ag-tt-cache-tag.ag-cache-good {
+  background-color: rgba(132, 181, 165, 0.17) !important;
+  border-color: rgba(132, 181, 165, 0.30) !important;
+  color: #8EC0AF !important;
+}
+
+:is(html[data-ag-theme-mode="dark"] body, body.dark) #ag-live-metrics-tooltip .ag-tt-cache-tag.ag-cache-fair {
+  background-color: rgba(214, 180, 117, 0.17) !important;
+  border-color: rgba(214, 180, 117, 0.30) !important;
+  color: #DFBE82 !important;
+}
+
+:is(html[data-ag-theme-mode="dark"] body, body.dark) #ag-live-metrics-tooltip .ag-tt-cache-tag.ag-cache-low {
+  background-color: rgba(224, 122, 95, 0.18) !important;
+  border-color: rgba(224, 122, 95, 0.32) !important;
+  color: #E59B82 !important;
+}
+
+:is(html[data-ag-theme-mode="dark"] body, body.dark) #ag-live-metrics-tooltip .ag-tt-cache-tag.ag-cache-bad {
+  background-color: rgba(185, 28, 28, 0.28) !important;
+  border-color: rgba(248, 113, 113, 0.36) !important;
+  color: #F87171 !important;
+}
+
+:is(html[data-ag-theme-mode="dark"] body, body.dark) #ag-live-metrics-tooltip .ag-tt-split-track {
+  background-color: rgba(255, 255, 255, 0.12);
+}
+
+:is(html[data-ag-theme-mode="dark"] body, body.dark) #ag-live-metrics-tooltip .ag-tt-split-think {
+  background-color: #E07A5F;
+}
+
+:is(html[data-ag-theme-mode="dark"] body, body.dark) #ag-live-metrics-tooltip .ag-tt-split-resp {
+  background-color: #6E9AA6;
+}
+
+:is(html[data-ag-theme-mode="dark"] body, body.dark) #ag-live-metrics-tooltip .ag-tt-ctx-bar {
+  background-color: rgba(217, 119, 87, 0.16);
+  border-color: rgba(217, 119, 87, 0.28);
+}
+
+:is(html[data-ag-theme-mode="dark"] body, body.dark) #ag-live-metrics-tooltip .ag-tt-bar-lbl {
+  color: #FFFFFF !important;
+}
+
+:is(html[data-ag-theme-mode="dark"] body, body.dark) #ag-live-metrics-tooltip .ag-tt-num-good {
+  color: #8EC0AF !important;
+}
+
+:is(html[data-ag-theme-mode="dark"] body, body.dark) #ag-live-metrics-tooltip .ag-tt-num-fair {
+  color: #DFBE82 !important;
+}
+
+:is(html[data-ag-theme-mode="dark"] body, body.dark) #ag-live-metrics-tooltip .ag-tt-num-low {
+  color: #E59B82 !important;
+}
+
+:is(html[data-ag-theme-mode="dark"] body, body.dark) #ag-live-metrics-tooltip .ag-tt-num-bad {
+  color: #F87171 !important;
+}
+
+:is(html[data-ag-dark-preset="claude-warm"][data-ag-theme-mode="dark"] body, html[data-ag-dark-preset="claude-warm"] body.dark) #ag-live-metrics-tooltip .ag-tt-hdr-meta,
+:is(html[data-ag-dark-preset="claude-warm"][data-ag-theme-mode="dark"] body, html[data-ag-dark-preset="claude-warm"] body.dark) #ag-live-metrics-tooltip .ag-tt-split-ratio {
+  color: #A39E8D !important;
+}
+
+:is(html[data-ag-dark-preset="claude-warm"][data-ag-theme-mode="dark"] body, html[data-ag-dark-preset="claude-warm"] body.dark) #ag-live-metrics-tooltip .ag-tt-think-lbl {
+  color: #EBB098 !important;
+}
+
+:is(html[data-ag-dark-preset="claude-warm"][data-ag-theme-mode="dark"] body, html[data-ag-dark-preset="claude-warm"] body.dark) #ag-live-metrics-tooltip .ag-tt-resp-lbl {
+  color: #9CC3CE !important;
+}
+
+:is(html[data-ag-dark-preset="claude-warm"][data-ag-theme-mode="dark"] body, html[data-ag-dark-preset="claude-warm"] body.dark) #ag-live-metrics-tooltip .ag-tt-split-resp {
+  background-color: #7AA6B2;
+}
+
+:is(html[data-ag-dark-preset="claude-warm"][data-ag-theme-mode="dark"] body, html[data-ag-dark-preset="claude-warm"] body.dark) #ag-live-metrics-tooltip .ag-tt-bar-lbl {
+  color: #FCF9EF !important;
+}
+
+:is(html[data-ag-dark-preset="claude-warm"][data-ag-theme-mode="dark"] body, html[data-ag-dark-preset="claude-warm"] body.dark) #ag-live-metrics-tooltip .ag-tt-num-good {
+  color: #93C4B0 !important;
+}
+
+:is(html[data-ag-dark-preset="claude-warm"][data-ag-theme-mode="dark"] body, html[data-ag-dark-preset="claude-warm"] body.dark) #ag-live-metrics-tooltip .ag-tt-num-fair {
+  color: #DFBF80 !important;
+}
+
+:is(html[data-ag-dark-preset="claude-warm"][data-ag-theme-mode="dark"] body, html[data-ag-dark-preset="claude-warm"] body.dark) #ag-live-metrics-tooltip .ag-tt-num-low {
+  color: #E69A7B !important;
+}
+
+:is(html[data-ag-dark-preset="claude-warm"][data-ag-theme-mode="dark"] body, html[data-ag-dark-preset="claude-warm"] body.dark) #ag-live-metrics-tooltip .ag-tt-num-bad {
+  color: #F87171 !important;
 }
 
 /* __AG_TOKEN_ANALYTICS_CSS_START__ */

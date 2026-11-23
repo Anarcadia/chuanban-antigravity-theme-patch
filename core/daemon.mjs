@@ -535,6 +535,7 @@ let activeConfig = {
   channel: 'auto',
   preset: 'high-contrast',
   darkPreset: 'onyx',
+  metricsMode: 'compact',
   contextLimit: 256000,
   contextLimitOverride: 0,
   modules: {
@@ -723,9 +724,13 @@ function rebuildBundleIfNeeded() {
   const contextLimit = Number.isFinite(rawCtxLimit) && rawCtxLimit > 0 ? rawCtxLimit : 256000;
   const rawCtxOverride = Number(userCfg.contextLimitOverride);
   const contextLimitOverride = Number.isFinite(rawCtxOverride) && rawCtxOverride > 0 ? rawCtxOverride : 0;
+  const rawMetricsMode = String(userCfg.metricsMode || 'compact').trim().toLowerCase();
+  const metricsMode = rawMetricsMode === 'full' || rawMetricsMode === 'legacy' ? 'full' : 'compact';
   if (
     activeConfig &&
-    (contextLimit !== activeConfig.contextLimit || contextLimitOverride !== activeConfig.contextLimitOverride)
+    (contextLimit !== activeConfig.contextLimit ||
+      contextLimitOverride !== activeConfig.contextLimitOverride ||
+      metricsMode !== activeConfig.metricsMode)
   ) {
     metricsCache.clear();
     lastBestEffortPayloadCache.clear();
@@ -828,6 +833,7 @@ function rebuildBundleIfNeeded() {
     channel,
     preset,
     darkPreset,
+    metricsMode,
     contextLimit,
     contextLimitOverride,
     modules,
@@ -863,6 +869,7 @@ function rebuildBundleIfNeeded() {
       JSON.stringify({
         preset,
         darkPreset,
+        metricsMode,
         modules,
         themeVars,
         darkThemeVars,
@@ -2583,11 +2590,13 @@ function parseConversationMetrics(cascadeId, endpointOrDir, precomputedState = n
     // 统计最后一条用户提问之后的模型规划步数，并从有效调用末尾切片汇总，消除按位置对齐的错位风险
     const turnSlice = rawTurnSteps > 0 ? valid.slice(-rawTurnSteps) : [];
     const turnSteps = turnSlice.length;
+    let turnIn = 0;
     let turnOut = 0;
     let turnThink = 0;
     let turnResp = 0;
     let turnDur = 0;
     for (let i = 0; i < turnSlice.length; i++) {
+      turnIn += turnSlice[i].inTok;
       turnOut += turnSlice[i].outTok;
       turnThink += turnSlice[i].thinkTok;
       turnResp += turnSlice[i].respTok;
@@ -2625,36 +2634,6 @@ function parseConversationMetrics(cascadeId, endpointOrDir, precomputedState = n
       ? `<span class="ag-sep">·</span><span class="ag-zh-warn-dot" title="${escapeHtmlSafe(zhTitleStatus.label)}">●</span>`
       : '';
     const subSyncing = isDraining || partialStale;
-    const subInlineHtml =
-      childCount > 0 ? `<span class="ag-sep">·</span><span class="ag-sub-badge">+${childCount} sub</span>` : '';
-    const inlineHtml = [
-      `<span>${Math.round(displayTps)} tok/s</span>`,
-      `<span class="ag-sep">·</span>`,
-      `<span>${useStream ? 'TTFT' : 'Hold'} ${last.ttft.toFixed(1)}s</span>`,
-      `<span class="ag-sep">·</span>`,
-      `<span>Ctx ${fmtTok(last.ctx)}/${limitStr} <span class="${ctxClass}">(${ctxPct}%)</span></span>`,
-      `<span class="ag-sep">·</span>`,
-      `<span>Out ${fmtTok(last.outTok)}</span>`,
-      subInlineHtml,
-      zhWarnInlineHtml
-    ].join('');
-
-    const turnRowHtml =
-      turnSteps > 1
-        ? `<div class="ag-tt-row"><span class="ag-tt-lbl">本轮合计 (${turnSteps}步)</span><span class="ag-tt-val">输出 ${fmtNum(turnOut)} (思考 ${fmtNum(turnThink)} + 响应 ${fmtNum(turnResp)}) | 耗时 ${turnDur.toFixed(1)}s</span></div>`
-        : '';
-
-    const combinedOut = totalOut + childOut;
-    const subRowHtml =
-      childCount > 0
-        ? `<div class="ag-tt-row"><span class="ag-tt-lbl">子 Agent (${childCount}${subSyncing ? ' · 同步中' : ''})</span><span class="ag-tt-val">${childCalls} 次 · 新增 ${fmtTok(childIn)} + 缓存 ${fmtTok(childCache)} · 输出 ${fmtTok(childOut)}</span></div>`
-        : descendantIds.length > 0 && subSyncing
-          ? `<div class="ag-tt-row"><span class="ag-tt-lbl">子 Agent (同步中)</span><span class="ag-tt-val">正在索引 ${descendantIds.length} 个子会话…</span></div>`
-          : '';
-    const outputRowHtml =
-      childCount > 0
-        ? `<div class="ag-tt-row"><span class="ag-tt-lbl">累计输出量</span><span class="ag-tt-val">总计 ${fmtTok(combinedOut)} (主 ${fmtTok(totalOut)} + 子 ${fmtTok(childOut)})</span></div>`
-        : `<div class="ag-tt-row"><span class="ag-tt-lbl">累计输出量</span><span class="ag-tt-val">总计 ${fmtTok(totalOut)} (思考链 ${fmtTok(totalThink)} + 正文/工具 ${fmtTok(totalResp)})</span></div>`;
     const zhCmdEsc = zhWarnActive && zhTitleStatus.cmd ? escapeHtmlSafe(zhTitleStatus.cmd) : '';
     const zhCmdRowHtml = zhCmdEsc
       ? `<div class="ag-tt-warn-cmd-row"><code class="ag-tt-warn-cmd">${zhCmdEsc}</code><button type="button" class="ag-tt-copy-btn" data-ag-copy-cmd="${zhCmdEsc}">复制命令</button></div>`
@@ -2663,21 +2642,99 @@ function parseConversationMetrics(cascadeId, endpointOrDir, precomputedState = n
       ? `<div class="ag-tt-warn"><div class="ag-tt-warn-hdr"><span class="ag-tt-warn-lbl">⚠ ${escapeHtmlSafe(zhTitleStatus.label)}</span></div><span class="ag-tt-warn-val">${escapeHtmlSafe(zhTitleStatus.detail)}</span>${zhCmdRowHtml}</div>`
       : '';
 
-    const tooltipRows = [
-      `<div class="ag-tt-hdr">本轮最新调用 (Gen #${last.idx + 1})</div>`,
-      `<div class="ag-tt-row"><span class="ag-tt-lbl">生成速度</span><span class="ag-tt-val">${useStream ? `流式 ${rawStreamTps.toFixed(1)} tok/s | ` : ''}端到端（含等待） ${e2eTps.toFixed(1)} tok/s</span></div>`,
-      `<div class="ag-tt-row"><span class="ag-tt-lbl">响应耗时</span><span class="ag-tt-val">${useStream ? `TTFT ${last.ttft.toFixed(2)}s | 流式 ${last.stream.toFixed(2)}s | 总计 ${last.totDur.toFixed(2)}s` : `等待 ${last.ttft.toFixed(2)}s | 刷出 ${last.stream.toFixed(2)}s | 总计 ${last.totDur.toFixed(2)}s`}</span></div>`,
-      `<div class="ag-tt-row"><span class="ag-tt-lbl">当前上下文</span><span class="ag-tt-val">${fmtNum(last.ctx)} (新增 ${fmtNum(last.inTok)} + 缓存 ${fmtNum(last.cacheRead)}, ${lastCacheRate}%)</span></div>`,
-      `<div class="ag-tt-row"><span class="ag-tt-lbl">本步输出量</span><span class="ag-tt-val">${fmtNum(last.outTok)} (思考链 ${fmtNum(last.thinkTok)} + 正文/工具 ${fmtNum(last.respTok)})</span></div>`,
-      turnRowHtml,
-      `<div class="ag-tt-hdr ag-tt-sec">当前会话累计 (${userStepsCount} 轮提问 / ${valid.length} 次有效调用)</div>`,
-      `<div class="ag-tt-row"><span class="ag-tt-lbl">压缩水位线</span><span class="ag-tt-val">${fmtTok(last.ctx)} / ${limitStr} (${ctxPct}%) · 距压缩余 ${fmtTok(remainCtx)}</span></div>`,
-      `<div class="ag-tt-row"><span class="ag-tt-lbl">累计输入量</span><span class="ag-tt-val">新增 ${fmtTok(totalIn)} + 缓存读取 ${fmtTok(totalCache)} (命中率 ${sessionCacheRate}%)</span></div>`,
-      subRowHtml,
-      outputRowHtml,
-      zhWarnRowHtml
-    ];
-    const tooltipHtml = tooltipRows.join('');
+    const isFullMetrics = activeConfig.metricsMode === 'full';
+    let inlineHtml = '';
+    let tooltipHtml = '';
+
+    if (isFullMetrics) {
+      const subInlineHtml =
+        childCount > 0 ? `<span class="ag-sep">·</span><span class="ag-sub-badge">+${childCount} sub</span>` : '';
+      inlineHtml = [
+        `<span>${Math.round(displayTps)} tok/s</span>`,
+        `<span class="ag-sep">·</span>`,
+        `<span>${useStream ? 'TTFT' : 'Hold'} ${last.ttft.toFixed(1)}s</span>`,
+        `<span class="ag-sep">·</span>`,
+        `<span>Ctx ${fmtTok(last.ctx)}/${limitStr} <span class="${ctxClass}">(${ctxPct}%)</span></span>`,
+        `<span class="ag-sep">·</span>`,
+        `<span>Out ${fmtTok(last.outTok)}</span>`,
+        subInlineHtml,
+        zhWarnInlineHtml
+      ].join('');
+
+      const turnRowHtml =
+        turnSteps > 1
+          ? `<div class="ag-tt-row"><span class="ag-tt-lbl">本轮合计 (${turnSteps}步)</span><span class="ag-tt-val">输出 ${fmtNum(turnOut)} (思考 ${fmtNum(turnThink)} + 响应 ${fmtNum(turnResp)}) | 耗时 ${turnDur.toFixed(1)}s</span></div>`
+          : '';
+      const combinedOut = totalOut + childOut;
+      const subRowHtml =
+        childCount > 0
+          ? `<div class="ag-tt-row"><span class="ag-tt-lbl">子 Agent (${childCount}${subSyncing ? ' · 同步中' : ''})</span><span class="ag-tt-val">${childCalls} 次 · 新增 ${fmtTok(childIn)} + 缓存 ${fmtTok(childCache)} · 输出 ${fmtTok(childOut)}</span></div>`
+          : descendantIds.length > 0 && subSyncing
+            ? `<div class="ag-tt-row"><span class="ag-tt-lbl">子 Agent (同步中)</span><span class="ag-tt-val">正在索引 ${descendantIds.length} 个子会话…</span></div>`
+            : '';
+      const outputRowHtml =
+        childCount > 0
+          ? `<div class="ag-tt-row"><span class="ag-tt-lbl">累计输出量</span><span class="ag-tt-val">总计 ${fmtTok(combinedOut)} (主 ${fmtTok(totalOut)} + 子 ${fmtTok(childOut)})</span></div>`
+          : `<div class="ag-tt-row"><span class="ag-tt-lbl">累计输出量</span><span class="ag-tt-val">总计 ${fmtTok(totalOut)} (思考链 ${fmtTok(totalThink)} + 正文/工具 ${fmtTok(totalResp)})</span></div>`;
+
+      tooltipHtml = [
+        `<div class="ag-tt-hdr">本轮最新调用 (Gen #${last.idx + 1})</div>`,
+        `<div class="ag-tt-row"><span class="ag-tt-lbl">生成速度</span><span class="ag-tt-val">${useStream ? `流式 ${rawStreamTps.toFixed(1)} tok/s | ` : ''}端到端（含等待） ${e2eTps.toFixed(1)} tok/s</span></div>`,
+        `<div class="ag-tt-row"><span class="ag-tt-lbl">响应耗时</span><span class="ag-tt-val">${useStream ? `TTFT ${last.ttft.toFixed(2)}s | 流式 ${last.stream.toFixed(2)}s | 总计 ${last.totDur.toFixed(2)}s` : `等待 ${last.ttft.toFixed(2)}s | 刷出 ${last.stream.toFixed(2)}s | 总计 ${last.totDur.toFixed(2)}s`}</span></div>`,
+        `<div class="ag-tt-row"><span class="ag-tt-lbl">当前上下文</span><span class="ag-tt-val">${fmtNum(last.ctx)} (新增 ${fmtNum(last.inTok)} + 缓存 ${fmtNum(last.cacheRead)}, ${lastCacheRate}%)</span></div>`,
+        `<div class="ag-tt-row"><span class="ag-tt-lbl">本步输出量</span><span class="ag-tt-val">${fmtNum(last.outTok)} (思考链 ${fmtNum(last.thinkTok)} + 正文/工具 ${fmtNum(last.respTok)})</span></div>`,
+        turnRowHtml,
+        `<div class="ag-tt-hdr ag-tt-sec">当前会话累计 (${userStepsCount} 轮提问 / ${valid.length} 次有效调用)</div>`,
+        `<div class="ag-tt-row"><span class="ag-tt-lbl">压缩水位线</span><span class="ag-tt-val">${fmtTok(last.ctx)} / ${limitStr} (${ctxPct}%) · 距压缩余 ${fmtTok(remainCtx)}</span></div>`,
+        `<div class="ag-tt-row"><span class="ag-tt-lbl">累计输入量</span><span class="ag-tt-val">新增 ${fmtTok(totalIn)} + 缓存读取 ${fmtTok(totalCache)} (命中率 ${sessionCacheRate}%)</span></div>`,
+        subRowHtml,
+        outputRowHtml,
+        zhWarnRowHtml
+      ].join('');
+    } else {
+      const clampedPct = Math.max(0, Math.min(100, ctxPct));
+      const ringVisualPct = last.ctx > 0 && clampedPct < 5 ? 5 : clampedPct;
+      const ringCircum = 36.44;
+      const ringOffset = (ringCircum * (1 - ringVisualPct / 100)).toFixed(2);
+      const ringSvg = `<svg class="ag-ctx-ring ${ctxClass}" width="13" height="13" viewBox="0 0 16 16" aria-hidden="true"><circle class="ag-ctx-ring-track" cx="8" cy="8" r="5.8" fill="none" stroke-width="2.1"/><circle class="ag-ctx-ring-fill" cx="8" cy="8" r="5.8" fill="none" stroke-width="2.1" stroke-linecap="round" stroke-dasharray="${ringCircum}" stroke-dashoffset="${ringOffset}" transform="rotate(-90 8 8)"/></svg>`;
+
+      inlineHtml = [
+        ringSvg,
+        `<span class="ag-ring-after">${Math.round(displayTps)} tok/s</span>`,
+        `<span class="ag-sep">·</span>`,
+        `<span>${useStream ? 'TTFT' : 'Hold'} ${last.ttft.toFixed(1)}s</span>`,
+        zhWarnInlineHtml
+      ].join('');
+
+      const turnDisplayNum = userStepsCount > 0 ? userStepsCount : last.idx + 1;
+      const effectiveTurnSteps = turnSteps > 0 ? turnSteps : 1;
+      const effectiveTurnDur = turnSteps > 0 ? turnDur : last.totDur;
+      const turnDurStr = effectiveTurnDur >= 10 ? `${Math.round(effectiveTurnDur)}s` : `${effectiveTurnDur.toFixed(1)}s`;
+
+      const effectiveTurnIn = turnSteps > 0 ? turnIn : last.inTok;
+      const effectiveTurnThink = turnSteps > 0 ? turnThink : last.thinkTok;
+      const effectiveTurnResp = turnSteps > 0 ? turnResp : last.respTok;
+      const splitSum = (effectiveTurnThink || 0) + (effectiveTurnResp || 0);
+      const thinkRatioPct = splitSum > 0 ? Math.round(((effectiveTurnThink || 0) / splitSum) * 100) : 0;
+      const respRatioPct = 100 - thinkRatioPct;
+
+      const resolveCacheTier = (rateVal) =>
+        rateVal >= 95 ? 'good' : rateVal >= 90 ? 'fair' : rateVal >= 50 ? 'low' : 'bad';
+      const lastCacheTier = resolveCacheTier(Number(lastCacheRate) || 0);
+      const sessionCacheTier = resolveCacheTier(Number(sessionCacheRate) || 0);
+      const ctxVolTier = last.ctx > 400000 ? 'bad' : last.ctx >= 200000 ? 'fair' : 'good';
+
+      tooltipHtml = [
+        `<div class="ag-tt-hdr"><span>当前轮次</span><span class="ag-tt-hdr-meta">第${turnDisplayNum}轮 总${effectiveTurnSteps}步 共耗时${turnDurStr}</span></div>`,
+        `<div class="ag-tt-row"><span class="ag-tt-lbl">生成速度</span><span class="ag-tt-val">${useStream ? `流式 ${rawStreamTps.toFixed(1)} tok/s | ` : ''}端到端 ${e2eTps.toFixed(1)} tok/s</span></div>`,
+        `<div class="ag-tt-row"><span class="ag-tt-lbl">响应耗时</span><span class="ag-tt-val">${useStream ? `TTFT ${last.ttft.toFixed(2)}s | 流式 ${last.stream.toFixed(2)}s | 总计 ${last.totDur.toFixed(2)}s` : `等待 ${last.ttft.toFixed(2)}s | 刷出 ${last.stream.toFixed(2)}s | 总计 ${last.totDur.toFixed(2)}s`}</span></div>`,
+        `<div class="ag-tt-row ag-tt-row-merged"><span class="ag-tt-lbl">本轮净增</span><span class="ag-tt-compact-right"><span class="ag-tt-val">+${fmtTok(effectiveTurnIn)}</span><span class="ag-tt-cache-tag ag-cache-${lastCacheTier}">缓存率 ${lastCacheRate}%</span></span></div>`,
+        `<div class="ag-tt-row ag-tt-row-merged"><span class="ag-tt-lbl">输出比例</span><span class="ag-tt-split-group"><span class="ag-tt-split-ratio ag-tt-think-lbl">思维链 ${thinkRatioPct}%</span><span class="ag-tt-split-track"><span class="ag-tt-split-think" style="width:${thinkRatioPct}%"></span><span class="ag-tt-split-resp" style="width:${respRatioPct}%"></span></span><span class="ag-tt-split-ratio ag-tt-resp-lbl">正文/工具 ${respRatioPct}%</span></span></div>`,
+        `<div class="ag-tt-hdr ag-tt-sec"><span>会话总计</span><span class="ag-tt-hdr-meta">${userStepsCount} 轮提问 / ${valid.length} 次调用</span></div>`,
+        `<div class="ag-tt-row ag-tt-row-merged"><span class="ag-tt-bar-group"><span class="ag-tt-ctx-bar"><span class="ag-tt-ctx-fill ${ctxClass}" style="width:${clampedPct}%"></span></span><span class="ag-tt-bar-lbl ag-tt-num-${ctxVolTier}">${fmtTok(last.ctx)}/${limitStr} (${ctxPct}%)</span></span><span class="ag-tt-nowrap"><span class="ag-tt-lbl">全轮次平均缓存 </span><span class="ag-tt-val ag-tt-num-${sessionCacheTier}">${sessionCacheRate}%</span></span></div>`,
+        zhWarnRowHtml
+      ].join('');
+    }
 
     const uncBackoffActive = Boolean(
       childSnap?.uncBackoffActive || (uncParent && Date.now() < wslUncBackoffUntil)
