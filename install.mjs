@@ -117,7 +117,7 @@ function buildManifest(baseDir = __dirname) {
   }
   const manifest = {
     name: 'chuanban-antigravity-theme-patch',
-    version: '6.0.0',
+    version: '6.0.1',
     minNodeVersion: '22.0.0',
     fullMetricsNodeVersion: '22.13.0',
     distribution: {
@@ -1076,9 +1076,9 @@ function ensureCdpLaunchers(channel = 'auto', options = {}) {
           '  <key>CFBundlePackageType</key>',
           '  <string>APPL</string>',
           '  <key>CFBundleShortVersionString</key>',
-          '  <string>6.0.0</string>',
+          '  <string>6.0.1</string>',
           '  <key>CFBundleVersion</key>',
-          '  <string>600</string>',
+          '  <string>601</string>',
           ...(iconBase ? ['  <key>CFBundleIconFile</key>', `  <string>${iconBase}</string>`] : []),
           '  <key>LSMinimumSystemVersion</key>',
           '  <string>12.0</string>',
