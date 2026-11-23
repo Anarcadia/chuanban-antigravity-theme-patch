@@ -2210,7 +2210,7 @@ async function runInstall() {
   }
   if (preset) {
     currentCfg.preset = preset === 'high-contrast' ? 'morandi' : preset;
-  } else if (!currentCfg.preset) {
+  } else if (!currentCfg.preset || currentCfg.preset === 'high-contrast') {
     currentCfg.preset = 'morandi';
   }
   if (darkPreset) {

@@ -490,10 +490,15 @@
       if (typeof setOverlay !== 'function') return;
       const targetEl = document.body || document.documentElement;
       if (!targetEl || typeof getComputedStyle !== 'function') return;
-      const fbBg = (customFallbacks && customFallbacks.bg) || (isDark ? '#111114' : '#F7F5F0');
-      const fbFg = (customFallbacks && customFallbacks.fg) || (isDark ? '#FAFAFA' : '#1F1E1D');
-      const bgHex = resolveCssColorToHex6('--sidebar', targetEl, fbBg);
-      const fgHex = resolveCssColorToHex6('--foreground', targetEl, fbFg);
+      const curPreset = document.documentElement ? document.documentElement.getAttribute('data-ag-preset') : '';
+      const defaultLightBg = curPreset === 'native' ? '#FFFFFF' : curPreset === 'absolutely' ? '#F7F5F0' : '#E8E3D9';
+      const fbBg = (customFallbacks && customFallbacks.bg) || (isDark ? '#101417' : defaultLightBg);
+      const fbFg = (customFallbacks && customFallbacks.fg) || (isDark ? '#FAFAFA' : '#24221F');
+      const sidebarEl = document.querySelector('[data-testid="conversation-list-sidebar"]');
+      const directBgHex = sidebarEl ? parseColorToHex6(getComputedStyle(sidebarEl).backgroundColor) : null;
+      const directFgHex = parseColorToHex6(getComputedStyle(targetEl).color);
+      const bgHex = directBgHex || resolveCssColorToHex6('--sidebar', targetEl, fbBg);
+      const fgHex = directFgHex || resolveCssColorToHex6('--foreground', targetEl, fbFg);
       const sig = bgHex + '|' + fgHex;
       if (force || window.__ag_last_overlay_sig !== sig) {
         window.__ag_last_overlay_sig = sig;
