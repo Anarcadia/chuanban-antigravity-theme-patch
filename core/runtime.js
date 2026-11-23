@@ -2223,6 +2223,11 @@
     };
 
     window.__ag_handle_native_theme_btn_click = (ev, btn, slot) => {
+      if (typeof ev === 'string') {
+        slot = ev;
+        ev = null;
+        btn = null;
+      }
       if (slot === 'light' && window.__ag_internal_sun_click) return;
       if (slot === 'dark' && window.__ag_internal_moon_click) return;
       hideThemeBtnTooltip();
@@ -2298,7 +2303,10 @@
 
     function mountWarmNightBtnOnGroup(group) {
       const slots = identifyNativeThemeButtons(group);
-      if (!slots) return false;
+      if (!slots) {
+        group.setAttribute('data-ag-theme-toggle-group', '0');
+        return false;
+      }
       const { sysBtn, lightBtn, darkBtn } = slots;
       group.setAttribute('data-ag-theme-toggle-group', '1');
       sysBtn.setAttribute('data-ag-native-theme-slot', 'system');
@@ -2524,15 +2532,18 @@
       return true;
     }
 
-    function ensureAppearanceWarmNightToggle(root) {
+    function ensureAppearanceWarmNightToggle(root, forceRemount = false) {
       if (!document.body) return;
       const scope = root && root.nodeType === 1 ? root : document;
+      const selector = forceRemount
+        ? '[data-slot="toggle-group"]:not([data-ag-theme-toggle-group="0"])'
+        : '[data-slot="toggle-group"]:not([data-ag-theme-toggle-group])';
       let mountedAny = false;
-      if (scope.matches && scope.matches('[data-slot="toggle-group"]:not([data-ag-theme-toggle-group])')) {
+      if (scope.matches && scope.matches(selector)) {
         if (mountWarmNightBtnOnGroup(scope)) mountedAny = true;
       }
       if (scope.querySelectorAll) {
-        const groups = scope.querySelectorAll('[data-slot="toggle-group"]:not([data-ag-theme-toggle-group])');
+        const groups = scope.querySelectorAll(selector);
         for (let i = 0; i < groups.length; i++) {
           if (mountWarmNightBtnOnGroup(groups[i])) mountedAny = true;
         }
@@ -2610,7 +2621,7 @@
       }
     }
 
-    ensureAppearanceWarmNightToggle(document);
+    ensureAppearanceWarmNightToggle(document, true);
     syncAppearanceWarmNightToggle();
   }
 

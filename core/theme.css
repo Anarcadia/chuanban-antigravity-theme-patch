@@ -1425,13 +1425,13 @@ body[data-agy-theme][data-newux-theme="onyx"].dark .agy-sidebar-row[data-selecte
 }
 
 /* 黑夜预设 2（莫兰迪暖玄武矿彩夜）：claude-warm · 暖玄武底 #21201D + 矿物象牙 #ECE7D9 + 赤陶 #D97757 × 粉青 #86B0BC 冷暖互补 */
-html[data-ag-dark-preset="claude-warm"]:not([data-ag-preset="native"])[data-ag-theme-mode="dark"],
-html[data-ag-dark-preset="claude-warm"]:not([data-ag-preset="native"])[data-ag-theme-mode="dark"] body,
-html[data-ag-dark-preset="claude-warm"]:not([data-ag-preset="native"]) body.dark,
-html[data-ag-dark-preset="claude-warm"]:not([data-ag-preset="native"]) body.theme-dark,
-html[data-ag-dark-preset="claude-warm"]:not([data-ag-preset="native"]) body[data-agy-theme].dark,
-html[data-ag-dark-preset="claude-warm"]:not([data-ag-preset="native"])[data-ag-preset] body.dark,
-html[data-ag-dark-preset="claude-warm"]:not([data-ag-preset="native"])[data-ag-preset] body[data-agy-theme].dark {
+html[data-ag-dark-preset="claude-warm"][data-ag-theme-mode="dark"],
+html[data-ag-dark-preset="claude-warm"][data-ag-theme-mode="dark"] body,
+html[data-ag-dark-preset="claude-warm"] body.dark,
+html[data-ag-dark-preset="claude-warm"] body.theme-dark,
+html[data-ag-dark-preset="claude-warm"] body[data-agy-theme].dark,
+html[data-ag-dark-preset="claude-warm"][data-ag-preset] body.dark,
+html[data-ag-dark-preset="claude-warm"][data-ag-preset] body[data-agy-theme].dark {
   --background: #21201D !important;
   --body-background: #21201D !important;
   --content: #21201D !important;
@@ -1514,60 +1514,60 @@ html[data-ag-dark-preset="claude-warm"]:not([data-ag-preset="native"])[data-ag-p
   --code-foreground: #E8E3D4 !important;
 }
 
-html[data-ag-dark-preset="claude-warm"]:not([data-ag-preset="native"]) body[data-agy-theme].dark .agy-sidebar-row[data-selected="true"],
-html[data-ag-dark-preset="claude-warm"]:not([data-ag-preset="native"]) body[data-agy-theme][data-newux-theme="onyx"].dark .agy-sidebar-row[data-selected="true"],
-:is(html[data-ag-dark-preset="claude-warm"]:not([data-ag-preset="native"])[data-ag-theme-mode="dark"] body, html[data-ag-dark-preset="claude-warm"]:not([data-ag-preset="native"]) body.dark) .agy-sidebar-row[data-selected="true"] {
+html[data-ag-dark-preset="claude-warm"] body[data-agy-theme].dark .agy-sidebar-row[data-selected="true"],
+html[data-ag-dark-preset="claude-warm"] body[data-agy-theme][data-newux-theme="onyx"].dark .agy-sidebar-row[data-selected="true"],
+:is(html[data-ag-dark-preset="claude-warm"][data-ag-theme-mode="dark"] body, html[data-ag-dark-preset="claude-warm"] body.dark) .agy-sidebar-row[data-selected="true"] {
   box-shadow: inset 2px 0 0 rgba(217, 119, 87, 0.65), inset 0 1px 0 rgba(236, 231, 217, 0.07) !important;
 }
 
-:is(html[data-ag-dark-preset="claude-warm"]:not([data-ag-preset="native"])[data-ag-theme-mode="dark"] body, html[data-ag-dark-preset="claude-warm"]:not([data-ag-preset="native"]) body.dark) #antigravity\.agentSidePanelInputBox button:not([data-testid="send-button"]):not([data-testid="voice-start-button"]):not([data-testid="input-cancel-button"]):hover,
-:is(html[data-ag-dark-preset="claude-warm"]:not([data-ag-preset="native"])[data-ag-theme-mode="dark"] body, html[data-ag-dark-preset="claude-warm"]:not([data-ag-preset="native"]) body.dark) #antigravity\.agentSidePanelInputBox button:not([data-testid="send-button"]):not([data-testid="voice-start-button"]):not([data-testid="input-cancel-button"]):hover :is(span, svg) {
+:is(html[data-ag-dark-preset="claude-warm"][data-ag-theme-mode="dark"] body, html[data-ag-dark-preset="claude-warm"] body.dark) #antigravity\.agentSidePanelInputBox button:not([data-testid="send-button"]):not([data-testid="voice-start-button"]):not([data-testid="input-cancel-button"]):hover,
+:is(html[data-ag-dark-preset="claude-warm"][data-ag-theme-mode="dark"] body, html[data-ag-dark-preset="claude-warm"] body.dark) #antigravity\.agentSidePanelInputBox button:not([data-testid="send-button"]):not([data-testid="voice-start-button"]):not([data-testid="input-cancel-button"]):hover :is(span, svg) {
   color: #F8F5EA !important;
 }
 
-:is(html[data-ag-dark-preset="claude-warm"]:not([data-ag-preset="native"])[data-ag-theme-mode="dark"] body, html[data-ag-dark-preset="claude-warm"]:not([data-ag-preset="native"]) body.dark) :is([data-testid="conversation-row-sidebar"], .agy-sidebar-row):not([data-selected="true"]):hover span.truncate {
+:is(html[data-ag-dark-preset="claude-warm"][data-ag-theme-mode="dark"] body, html[data-ag-dark-preset="claude-warm"] body.dark) :is([data-testid="conversation-row-sidebar"], .agy-sidebar-row):not([data-selected="true"]):hover span.truncate {
   color: #F8F5EA !important;
 }
 
-:is(html[data-ag-dark-preset="claude-warm"]:not([data-ag-preset="native"])[data-ag-theme-mode="dark"] body, html[data-ag-dark-preset="claude-warm"]:not([data-ag-preset="native"]) body.dark) :is(.bg-sidebar a[class*="border"], .bg-sidebar button[class*="border"], a[class*="inline-flex items-center"][class*="border"]) {
+:is(html[data-ag-dark-preset="claude-warm"][data-ag-theme-mode="dark"] body, html[data-ag-dark-preset="claude-warm"] body.dark) :is(.bg-sidebar a[class*="border"], .bg-sidebar button[class*="border"], a[class*="inline-flex items-center"][class*="border"]) {
   border-color: rgba(236, 231, 217, 0.12) !important;
 }
 
-:is(html[data-ag-dark-preset="claude-warm"]:not([data-ag-preset="native"])[data-ag-theme-mode="dark"] body, html[data-ag-dark-preset="claude-warm"]:not([data-ag-preset="native"]) body.dark) .bg-border {
+:is(html[data-ag-dark-preset="claude-warm"][data-ag-theme-mode="dark"] body, html[data-ag-dark-preset="claude-warm"] body.dark) .bg-border {
   background-color: rgba(236, 231, 217, 0.10) !important;
 }
 
-:is(html[data-ag-dark-preset="claude-warm"]:not([data-ag-preset="native"])[data-ag-theme-mode="dark"] body, html[data-ag-dark-preset="claude-warm"]:not([data-ag-preset="native"]) body.dark, html[data-ag-dark-preset="claude-warm"]:not([data-ag-preset="native"]) body.theme-dark) :is([data-markdown-root], [data-testid="user-message-content"], .prose, .markdown) {
+:is(html[data-ag-dark-preset="claude-warm"][data-ag-theme-mode="dark"] body, html[data-ag-dark-preset="claude-warm"] body.dark, html[data-ag-dark-preset="claude-warm"] body.theme-dark) :is([data-markdown-root], [data-testid="user-message-content"], .prose, .markdown) {
   color: #E9E4D5;
 }
 
-:is(html[data-ag-dark-preset="claude-warm"]:not([data-ag-preset="native"])[data-ag-theme-mode="dark"] body, html[data-ag-dark-preset="claude-warm"]:not([data-ag-preset="native"]) body.dark, html[data-ag-dark-preset="claude-warm"]:not([data-ag-preset="native"]) body.theme-dark) :is([data-markdown-root], [data-testid="user-message-content"], .select-text, .prose, .markdown) :is(h1, h2, h3, h4, h5, h6, strong, b) {
+:is(html[data-ag-dark-preset="claude-warm"][data-ag-theme-mode="dark"] body, html[data-ag-dark-preset="claude-warm"] body.dark, html[data-ag-dark-preset="claude-warm"] body.theme-dark) :is([data-markdown-root], [data-testid="user-message-content"], .select-text, .prose, .markdown) :is(h1, h2, h3, h4, h5, h6, strong, b) {
   color: #F6F2E6;
 }
 
-:is(html[data-ag-dark-preset="claude-warm"]:not([data-ag-preset="native"])[data-ag-theme-mode="dark"] body, html[data-ag-dark-preset="claude-warm"]:not([data-ag-preset="native"]) body.dark, html[data-ag-dark-preset="claude-warm"]:not([data-ag-preset="native"]) body.theme-dark) .agy-user-bubble {
+:is(html[data-ag-dark-preset="claude-warm"][data-ag-theme-mode="dark"] body, html[data-ag-dark-preset="claude-warm"] body.dark, html[data-ag-dark-preset="claude-warm"] body.theme-dark) .agy-user-bubble {
   background-color: #2E2B26 !important;
   border: 1px solid rgba(122, 166, 178, 0.18) !important;
 }
 
-:is(html[data-ag-dark-preset="claude-warm"]:not([data-ag-preset="native"])[data-ag-theme-mode="dark"] body, html[data-ag-dark-preset="claude-warm"]:not([data-ag-preset="native"]) body.dark, html[data-ag-dark-preset="claude-warm"]:not([data-ag-preset="native"]) body.theme-dark) :is([data-markdown-root], .select-text, .prose, .markdown) :not(pre) > code {
+:is(html[data-ag-dark-preset="claude-warm"][data-ag-theme-mode="dark"] body, html[data-ag-dark-preset="claude-warm"] body.dark, html[data-ag-dark-preset="claude-warm"] body.theme-dark) :is([data-markdown-root], .select-text, .prose, .markdown) :not(pre) > code {
   background-color: rgba(122, 166, 178, 0.11);
   border: 1px solid rgba(122, 166, 178, 0.22);
   color: #B4D2DC !important;
 }
 
-:is(html[data-ag-dark-preset="claude-warm"]:not([data-ag-preset="native"])[data-ag-theme-mode="dark"] body, html[data-ag-dark-preset="claude-warm"]:not([data-ag-preset="native"]) body.dark, html[data-ag-dark-preset="claude-warm"]:not([data-ag-preset="native"]) body.theme-dark) :is(a.inline-pill[href^="file:"], a.inline-pill[href^="vscode-"], .inline-pill[data-uri^="file:"], .inline-pill[data-uri^="vscode-"]) {
+:is(html[data-ag-dark-preset="claude-warm"][data-ag-theme-mode="dark"] body, html[data-ag-dark-preset="claude-warm"] body.dark, html[data-ag-dark-preset="claude-warm"] body.theme-dark) :is(a.inline-pill[href^="file:"], a.inline-pill[href^="vscode-"], .inline-pill[data-uri^="file:"], .inline-pill[data-uri^="vscode-"]) {
   background-color: rgba(122, 166, 178, 0.12) !important;
   border-color: rgba(122, 166, 178, 0.25) !important;
   color: #B8D5DF !important;
 }
 
-:is(html[data-ag-dark-preset="claude-warm"]:not([data-ag-preset="native"])[data-ag-theme-mode="dark"] body, html[data-ag-dark-preset="claude-warm"]:not([data-ag-preset="native"]) body.dark, html[data-ag-dark-preset="claude-warm"]:not([data-ag-preset="native"]) body.theme-dark) #antigravity\.agentSidePanelInputBox button[data-testid="input-cancel-button"] {
+:is(html[data-ag-dark-preset="claude-warm"][data-ag-theme-mode="dark"] body, html[data-ag-dark-preset="claude-warm"] body.dark, html[data-ag-dark-preset="claude-warm"] body.theme-dark) #antigravity\.agentSidePanelInputBox button[data-testid="input-cancel-button"] {
   background-color: rgba(236, 231, 217, 0.11) !important;
   color: #ECE7D9 !important;
 }
 
-:is(html[data-ag-dark-preset="claude-warm"]:not([data-ag-preset="native"])[data-ag-theme-mode="dark"] body, html[data-ag-dark-preset="claude-warm"]:not([data-ag-preset="native"]) body.dark, html[data-ag-dark-preset="claude-warm"]:not([data-ag-preset="native"]) body.theme-dark) #antigravity\.agentSidePanelInputBox button[data-testid="input-cancel-button"]:hover {
+:is(html[data-ag-dark-preset="claude-warm"][data-ag-theme-mode="dark"] body, html[data-ag-dark-preset="claude-warm"] body.dark, html[data-ag-dark-preset="claude-warm"] body.theme-dark) #antigravity\.agentSidePanelInputBox button[data-testid="input-cancel-button"]:hover {
   background-color: rgba(217, 119, 87, 0.22) !important;
   color: #FAF6EE !important;
 }
