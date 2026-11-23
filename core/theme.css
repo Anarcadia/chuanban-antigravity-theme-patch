@@ -514,25 +514,25 @@ body[data-agy-theme][data-newux-theme="onyx"] .surface-composer:focus-within > .
   border-top-right-radius: 0 !important;
 }
 
-/* 当普通对话存在展开的非空顶部附加栏（如排队消息或引用块）时，仅作底部分隔线而不产生外围套框 */
-:is(#antigravity\.agentSidePanelInputBox, [id="antigravity.agentSidePanelInputBox"], .surface-composer) > div:first-child:not(.surface-composer-card):not([aria-hidden="true"]):not(.voice-glow-ring):not(:empty):not([hidden]) {
+/* 当普通对话存在展开的非空顶部附加栏（如排队消息或引用块）时，仅作底部分隔线而不产生外围套框（兼容 voice-glow-ring 挂载为首子节点） */
+:is(#antigravity\.agentSidePanelInputBox, [id="antigravity.agentSidePanelInputBox"], .surface-composer) > :nth-child(1 of div:not(.surface-composer-card):not([aria-hidden="true"]):not(.voice-glow-ring):not(:empty):not([hidden])) {
   background-color: var(--ag-composer-tray-bg, #EAE4D8) !important;
   border-bottom: 1px solid var(--ag-composer-tray-divider, rgba(154, 71, 50, 0.15)) !important;
   border-radius: calc(var(--nux-composer-frame-radius, 21px) - var(--ag-composer-bw, 2px)) calc(var(--nux-composer-frame-radius, 21px) - var(--ag-composer-bw, 2px)) 0 0 !important;
 }
 
 /* 新建对话主界面（项目/环境/分支选择顶栏）：保留上部托盘深色底，仅消除中间 1px 水平分界线 */
-html[data-ag-page-type="home"] :is(#antigravity\.agentSidePanelInputBox, [id="antigravity.agentSidePanelInputBox"], .surface-composer) > div:first-child:not(.surface-composer-card):not([aria-hidden="true"]):not(.voice-glow-ring):not(:empty):not([hidden]),
-:is(#antigravity\.agentSidePanelInputBox, [id="antigravity.agentSidePanelInputBox"], .surface-composer) > div:first-child:not(.surface-composer-card):not([aria-hidden="true"]):not(.voice-glow-ring):not(:empty):not([hidden]):has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [data-testid="branch-pill-trigger"], [data-testid="project-branch-picker"], [aria-label^="Select project"], [aria-label^="选择项目"]) {
+html[data-ag-page-type="home"] :is(#antigravity\.agentSidePanelInputBox, [id="antigravity.agentSidePanelInputBox"], .surface-composer) > :nth-child(1 of div:not(.surface-composer-card):not([aria-hidden="true"]):not(.voice-glow-ring):not(:empty):not([hidden])),
+:is(#antigravity\.agentSidePanelInputBox, [id="antigravity.agentSidePanelInputBox"], .surface-composer) > :nth-child(1 of div:not(.surface-composer-card):not([aria-hidden="true"]):not(.voice-glow-ring):not(:empty):not([hidden])):has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [data-testid="branch-pill-trigger"], [data-testid="project-branch-picker"], [aria-label^="Select project"], [aria-label^="选择项目"]) {
   border-bottom: 0 solid transparent !important;
 }
 
-/* 输入框顶部工具栏（排除 .surface-composer-card 本身）、底部按钮与发送/取消按钮 */
-[id="antigravity.agentSidePanelInputBox"] > div:first-child:not(.surface-composer-card) :is(button, span, svg) {
+/* 输入框顶部工具栏（排除 .surface-composer-card 与 .voice-glow-ring）、底部按钮与发送/取消按钮 */
+[id="antigravity.agentSidePanelInputBox"] > div:not(.surface-composer-card):not(.voice-glow-ring) :is(button, span, svg) {
   color: var(--ag-composer-top-fg, #383431) !important;
 }
 
-[id="antigravity.agentSidePanelInputBox"] > div:first-child:not(.surface-composer-card) button:hover {
+[id="antigravity.agentSidePanelInputBox"] > div:not(.surface-composer-card):not(.voice-glow-ring) button:hover {
   background-color: var(--ag-composer-top-hover-bg, rgba(217, 119, 87, 0.08)) !important;
   color: var(--ag-composer-top-hover-fg, #1F1E1D) !important;
 }
@@ -625,8 +625,8 @@ body[data-agy-theme] :is([data-testid="model-selector-trigger"], [data-testid="w
   box-shadow: none !important;
 }
 
-/* 为输入框工具栏非发送按钮提供柔和背景底色键盘焦点提示（不产生外扩描边环，防止 Esc 关闭菜单 returnFocus 出现橙框） */
-:is(#antigravity\.agentSidePanelInputBox, [id="antigravity.agentSidePanelInputBox"]) button:not([data-testid="send-button"]):not([data-testid="input-cancel-button"]):not(.agy-send-button):focus-visible {
+/* 为输入框工具栏非发送/非语音胶囊按钮提供柔和背景底色键盘焦点提示（不产生外扩描边环，防止 Esc 关闭菜单 returnFocus 出现橙框） */
+:is(#antigravity\.agentSidePanelInputBox, [id="antigravity.agentSidePanelInputBox"]) button:not([data-testid="send-button"]):not([data-testid="input-cancel-button"]):not([data-testid="voice-live-pill"]):not([data-testid="voice-start-button"]):not(.agy-send-button):focus-visible {
   background-color: var(--ag-composer-top-hover-bg, rgba(63, 110, 122, 0.09)) !important;
 }
 
