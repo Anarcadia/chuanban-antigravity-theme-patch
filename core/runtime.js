@@ -133,8 +133,87 @@
 
   const DEFAULT_PRESET = boot.preset || 'morandi';
   const DEFAULT_DARK_PRESET = boot.darkPreset || 'onyx';
+  const INSTALLED_LOCALE = String(boot.installedLocale || 'zh-CN').trim() || 'zh-CN';
+  const HAS_LOCALE_PACK =
+    INSTALLED_LOCALE !== 'none' &&
+    !!(boot.i18nDict && typeof boot.i18nDict === 'object' && Object.keys(boot.i18nDict).length > 0);
+
+  // 预留多语种单选扩展元数据表（当前阶段使用 zh-CN；下一版本支持安装期单选 ja 或 none）
+  const LOCALE_META = {
+    'zh-CN': {
+      btnLabel: '中文',
+      tooltip: '简体中文',
+      rowLabel: '界面语言',
+      enTooltip: '英文原版',
+      themeTooltips: {
+        native: '原版配色',
+        absolutely: 'Absolutely！',
+        morandi: '莫兰迪色',
+        warmDark: '暖纸深色',
+        onyx: '深色'
+      },
+      extHeading: '本地扩展',
+      tokenTab: 'Token 统计'
+    },
+    ja: {
+      btnLabel: '日本語',
+      tooltip: '日本語',
+      rowLabel: '表示言語',
+      enTooltip: 'Original English',
+      themeTooltips: {
+        native: '純正テーマ',
+        absolutely: 'Absolutely!',
+        morandi: 'モランディ',
+        warmDark: '暖色ダーク',
+        onyx: 'ダーク'
+      },
+      extHeading: 'ローカル拡張',
+      tokenTab: 'Token 統計'
+    }
+  };
+  const EN_UI_STRINGS = {
+    rowLabel: 'Language',
+    enTooltip: 'Original English',
+    themeTooltips: {
+      native: 'Original Theme',
+      absolutely: 'Absolutely!',
+      morandi: 'Morandi',
+      warmDark: 'Warm Dark',
+      onyx: 'Dark'
+    },
+    extHeading: 'Local Extensions',
+    tokenTab: 'Token Analytics'
+  };
+
+  if (
+    !window.__ag_persist_preset_timer &&
+    !(window.__ag_pending_persist_map && window.__ag_pending_persist_map.uiLang !== undefined)
+  ) {
+    if (!HAS_LOCALE_PACK) {
+      window.__ag_runtime_ui_lang = 'en';
+    } else if (window.__ag_host_ui_lang === 'en' || window.__ag_host_ui_lang === 'target') {
+      window.__ag_runtime_ui_lang = window.__ag_host_ui_lang;
+    } else {
+      window.__ag_runtime_ui_lang = MODULES.i18n === false ? 'en' : 'target';
+    }
+  } else if (!HAS_LOCALE_PACK) {
+    window.__ag_runtime_ui_lang = 'en';
+  }
+
+  function isUiEnglish() {
+    return !HAS_LOCALE_PACK || window.__ag_runtime_ui_lang === 'en';
+  }
+
+  function getSelfUiStrings() {
+    return isUiEnglish() ? EN_UI_STRINGS : LOCALE_META[INSTALLED_LOCALE] || LOCALE_META['zh-CN'];
+  }
+
+  if (ENABLED && document.documentElement) {
+    document.documentElement.setAttribute('data-ag-lang', isUiEnglish() ? 'en' : INSTALLED_LOCALE);
+  }
+
   const DEFAULT_EXCLUDE_I18N =
-    'code, pre, kbd, samp, textarea, input, style, script, noscript, [contenteditable="true"], [data-markdown-root], [data-testid="user-message-content"], .agy-user-bubble, .monaco-editor, .monaco-diff-editor, .xterm, [class*="onyx-key"], .prose, .markdown, [class*="chat-message"], [class*="group/file-title"], [data-uri^="file:"], [data-uri^="vscode-"], a.inline-pill[href^="file:"], a.inline-pill[href^="vscode-"], [data-testid="conversation-row-sidebar"] a[href^="/c/"], [data-testid="conversation-row-sidebar"] span.truncate, [data-testid="conversation-row-history"] a[href^="/c/"], [data-testid="conversation-row-history"] span.truncate, [data-testid="conversation-navigator-turn"], .msg-body, #raw, [data-testid="swarm-raw"], #swarm-title, #ag-live-metrics-pill, .ag-live-metrics-pill, [data-ag-metrics-pill], #ag-live-metrics-tooltip, #ag-token-nav-section, #ag-token-analytics-panel, #ag-ta-tooltip, [data-ag-token-ui]';
+    'code, pre, kbd, samp, textarea, input, style, script, noscript, [contenteditable="true"], [data-markdown-root], [data-testid="user-message-content"], .agy-user-bubble, .monaco-editor, .monaco-diff-editor, .xterm, [class*="onyx-key"], .prose, .markdown, [class*="chat-message"], [class*="group/file-title"], [data-uri^="file:"], [data-uri^="vscode-"], a.inline-pill[href^="file:"], a.inline-pill[href^="vscode-"], [data-testid="conversation-row-sidebar"] a[href^="/c/"], [data-testid="conversation-row-sidebar"] span.truncate, [data-testid="conversation-row-history"] a[href^="/c/"], [data-testid="conversation-row-history"] span.truncate, [data-testid="conversation-navigator-turn"], .msg-body, #raw, [data-testid="swarm-raw"], #swarm-title, #ag-live-metrics-pill, .ag-live-metrics-pill, [data-ag-metrics-pill], #ag-live-metrics-tooltip, #ag-token-nav-section, #ag-token-analytics-panel, #ag-ta-tooltip, [data-ag-token-ui], [data-ag-lang-row="1"]';
 
   function cleanupTokenAnalyticsDom() {
     try {
@@ -585,6 +664,8 @@
       window.__ag_appearance_btn_attr_observer = null;
     }
     try {
+      document.querySelectorAll('[data-ag-lang-row="1"]').forEach((el) => el.remove());
+      if (document.documentElement) document.documentElement.removeAttribute('data-ag-lang');
       document.querySelectorAll('button[data-ag-warm-night-btn], button[data-ag-morandi-btn]').forEach((el) => el.remove());
       document.querySelectorAll('svg[data-ag-agy-logo="1"], svg[data-ag-claude-spark="1"]').forEach((el) => el.remove());
       document.querySelectorAll('button[data-ag-native-theme-slot="system"]').forEach((btn) => {
@@ -1860,6 +1941,31 @@
       window.__ag_sync_preset_fn();
     }
   };
+  window.__ag_set_host_ui_lang = (nextUiLang) => {
+    if (
+      !IS_SWARM_PLUGIN_FRAME &&
+      (window.__ag_persist_preset_timer ||
+        (window.__ag_pending_persist_map && window.__ag_pending_persist_map.uiLang !== undefined))
+    ) {
+      return;
+    }
+    const norm = !HAS_LOCALE_PACK || String(nextUiLang || '').trim().toLowerCase() === 'en' ? 'en' : 'target';
+    window.__ag_host_ui_lang = norm;
+    if (typeof window.__ag_set_ui_lang_fn === 'function') {
+      window.__ag_set_ui_lang_fn(norm, false);
+    } else {
+      window.__ag_runtime_ui_lang = norm;
+      if (document.documentElement) {
+        document.documentElement.setAttribute('data-ag-lang', isUiEnglish() ? 'en' : INSTALLED_LOCALE);
+      }
+      if (typeof window.__ag_apply_i18n_dom_state === 'function') {
+        window.__ag_apply_i18n_dom_state();
+      }
+      if (typeof window.__ag_refresh_self_ui_lang === 'function') {
+        window.__ag_refresh_self_ui_lang();
+      }
+    }
+  };
 
   if (!window.__ag_preset_hook_installed) {
     window.__ag_preset_hook_installed = true;
@@ -2064,8 +2170,43 @@
             window.__agSetDarkPreset(map.dark);
           } catch (e) {}
         }
+        if (map.uiLang !== undefined && typeof window.__agSetUiLang === 'function') {
+          try {
+            window.__agSetUiLang(map.uiLang);
+          } catch (e) {}
+        }
       }, 120);
     }
+
+    function refreshSelfOwnedUiLang() {
+      if (typeof window.__ag_sync_warm_night_btn_fn === 'function') {
+        window.__ag_sync_warm_night_btn_fn();
+      }
+      if (typeof window.__ag_rerender_token_analytics_lang === 'function') {
+        try {
+          window.__ag_rerender_token_analytics_lang();
+        } catch (e) {}
+      }
+    }
+    window.__ag_refresh_self_ui_lang = refreshSelfOwnedUiLang;
+
+    function setRuntimeUiLang(nextUiLang, persist = true) {
+      const normalized = !HAS_LOCALE_PACK || String(nextUiLang || '').trim().toLowerCase() === 'en' ? 'en' : 'target';
+      const prev = isUiEnglish() ? 'en' : 'target';
+      window.__ag_runtime_ui_lang = normalized;
+      if (document.documentElement) {
+        document.documentElement.setAttribute('data-ag-lang', isUiEnglish() ? 'en' : INSTALLED_LOCALE);
+      }
+      hideThemeBtnTooltip();
+      if (prev !== normalized && typeof window.__ag_apply_i18n_dom_state === 'function') {
+        window.__ag_apply_i18n_dom_state();
+      }
+      refreshSelfOwnedUiLang();
+      if (persist) {
+        schedulePresetPersist('uiLang', normalized);
+      }
+    }
+    window.__ag_set_ui_lang_fn = setRuntimeUiLang;
 
     function setRuntimeDarkPreset(nextPreset, persist = true) {
       const normalized = resolveNormalizedDarkPreset(nextPreset);
@@ -2203,6 +2344,10 @@
         }
 
         if (sysBtn) {
+          const wantSysAria = getSelfUiStrings().themeTooltips.native;
+          if (sysBtn.getAttribute('aria-label') !== wantSysAria) {
+            sysBtn.setAttribute('aria-label', wantSysAria);
+          }
           const agyGlyph = sysBtn.querySelector('path[data-ag-agy-glyph="1"]');
           const gradId = sysBtn.getAttribute('data-ag-grad-id');
           if (agyGlyph) {
@@ -2210,6 +2355,54 @@
             if (agyGlyph.getAttribute('fill') !== wantFill) {
               agyGlyph.setAttribute('fill', wantFill);
             }
+          }
+        }
+        const lightBtn = group.querySelector('button[data-ag-native-theme-slot="light"]');
+        if (lightBtn) {
+          const wantLightAria = getSelfUiStrings().themeTooltips.absolutely;
+          if (lightBtn.getAttribute('aria-label') !== wantLightAria) {
+            lightBtn.setAttribute('aria-label', wantLightAria);
+          }
+        }
+        if (morandiBtn) {
+          const wantMoAria = getSelfUiStrings().themeTooltips.morandi;
+          if (morandiBtn.getAttribute('aria-label') !== wantMoAria) {
+            morandiBtn.setAttribute('aria-label', wantMoAria);
+          }
+        }
+        if (bookBtn) {
+          const wantBookAria = getSelfUiStrings().themeTooltips.warmDark;
+          if (bookBtn.getAttribute('aria-label') !== wantBookAria) {
+            bookBtn.setAttribute('aria-label', wantBookAria);
+          }
+        }
+      }
+
+      const activeLangSlot = isUiEnglish() ? 'en' : 'target';
+      const wantRowLabel = getSelfUiStrings().rowLabel;
+      const langRows = document.querySelectorAll('[data-ag-lang-row="1"]');
+      for (let i = 0; i < langRows.length; i++) {
+        const row = langRows[i];
+        const lbl = row.querySelector('[data-ag-lang-row-label="1"]');
+        if (lbl && lbl.textContent !== wantRowLabel) {
+          lbl.textContent = wantRowLabel;
+        }
+        const lGroup = row.querySelector('[data-ag-lang-toggle-group="1"]');
+        if (lGroup) {
+          if (lGroup.getAttribute('data-ag-active-lang') !== activeLangSlot) {
+            lGroup.setAttribute('data-ag-active-lang', activeLangSlot);
+          }
+          const enBtn = lGroup.querySelector('button[data-ag-lang-btn="en"]');
+          const tgtBtn = lGroup.querySelector('button[data-ag-lang-btn="target"]');
+          if (enBtn) {
+            const enOn = activeLangSlot === 'en';
+            const wantEnAria = getSelfUiStrings().enTooltip;
+            if (enBtn.getAttribute('aria-label') !== wantEnAria) enBtn.setAttribute('aria-label', wantEnAria);
+            if (enBtn.getAttribute('aria-pressed') !== String(enOn)) enBtn.setAttribute('aria-pressed', String(enOn));
+          }
+          if (tgtBtn) {
+            const tgtOn = activeLangSlot === 'target';
+            if (tgtBtn.getAttribute('aria-pressed') !== String(tgtOn)) tgtBtn.setAttribute('aria-pressed', String(tgtOn));
           }
         }
       }
@@ -2221,9 +2414,9 @@
         return;
       }
       if (slot === 'system') {
-        scheduleThemeBtnTooltip(btn, '原版配色', true);
+        scheduleThemeBtnTooltip(btn, getSelfUiStrings().themeTooltips.native, true);
       } else if (slot === 'light') {
-        scheduleThemeBtnTooltip(btn, 'Absolutely！', true);
+        scheduleThemeBtnTooltip(btn, getSelfUiStrings().themeTooltips.absolutely, true);
       }
     };
 
@@ -2480,11 +2673,11 @@
         morandiBtn.appendChild(moSpan);
 
         morandiBtn.addEventListener('mouseenter', () => {
-          scheduleThemeBtnTooltip(morandiBtn, '莫兰迪色', false);
+          scheduleThemeBtnTooltip(morandiBtn, getSelfUiStrings().themeTooltips.morandi, false);
         });
         morandiBtn.addEventListener('mouseleave', hideThemeBtnTooltip);
         morandiBtn.addEventListener('focus', () => {
-          scheduleThemeBtnTooltip(morandiBtn, '莫兰迪色', false);
+          scheduleThemeBtnTooltip(morandiBtn, getSelfUiStrings().themeTooltips.morandi, false);
         });
         morandiBtn.addEventListener('blur', hideThemeBtnTooltip);
         morandiBtn.addEventListener('click', (ev) => {
@@ -2500,7 +2693,7 @@
         bookBtn = document.createElement('button');
         bookBtn.type = 'button';
         bookBtn.setAttribute('data-ag-warm-night-btn', '1');
-        bookBtn.setAttribute('aria-label', '暖纸深色');
+        bookBtn.setAttribute('aria-label', getSelfUiStrings().themeTooltips.warmDark);
         bookBtn.setAttribute('aria-pressed', 'false');
         bookBtn.className = lightBtn.className;
 
@@ -2520,11 +2713,11 @@
         bookBtn.appendChild(spanWrap);
 
         bookBtn.addEventListener('mouseenter', () => {
-          scheduleThemeBtnTooltip(bookBtn, '暖纸深色', false);
+          scheduleThemeBtnTooltip(bookBtn, getSelfUiStrings().themeTooltips.warmDark, false);
         });
         bookBtn.addEventListener('mouseleave', hideThemeBtnTooltip);
         bookBtn.addEventListener('focus', () => {
-          scheduleThemeBtnTooltip(bookBtn, '暖纸深色', false);
+          scheduleThemeBtnTooltip(bookBtn, getSelfUiStrings().themeTooltips.warmDark, false);
         });
         bookBtn.addEventListener('blur', hideThemeBtnTooltip);
         bookBtn.addEventListener('click', (ev) => {
@@ -2533,6 +2726,74 @@
 
         // 物理挂载在末尾（不干扰 React 前 3 个按钮的 nextSibling 链），由 CSS order 排位
         group.appendChild(bookBtn);
+      }
+
+      // 外观卡片独立「界面语言 / Language」二元切换行（挂载在 .agy-card 末尾，零侵入 React 子节点顺序；预留 installedLocale 映射）
+      if (HAS_LOCALE_PACK) {
+        const themeRow =
+          (group.closest && group.closest('.agy-card > div')) ||
+          (group.parentElement ? group.parentElement.parentElement : null);
+        const card = themeRow ? themeRow.parentElement : null;
+        if (card && !card.querySelector('[data-ag-lang-row="1"]')) {
+          const localeInfo = LOCALE_META[INSTALLED_LOCALE] || LOCALE_META['zh-CN'];
+          const langRow = document.createElement('div');
+          langRow.setAttribute('data-ag-lang-row', '1');
+          langRow.className =
+            themeRow.className || 'py-2 px-3 w-full bg-transparent flex justify-between gap-4 items-center';
+
+          const leftCol = document.createElement('div');
+          leftCol.className = 'flex-1 flex flex-col gap-0.5';
+          const labelInner = document.createElement('div');
+          labelInner.className = 'flex items-center gap-1.5';
+          const labelSpan = document.createElement('span');
+          labelSpan.setAttribute('data-ag-lang-row-label', '1');
+          labelSpan.textContent = getSelfUiStrings().rowLabel;
+          labelInner.appendChild(labelSpan);
+          leftCol.appendChild(labelInner);
+
+          const rightCol = document.createElement('div');
+          rightCol.className = 'shrink-0';
+          const langGroup = document.createElement('div');
+          langGroup.setAttribute('data-orientation', 'horizontal');
+          langGroup.setAttribute('aria-orientation', 'horizontal');
+          langGroup.setAttribute('role', 'group');
+          langGroup.setAttribute('data-slot', 'toggle-group');
+          langGroup.setAttribute('data-ag-theme-toggle-group', '0');
+          langGroup.setAttribute('data-ag-lang-toggle-group', '1');
+          langGroup.setAttribute('data-ag-active-lang', isUiEnglish() ? 'en' : 'target');
+          langGroup.className = group.className;
+
+          const mkLangBtn = (slotVal, labelText, getTipFn) => {
+            const b = document.createElement('button');
+            b.type = 'button';
+            b.setAttribute('data-ag-lang-btn', slotVal);
+            b.setAttribute('aria-label', getTipFn());
+            b.setAttribute('aria-pressed', String((isUiEnglish() ? 'en' : 'target') === slotVal));
+            b.className = lightBtn.className;
+            b.textContent = labelText;
+            b.addEventListener('mouseenter', () => {
+              scheduleThemeBtnTooltip(b, getTipFn(), false);
+            });
+            b.addEventListener('mouseleave', hideThemeBtnTooltip);
+            b.addEventListener('focus', () => {
+              scheduleThemeBtnTooltip(b, getTipFn(), false);
+            });
+            b.addEventListener('blur', hideThemeBtnTooltip);
+            b.addEventListener('click', (ev) => {
+              ev.preventDefault();
+              ev.stopPropagation();
+              window.__ag_set_ui_lang_fn?.(slotVal, true);
+            });
+            return b;
+          };
+
+          langGroup.appendChild(mkLangBtn('en', 'EN', () => getSelfUiStrings().enTooltip));
+          langGroup.appendChild(mkLangBtn('target', localeInfo.btnLabel, () => localeInfo.tooltip));
+          rightCol.appendChild(langGroup);
+          langRow.appendChild(leftCol);
+          langRow.appendChild(rightCol);
+          card.appendChild(langRow);
+        }
       }
       return true;
     }
@@ -3742,7 +4003,7 @@
     attributeFilter: ['title', 'aria-label', 'placeholder']
   };
 
-  if (MODULES.i18n) {
+  if (HAS_LOCALE_PACK) {
     function splitTopLevelSelectors(selStr) {
       const parts = [];
       let cur = '';
@@ -5040,19 +5301,22 @@
     }
 
     scanBodyFn = scanAndTranslate;
-    if (document.body) {
-      scanAndTranslate(document.body);
-    }
 
     const dirtyRoots = new Set();
     let pending = false;
     let fallbackTimer = null;
+    let flushRafId = null;
 
     function flushTranslations() {
       pending = false;
+      flushRafId = null;
       if (fallbackTimer) {
         clearTimeout(fallbackTimer);
         fallbackTimer = null;
+      }
+      if (isUiEnglish()) {
+        dirtyRoots.clear();
+        return;
       }
       if (dirtyRoots.size === 0) return;
 
@@ -5099,13 +5363,14 @@
     }
 
     function scheduleFlush() {
-      if (pending) return;
+      if (pending || isUiEnglish()) return;
       pending = true;
-      requestAnimationFrame(flushTranslations);
+      flushRafId = requestAnimationFrame(flushTranslations);
       fallbackTimer = setTimeout(flushTranslations, 80);
     }
 
     window.__ag_i18n_observer = new MutationObserver((mutations) => {
+      if (isUiEnglish()) return;
       const batchSafeSet = new Set();
       for (let i = 0; i < mutations.length; i++) {
         const m = mutations[i];
@@ -5169,12 +5434,54 @@
       }
     });
 
-    if (document.body) {
-      window.__ag_i18n_observer.observe(document.body, I18N_OBS_OPTS);
+    function applyI18nDomState() {
+      if (!document.body) return;
+      if (isUiEnglish()) {
+        dirtyRoots.clear();
+        pending = false;
+        if (flushRafId) {
+          try {
+            cancelAnimationFrame(flushRafId);
+          } catch (e) {}
+          flushRafId = null;
+        }
+        if (fallbackTimer) {
+          clearTimeout(fallbackTimer);
+          fallbackTimer = null;
+        }
+        if (window.__ag_i18n_observer) {
+          try {
+            window.__ag_i18n_observer.disconnect();
+          } catch (e) {}
+        }
+        restoreAllTranslations(document.body);
+      } else {
+        try {
+          scanAndTranslate(document.body);
+        } catch (e) {}
+        if (window.__ag_i18n_observer) {
+          try {
+            window.__ag_i18n_observer.disconnect();
+            window.__ag_i18n_observer.observe(document.body, I18N_OBS_OPTS);
+          } catch (e) {}
+        }
+      }
+      if (typeof window.__ag_sync_warm_night_btn_fn === 'function') {
+        window.__ag_sync_warm_night_btn_fn();
+      }
     }
-  } else if (document.body) {
-    // 若用户在配置中关闭了 i18n 模块，实时将已翻译的文本与属性还原为原始英文
-    restoreAllTranslations(document.body);
+    window.__ag_apply_i18n_dom_state = applyI18nDomState;
+
+    if (document.body) {
+      applyI18nDomState();
+    }
+  } else {
+    window.__ag_apply_i18n_dom_state = () => {
+      if (document.body) restoreAllTranslations(document.body);
+    };
+    if (document.body) {
+      restoreAllTranslations(document.body);
+    }
   }
 
   // 若由 Page.addScriptToEvaluateOnNewDocument 在 <head> 早期触发（此时 document.body === null），
@@ -5228,19 +5535,9 @@
           window.__ag_sync_token_analytics_fn();
         } catch (e) {}
       }
-      if (MODULES.i18n && document.body) {
-        if (typeof scanBodyFn === 'function') {
-          try {
-            scanBodyFn(document.body);
-          } catch (e) {}
-        }
-        if (window.__ag_i18n_observer) {
-          try {
-            window.__ag_i18n_observer.disconnect();
-            window.__ag_i18n_observer.observe(document.body, I18N_OBS_OPTS);
-          } catch (e) {}
-        }
-      } else if (!MODULES.i18n && document.body) {
+      if (typeof window.__ag_apply_i18n_dom_state === 'function' && document.body) {
+        window.__ag_apply_i18n_dom_state();
+      } else if (document.body) {
         restoreAllTranslations(document.body);
       }
       window.__ag_body_ready = true;
@@ -6828,19 +7125,20 @@
 
         let navSection = document.getElementById(NAV_SECTION_ID);
         if (!navSection) {
+          const uiStr = getSelfUiStrings();
           navSection = document.createElement('div');
           navSection.id = NAV_SECTION_ID;
           navSection.setAttribute('data-ag-token-ui', '1');
           navSection.innerHTML =
             `<div class="ag-ta-nav-divider"></div>` +
-            `<div class="ag-ta-nav-heading">本地扩展</div>` +
+            `<div class="ag-ta-nav-heading" data-ag-ta-nav-heading="1">${uiStr.extHeading}</div>` +
             `<div class="relative mx-2">` +
             `  <button type="button" id="${NAV_BTN_ID}" data-ag-token-tab="1" data-active="0">` +
             `    <svg class="ag-ta-nav-icon" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">` +
             `      <path d="M3 3v18h18"/><rect x="7" y="10" width="3" height="7" rx="1"/>` +
             `      <rect x="12" y="6" width="3" height="11" rx="1"/><rect x="17" y="13" width="3" height="4" rx="1"/>` +
             `    </svg>` +
-            `    <span>Token 统计</span>` +
+            `    <span data-ag-ta-nav-btn-label="1">${uiStr.tokenTab}</span>` +
             `  </button>` +
             `</div>`;
           navSection.querySelector(`#${NAV_BTN_ID}`)?.addEventListener('click', (e) => {
@@ -6849,7 +7147,22 @@
             if (tabActive && modal.getAttribute('data-ag-token-tab-active') === '1') return;
             setTokenTabActive(modal, true);
           });
+        } else {
+          const uiStr = getSelfUiStrings();
+          const hEl = navSection.querySelector('[data-ag-ta-nav-heading="1"], .ag-ta-nav-heading');
+          const bEl = navSection.querySelector('[data-ag-ta-nav-btn-label="1"], #ag-token-nav-btn span');
+          if (hEl && hEl.textContent !== uiStr.extHeading) hEl.textContent = uiStr.extHeading;
+          if (bEl && bEl.textContent !== uiStr.tokenTab) bEl.textContent = uiStr.tokenTab;
         }
+        window.__ag_rerender_token_analytics_lang = () => {
+          const sec = document.getElementById(NAV_SECTION_ID);
+          if (!sec) return;
+          const uiStr = getSelfUiStrings();
+          const hEl = sec.querySelector('[data-ag-ta-nav-heading="1"], .ag-ta-nav-heading');
+          const bEl = sec.querySelector('[data-ag-ta-nav-btn-label="1"], #ag-token-nav-btn span');
+          if (hEl && hEl.textContent !== uiStr.extHeading) hEl.textContent = uiStr.extHeading;
+          if (bEl && bEl.textContent !== uiStr.tokenTab) bEl.textContent = uiStr.tokenTab;
+        };
         if (navSection.parentElement !== navContainer) {
           navContainer.appendChild(navSection);
         }

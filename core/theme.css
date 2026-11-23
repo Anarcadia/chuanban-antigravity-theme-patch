@@ -1680,6 +1680,50 @@ body[data-agy-theme] [data-slot="toggle-group"][data-ag-theme-toggle-group="1"][
   color: #7AA6B2 !important;
 }
 
+/* 外观卡片独立「界面语言 / Language」二元切换胶囊（预留 installedLocale 映射：当前 [ EN | 中文 ]，未来 [ EN | 日本語 ]） */
+[data-slot="toggle-group"][data-ag-lang-toggle-group="1"] > button[data-ag-lang-btn] {
+  font-size: 12px !important;
+  font-weight: 560 !important;
+  letter-spacing: 0.01em !important;
+  padding: 0 9px !important;
+  min-width: 38px;
+  background-color: transparent !important;
+  box-shadow: none !important;
+  color: var(--secondary-foreground, #686259) !important;
+}
+
+[data-slot="toggle-group"][data-ag-lang-toggle-group="1"] > button[data-ag-lang-btn]:hover {
+  color: var(--foreground, #1F1E1D) !important;
+}
+
+body[data-agy-theme] [data-slot="toggle-group"][data-ag-lang-toggle-group="1"][data-ag-active-lang="en"] > button[data-ag-lang-btn="en"]:is(*, [data-pressed]),
+[data-slot="toggle-group"][data-ag-lang-toggle-group="1"][data-ag-active-lang="en"] > button[data-ag-lang-btn="en"]:is(*, [data-pressed]),
+body[data-agy-theme] [data-slot="toggle-group"][data-ag-lang-toggle-group="1"][data-ag-active-lang="target"] > button[data-ag-lang-btn="target"]:is(*, [data-pressed]),
+[data-slot="toggle-group"][data-ag-lang-toggle-group="1"][data-ag-active-lang="target"] > button[data-ag-lang-btn="target"]:is(*, [data-pressed]) {
+  background-color: var(--onyx-raised, var(--card, #FFFFFF)) !important;
+  color: var(--foreground, #1F1E1D) !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08), 0 0 0 0.5px var(--border, rgba(0, 0, 0, 0.12)) !important;
+}
+
+:is(html[data-ag-theme-mode="dark"] body, html.dark body, body.dark):is(*, [data-agy-theme]) [data-slot="toggle-group"][data-ag-lang-toggle-group="1"][data-ag-active-lang="en"] > button[data-ag-lang-btn="en"]:is(*, [data-pressed]),
+:is(html[data-ag-theme-mode="dark"] body, html.dark body, body.dark):is(*, [data-agy-theme]) [data-slot="toggle-group"][data-ag-lang-toggle-group="1"][data-ag-active-lang="target"] > button[data-ag-lang-btn="target"]:is(*, [data-pressed]) {
+  background-color: var(--onyx-selected, #252E34) !important;
+  color: var(--foreground, #FFFFFF) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.09), 0 1px 3px rgba(0, 0, 0, 0.36) !important;
+}
+
+html:not([data-ag-preset="native"]):not([data-ag-preset="absolutely"]) [data-slot="toggle-group"][data-ag-lang-toggle-group="1"][data-ag-active-lang="target"] > button[data-ag-lang-btn="target"] {
+  color: #3F6E7A !important;
+}
+
+html[data-ag-preset="absolutely"] [data-slot="toggle-group"][data-ag-lang-toggle-group="1"][data-ag-active-lang="target"] > button[data-ag-lang-btn="target"] {
+  color: #D97757 !important;
+}
+
+:is(html[data-ag-theme-mode="dark"] body, body.dark) [data-slot="toggle-group"][data-ag-lang-toggle-group="1"][data-ag-active-lang="target"] > button[data-ag-lang-btn="target"] {
+  color: #86B0BC !important;
+}
+
 /* 仅屏蔽宿主 [role="tooltip"] 提示气泡，严禁隐藏 Popper/Portal 容器以防误伤顶栏菜单 */
 html[data-ag-suppress-native-tt="1"] [role="tooltip"]:not(#ag-theme-btn-tooltip) {
   opacity: 0 !important;

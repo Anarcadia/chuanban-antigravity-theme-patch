@@ -3,6 +3,7 @@
   "channel": "auto",
   "preset": "morandi",
   "darkPreset": "onyx",
+  "installedLocale": "zh-CN",
   "contextLimit": 256000,
   "modules": {
     "i18n": true,

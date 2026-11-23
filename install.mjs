@@ -917,6 +917,7 @@ async function inspectLiveWindow(portFileOrEnv, fallbackPort = 9222) {
                   hasUserStyle: !!document.getElementById('antigravity-user-custom-style'),
                   preset: document.documentElement ? document.documentElement.getAttribute('data-ag-preset') : null,
                   darkPreset: document.documentElement ? document.documentElement.getAttribute('data-ag-dark-preset') : null,
+                  uiLang: document.documentElement ? document.documentElement.getAttribute('data-ag-lang') : null,
                   themeMode: document.documentElement ? document.documentElement.getAttribute('data-ag-theme-mode') : null,
                   pageType: document.documentElement ? document.documentElement.getAttribute('data-ag-page-type') : null,
                   waxSeal: document.documentElement ? document.documentElement.getAttribute('data-ag-wax-seal') : null,
