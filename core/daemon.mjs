@@ -5269,7 +5269,10 @@ function attachTarget(target, endpoint) {
         }
       };
 
-      const syncMetricsForSession = async (force = false, skipDomEval = false) => {
+      let metricsSyncInFlight = null;
+      let queuedMetricsSync = null;
+
+      const syncMetricsForSessionInner = async (force = false, skipDomEval = false) => {
         if (target.type === 'iframe' || !DatabaseSync || !activeConfig.modules.metrics || !activeConfig.enabled) return;
 
         // 仅在尚未获知前端订阅或强制重同步时向前端发起 Runtime.evaluate，日常靠 __agRequestMetrics 绑定事件实时驱动
@@ -5399,6 +5402,32 @@ function attachTarget(target, endpoint) {
             }
           }
         }
+      };
+
+      const syncMetricsForSession = async (force = false, skipDomEval = false) => {
+        if (metricsSyncInFlight) {
+          queuedMetricsSync = {
+            force: Boolean(queuedMetricsSync?.force || force),
+            skipDomEval: queuedMetricsSync ? Boolean(queuedMetricsSync.skipDomEval && skipDomEval) : Boolean(skipDomEval)
+          };
+          return metricsSyncInFlight;
+        }
+        metricsSyncInFlight = (async () => {
+          let curForce = force;
+          let curSkip = skipDomEval;
+          try {
+            while (true) {
+              await syncMetricsForSessionInner(curForce, curSkip);
+              if (!queuedMetricsSync) break;
+              curForce = queuedMetricsSync.force;
+              curSkip = queuedMetricsSync.skipDomEval;
+              queuedMetricsSync = null;
+            }
+          } finally {
+            metricsSyncInFlight = null;
+          }
+        })();
+        return metricsSyncInFlight;
       };
 
       const checkAndInject = async () => {
