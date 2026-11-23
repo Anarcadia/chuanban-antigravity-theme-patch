@@ -533,7 +533,7 @@ function setIncrementalMetrics(dbPath, state) {
 let activeConfig = {
   enabled: true,
   channel: 'auto',
-  preset: 'high-contrast',
+  preset: 'morandi',
   darkPreset: 'onyx',
   metricsMode: 'compact',
   contextLimit: 256000,
@@ -659,6 +659,78 @@ function persistDarkPresetToUserConfig(rawDarkPreset) {
   }
 }
 
+function normalizeLightPresetValue(rawVal) {
+  const s = String(rawVal || '').trim().toLowerCase();
+  if (s === 'absolutely' || s === 'claude-orange') return 'absolutely';
+  if (s === 'claude-desktop-purewhite') return 'claude-desktop-purewhite';
+  if (s === 'vintage-deep') return 'vintage-deep';
+  return 'morandi';
+}
+
+function persistLightPresetToUserConfig(rawLightPreset) {
+  if (SAFE_MODE) return false;
+  const nextPreset = normalizeLightPresetValue(rawLightPreset);
+  const cfgPath = path.join(USER_DIR, 'config.json');
+  const tmpPath = `${cfgPath}.tmp-${process.pid}-lp`;
+  try {
+    fs.mkdirSync(USER_DIR, { recursive: true });
+    let currentObj = {};
+    if (fs.existsSync(cfgPath)) {
+      let parsed = null;
+      try {
+        const rawText = fs.readFileSync(cfgPath, 'utf8').replace(/^\uFEFF/, '');
+        parsed = JSON.parse(rawText);
+      } catch (parseErr) {
+        logDaemonEvent(`persistLightPreset skipped: user/config.json unreadable (${parseErr?.message || parseErr})`);
+        return false;
+      }
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        return false;
+      }
+      currentObj = parsed;
+    }
+    if (currentObj.preset === nextPreset) {
+      return false;
+    }
+    const updatedObj = {};
+    let inserted = false;
+    for (const [k, v] of Object.entries(currentObj)) {
+      if (k === 'preset') {
+        updatedObj.preset = nextPreset;
+        inserted = true;
+      } else {
+        updatedObj[k] = v;
+      }
+    }
+    if (!inserted) {
+      updatedObj.preset = nextPreset;
+    }
+    fs.writeFileSync(tmpPath, `${JSON.stringify(updatedObj, null, 2)}\n`, 'utf8');
+    fs.renameSync(tmpPath, cfgPath);
+    if (rebuildBundleIfNeeded()) {
+      void (async () => {
+        for (const [, entry] of attachedTargets.entries()) {
+          if (!entry?.hostConfirmed) continue;
+          await entry.updateNewDocScript?.();
+          if (entry.type === 'iframe') {
+            await entry.send?.('Runtime.evaluate', {
+              expression: `window.__ag_set_host_light_preset && window.__ag_set_host_light_preset(${JSON.stringify(nextPreset)})`,
+              returnByValue: false
+            });
+          }
+        }
+      })();
+    }
+    return true;
+  } catch (err) {
+    try {
+      if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath);
+    } catch {}
+    logDaemonEvent(`persistLightPreset error: ${err?.message || err}`);
+    return false;
+  }
+}
+
 function readHostThemeMode() {
   const fileSig = getFileMtimeSig(HOST_CONFIG_PATH);
   if (fileSig === cachedHostCfgFileSig) {
@@ -708,7 +780,7 @@ function rebuildBundleIfNeeded() {
   const userCfg = SAFE_MODE ? {} : readJsonSafe(path.join(USER_DIR, 'config.json'), {});
   const enabled = SAFE_MODE ? true : userCfg.enabled !== false;
   const channel = CLI_CHANNEL || userCfg.channel || 'auto';
-  const preset = userCfg.preset || 'high-contrast';
+  const preset = normalizeLightPresetValue(userCfg.preset);
   const rawDarkPreset = String(userCfg.darkPreset || 'onyx').trim().toLowerCase();
   const darkPreset =
     rawDarkPreset === 'claude-warm' ||
@@ -5271,6 +5343,7 @@ function attachTarget(target, endpoint) {
             await send('Runtime.addBinding', { name: '__agRequestMetrics' });
             await send('Runtime.addBinding', { name: '__agRequestHardReload' });
             await send('Runtime.addBinding', { name: '__agSetDarkPreset' });
+            await send('Runtime.addBinding', { name: '__agSetLightPreset' });
             await send('Runtime.addBinding', { name: '__agSyncHostThemeMode' });
             await send('Runtime.addBinding', { name: '__agRequestTokenAnalytics' });
           }
@@ -5477,6 +5550,15 @@ function attachTarget(target, endpoint) {
             syncDarkPresetToChildIframes(target.id, msg.params.payload);
             if (!SAFE_MODE) {
               persistDarkPresetToUserConfig(msg.params.payload);
+            }
+            return;
+          }
+          if (msg.method === 'Runtime.bindingCalled' && msg.params?.name === '__agSetLightPreset') {
+            if (!hostConfirmed || target.type !== 'page' || !activeConfig.enabled) {
+              return;
+            }
+            if (!SAFE_MODE) {
+              persistLightPresetToUserConfig(msg.params.payload);
             }
             return;
           }

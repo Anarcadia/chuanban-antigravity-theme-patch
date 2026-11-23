@@ -720,9 +720,9 @@ button[data-project-card="true"] span {
  * PART II. 白天模式（Light Mode · 莫兰迪古典矿物冷暖互补色系：石青 × 赤陶 × 青瓷 × 藤赭 × 宣纸矿灰）
  * ============================================================================ */
 
-/* 白天模式通用组件变量 + 全域 Tailwind / 语义色 / 语法高亮 / Diff 莫兰迪矿物接管 */
-html:not([data-ag-theme-mode="dark"]):not(:has(> body.dark)),
-html:not([data-ag-theme-mode="dark"]) body:not(.dark) {
+/* 白天模式通用组件变量 + 全域 Tailwind / 语义色 / 语法高亮 / Diff 莫兰迪矿物接管（默认 morandi 激活） */
+html:not([data-ag-theme-mode="dark"]):not(:has(> body.dark)):not([data-ag-preset="absolutely"]),
+html:not([data-ag-theme-mode="dark"]):not([data-ag-preset="absolutely"]) body:not(.dark) {
   --ag-composer-tray-bg: #EAE4D8;
   --ag-composer-card-bg: #FAF8F3;
   --ag-composer-card-border: rgba(63, 110, 122, 0.10);
@@ -889,9 +889,11 @@ html:not([data-ag-theme-mode="dark"]) body:not(.dark) {
   --syntax-punctuation: #6E685E !important;
 }
 
-/* 白天预设 1（默认首选）：莫兰迪宣纸矿灰 (high-contrast) */
+/* 白天预设 1（默认激活 MO 按钮）：莫兰迪宣纸矿灰 (morandi) */
+html:not([data-ag-theme-mode="dark"]):not(:has(> body.dark))[data-ag-preset="morandi"],
 html:not([data-ag-theme-mode="dark"]):not(:has(> body.dark))[data-ag-preset="high-contrast"],
 html:not([data-ag-theme-mode="dark"]):not(:has(> body.dark)):not([data-ag-preset]),
+html:not([data-ag-theme-mode="dark"])[data-ag-preset="morandi"] body:not(.dark),
 html:not([data-ag-theme-mode="dark"])[data-ag-preset="high-contrast"] body:not(.dark),
 html:not([data-ag-theme-mode="dark"]):not([data-ag-preset]) body:not(.dark) {
   --primary: #C86D51 !important;
@@ -1000,30 +1002,34 @@ html:not([data-ag-theme-mode="dark"])[data-ag-preset="vintage-deep"] body:not(.d
   --code-foreground: #312C25 !important;
 }
 
-/* 白天模式侧栏选中项、用户气泡、文件胶囊、引用块与代码块冷暖矿物互补细节 */
+/* 白天模式侧栏选中项、用户气泡、文件胶囊、引用块与代码块冷暖矿物互补细节（隔离 absolutely 预设） */
 body[data-agy-theme]:not(.dark) .agy-sidebar-row[data-selected="true"],
 body[data-agy-theme][data-newux-theme="onyx"]:not(.dark) .agy-sidebar-row[data-selected="true"],
 html:not([data-ag-theme-mode="dark"]) body:not(.dark) .agy-sidebar-row[data-selected="true"] {
   background-color: var(--sidebar-secondary) !important;
   --row-bg: var(--sidebar-secondary) !important;
+  box-shadow: none !important;
+}
+
+html:not([data-ag-preset="absolutely"]):not([data-ag-theme-mode="dark"]) body:not(.dark) .agy-sidebar-row[data-selected="true"] {
   box-shadow: inset 2px 0 0 rgba(63, 110, 122, 0.55) !important;
 }
 
-html[data-ag-preset="high-contrast"]:not([data-ag-theme-mode="dark"]) body:not(.dark) :is(a[class*="inline-flex items-center"], .bg-sidebar a, .bg-sidebar button) {
+html:is([data-ag-preset="morandi"], [data-ag-preset="high-contrast"]):not([data-ag-theme-mode="dark"]) body:not(.dark) :is(a[class*="inline-flex items-center"], .bg-sidebar a, .bg-sidebar button) {
   border-color: rgba(54, 49, 43, 0.22) !important;
 }
 
-html[data-ag-preset="high-contrast"]:not([data-ag-theme-mode="dark"]) body:not(.dark) .bg-border {
+html:is([data-ag-preset="morandi"], [data-ag-preset="high-contrast"]):not([data-ag-theme-mode="dark"]) body:not(.dark) .bg-border {
   background-color: rgba(54, 49, 43, 0.20) !important;
 }
 
-html:not([data-ag-theme-mode="dark"]) body:not(.dark) .agy-user-bubble {
+html:not([data-ag-preset="absolutely"]):not([data-ag-theme-mode="dark"]) body:not(.dark) .agy-user-bubble {
   background-color: #E8E2D5 !important;
   border: 1px solid rgba(63, 110, 122, 0.16) !important;
   color: #24221F !important;
 }
 
-html:not([data-ag-theme-mode="dark"]) body:not(.dark) :is([data-markdown-root], .select-text, .prose, .markdown) :not(pre) > code {
+html:not([data-ag-preset="absolutely"]):not([data-ag-theme-mode="dark"]) body:not(.dark) :is([data-markdown-root], .select-text, .prose, .markdown) :not(pre) > code {
   background-color: rgba(63, 110, 122, 0.085);
   border: 1px solid rgba(63, 110, 122, 0.19);
   border-radius: 5px;
@@ -1031,32 +1037,125 @@ html:not([data-ag-theme-mode="dark"]) body:not(.dark) :is([data-markdown-root], 
   color: #2C535E !important;
 }
 
-html:not([data-ag-theme-mode="dark"]) body:not(.dark) :is(a.inline-pill[href^="file:"], a.inline-pill[href^="vscode-"], .inline-pill[data-uri^="file:"], .inline-pill[data-uri^="vscode-"]) {
+html:not([data-ag-preset="absolutely"]):not([data-ag-theme-mode="dark"]) body:not(.dark) :is(a.inline-pill[href^="file:"], a.inline-pill[href^="vscode-"], .inline-pill[data-uri^="file:"], .inline-pill[data-uri^="vscode-"]) {
   background-color: rgba(63, 110, 122, 0.095) !important;
   border-color: rgba(63, 110, 122, 0.24) !important;
   color: #2B525D !important;
 }
 
-html:not([data-ag-theme-mode="dark"]) body:not(.dark) :is(a.inline-pill[href^="file:"], a.inline-pill[href^="vscode-"], .inline-pill[data-uri^="file:"], .inline-pill[data-uri^="vscode-"]):hover {
+html:not([data-ag-preset="absolutely"]):not([data-ag-theme-mode="dark"]) body:not(.dark) :is(a.inline-pill[href^="file:"], a.inline-pill[href^="vscode-"], .inline-pill[data-uri^="file:"], .inline-pill[data-uri^="vscode-"]):hover {
   background-color: rgba(63, 110, 122, 0.16) !important;
   border-color: rgba(63, 110, 122, 0.36) !important;
 }
 
-html:not([data-ag-theme-mode="dark"]) body:not(.dark) :is([data-markdown-root], .prose, .markdown) a:not(.inline-pill) {
+html:not([data-ag-preset="absolutely"]):not([data-ag-theme-mode="dark"]) body:not(.dark) :is([data-markdown-root], .prose, .markdown) a:not(.inline-pill) {
   color: #3F6E7A;
   text-decoration-color: rgba(63, 110, 122, 0.38);
 }
 
-html:not([data-ag-theme-mode="dark"]) body:not(.dark) :is([data-markdown-root], .prose, .markdown) a:not(.inline-pill):hover {
+html:not([data-ag-preset="absolutely"]):not([data-ag-theme-mode="dark"]) body:not(.dark) :is([data-markdown-root], .prose, .markdown) a:not(.inline-pill):hover {
   color: #B85E43;
   text-decoration-color: rgba(184, 94, 67, 0.55);
 }
 
-html:not([data-ag-theme-mode="dark"]) body:not(.dark) :is([data-markdown-root], .prose, .markdown) blockquote {
+html:not([data-ag-preset="absolutely"]):not([data-ag-theme-mode="dark"]) body:not(.dark) :is([data-markdown-root], .prose, .markdown) blockquote {
   border-left: 3px solid #6E9AA6 !important;
   background-color: rgba(63, 110, 122, 0.045);
   border-radius: 0 6px 6px 0;
   color: #46423C;
+}
+
+/* 船板专属预设（✳️ Absolutely！按钮激活）：经典仿 Claude 高对比暖白 + 陶土橙 (#D97757) */
+html[data-ag-preset="absolutely"] {
+  --ag-wax-seal-hover: #74221A;
+  --ag-dark-wax-seal-hover: rgba(47, 113, 227, 0.72);
+  --ag-ta-success: #15803D;
+  --ag-ta-warn: #B45309;
+  --ag-ta-err: #DC2626;
+  --ag-ta-hm-1: rgba(217, 119, 87, 0.25);
+  --ag-ta-hm-2: rgba(217, 119, 87, 0.48);
+  --ag-ta-hm-3: rgba(217, 119, 87, 0.72);
+  --ag-ta-hm-4: #D97757;
+  --ag-ta-c1: #D97757;
+  --ag-ta-c2: #2563EB;
+  --ag-ta-c3: #0D9488;
+  --ag-ta-c4: #7C3AED;
+  --ag-ta-c5: #D97706;
+  --ag-ta-c6: #64748B;
+}
+
+html[data-ag-preset="absolutely"]:not([data-ag-theme-mode="dark"]):not(:has(> body.dark)),
+html[data-ag-preset="absolutely"]:not([data-ag-theme-mode="dark"]) body:not(.dark) {
+  --primary: #D97757 !important;
+  --primary-foreground: #FFFFFF !important;
+  --editor-selection-background: rgba(217, 119, 87, 0.34) !important;
+  --background: #FCFCFB !important;
+  --content: #FCFCFB !important;
+  --foreground: #1F1E1D !important;
+  --sidebar: #F7F5F0 !important;
+  --shell: #F7F5F0 !important;
+  --sidebar-secondary: #ECE9E1 !important;
+  --sidebar-muted: #F2EFE7 !important;
+  --sidebar-border: rgba(0, 0, 0, 0.35) !important;
+  --border: rgba(0, 0, 0, 0.38) !important;
+  --vscode-sideBar-background: #F7F5F0 !important;
+  --card: #FFFFFF !important;
+  --card-border: rgba(0, 0, 0, 0.35) !important;
+  --card-edge: rgba(0, 0, 0, 0.35) !important;
+  --sash-line: rgba(0, 0, 0, 0.35) !important;
+  --secondary-foreground: #0A0A0A !important;
+  --muted-foreground: #1A1A1A !important;
+  --onyx-frame: #ECE9E1 !important;
+  --onyx-well: #F7F5F0 !important;
+  --onyx-raised: #FFFFFF !important;
+  --onyx-selected: #ECE9E1 !important;
+  --onyx-key: #FFFFFF !important;
+  --glass: #F9F7F2 !important;
+  --glass-border: rgba(0, 0, 0, 0.35) !important;
+  --glass-highlight: transparent !important;
+  --home-glow: transparent !important;
+  --ag-composer-tray-bg: #F7EFE6;
+  --ag-composer-card-bg: #FFFFFF;
+  --ag-composer-card-border: transparent;
+  --ag-composer-card-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
+  --ag-composer-card-focus-border: transparent;
+  --ag-composer-card-focus-shadow: 0 6px 20px -2px rgba(60, 20, 15, 0.07), 0 2px 6px -1px rgba(0, 0, 0, 0.04);
+  --ag-seal-home-border: transparent;
+  --ag-seal-home-shadow: none;
+  --ag-seal-home-focus-border: rgba(116, 34, 26, 0.36);
+  --ag-seal-home-focus-shadow: 0 1px 3px rgba(116, 34, 26, 0.04);
+  --ag-seal-chat-border: rgba(116, 34, 26, 0.36);
+  --ag-seal-chat-shadow: 0 1px 3px rgba(116, 34, 26, 0.03);
+  --ag-seal-chat-focus-border: #74221A;
+  --ag-seal-chat-focus-shadow: 0 1px 4px rgba(116, 34, 26, 0.12);
+  --ag-seal-off-border: rgba(31, 30, 29, 0.15);
+  --ag-composer-top-fg: #383431;
+  --ag-composer-top-hover-bg: rgba(217, 119, 87, 0.08);
+  --ag-composer-top-hover-fg: #1F1E1D;
+  --ag-composer-ctrl-fg: #0A0A0A;
+  --ag-send-btn-bg: #D97757;
+  --ag-send-btn-hover-bg: #C86646;
+  --ag-send-btn-border: #C45F40;
+  --ag-send-btn-shadow: 0 1px 2px rgba(217, 119, 87, 0.25);
+  --ag-sidebar-fg: #262422;
+  --ag-sidebar-row-fg: #262422;
+  --ag-sidebar-header-fg: #383533;
+  --ag-sidebar-header-title-fg: #2C2B29;
+  --ag-sidebar-selected-fg: #0A0A0A;
+  --ag-sidebar-muted-fg: #7A7670;
+  --ag-menu-item-fg: #1F1E1D;
+  --ag-menu-header-fg: #1A1A1A;
+  --ag-dialog-title-fg: #1F1E1D;
+  --ag-dialog-item-fg: #1F1E1D;
+  --code-foreground: #262422 !important;
+}
+
+html[data-ag-preset="absolutely"]:not([data-ag-theme-mode="dark"]) body:not(.dark) :is(a[class*="inline-flex items-center"], .bg-sidebar a, .bg-sidebar button) {
+  border-color: rgba(0, 0, 0, 0.32) !important;
+}
+
+html[data-ag-preset="absolutely"]:not([data-ag-theme-mode="dark"]) body:not(.dark) .bg-border {
+  background-color: rgba(0, 0, 0, 0.28) !important;
 }
 
 /* Swarm 插件子帧白天模式兜底：防止宿主曾推送过深色内联 style 变量在切换回浅色后残留 */
@@ -1466,7 +1565,7 @@ html[data-ag-dark-preset="claude-warm"] body[data-agy-theme][data-newux-theme="o
   color: #FAF6EE !important;
 }
 
-/* 外观界面「主题模式」四段式胶囊：在浅色(☀️)与深色(🌙)之间无损插入「暖纸深色(📖)」切换钮 */
+/* 外观界面「主题模式」五段式胶囊：[系统(1)] [✳️ Absolutely！(2)] [MO 莫兰迪色(3·原书卷位·默认激活)] [📖 暖纸深色(4)] [🌙 深色(5)] */
 [data-slot="toggle-group"][data-ag-theme-toggle-group="1"] > button[data-ag-native-theme-slot="system"] {
   order: 1;
 }
@@ -1475,16 +1574,53 @@ html[data-ag-dark-preset="claude-warm"] body[data-agy-theme][data-newux-theme="o
   order: 2;
 }
 
-[data-slot="toggle-group"][data-ag-theme-toggle-group="1"] > button[data-ag-warm-night-btn="1"] {
+[data-slot="toggle-group"][data-ag-theme-toggle-group="1"] > button[data-ag-morandi-btn="1"] {
   order: 3;
 }
 
-[data-slot="toggle-group"][data-ag-theme-toggle-group="1"] > button[data-ag-native-theme-slot="dark"] {
+[data-slot="toggle-group"][data-ag-theme-toggle-group="1"] > button[data-ag-warm-night-btn="1"] {
   order: 4;
+}
+
+[data-slot="toggle-group"][data-ag-theme-toggle-group="1"] > button[data-ag-native-theme-slot="dark"] {
+  order: 5;
 }
 
 [data-slot="toggle-group"][data-ag-theme-toggle-group="1"] > :not(button) {
   order: 99;
+}
+
+/* 当 MO（莫兰迪色）默认或手动激活时，无损压制原生 Light/System 按钮的按下胶囊底色 */
+body[data-agy-theme] [data-slot="toggle-group"][data-ag-theme-toggle-group="1"][data-ag-active-light="morandi"] > button:is([data-ag-native-theme-slot="light"], [data-ag-native-theme-slot="system"])[data-pressed],
+[data-slot="toggle-group"][data-ag-theme-toggle-group="1"][data-ag-active-light="morandi"] > button:is([data-ag-native-theme-slot="light"], [data-ag-native-theme-slot="system"])[data-pressed] {
+  background-color: transparent !important;
+  box-shadow: none !important;
+  color: var(--secondary-foreground) !important;
+}
+
+body[data-agy-theme] [data-slot="toggle-group"][data-ag-theme-toggle-group="1"][data-ag-active-light="morandi"] > button:is([data-ag-native-theme-slot="light"], [data-ag-native-theme-slot="system"]):hover,
+[data-slot="toggle-group"][data-ag-theme-toggle-group="1"][data-ag-active-light="morandi"] > button:is([data-ag-native-theme-slot="light"], [data-ag-native-theme-slot="system"]):hover {
+  color: var(--foreground) !important;
+}
+
+/* ✳️ Absolutely！激活时星芒呈 Claude 陶土橙；MO 激活时呈矿物石青 */
+[data-slot="toggle-group"][data-ag-theme-toggle-group="1"]:not([data-ag-active-light="morandi"]) > button[data-ag-native-theme-slot="light"][data-pressed] svg {
+  color: #D97757 !important;
+}
+
+[data-slot="toggle-group"][data-ag-theme-toggle-group="1"] > button[data-ag-morandi-btn="1"][data-pressed] svg {
+  color: #3F6E7A !important;
+}
+
+:is(html[data-ag-theme-mode="dark"] body, body.dark) [data-slot="toggle-group"][data-ag-theme-toggle-group="1"] > button[data-ag-morandi-btn="1"][data-pressed] svg {
+  color: #7AA6B2 !important;
+}
+
+/* 屏蔽改装后 Light(✳️) 按钮的宿主原生“浅色”气泡，统一走 #ag-theme-btn-tooltip 显示「Absolutely！」 */
+body:has([data-slot="toggle-group"][data-ag-theme-toggle-group="1"] > button[data-ag-native-theme-slot="light"]:is(:hover, :focus-visible)) :is([role="tooltip"]:not(#ag-theme-btn-tooltip), [data-radix-popper-content-wrapper], [data-floating-ui-portal]) {
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
 }
 
 body[data-agy-theme] [data-slot="toggle-group"][data-ag-theme-toggle-group="1"][data-ag-active-night="claude-warm"] > button[data-ag-native-theme-slot="dark"][data-pressed],

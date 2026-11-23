@@ -131,7 +131,7 @@
     boot.modules || {}
   );
 
-  const DEFAULT_PRESET = boot.preset || 'high-contrast';
+  const DEFAULT_PRESET = boot.preset || 'morandi';
   const DEFAULT_DARK_PRESET = boot.darkPreset || 'onyx';
   const DEFAULT_EXCLUDE_I18N =
     'code, pre, kbd, samp, textarea, input, style, script, noscript, [contenteditable="true"], [data-markdown-root], [data-testid="user-message-content"], .agy-user-bubble, .monaco-editor, .monaco-diff-editor, .xterm, [class*="onyx-key"], .prose, .markdown, [class*="chat-message"], [class*="group/file-title"], [data-uri^="file:"], [data-uri^="vscode-"], a.inline-pill[href^="file:"], a.inline-pill[href^="vscode-"], [data-testid="conversation-row-sidebar"] a[href^="/c/"], [data-testid="conversation-row-sidebar"] span.truncate, [data-testid="conversation-row-history"] a[href^="/c/"], [data-testid="conversation-row-history"] span.truncate, [data-testid="conversation-navigator-turn"], .msg-body, #raw, [data-testid="swarm-raw"], #swarm-title, #ag-live-metrics-pill, .ag-live-metrics-pill, [data-ag-metrics-pill], #ag-live-metrics-tooltip, #ag-token-nav-section, #ag-token-analytics-panel, #ag-ta-tooltip, [data-ag-token-ui]';
@@ -574,16 +574,32 @@
       window.__ag_appearance_btn_attr_observer = null;
     }
     try {
-      document.querySelectorAll('button[data-ag-warm-night-btn]').forEach((el) => el.remove());
+      document.querySelectorAll('button[data-ag-warm-night-btn], button[data-ag-morandi-btn]').forEach((el) => el.remove());
+      document.querySelectorAll('button[data-ag-native-theme-slot="light"]').forEach((btn) => {
+        if (btn.__ag_orig_light_svg_el) {
+          const curSvg = btn.querySelector('svg[data-ag-claude-spark="1"]');
+          if (curSvg && curSvg.parentNode) {
+            curSvg.parentNode.replaceChild(btn.__ag_orig_light_svg_el, curSvg);
+          }
+          btn.__ag_orig_light_svg_el = null;
+        }
+        if (typeof btn.__ag_orig_light_aria === 'string') {
+          if (btn.__ag_orig_light_aria) btn.setAttribute('aria-label', btn.__ag_orig_light_aria);
+          else btn.removeAttribute('aria-label');
+        }
+      });
       document.querySelectorAll('[data-ag-theme-toggle-group]').forEach((g) => {
         g.removeAttribute('data-ag-theme-toggle-group');
         g.removeAttribute('data-ag-active-night');
+        g.removeAttribute('data-ag-active-light');
       });
       document.querySelectorAll('[data-ag-native-theme-slot]').forEach((b) => {
         b.removeAttribute('data-ag-native-theme-slot');
       });
     } catch (e) {}
     window.__ag_set_dark_preset_fn = null;
+    window.__ag_set_light_preset_fn = null;
+    window.__ag_set_host_light_preset = null;
     window.__ag_sync_warm_night_btn_fn = null;
     window.__ag_ensure_warm_night_btn_fn = null;
     if (window.__ag_i18n_observer) {
@@ -1362,6 +1378,8 @@
   // 3. 专属色彩预设状态联动（支持 user/config.json 热重载切换）与防白屏崩溃保护
   // ============================================================================
   const PRESETS = {
+    MORANDI: 'morandi',
+    ABSOLUTELY: 'absolutely',
     HIGH_CONTRAST: 'high-contrast',
     CLAUDE_PUREWHITE: 'claude-desktop-purewhite',
     VINTAGE_DEEP: 'vintage-deep',
@@ -1377,11 +1395,27 @@
 
   const ALL_CUSTOM_PRESET_NAMES = new Set(Object.values(PRESETS));
 
+  function resolveNormalizedLightPreset(rawVal) {
+    const s = String(rawVal || '').trim().toLowerCase();
+    if (s === PRESETS.ABSOLUTELY || s === 'claude-orange' || s === 'absolutely!') {
+      return PRESETS.ABSOLUTELY;
+    }
+    if (s === PRESETS.CLAUDE_PUREWHITE || s === PRESETS.LEGACY_OFFICIAL || s === 'claudedesktop 净白') {
+      return PRESETS.CLAUDE_PUREWHITE;
+    }
+    if (s === PRESETS.VINTAGE_DEEP || s === PRESETS.LEGACY_CHUANBAN || s === '复古深色') {
+      return PRESETS.VINTAGE_DEEP;
+    }
+    return PRESETS.MORANDI;
+  }
+
   // 当用户在 user/config.json 中修改了 preset / darkPreset 时，同步刷新 localStorage 中的预设标记
-  if (DEFAULT_PRESET && window.__ag_last_boot_preset !== DEFAULT_PRESET) {
-    window.__ag_last_boot_preset = DEFAULT_PRESET;
+  const normalizedBootPreset = resolveNormalizedLightPreset(DEFAULT_PRESET);
+  if (normalizedBootPreset && window.__ag_last_boot_preset !== normalizedBootPreset) {
+    window.__ag_last_boot_preset = normalizedBootPreset;
+    window.__ag_runtime_light_preset = normalizedBootPreset;
     try {
-      Storage.prototype.setItem.call(localStorage, 'theme-color-flavor', DEFAULT_PRESET);
+      Storage.prototype.setItem.call(localStorage, 'theme-color-flavor', normalizedBootPreset);
     } catch (e) {}
   }
   const effectiveBootDarkPreset =
@@ -1430,20 +1464,12 @@
       }
 
       const flavor =
-        Storage.prototype.getItem.call(localStorage, 'theme-color-flavor') || DEFAULT_PRESET || PRESETS.HIGH_CONTRAST;
+        window.__ag_runtime_light_preset ||
+        Storage.prototype.getItem.call(localStorage, 'theme-color-flavor') ||
+        DEFAULT_PRESET ||
+        PRESETS.MORANDI;
 
-      let targetPreset = PRESETS.HIGH_CONTRAST;
-      if (flavor === PRESETS.HIGH_CONTRAST || flavor === PRESETS.LEGACY_WARM_WHITE || flavor === '高对比版') {
-        targetPreset = PRESETS.HIGH_CONTRAST;
-      } else if (
-        flavor === PRESETS.CLAUDE_PUREWHITE ||
-        flavor === PRESETS.LEGACY_OFFICIAL ||
-        flavor === 'ClaudeDesktop 净白'
-      ) {
-        targetPreset = PRESETS.CLAUDE_PUREWHITE;
-      } else if (flavor === PRESETS.VINTAGE_DEEP || flavor === PRESETS.LEGACY_CHUANBAN || flavor === '复古深色') {
-        targetPreset = PRESETS.VINTAGE_DEEP;
-      }
+      const targetPreset = resolveNormalizedLightPreset(flavor);
 
       const prevPreset = document.documentElement.getAttribute('data-ag-preset');
       if (prevPreset !== targetPreset) {
@@ -1608,6 +1634,15 @@
       window.__ag_sync_preset_fn();
     }
   };
+  window.__ag_set_host_light_preset = (nextLightPreset) => {
+    window.__ag_runtime_light_preset = resolveNormalizedLightPreset(nextLightPreset);
+    try {
+      Storage.prototype.setItem.call(localStorage, 'theme-color-flavor', window.__ag_runtime_light_preset);
+    } catch (e) {}
+    if (typeof window.__ag_sync_preset_fn === 'function') {
+      window.__ag_sync_preset_fn();
+    }
+  };
 
   if (!window.__ag_preset_hook_installed) {
     window.__ag_preset_hook_installed = true;
@@ -1747,12 +1782,42 @@
       }
     }
 
+    function setRuntimeLightPreset(nextPreset, persist = true) {
+      const normalized = resolveNormalizedLightPreset(nextPreset);
+      window.__ag_runtime_light_preset = normalized;
+      try {
+        Storage.prototype.setItem.call(localStorage, 'theme-color-flavor', normalized);
+      } catch (e) {}
+      syncChuanbanPreset();
+      if (typeof window.__ag_sync_warm_night_btn_fn === 'function') {
+        window.__ag_sync_warm_night_btn_fn();
+      }
+      if (persist && typeof window.__agSetLightPreset === 'function') {
+        try {
+          window.__agSetLightPreset(normalized);
+        } catch (e) {}
+      }
+    }
+
+    // 仿 Claude 近似有机放射性星芒路径（12 道长短微错落圆头射线）与 MO 徽标路径
+    const CLAUDE_SPARK_RAYS_PATH =
+      'M12 9.7L12 2.6M13.12 10.08L16.1 5.35M13.92 10.92L20.15 7.6M14.2 12.06L19.85 12.26M13.88 13.18L19.9 17.1M13.02 13.94L15.48 18.52M11.94 14.2L11.8 21.25M10.82 13.88L7.76 18.5M10.06 13.06L3.9 16.32M9.8 11.94L4.25 11.74M10.12 10.82L4.1 7.0M10.94 10.06L8.38 5.45';
+    const MO_BADGE_PATH_M =
+      'M1.35 12.45V3.55h1.9l2.75 5.35 2.75-5.35h1.9v8.9H9.0V6.5L6.52 11.3H5.48L3.0 6.5v5.95H1.35Z';
+    const MO_BADGE_PATH_O =
+      'M16.55 3.4c2.48 0 4.18 1.9 4.18 4.6s-1.7 4.6-4.18 4.6-4.18-1.9-4.18-4.6 1.7-4.6 4.18-4.6Zm0 1.6c-1.42 0-2.42 1.2-2.42 3.0s1.0 3.0 2.42 3.0 2.42-1.2 2.42-3.0-1.0-3.0-2.42-3.0Z';
+
     function identifyNativeThemeButtons(group) {
       if (!group || group.nodeType !== 1) return null;
       const nativeBtns = [];
       for (let i = 0; i < group.children.length; i++) {
         const ch = group.children[i];
-        if (ch && ch.tagName === 'BUTTON' && !ch.hasAttribute('data-ag-warm-night-btn')) {
+        if (
+          ch &&
+          ch.tagName === 'BUTTON' &&
+          !ch.hasAttribute('data-ag-warm-night-btn') &&
+          !ch.hasAttribute('data-ag-morandi-btn')
+        ) {
           nativeBtns.push(ch);
         }
       }
@@ -1764,7 +1829,15 @@
         const d = pathEl ? String(pathEl.getAttribute('d') || '') : '';
         const aria = String(btn.getAttribute('aria-label') || '').trim().toLowerCase();
         if (d.startsWith('M263.85-140') || aria === 'system' || aria === '跟随系统') return 'system';
-        if (d.startsWith('M565-395') || aria === 'light' || aria === '浅色' || aria === '浅色主题') return 'light';
+        if (
+          d.startsWith('M565-395') ||
+          aria === 'light' ||
+          aria === '浅色' ||
+          aria === '浅色主题' ||
+          aria === 'absolutely！'
+        ) {
+          return 'light';
+        }
         if (d.startsWith('M481.15-140') || aria === 'dark' || aria === '深色' || aria === '深色主题') return 'dark';
         return null;
       };
@@ -1779,11 +1852,43 @@
 
     function syncAppearanceWarmNightToggle() {
       const isWarmNight = document.documentElement.getAttribute('data-ag-dark-preset') === DARK_PRESETS.CLAUDE_WARM;
+      const isMorandiLight = document.documentElement.getAttribute('data-ag-preset') !== PRESETS.ABSOLUTELY;
+      const isDarkNow =
+        document.documentElement.getAttribute('data-ag-theme-mode') === 'dark' ||
+        !!(document.body && document.body.classList.contains('dark'));
       const groups = document.querySelectorAll('[data-slot="toggle-group"][data-ag-theme-toggle-group="1"]');
       for (let i = 0; i < groups.length; i++) {
         const group = groups[i];
+        const sysBtn = group.querySelector('button[data-ag-native-theme-slot="system"]');
+        const lightBtn = group.querySelector('button[data-ag-native-theme-slot="light"]');
+        const morandiBtn = group.querySelector('button[data-ag-morandi-btn="1"]');
         const bookBtn = group.querySelector('button[data-ag-warm-night-btn="1"]');
         const darkBtn = group.querySelector('button[data-ag-native-theme-slot="dark"]');
+
+        if (lightBtn && morandiBtn) {
+          const isExplicitLightSelected =
+            lightBtn.hasAttribute('data-pressed') || lightBtn.getAttribute('aria-pressed') === 'true';
+          const isSysSelected =
+            !!(sysBtn && (sysBtn.hasAttribute('data-pressed') || sysBtn.getAttribute('aria-pressed') === 'true'));
+          const moActive =
+            !isDarkNow &&
+            isMorandiLight &&
+            (isExplicitLightSelected || (isSysSelected && !window.__ag_user_explicit_system));
+          if (moActive) {
+            if (!morandiBtn.hasAttribute('data-pressed')) morandiBtn.setAttribute('data-pressed', '');
+            if (morandiBtn.getAttribute('aria-pressed') !== 'true') morandiBtn.setAttribute('aria-pressed', 'true');
+            if (group.getAttribute('data-ag-active-light') !== PRESETS.MORANDI) {
+              group.setAttribute('data-ag-active-light', PRESETS.MORANDI);
+            }
+          } else {
+            if (morandiBtn.hasAttribute('data-pressed')) morandiBtn.removeAttribute('data-pressed');
+            if (morandiBtn.getAttribute('aria-pressed') !== 'false') morandiBtn.setAttribute('aria-pressed', 'false');
+            if (group.hasAttribute('data-ag-active-light')) {
+              group.removeAttribute('data-ag-active-light');
+            }
+          }
+        }
+
         if (!bookBtn || !darkBtn) continue;
         const isExplicitDarkSelected =
           darkBtn.hasAttribute('data-pressed') || darkBtn.getAttribute('aria-pressed') === 'true';
@@ -1813,11 +1918,77 @@
       lightBtn.setAttribute('data-ag-native-theme-slot', 'light');
       darkBtn.setAttribute('data-ag-native-theme-slot', 'dark');
 
+      const svgNS = 'http://www.w3.org/2000/svg';
+
+      // 将原 Light(☀️) 按钮改装为船板专属「Absolutely！」仿 Claude 放射性星芒标志
+      if (!lightBtn.querySelector('svg[data-ag-claude-spark="1"]')) {
+        const origSvg = lightBtn.querySelector('svg');
+        if (origSvg && origSvg.parentNode) {
+          lightBtn.__ag_orig_light_svg_el = origSvg;
+          if (lightBtn.__ag_orig_light_aria === undefined) {
+            lightBtn.__ag_orig_light_aria = lightBtn.getAttribute('aria-label') || '';
+          }
+          const sparkSvg = document.createElementNS(svgNS, 'svg');
+          sparkSvg.setAttribute('xmlns', svgNS);
+          sparkSvg.setAttribute('data-ag-claude-spark', '1');
+          sparkSvg.setAttribute('width', '16');
+          sparkSvg.setAttribute('height', '16');
+          sparkSvg.setAttribute('viewBox', '0 0 24 24');
+          sparkSvg.setAttribute('fill', 'none');
+          sparkSvg.setAttribute('aria-hidden', 'true');
+          const coreCircle = document.createElementNS(svgNS, 'circle');
+          coreCircle.setAttribute('cx', '12');
+          coreCircle.setAttribute('cy', '12');
+          coreCircle.setAttribute('r', '2.3');
+          coreCircle.setAttribute('fill', 'currentColor');
+          const raysPath = document.createElementNS(svgNS, 'path');
+          raysPath.setAttribute('d', CLAUDE_SPARK_RAYS_PATH);
+          raysPath.setAttribute('stroke', 'currentColor');
+          raysPath.setAttribute('stroke-width', '1.95');
+          raysPath.setAttribute('stroke-linecap', 'round');
+          sparkSvg.appendChild(coreCircle);
+          sparkSvg.appendChild(raysPath);
+          origSvg.parentNode.replaceChild(sparkSvg, origSvg);
+        }
+      }
+      lightBtn.setAttribute('aria-label', 'Absolutely！');
+      if (lightBtn.hasAttribute('title')) lightBtn.removeAttribute('title');
+
+      if (!lightBtn.__ag_absolutely_hooked) {
+        lightBtn.__ag_absolutely_hooked = true;
+        lightBtn.addEventListener('mouseenter', () => {
+          scheduleThemeBtnTooltip(lightBtn, 'Absolutely！');
+        });
+        lightBtn.addEventListener('mouseleave', hideThemeBtnTooltip);
+        lightBtn.addEventListener('focus', () => {
+          scheduleThemeBtnTooltip(lightBtn, 'Absolutely！');
+        });
+        lightBtn.addEventListener('blur', hideThemeBtnTooltip);
+        lightBtn.addEventListener(
+          'click',
+          () => {
+            hideThemeBtnTooltip();
+            window.__ag_user_explicit_system = false;
+            if (window.__ag_internal_sun_click) return;
+            if (typeof window.__ag_set_light_preset_fn === 'function') {
+              window.__ag_set_light_preset_fn(PRESETS.ABSOLUTELY, true);
+            }
+            requestAnimationFrame(() => {
+              if (typeof window.__ag_sync_warm_night_btn_fn === 'function') {
+                window.__ag_sync_warm_night_btn_fn();
+              }
+            });
+          },
+          true
+        );
+      }
+
       if (!darkBtn.__ag_warm_night_hooked) {
         darkBtn.__ag_warm_night_hooked = true;
         darkBtn.addEventListener(
           'click',
           () => {
+            window.__ag_user_explicit_system = false;
             if (window.__ag_internal_moon_click) return;
             if (typeof window.__ag_set_dark_preset_fn === 'function') {
               window.__ag_set_dark_preset_fn(DARK_PRESETS.ONYX, true);
@@ -1831,21 +2002,20 @@
           true
         );
       }
-      for (const otherBtn of [sysBtn, lightBtn]) {
-        if (!otherBtn.__ag_warm_night_hooked) {
-          otherBtn.__ag_warm_night_hooked = true;
-          otherBtn.addEventListener(
-            'click',
-            () => {
-              requestAnimationFrame(() => {
-                if (typeof window.__ag_sync_warm_night_btn_fn === 'function') {
-                  window.__ag_sync_warm_night_btn_fn();
-                }
-              });
-            },
-            true
-          );
-        }
+      if (!sysBtn.__ag_warm_night_hooked) {
+        sysBtn.__ag_warm_night_hooked = true;
+        sysBtn.addEventListener(
+          'click',
+          () => {
+            window.__ag_user_explicit_system = true;
+            requestAnimationFrame(() => {
+              if (typeof window.__ag_sync_warm_night_btn_fn === 'function') {
+                window.__ag_sync_warm_night_btn_fn();
+              }
+            });
+          },
+          true
+        );
       }
 
       if (window.__ag_appearance_btn_attr_observer) {
@@ -1865,6 +2035,70 @@
         } catch (e) {}
       }
 
+      // 在原本书卷的位置 (order: 3) 新添「MO」按钮（默认激活：莫兰迪色）
+      let morandiBtn = group.querySelector('button[data-ag-morandi-btn="1"]');
+      if (!morandiBtn) {
+        morandiBtn = document.createElement('button');
+        morandiBtn.type = 'button';
+        morandiBtn.setAttribute('data-ag-morandi-btn', '1');
+        morandiBtn.setAttribute('aria-label', '莫兰迪色');
+        morandiBtn.setAttribute('aria-pressed', 'false');
+        morandiBtn.className = lightBtn.className;
+
+        const moSpan = document.createElement('span');
+        moSpan.className = 'shrink-0 flex items-center';
+        const moSvg = document.createElementNS(svgNS, 'svg');
+        moSvg.setAttribute('xmlns', svgNS);
+        moSvg.setAttribute('width', '18');
+        moSvg.setAttribute('height', '16');
+        moSvg.setAttribute('viewBox', '0 0 22 16');
+        moSvg.setAttribute('fill', 'currentColor');
+        moSvg.setAttribute('aria-hidden', 'true');
+        const pathM = document.createElementNS(svgNS, 'path');
+        pathM.setAttribute('d', MO_BADGE_PATH_M);
+        const pathO = document.createElementNS(svgNS, 'path');
+        pathO.setAttribute('d', MO_BADGE_PATH_O);
+        pathO.setAttribute('fill-rule', 'evenodd');
+        moSvg.appendChild(pathM);
+        moSvg.appendChild(pathO);
+        moSpan.appendChild(moSvg);
+        morandiBtn.appendChild(moSpan);
+
+        morandiBtn.addEventListener('mouseenter', () => {
+          scheduleThemeBtnTooltip(morandiBtn, '莫兰迪色');
+        });
+        morandiBtn.addEventListener('mouseleave', hideThemeBtnTooltip);
+        morandiBtn.addEventListener('focus', () => {
+          scheduleThemeBtnTooltip(morandiBtn, '莫兰迪色');
+        });
+        morandiBtn.addEventListener('blur', hideThemeBtnTooltip);
+        morandiBtn.addEventListener('click', (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          hideThemeBtnTooltip();
+          window.__ag_user_explicit_system = false;
+          if (typeof window.__ag_set_light_preset_fn === 'function') {
+            window.__ag_set_light_preset_fn(PRESETS.MORANDI, true);
+          }
+          const sunPressed = lightBtn.hasAttribute('data-pressed') || lightBtn.getAttribute('aria-pressed') === 'true';
+          if (!sunPressed) {
+            window.__ag_internal_sun_click = true;
+            try {
+              lightBtn.click();
+            } finally {
+              window.__ag_internal_sun_click = false;
+            }
+          }
+          requestAnimationFrame(() => {
+            if (typeof window.__ag_sync_warm_night_btn_fn === 'function') {
+              window.__ag_sync_warm_night_btn_fn();
+            }
+          });
+        });
+
+        group.appendChild(morandiBtn);
+      }
+
       let bookBtn = group.querySelector('button[data-ag-warm-night-btn="1"]');
       if (!bookBtn) {
         bookBtn = document.createElement('button');
@@ -1876,7 +2110,6 @@
 
         const spanWrap = document.createElement('span');
         spanWrap.className = 'shrink-0 flex items-center';
-        const svgNS = 'http://www.w3.org/2000/svg';
         const svgEl = document.createElementNS(svgNS, 'svg');
         svgEl.setAttribute('xmlns', svgNS);
         svgEl.setAttribute('width', '16');
@@ -1902,6 +2135,7 @@
           ev.preventDefault();
           ev.stopPropagation();
           hideThemeBtnTooltip();
+          window.__ag_user_explicit_system = false;
           if (typeof window.__ag_set_dark_preset_fn === 'function') {
             window.__ag_set_dark_preset_fn(DARK_PRESETS.CLAUDE_WARM, true);
           }
@@ -1921,7 +2155,7 @@
           });
         });
 
-        // 物理挂载在末尾（不干扰 React 前 3 个按钮的 nextSibling 链），由 CSS order: 3 排入太阳与月亮正中间
+        // 物理挂载在末尾（不干扰 React 前 3 个按钮的 nextSibling 链），由 CSS order 排位
         group.appendChild(bookBtn);
       }
       return true;
@@ -1946,6 +2180,7 @@
     }
 
     window.__ag_set_dark_preset_fn = setRuntimeDarkPreset;
+    window.__ag_set_light_preset_fn = setRuntimeLightPreset;
     window.__ag_sync_warm_night_btn_fn = syncAppearanceWarmNightToggle;
     window.__ag_ensure_warm_night_btn_fn = ensureAppearanceWarmNightToggle;
 
