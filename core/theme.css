@@ -457,66 +457,66 @@ html[data-ag-os="darwin"]:not([data-ag-theme-mode="dark"]) body:not(.dark):not(.
   box-shadow: inset 0 0 0 1px var(--card-edge, rgba(0, 0, 0, 0.35)) !important;
 }
 
-/* 输入框外托盘与内卡片几何（色彩由 Part II 白天 / Part III 黑夜变量驱动） */
-:is(#antigravity\.agentSidePanelInputBox, [id="antigravity.agentSidePanelInputBox"], .surface-composer.bg-card-border) {
-  background-color: var(--ag-composer-tray-bg, #F7EFE6) !important;
+/* 输入框单层合并蜡封粗线几何（消除原 p-px 灰底夹层与内卡片二次描边的双层套框视觉） */
+:is(#antigravity\.agentSidePanelInputBox, [id="antigravity.agentSidePanelInputBox"], .surface-composer, .surface-composer.bg-card-border) {
+  padding: 0 !important;
+  background-color: var(--ag-composer-card-bg, #FAF8F3) !important;
   outline: none !important;
-  transition: border-color 220ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 220ms cubic-bezier(0.16, 1, 0.3, 1) !important;
+  transition: border-color 180ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 200ms cubic-bezier(0.16, 1, 0.3, 1) !important;
 }
 
-/* 场景 1.1：具体会话日常常态（设计 A，基础层；消除 :not(:has(...)) 反向子树重算） */
-html:not([data-ag-wax-seal="off"]) :is(#antigravity\.agentSidePanelInputBox, [id="antigravity.agentSidePanelInputBox"], .surface-composer.bg-card-border) {
-  border: 1.5px solid var(--ag-seal-chat-border, rgba(116, 34, 26, 0.36)) !important;
-  box-shadow: var(--ag-seal-chat-shadow, 0 1px 3px rgba(116, 34, 26, 0.03)) !important;
+/* 未聚焦常态（会话页与首页统一）：深橙蜡封主色调的浅色版合并粗线 */
+html:not([data-ag-wax-seal="off"]) :is(#antigravity\.agentSidePanelInputBox, [id="antigravity.agentSidePanelInputBox"], .surface-composer, .surface-composer.bg-card-border) {
+  border: 2px solid var(--ag-seal-chat-border, #D7A28E) !important;
+  box-shadow: var(--ag-seal-chat-shadow, 0 2px 8px -2px rgba(58, 48, 40, 0.05)) !important;
 }
 
-/* 场景 1.2：具体会话悬停 / 聚焦（设计 B） */
-html:not([data-ag-wax-seal="off"]) :is(#antigravity\.agentSidePanelInputBox, [id="antigravity.agentSidePanelInputBox"], .surface-composer.bg-card-border):is(:hover, :focus-within) {
-  border: 1.5px solid var(--ag-seal-chat-focus-border, #74221A) !important;
-  box-shadow: var(--ag-seal-chat-focus-shadow, 0 1px 4px rgba(116, 34, 26, 0.12)) !important;
+/* 未聚焦悬停微过渡 */
+html:not([data-ag-wax-seal="off"]) :is(#antigravity\.agentSidePanelInputBox, [id="antigravity.agentSidePanelInputBox"], .surface-composer, .surface-composer.bg-card-border):hover:not(:focus-within) {
+  border-color: var(--ag-seal-chat-hover-border, #C4836B) !important;
 }
 
-/* 场景 2.1：首页新建对话日常常态（设计 C，高特异度覆盖 1.1） */
-html:not([data-ag-wax-seal="off"]) :is(#antigravity\.agentSidePanelInputBox, [id="antigravity.agentSidePanelInputBox"], .surface-composer.bg-card-border):has([data-testid="branch-pill-trigger"], [data-testid="project-branch-picker"], [data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"]),
-html:not([data-ag-wax-seal="off"])[data-ag-page-type="home"] :is(#antigravity\.agentSidePanelInputBox, [id="antigravity.agentSidePanelInputBox"], .surface-composer.bg-card-border) {
-  border: 1.5px solid var(--ag-seal-home-border, transparent) !important;
-  box-shadow: var(--ag-seal-home-shadow, none) !important;
+/* 聚焦态（:focus-within）：转换为无暗淡效果的 100% 实色深橙蜡封线 */
+html:not([data-ag-wax-seal="off"]) :is(#antigravity\.agentSidePanelInputBox, [id="antigravity.agentSidePanelInputBox"], .surface-composer, .surface-composer.bg-card-border):focus-within {
+  border: 2px solid var(--ag-seal-chat-focus-border, #9A4732) !important;
+  box-shadow: var(--ag-seal-chat-focus-shadow, 0 6px 20px -4px rgba(138, 63, 45, 0.12)) !important;
 }
 
-/* 场景 2.2：首页新建对话悬停 / 聚焦（设计 A，最高特异度覆盖 1.2 & 2.1） */
-html:not([data-ag-wax-seal="off"]) :is(#antigravity\.agentSidePanelInputBox, [id="antigravity.agentSidePanelInputBox"], .surface-composer.bg-card-border):has([data-testid="branch-pill-trigger"], [data-testid="project-branch-picker"], [data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [aria-label^="Select project"], [aria-label^="选择项目"]):is(:hover, :focus-within),
-html:not([data-ag-wax-seal="off"])[data-ag-page-type="home"] :is(#antigravity\.agentSidePanelInputBox, [id="antigravity.agentSidePanelInputBox"], .surface-composer.bg-card-border):is(:hover, :focus-within) {
-  border: 1.5px solid var(--ag-seal-home-focus-border, rgba(116, 34, 26, 0.36)) !important;
-  box-shadow: var(--ag-seal-home-focus-shadow, 0 1px 3px rgba(116, 34, 26, 0.04)) !important;
-}
-
-/* 显式关闭蜡封模块时回退 1px 标准描边 */
-html[data-ag-wax-seal="off"] :is(#antigravity\.agentSidePanelInputBox, [id="antigravity.agentSidePanelInputBox"], .surface-composer.bg-card-border),
-html[data-ag-wax-seal="off"] :is(#antigravity\.agentSidePanelInputBox, [id="antigravity.agentSidePanelInputBox"], .surface-composer.bg-card-border):is(:hover, :focus-within) {
-  border: 1px solid var(--ag-seal-off-border, rgba(31, 30, 29, 0.15)) !important;
+/* 显式关闭蜡封模块时回退 1px 标准单线描边 */
+html[data-ag-wax-seal="off"] :is(#antigravity\.agentSidePanelInputBox, [id="antigravity.agentSidePanelInputBox"], .surface-composer, .surface-composer.bg-card-border),
+html[data-ag-wax-seal="off"] :is(#antigravity\.agentSidePanelInputBox, [id="antigravity.agentSidePanelInputBox"], .surface-composer, .surface-composer.bg-card-border):is(:hover, :focus-within) {
+  border: 1px solid var(--ag-seal-off-border, rgba(31, 30, 29, 0.18)) !important;
   box-shadow: none !important;
 }
 
-/* 输入框内部卡片 */
+/* 输入框内部卡片：彻底清空内层独立描边与内阴影，与外框融合为单一视觉层 */
 body[data-agy-theme] .surface-composer > .surface-composer-card,
 body[data-agy-theme][data-newux-theme="onyx"] .surface-composer > .surface-composer-card,
 .surface-composer-card.bg-card,
 [id="antigravity.agentSidePanelInputBox"] .surface-composer-card,
-[id="antigravity.agentSidePanelInputBox"] > div.bg-card {
-  background-color: var(--ag-composer-card-bg, #FFFFFF) !important;
-  border: 1px solid var(--ag-composer-card-border, transparent) !important;
-  box-shadow: var(--ag-composer-card-shadow, 0 1px 2px rgba(0, 0, 0, 0.02)) !important;
-  outline: none !important;
-  transition: box-shadow 250ms cubic-bezier(0.16, 1, 0.3, 1), border-color 250ms ease !important;
-}
-
+[id="antigravity.agentSidePanelInputBox"] > div.bg-card,
 body[data-agy-theme] .surface-composer:focus-within > .surface-composer-card,
 body[data-agy-theme][data-newux-theme="onyx"] .surface-composer:focus-within > .surface-composer-card,
 .surface-composer:focus-within > .surface-composer-card,
 .surface-composer-card:focus-within,
 [id="antigravity.agentSidePanelInputBox"]:focus-within .surface-composer-card {
-  border-color: var(--ag-composer-card-focus-border, transparent) !important;
-  box-shadow: var(--ag-composer-card-focus-shadow, 0 6px 20px -2px rgba(60, 20, 15, 0.07), 0 2px 6px -1px rgba(0, 0, 0, 0.04)) !important;
+  background-color: var(--ag-composer-card-bg, #FAF8F3) !important;
+  border: 0 solid transparent !important;
+  box-shadow: none !important;
+  outline: none !important;
+  border-radius: calc(var(--nux-composer-frame-radius, 21px) - 2px) !important;
+}
+
+:is(#antigravity\.agentSidePanelInputBox, [id="antigravity.agentSidePanelInputBox"], .surface-composer) > div:not(.surface-composer-card):not([aria-hidden="true"]):not(.voice-glow-ring) ~ .surface-composer-card {
+  border-top-left-radius: 0 !important;
+  border-top-right-radius: 0 !important;
+}
+
+/* 当存在展开的顶部附加栏（如排队消息、引用块或分支选择条）时，仅作底部分隔线而不产生外围套框 */
+:is(#antigravity\.agentSidePanelInputBox, [id="antigravity.agentSidePanelInputBox"], .surface-composer) > div:first-child:not(.surface-composer-card):not([aria-hidden="true"]):not(.voice-glow-ring) {
+  background-color: var(--ag-composer-tray-bg, #EAE4D8) !important;
+  border-bottom: 1px solid var(--ag-composer-tray-divider, rgba(154, 71, 50, 0.15)) !important;
+  border-radius: calc(var(--nux-composer-frame-radius, 21px) - 2px) calc(var(--nux-composer-frame-radius, 21px) - 2px) 0 0 !important;
 }
 
 /* 输入框顶部工具栏（排除 .surface-composer-card 本身）、底部按钮与发送/取消按钮 */
@@ -742,19 +742,17 @@ button[data-project-card="true"] span {
 html:not([data-ag-theme-mode="dark"]):not([data-ag-preset="absolutely"]),
 html:not([data-ag-theme-mode="dark"]):not([data-ag-preset="absolutely"]) body:not(.dark) {
   --ag-composer-tray-bg: #EAE4D8;
+  --ag-composer-tray-divider: rgba(154, 71, 50, 0.16);
   --ag-composer-card-bg: #FAF8F3;
-  --ag-composer-card-border: rgba(63, 110, 122, 0.10);
-  --ag-composer-card-shadow: 0 1px 2px rgba(38, 36, 33, 0.03);
-  --ag-composer-card-focus-border: rgba(63, 110, 122, 0.22);
-  --ag-composer-card-focus-shadow: 0 6px 20px -2px rgba(58, 48, 40, 0.08), 0 2px 6px -1px rgba(38, 36, 33, 0.04);
-  --ag-seal-home-border: transparent;
-  --ag-seal-home-shadow: none;
-  --ag-seal-home-focus-border: rgba(138, 63, 45, 0.36);
-  --ag-seal-home-focus-shadow: 0 1px 3px rgba(138, 63, 45, 0.05);
-  --ag-seal-chat-border: rgba(138, 63, 45, 0.32);
-  --ag-seal-chat-shadow: 0 1px 3px rgba(138, 63, 45, 0.04);
-  --ag-seal-chat-focus-border: var(--ag-wax-seal-hover, #8A3F2D);
-  --ag-seal-chat-focus-shadow: 0 1px 5px rgba(138, 63, 45, 0.13);
+  --ag-composer-card-border: transparent;
+  --ag-composer-card-shadow: none;
+  --ag-composer-card-focus-border: transparent;
+  --ag-composer-card-focus-shadow: none;
+  --ag-seal-chat-border: #D7A28E;
+  --ag-seal-chat-hover-border: #C4836B;
+  --ag-seal-chat-shadow: 0 2px 8px -2px rgba(58, 48, 40, 0.05);
+  --ag-seal-chat-focus-border: #9A4732;
+  --ag-seal-chat-focus-shadow: 0 6px 20px -4px rgba(154, 71, 50, 0.14);
   --ag-seal-off-border: rgba(54, 49, 43, 0.18);
   --ag-composer-top-fg: #46423C;
   --ag-composer-top-hover-bg: rgba(63, 110, 122, 0.09);
@@ -1019,6 +1017,9 @@ html:not([data-ag-theme-mode="dark"])[data-ag-preset="vintage-deep"] body:not(.d
   --home-glow: rgba(63, 110, 122, 0.05) !important;
   --ag-composer-tray-bg: #DFD4C1;
   --ag-composer-card-bg: #F6F0E6;
+  --ag-seal-chat-border: #CFA08B;
+  --ag-seal-chat-hover-border: #BC7D64;
+  --ag-seal-chat-focus-border: #94422D;
   --code-foreground: #312C25 !important;
 }
 
@@ -1137,19 +1138,17 @@ html[data-ag-preset="absolutely"]:not([data-ag-theme-mode="dark"]) body:not(.dar
   --glass-highlight: transparent !important;
   --home-glow: transparent !important;
   --ag-composer-tray-bg: #F7EFE6;
+  --ag-composer-tray-divider: rgba(166, 66, 41, 0.16);
   --ag-composer-card-bg: #FFFFFF;
   --ag-composer-card-border: transparent;
-  --ag-composer-card-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
+  --ag-composer-card-shadow: none;
   --ag-composer-card-focus-border: transparent;
-  --ag-composer-card-focus-shadow: 0 6px 20px -2px rgba(60, 20, 15, 0.07), 0 2px 6px -1px rgba(0, 0, 0, 0.04);
-  --ag-seal-home-border: transparent;
-  --ag-seal-home-shadow: none;
-  --ag-seal-home-focus-border: rgba(116, 34, 26, 0.36);
-  --ag-seal-home-focus-shadow: 0 1px 3px rgba(116, 34, 26, 0.04);
-  --ag-seal-chat-border: rgba(116, 34, 26, 0.36);
-  --ag-seal-chat-shadow: 0 1px 3px rgba(116, 34, 26, 0.03);
-  --ag-seal-chat-focus-border: #74221A;
-  --ag-seal-chat-focus-shadow: 0 1px 4px rgba(116, 34, 26, 0.12);
+  --ag-composer-card-focus-shadow: none;
+  --ag-seal-chat-border: #DFAC98;
+  --ag-seal-chat-hover-border: #CC876E;
+  --ag-seal-chat-shadow: 0 2px 8px -2px rgba(60, 20, 15, 0.05);
+  --ag-seal-chat-focus-border: #A64229;
+  --ag-seal-chat-focus-shadow: 0 6px 20px -4px rgba(166, 66, 41, 0.15);
   --ag-seal-off-border: rgba(31, 30, 29, 0.15);
   --ag-composer-top-fg: #383431;
   --ag-composer-top-hover-bg: rgba(217, 119, 87, 0.08);
@@ -1351,20 +1350,18 @@ html[data-ag-preset] body[data-agy-theme].dark {
   --ag-ink-shadow-prose: none !important;
   --ag-ink-shadow-prose-bold: none !important;
   /* 黑夜模式组件级色彩变量绑定（深海石青 × 赤陶微光） */
-  --ag-composer-tray-bg: #111619;
+  --ag-composer-tray-bg: #141A1E;
+  --ag-composer-tray-divider: rgba(196, 107, 79, 0.22);
   --ag-composer-card-bg: #1B2125;
-  --ag-composer-card-border: rgba(220, 230, 233, 0.08);
-  --ag-composer-card-shadow: inset 0 1px 0 rgba(220, 230, 233, 0.06), 0 3px 10px -2px rgba(0, 0, 0, 0.38);
-  --ag-composer-card-focus-border: rgba(110, 154, 166, 0.38);
-  --ag-composer-card-focus-shadow: inset 0 1px 0 rgba(220, 230, 233, 0.09), 0 6px 18px -3px rgba(0, 0, 0, 0.48);
-  --ag-seal-home-border: rgba(220, 230, 233, 0.085);
-  --ag-seal-home-shadow: 0 14px 34px -10px rgba(0, 0, 0, 0.45);
-  --ag-seal-home-focus-border: rgba(110, 154, 166, 0.48);
-  --ag-seal-home-focus-shadow: 0 16px 36px -10px rgba(0, 0, 0, 0.55);
-  --ag-seal-chat-border: rgba(220, 230, 233, 0.13);
-  --ag-seal-chat-shadow: 0 16px 36px -10px rgba(0, 0, 0, 0.5);
-  --ag-seal-chat-focus-border: var(--ag-dark-wax-seal-hover, rgba(110, 154, 166, 0.72));
-  --ag-seal-chat-focus-shadow: 0 0 0 1px rgba(110, 154, 166, 0.18), 0 18px 40px -12px rgba(0, 0, 0, 0.55);
+  --ag-composer-card-border: transparent;
+  --ag-composer-card-shadow: none;
+  --ag-composer-card-focus-border: transparent;
+  --ag-composer-card-focus-shadow: none;
+  --ag-seal-chat-border: #634036;
+  --ag-seal-chat-hover-border: #845243;
+  --ag-seal-chat-shadow: 0 14px 32px -10px rgba(0, 0, 0, 0.48);
+  --ag-seal-chat-focus-border: #C46B4F;
+  --ag-seal-chat-focus-shadow: 0 16px 36px -10px rgba(0, 0, 0, 0.56);
   --ag-seal-off-border: rgba(220, 230, 233, 0.12);
   --ag-composer-top-fg: #C8D2D5;
   --ag-composer-top-hover-bg: rgba(110, 154, 166, 0.12);
@@ -1502,21 +1499,18 @@ html[data-ag-dark-preset="claude-warm"][data-ag-preset] body[data-agy-theme].dar
   --cta: #C86D51 !important;
   --success: #8EC0AF !important;
   --color-success: #8EC0AF !important;
-  --ag-composer-tray-bg: #191815;
+  --ag-composer-tray-bg: #22201C;
+  --ag-composer-tray-divider: rgba(201, 110, 81, 0.22);
   --ag-composer-card-bg: #292723;
-  --ag-composer-card-border: rgba(236, 231, 217, 0.08);
-  --ag-composer-card-shadow: inset 0 1px 0 rgba(236, 231, 217, 0.06), 0 3px 10px -2px rgba(0, 0, 0, 0.42);
-  --ag-composer-card-focus-border: rgba(122, 166, 178, 0.36);
-  --ag-composer-card-focus-shadow: inset 0 1px 0 rgba(236, 231, 217, 0.08), 0 6px 18px -3px rgba(0, 0, 0, 0.50);
-  --ag-seal-home-border: rgba(236, 231, 217, 0.09);
-  --ag-seal-home-shadow: 0 14px 34px -10px rgba(0, 0, 0, 0.50);
-  --ag-seal-home-focus-border: rgba(217, 119, 87, 0.50);
-  --ag-seal-home-focus-shadow: 0 16px 36px -10px rgba(0, 0, 0, 0.60);
-  --ag-seal-chat-border: rgba(236, 231, 217, 0.13);
-  --ag-seal-chat-shadow: 0 16px 36px -10px rgba(0, 0, 0, 0.55);
-  --ag-dark-wax-seal-hover: rgba(217, 119, 87, 0.68);
-  --ag-seal-chat-focus-border: var(--ag-dark-wax-seal-hover, rgba(217, 119, 87, 0.68));
-  --ag-seal-chat-focus-shadow: 0 0 0 1px rgba(217, 119, 87, 0.18), 0 18px 40px -12px rgba(0, 0, 0, 0.60);
+  --ag-composer-card-border: transparent;
+  --ag-composer-card-shadow: none;
+  --ag-composer-card-focus-border: transparent;
+  --ag-composer-card-focus-shadow: none;
+  --ag-seal-chat-border: #6E4436;
+  --ag-seal-chat-hover-border: #8D5542;
+  --ag-seal-chat-shadow: 0 14px 32px -10px rgba(0, 0, 0, 0.52);
+  --ag-seal-chat-focus-border: #C96E51;
+  --ag-seal-chat-focus-shadow: 0 16px 36px -10px rgba(0, 0, 0, 0.60);
   --ag-seal-off-border: rgba(236, 231, 217, 0.11);
   --ag-composer-top-fg: #D5CFC0;
   --ag-composer-top-hover-bg: rgba(122, 166, 178, 0.11);
