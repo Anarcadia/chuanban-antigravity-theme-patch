@@ -584,7 +584,7 @@
                 ? '#EFECE5'
                 : '#E8E3D9';
       const defaultDarkBg =
-        curPreset === 'native' ? '#131313' : curDarkPreset === 'claude-warm' ? '#191815' : '#101417';
+        curPreset === 'native' ? '#131313' : curDarkPreset === 'claude-warm' ? '#1B1A18' : '#101417';
       const defaultLightFg =
         curPreset === 'native'
           ? '#0A0A0C'
@@ -594,7 +594,7 @@
               ? '#26221C'
               : '#24221F';
       const defaultDarkFg =
-        curPreset === 'native' ? '#FAFAFA' : curDarkPreset === 'claude-warm' ? '#ECE7D9' : '#E4E8E9';
+        curPreset === 'native' ? '#FAFAFA' : curDarkPreset === 'claude-warm' ? '#F3F0E4' : '#E4E8E9';
       const fbBg = (customFallbacks && customFallbacks.bg) || (isDark ? defaultDarkBg : defaultLightBg);
       const fbFg = (customFallbacks && customFallbacks.fg) || (isDark ? defaultDarkFg : defaultLightFg);
       // Windows 11 TitleBarOverlay 物理位于顶栏菜单条最右侧：优先读取顶栏容器实色，其次读侧栏实色，最后回落 CSS 变量与全预设色表
@@ -1853,6 +1853,7 @@
             '#F3EAD8',
             '#F8F7F4',
             '#15191C',
+            '#242320',
             '#21201D',
             '#1B1A18'
           ]);
