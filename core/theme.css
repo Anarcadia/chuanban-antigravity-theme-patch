@@ -600,6 +600,23 @@ input:not([type="checkbox"]):not([type="radio"]):not([type="range"])[class*="foc
   box-shadow: none !important;
 }
 
+/* 输入框底部工具栏按钮（含模型选择触发钮）与「已工作」折叠钮：消除关闭菜单 returnFocus / 切窗口时蹦出的外扩焦点框 */
+body[data-agy-theme] :is(#antigravity\.agentSidePanelInputBox, [id="antigravity.agentSidePanelInputBox"]) button:focus-visible,
+:is(#antigravity\.agentSidePanelInputBox, [id="antigravity.agentSidePanelInputBox"]) button:focus-visible,
+body[data-agy-theme] :is([data-testid="model-selector-trigger"], [data-testid="worked-for-collapsible"]):is(:focus-visible, :focus-visible:not(.no-focus-ring)),
+:is([data-testid="model-selector-trigger"], [data-testid="worked-for-collapsible"]):focus-visible {
+  --nux-focus-ring: transparent !important;
+  outline: none !important;
+  outline-offset: 0 !important;
+}
+
+body[data-agy-theme] :is(#antigravity\.agentSidePanelInputBox, [id="antigravity.agentSidePanelInputBox"]) button:not([data-testid="send-button"]):focus-visible,
+:is(#antigravity\.agentSidePanelInputBox, [id="antigravity.agentSidePanelInputBox"]) button:not([data-testid="send-button"]):focus-visible,
+body[data-agy-theme] :is([data-testid="model-selector-trigger"], [data-testid="worked-for-collapsible"]):is(:focus-visible, :focus-visible:not(.no-focus-ring)),
+:is([data-testid="model-selector-trigger"], [data-testid="worked-for-collapsible"]):focus-visible {
+  box-shadow: none !important;
+}
+
 /* 保护 voice-live-pill 内部状态显隐 */
 html[data-ag-preset] #antigravity\.agentSidePanelInputBox [data-testid="voice-live-pill"] :is(.opacity-0, [class*="opacity-0"]),
 [data-testid="voice-live-pill"] :is(.opacity-0, [class*="opacity-0"]) {
@@ -776,6 +793,8 @@ html:not([data-ag-theme-mode="dark"]):not([data-ag-preset="absolutely"]) body:no
   --editor-comment-selection-background: rgba(63, 110, 122, 0.16) !important;
   --bg-cursor-line: rgba(184, 132, 59, 0.08) !important;
   --fg-cursor: #3F6E7A !important;
+  --nux-focus-ring: rgba(63, 110, 122, 0.25) !important;
+  --focus-ring-color: rgba(63, 110, 122, 0.20) !important;
   --rt-color-dark: #2B2925 !important;
   --rt-color-info: #3F6E7A !important;
   --rt-color-success: #2B5E53 !important;
@@ -1089,6 +1108,8 @@ html[data-ag-preset="absolutely"]:not([data-ag-theme-mode="dark"]),
 html[data-ag-preset="absolutely"]:not([data-ag-theme-mode="dark"]) body:not(.dark) {
   --primary: #D97757 !important;
   --primary-foreground: #FFFFFF !important;
+  --nux-focus-ring: rgba(217, 119, 87, 0.24) !important;
+  --focus-ring-color: rgba(217, 119, 87, 0.18) !important;
   --editor-selection-background: rgba(217, 119, 87, 0.34) !important;
   --background: #FCFCFB !important;
   --content: #FCFCFB !important;
@@ -1201,6 +1222,8 @@ html[data-ag-preset] body[data-agy-theme].dark {
   --foreground: #E4E8E9 !important;
   --primary: #6E9AA6 !important;
   --primary-foreground: #F5F8F9 !important;
+  --nux-focus-ring: rgba(122, 166, 178, 0.28) !important;
+  --focus-ring-color: rgba(122, 166, 178, 0.22) !important;
   --editor-selection-background: rgba(110, 154, 166, 0.32) !important;
   --editor-comment-selection-background: rgba(110, 154, 166, 0.20) !important;
   --bg-selection: rgba(110, 154, 166, 0.28) !important;
@@ -1438,6 +1461,8 @@ html[data-ag-dark-preset="claude-warm"][data-ag-preset] body[data-agy-theme].dar
   --foreground: #ECE7D9 !important;
   --primary: #D97757 !important;
   --primary-foreground: #FAF6EE !important;
+  --nux-focus-ring: rgba(122, 166, 178, 0.30) !important;
+  --focus-ring-color: rgba(122, 166, 178, 0.22) !important;
   --editor-selection-background: rgba(122, 166, 178, 0.28) !important;
   --editor-comment-selection-background: rgba(122, 166, 178, 0.18) !important;
   --bg-selection: rgba(122, 166, 178, 0.26) !important;
@@ -1697,7 +1722,8 @@ html[data-ag-theme-mode="dark"] #ag-theme-btn-tooltip {
  * PART IV. 模型名称同行实时指标胶囊与悬浮详情卡（结构共用 + 白天/黑夜色彩自适应）
  * ============================================================================ */
 :is(#antigravity\.agentSidePanelInputBox, [id="antigravity.agentSidePanelInputBox"]) div[data-ag-row-mode] > div:first-child {
-  overflow: hidden !important;
+  overflow-x: clip !important;
+  overflow-y: visible !important;
   min-width: 0 !important;
 }
 
