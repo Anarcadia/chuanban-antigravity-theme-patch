@@ -22,7 +22,7 @@ import http from 'node:http';
 import crypto from 'node:crypto';
 import { performance } from 'node:perf_hooks';
 import { execFile, spawn, spawnSync } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -549,10 +549,12 @@ let activeConfig = {
     zoomShortcuts: true,
     cdpAutoRelaunch: true,
     customCss: true,
-    customJs: true
+    customJs: true,
+    zhTitle: true
   },
   themeVars: {},
   darkThemeVars: {},
+  zhTitle: {},
   allowedOrigins: [
     'http://127.0.0.1',
     'https://127.0.0.1',
@@ -981,7 +983,8 @@ function rebuildBundleIfNeeded(opts = {}) {
       cdpEventDiscovery: true,
       googleFonts: true,
       customCss: true,
-      customJs: true
+      customJs: true,
+      zhTitle: true
     },
     rawModules
   );
@@ -997,6 +1000,8 @@ function rebuildBundleIfNeeded(opts = {}) {
   const themeVars = !SAFE_MODE && userCfg.themeVars && typeof userCfg.themeVars === 'object' ? userCfg.themeVars : {};
   const darkThemeVars =
     !SAFE_MODE && userCfg.darkThemeVars && typeof userCfg.darkThemeVars === 'object' ? userCfg.darkThemeVars : {};
+  const zhTitleCfg =
+    !SAFE_MODE && userCfg.zhTitle && typeof userCfg.zhTitle === 'object' ? userCfg.zhTitle : {};
   const endpoints = resolveActiveChannelEndpoints(channel, userCfg);
 
   const normalizedSelectors = Object.assign({}, userCfg.selectors || {});
@@ -1070,6 +1075,7 @@ function rebuildBundleIfNeeded(opts = {}) {
     modules,
     themeVars,
     darkThemeVars,
+    zhTitle: zhTitleCfg,
     selectors: normalizedSelectors,
     allowedOrigins: Array.isArray(userCfg.allowedOrigins)
       ? Array.from(new Set([...DEFAULT_ALLOWED_ORIGINS, ...userCfg.allowedOrigins]))
@@ -1108,6 +1114,7 @@ function rebuildBundleIfNeeded(opts = {}) {
         modules: hashModules,
         themeVars,
         darkThemeVars,
+        zhTitle: zhTitleCfg,
         selectors: activeConfig.selectors,
         hostThemeMode
       })
@@ -1163,7 +1170,8 @@ function rebuildBundleIfNeeded(opts = {}) {
       contextLimitOverride,
       modules,
       themeVars,
-      darkThemeVars
+      darkThemeVars,
+      zhTitle: zhTitleCfg
     },
     customJs
   };
@@ -1191,6 +1199,35 @@ function rebuildBundleIfNeeded(opts = {}) {
 // 3. 单实例 PID 锁与协作式所有权围栏（防跨周期陈旧锁自杀、防跨完整性双实例并存）
 // ============================================================================
 const attachedTargets = new Map();
+let zhTitleCtrl = null;
+
+function getZhConfigSig(cfg = activeConfig) {
+  return JSON.stringify({
+    enabled: cfg?.enabled !== false,
+    zhTitleModule: cfg?.modules?.zhTitle !== false,
+    zhTitle: cfg?.zhTitle || {}
+  });
+}
+
+async function broadcastEval(expr) {
+  const tasks = [];
+  for (const [, t] of attachedTargets.entries()) {
+    if (
+      t &&
+      t.type === 'page' &&
+      t.hostConfirmed &&
+      t.ws?.readyState === WebSocket.OPEN &&
+      typeof t.send === 'function'
+    ) {
+      tasks.push(
+        Promise.resolve(t.send('Runtime.evaluate', { expression: expr, returnByValue: false })).catch(() => null)
+      );
+    }
+  }
+  if (tasks.length > 0) {
+    await Promise.allSettled(tasks);
+  }
+}
 const targetThemeModes = new Map();
 const targetDarkPresets = new Map();
 const targetLightPresets = new Map();
@@ -1385,6 +1422,9 @@ function shutdownDaemon(reason, unlinkStopFile = false) {
     } catch {}
   }
   logDaemonEvent(reason);
+  try {
+    zhTitleCtrl?.dispose?.();
+  } catch {}
   closeAllBrowserWatchers();
   for (const [, entry] of attachedTargets.entries()) {
     try {
@@ -1517,6 +1557,9 @@ if (!RUN_ONCE) {
       `Daemon started (${BASE_VERSION}, ${KEEP_ALIVE_ONLY ? 'via --keep-alive' : 'direct start'}); previous PID ${prevPid || 'none'} [${prevPidState}]`
     );
     const cleanPid = () => {
+      try {
+        zhTitleCtrl?.dispose?.();
+      } catch {}
       cleanupWslSqliteStagingCache();
       if (pidWatcher) {
         try {
@@ -1546,6 +1589,26 @@ if (!RUN_ONCE) {
     });
   } catch (err) {
     logDaemonEvent(`PID lock init warning: ${err?.message || err}`);
+  }
+}
+
+if (!SAFE_MODE) {
+  try {
+    const zhEnginePath = path.join(USER_DIR, 'zh-title-engine.mjs');
+    if (fs.existsSync(zhEnginePath)) {
+      const zhMod = await import(pathToFileURL(zhEnginePath).href);
+      if (zhMod && typeof zhMod.createZhTitleController === 'function') {
+        zhTitleCtrl = zhMod.createZhTitleController({
+          rootDir: ROOT_DIR,
+          userDir: USER_DIR,
+          getActiveConfig: () => activeConfig,
+          broadcastEval
+        });
+      }
+    }
+  } catch (err) {
+    console.error('[Daemon] Optional zh-title-engine load skipped:', err?.message || err);
+    zhTitleCtrl = null;
   }
 }
 
@@ -5648,6 +5711,7 @@ function attachTarget(target, endpoint) {
             await send('Runtime.addBinding', { name: '__agRequestMetrics' });
             await send('Runtime.addBinding', { name: '__agRequestHardReload' });
             await send('Runtime.addBinding', { name: '__agSetDarkPreset' });
+            await send('Runtime.addBinding', { name: '__agTitleSync' });
             await send('Runtime.addBinding', { name: '__agSetLightPreset' });
             await send('Runtime.addBinding', { name: '__agSetUiLang' });
             await send('Runtime.addBinding', { name: '__agSyncHostThemeMode' });
@@ -5662,6 +5726,16 @@ function attachTarget(target, endpoint) {
         const ok = await inject();
         if (target.type === 'page') {
           await syncMetricsForSession(true);
+        }
+        if (target.type === 'page' && !SAFE_MODE && activeConfig.enabled) {
+          try {
+            const p = Promise.resolve(zhTitleCtrl?.onTargetAttached?.(target.id, send)).catch((err) => {
+              logDaemonEvent(`zhTitle onTargetAttached error: ${err?.message || err}`);
+            });
+            if (RUN_ONCE) await p;
+          } catch (err) {
+            logDaemonEvent(`zhTitle onTargetAttached sync error: ${err?.message || err}`);
+          }
         }
         initialAttachDone = true;
         clearTimeout(attachTimeout);
@@ -5860,6 +5934,19 @@ function attachTarget(target, endpoint) {
             broadcastPresetToTargets('dark', normDark, target.id);
             if (!SAFE_MODE) {
               persistDarkPresetToUserConfig(normDark);
+            }
+            return;
+          }
+          if (msg.method === 'Runtime.bindingCalled' && msg.params?.name === '__agTitleSync') {
+            if (!hostConfirmed || target.type !== 'page' || SAFE_MODE || !activeConfig.enabled) {
+              return;
+            }
+            try {
+              Promise.resolve(zhTitleCtrl?.onBindingCalled?.(target.id, msg.params.payload, send)).catch((err) => {
+                logDaemonEvent(`zhTitle onBindingCalled error: ${err?.message || err}`);
+              });
+            } catch (err) {
+              logDaemonEvent(`zhTitle onBindingCalled sync error: ${err?.message || err}`);
             }
             return;
           }
@@ -6831,7 +6918,9 @@ async function sync() {
         cleanupWslSqliteStagingCache();
       }
     }
+    const prevZhSig = getZhConfigSig(activeConfig);
     const bundleChanged = rebuildBundleIfNeeded();
+    const zhConfigChanged = bundleChanged && getZhConfigSig(activeConfig) !== prevZhSig;
     if (!activeConfig.enabled) {
       targetThemeModes.clear();
       targetDarkPresets.clear();
@@ -6978,6 +7067,23 @@ async function sync() {
       if (attachPromises.length > 0) {
         await Promise.allSettled(attachPromises);
       }
+
+    if (zhConfigChanged && !SAFE_MODE) {
+      try {
+        Promise.resolve(zhTitleCtrl?.onConfigChanged?.(activeConfig)).catch(() => {});
+      } catch {}
+      if (!activeConfig.enabled || activeConfig.modules?.zhTitle === false || activeConfig.zhTitle?.enabled === false) {
+        void broadcastEval('window.__ag_apply_zh_titles && window.__ag_apply_zh_titles({"enabled":false,"titles":{}})');
+      } else {
+        for (const [id, entry] of attachedTargets.entries()) {
+          if (entry?.type === 'page' && entry.hostConfirmed && entry.ws?.readyState === WebSocket.OPEN) {
+            try {
+              Promise.resolve(zhTitleCtrl?.onTargetAttached?.(id, entry.send)).catch(() => {});
+            } catch {}
+          }
+        }
+      }
+    }
     };
 
     // 先同步宿主 page 目标以获取权威深浅色状态，再同步子 Swarm iframe（确保 --once 与冷启动零闪烁）
@@ -7050,6 +7156,9 @@ console.log(
 
 await sync();
 if (RUN_ONCE) {
+  try {
+    zhTitleCtrl?.dispose?.();
+  } catch {}
   for (const [, entry] of attachedTargets.entries()) {
     try {
       entry.ws.close();

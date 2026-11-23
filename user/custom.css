@@ -5,3 +5,331 @@
  * 2. 修改本文件保存后，常驻守护进程会在 2.5 秒内自动检测并热重载生效，无需重启服务。
  * 3. 若排障时怀疑自定义样式冲突，可运行 `node install.mjs verify --safe-mode` 临时隔离。
  * ============================================================================ */
+
+/* ============================================================================
+ * 7. 精简实时指标胶囊（进度环 + tok/s · TTFT）与莫兰迪悬浮详情卡（含 5h / 周额度）
+ * ============================================================================ */
+:is(#ag-live-metrics-pill, .ag-live-metrics-pill) :is(#ag-live-metrics-text, .ag-live-metrics-text):has(.ag-cm-ring-wrap) {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 5px !important;
+}
+
+:is(#ag-live-metrics-pill, .ag-live-metrics-pill) .ag-cm-ring-wrap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 13px;
+  height: 13px;
+  flex-shrink: 0;
+}
+
+:is(#ag-live-metrics-pill, .ag-live-metrics-pill) .ag-cm-ring {
+  display: block;
+  overflow: visible;
+  transform: rotate(-90deg);
+}
+
+:is(#ag-live-metrics-pill, .ag-live-metrics-pill) .ag-cm-ring-bg {
+  fill: none;
+  stroke: rgba(0, 0, 0, 0.14);
+  stroke-width: 2.1;
+}
+
+:is(#ag-live-metrics-pill, .ag-live-metrics-pill) .ag-cm-ring-fg {
+  fill: none;
+  stroke: #D97757;
+  stroke-width: 2.1;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 220ms ease, stroke 180ms ease;
+}
+
+:is(#ag-live-metrics-pill, .ag-live-metrics-pill) .ag-cm-ring-fg.ag-ctx-warn {
+  stroke: #D97706;
+}
+
+:is(#ag-live-metrics-pill, .ag-live-metrics-pill) .ag-cm-ring-fg.ag-ctx-crit {
+  stroke: #DC2626;
+}
+
+:is(#ag-live-metrics-pill, .ag-live-metrics-pill) .ag-cm-inline-stat {
+  white-space: nowrap;
+}
+
+:is(#ag-live-metrics-pill, .ag-live-metrics-pill) .ag-cm-inline-quota {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+:is(#ag-live-metrics-pill, .ag-live-metrics-pill) .ag-cm-inline-quota .ag-q-warn {
+  color: #B45309 !important;
+  font-weight: 600 !important;
+}
+
+:is(#ag-live-metrics-pill, .ag-live-metrics-pill) .ag-cm-inline-quota .ag-q-crit {
+  color: #DC2626 !important;
+  font-weight: 700 !important;
+}
+
+:is(html[data-ag-theme-mode="dark"] body, body.dark) :is(#ag-live-metrics-pill, .ag-live-metrics-pill) .ag-cm-inline-quota .ag-q-warn {
+  color: #F59E0B !important;
+}
+
+:is(html[data-ag-theme-mode="dark"] body, body.dark) :is(#ag-live-metrics-pill, .ag-live-metrics-pill) .ag-cm-inline-quota .ag-q-crit {
+  color: #F87171 !important;
+}
+
+:is(html[data-ag-theme-mode="dark"] body, body.dark) :is(#ag-live-metrics-pill, .ag-live-metrics-pill) .ag-cm-ring-bg {
+  stroke: rgba(255, 255, 255, 0.18);
+}
+
+:is(html[data-ag-theme-mode="dark"] body, body.dark) :is(#ag-live-metrics-pill, .ag-live-metrics-pill) .ag-cm-ring-fg {
+  stroke: #E07A5F;
+}
+
+:is(html[data-ag-theme-mode="dark"] body, body.dark) :is(#ag-live-metrics-pill, .ag-live-metrics-pill) .ag-cm-ring-fg.ag-ctx-warn {
+  stroke: #F59E0B;
+}
+
+:is(html[data-ag-theme-mode="dark"] body, body.dark) :is(#ag-live-metrics-pill, .ag-live-metrics-pill) .ag-cm-ring-fg.ag-ctx-crit {
+  stroke: #EF4444;
+}
+
+#ag-live-metrics-tooltip:has(.ag-cm-quota-row), #ag-live-metrics-tooltip:has(.ag-cm-panel) {
+  min-width: 356px !important;
+  max-width: 425px !important;
+  padding: 10px 12px !important;
+}
+
+#ag-live-metrics-tooltip .ag-cm-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+#ag-live-metrics-tooltip .ag-cm-hdr-meta {
+  font-size: 10.5px !important;
+  font-weight: 450 !important;
+  color: #78716C !important;
+  margin-left: 12px;
+}
+
+#ag-live-metrics-tooltip .ag-tt-row {
+  align-items: center;
+  line-height: 1.5 !important;
+}
+
+#ag-live-metrics-tooltip .ag-cm-cache-badge {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 6px;
+  padding: 0 6px;
+  height: 17px;
+  border-radius: 4px;
+  font-size: 10px !important;
+  font-weight: 600 !important;
+  background-color: rgba(22, 163, 74, 0.11);
+  border: 1px solid rgba(22, 163, 74, 0.24);
+  color: #15803D !important;
+}
+
+#ag-live-metrics-tooltip .ag-cm-ratio-val {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1 1 auto;
+  justify-content: flex-end;
+}
+
+#ag-live-metrics-tooltip .ag-cm-ratio-lbl-warm {
+  font-size: 10.5px !important;
+  font-weight: 500 !important;
+  color: #9A482B !important;
+  white-space: nowrap;
+}
+
+#ag-live-metrics-tooltip .ag-cm-ratio-lbl-cool {
+  font-size: 10.5px !important;
+  font-weight: 500 !important;
+  color: #2E5661 !important;
+  white-space: nowrap;
+}
+
+#ag-live-metrics-tooltip .ag-cm-ratio-track {
+  display: inline-flex;
+  align-items: stretch;
+  width: 96px;
+  height: 6px;
+  border-radius: 999px;
+  overflow: hidden;
+  background-color: rgba(0, 0, 0, 0.08);
+  gap: 1px;
+  flex-shrink: 0;
+}
+
+#ag-live-metrics-tooltip .ag-cm-ratio-think {
+  display: block;
+  height: 100%;
+  background-color: #D97757;
+  border-radius: 999px 0 0 999px;
+}
+
+#ag-live-metrics-tooltip .ag-cm-ratio-resp {
+  display: block;
+  height: 100%;
+  background-color: #3F6E7A;
+  border-radius: 0 999px 999px 0;
+}
+
+#ag-live-metrics-tooltip .ag-cm-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 10.5px !important;
+  margin-top: 1px;
+}
+
+#ag-live-metrics-tooltip .ag-cm-bar-track {
+  flex: 1 1 auto;
+  min-width: 68px;
+  height: 6px;
+  border-radius: 999px;
+  overflow: hidden;
+  background-color: rgba(0, 0, 0, 0.09);
+}
+
+#ag-live-metrics-tooltip .ag-cm-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  background-color: #D97757;
+  transition: width 180ms ease;
+}
+
+#ag-live-metrics-tooltip .ag-cm-bar-fill.ag-ctx-warn {
+  background-color: #D97706;
+}
+
+#ag-live-metrics-tooltip .ag-cm-bar-fill.ag-ctx-crit {
+  background-color: #DC2626;
+}
+
+#ag-live-metrics-tooltip .ag-cm-bar-fill.ag-q-ok {
+  background-color: #3F6E7A;
+}
+
+#ag-live-metrics-tooltip .ag-cm-bar-fill.ag-q-warn {
+  background-color: #D97706;
+}
+
+#ag-live-metrics-tooltip .ag-cm-bar-fill.ag-q-crit {
+  background-color: #DC2626;
+}
+
+#ag-live-metrics-tooltip .ag-cm-bar-stat {
+  font-weight: 600 !important;
+  color: #1F1E1D !important;
+  white-space: nowrap;
+}
+
+#ag-live-metrics-tooltip .ag-cm-bar-cache {
+  color: #78716C !important;
+  white-space: nowrap;
+}
+
+#ag-live-metrics-tooltip .ag-cm-quota-row {
+  display: grid;
+  grid-template-columns: 66px minmax(88px, 1fr) 118px;
+  align-items: center;
+  gap: 10px;
+  font-size: 10.5px !important;
+  line-height: 1.5 !important;
+}
+
+#ag-live-metrics-tooltip .ag-cm-quota-bar-wrap {
+  display: contents;
+}
+
+#ag-live-metrics-tooltip .ag-cm-quota-track {
+  width: 100%;
+  height: 5.5px;
+  border-radius: 999px;
+  overflow: hidden;
+  background-color: rgba(0, 0, 0, 0.09);
+}
+
+#ag-live-metrics-tooltip .ag-cm-quota-meta {
+  white-space: nowrap;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: #1F1E1D !important;
+  font-weight: 500 !important;
+}
+
+#ag-live-metrics-tooltip .ag-cm-quota-reset {
+  color: #78716C !important;
+  font-weight: 450 !important;
+}
+
+#ag-live-metrics-tooltip .ag-cm-quota-other {
+  font-size: 10px !important;
+  color: #78716C !important;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding-top: 2px;
+}
+
+/* 黑夜模式适配 (Onyx & Claude Warm) */
+:is(html[data-ag-theme-mode="dark"] body, body.dark) #ag-live-metrics-tooltip .ag-cm-hdr-meta,
+:is(html[data-ag-theme-mode="dark"] body, body.dark) #ag-live-metrics-tooltip .ag-cm-bar-cache,
+:is(html[data-ag-theme-mode="dark"] body, body.dark) #ag-live-metrics-tooltip .ag-cm-quota-reset,
+:is(html[data-ag-theme-mode="dark"] body, body.dark) #ag-live-metrics-tooltip .ag-cm-quota-other {
+  color: #A1A1AA !important;
+}
+
+:is(html[data-ag-theme-mode="dark"] body, body.dark) #ag-live-metrics-tooltip .ag-cm-bar-stat,
+:is(html[data-ag-theme-mode="dark"] body, body.dark) #ag-live-metrics-tooltip .ag-cm-quota-meta {
+  color: #F4F4F5 !important;
+}
+
+:is(html[data-ag-theme-mode="dark"] body, body.dark) #ag-live-metrics-tooltip .ag-cm-cache-badge {
+  background-color: rgba(74, 222, 128, 0.14);
+  border-color: rgba(74, 222, 128, 0.30);
+  color: #4ADE80 !important;
+}
+
+:is(html[data-ag-theme-mode="dark"] body, body.dark) #ag-live-metrics-tooltip .ag-cm-ratio-lbl-warm {
+  color: #E07A5F !important;
+}
+
+:is(html[data-ag-theme-mode="dark"] body, body.dark) #ag-live-metrics-tooltip .ag-cm-ratio-lbl-cool {
+  color: #7AA6B2 !important;
+}
+
+:is(html[data-ag-theme-mode="dark"] body, body.dark) #ag-live-metrics-tooltip .ag-cm-ratio-track,
+:is(html[data-ag-theme-mode="dark"] body, body.dark) #ag-live-metrics-tooltip .ag-cm-bar-track,
+:is(html[data-ag-theme-mode="dark"] body, body.dark) #ag-live-metrics-tooltip .ag-cm-quota-track {
+  background-color: rgba(255, 255, 255, 0.12);
+}
+
+:is(html[data-ag-theme-mode="dark"] body, body.dark) #ag-live-metrics-tooltip .ag-cm-ratio-think,
+:is(html[data-ag-theme-mode="dark"] body, body.dark) #ag-live-metrics-tooltip .ag-cm-bar-fill {
+  background-color: #E07A5F;
+}
+
+:is(html[data-ag-theme-mode="dark"] body, body.dark) #ag-live-metrics-tooltip .ag-cm-ratio-resp,
+:is(html[data-ag-theme-mode="dark"] body, body.dark) #ag-live-metrics-tooltip .ag-cm-bar-fill.ag-q-ok {
+  background-color: #7AA6B2;
+}
+
+:is(html[data-ag-dark-preset="onyx"][data-ag-theme-mode="dark"] body) #ag-live-metrics-tooltip .ag-cm-ratio-resp,
+:is(html[data-ag-dark-preset="onyx"][data-ag-theme-mode="dark"] body) #ag-live-metrics-tooltip .ag-cm-bar-fill.ag-q-ok {
+  background-color: #60A5FA;
+}
+
+:is(html[data-ag-dark-preset="onyx"][data-ag-theme-mode="dark"] body) #ag-live-metrics-tooltip .ag-cm-ratio-lbl-cool {
+  color: #60A5FA !important;
+}

@@ -15,7 +15,19 @@
     "zoomShortcuts": true,
     "cdpAutoRelaunch": true,
     "customCss": true,
-    "customJs": true
+    "customJs": true,
+    "zhTitle": true
   },
-  "themeVars": {}
+  "themeVars": {},
+  "zhTitle": {
+    "enabled": false,
+    "prependDateToChinese": true,
+    "persistToNative": false,
+    "apiFormat": "openai",
+    "apiBaseUrl": "https://api.openai.com",
+    "apiKey": "",
+    "primaryModel": "gpt-4o-mini",
+    "fallbackModel": "",
+    "maxParallel": 4
+  }
 }
