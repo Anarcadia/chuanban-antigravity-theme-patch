@@ -111,8 +111,8 @@ body[data-agy-font="inter"] :where(.font-sans) {
 
 :root {
   --ag-chat-font-size: 16px;
-  --ag-wax-seal-hover: #74221A;
-  --ag-dark-wax-seal-hover: rgba(47, 113, 227, 0.72);
+  --ag-wax-seal-hover: #8A3F2D;
+  --ag-dark-wax-seal-hover: rgba(110, 154, 166, 0.72);
   --ag-ink-shadow-xs: 0 0 0.15px rgba(38, 36, 34, 0.25);
   --ag-ink-shadow-sm: 0 0 0.2px rgba(38, 36, 34, 0.35);
   --ag-ink-shadow-md: 0 0 0.25px rgba(10, 10, 10, 0.4);
@@ -717,188 +717,368 @@ button[data-project-card="true"] span {
 
 
 /* ============================================================================
- * PART II. 白天模式（Light Mode · 非 .dark 状态：三套暖纸护眼预设 + 古朴暗红蜡封）
+ * PART II. 白天模式（Light Mode · 莫兰迪古典矿物冷暖互补色系：石青 × 赤陶 × 青瓷 × 藤赭 × 宣纸矿灰）
  * ============================================================================ */
 
-/* 白天模式通用组件变量默认值 */
+/* 白天模式通用组件变量 + 全域 Tailwind / 语义色 / 语法高亮 / Diff 莫兰迪矿物接管 */
 html:not([data-ag-theme-mode="dark"]):not(:has(> body.dark)),
 html:not([data-ag-theme-mode="dark"]) body:not(.dark) {
-  --ag-composer-tray-bg: #F7EFE6;
-  --ag-composer-card-bg: #FFFFFF;
-  --ag-composer-card-border: transparent;
-  --ag-composer-card-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
-  --ag-composer-card-focus-border: transparent;
-  --ag-composer-card-focus-shadow: 0 6px 20px -2px rgba(60, 20, 15, 0.07), 0 2px 6px -1px rgba(0, 0, 0, 0.04);
+  --ag-composer-tray-bg: #EAE4D8;
+  --ag-composer-card-bg: #FAF8F3;
+  --ag-composer-card-border: rgba(63, 110, 122, 0.10);
+  --ag-composer-card-shadow: 0 1px 2px rgba(38, 36, 33, 0.03);
+  --ag-composer-card-focus-border: rgba(63, 110, 122, 0.22);
+  --ag-composer-card-focus-shadow: 0 6px 20px -2px rgba(58, 48, 40, 0.08), 0 2px 6px -1px rgba(38, 36, 33, 0.04);
   --ag-seal-home-border: transparent;
   --ag-seal-home-shadow: none;
-  --ag-seal-home-focus-border: rgba(116, 34, 26, 0.36);
-  --ag-seal-home-focus-shadow: 0 1px 3px rgba(116, 34, 26, 0.04);
-  --ag-seal-chat-border: rgba(116, 34, 26, 0.36);
-  --ag-seal-chat-shadow: 0 1px 3px rgba(116, 34, 26, 0.03);
-  --ag-seal-chat-focus-border: var(--ag-wax-seal-hover, #74221A);
-  --ag-seal-chat-focus-shadow: 0 1px 4px rgba(116, 34, 26, 0.12);
-  --ag-seal-off-border: rgba(31, 30, 29, 0.15);
-  --ag-composer-top-fg: #383431;
-  --ag-composer-top-hover-bg: rgba(217, 119, 87, 0.08);
-  --ag-composer-top-hover-fg: #1F1E1D;
-  --ag-composer-ctrl-fg: #0A0A0A;
-  --ag-send-btn-bg: #D97757;
-  --ag-send-btn-hover-bg: #C86646;
-  --ag-send-btn-border: #C45F40;
-  --ag-send-btn-shadow: 0 1px 2px rgba(217, 119, 87, 0.25);
-  --ag-sidebar-fg: #262422;
-  --ag-sidebar-row-fg: #262422;
-  --ag-sidebar-header-fg: #383533;
-  --ag-sidebar-header-title-fg: #2C2B29;
-  --ag-sidebar-selected-fg: #0A0A0A;
-  --ag-sidebar-muted-fg: #7A7670;
-  --ag-menu-item-fg: #1F1E1D;
-  --ag-menu-header-fg: #1A1A1A;
-  --ag-dialog-title-fg: #1F1E1D;
-  --ag-dialog-item-fg: #1F1E1D;
-  --code-foreground: #262422 !important;
+  --ag-seal-home-focus-border: rgba(138, 63, 45, 0.36);
+  --ag-seal-home-focus-shadow: 0 1px 3px rgba(138, 63, 45, 0.05);
+  --ag-seal-chat-border: rgba(138, 63, 45, 0.32);
+  --ag-seal-chat-shadow: 0 1px 3px rgba(138, 63, 45, 0.04);
+  --ag-seal-chat-focus-border: var(--ag-wax-seal-hover, #8A3F2D);
+  --ag-seal-chat-focus-shadow: 0 1px 5px rgba(138, 63, 45, 0.13);
+  --ag-seal-off-border: rgba(54, 49, 43, 0.18);
+  --ag-composer-top-fg: #46423C;
+  --ag-composer-top-hover-bg: rgba(63, 110, 122, 0.09);
+  --ag-composer-top-hover-fg: #24221F;
+  --ag-composer-ctrl-fg: #2B2824;
+  --ag-send-btn-bg: #C86D51;
+  --ag-send-btn-hover-bg: #B65D42;
+  --ag-send-btn-border: #AD563C;
+  --ag-send-btn-shadow: 0 1px 2px rgba(182, 93, 66, 0.24);
+  --ag-sidebar-fg: #2E2B27;
+  --ag-sidebar-row-fg: #33302B;
+  --ag-sidebar-header-fg: #47433D;
+  --ag-sidebar-header-title-fg: #2B2925;
+  --ag-sidebar-selected-fg: #1B1917;
+  --ag-sidebar-muted-fg: #787167;
+  --ag-menu-item-fg: #262421;
+  --ag-menu-header-fg: #3A3631;
+  --ag-dialog-title-fg: #24221F;
+  --ag-dialog-item-fg: #2B2925;
+  --code-foreground: #2A2824 !important;
+
+  /* 全局语义色与交互反馈：冷（矿物石青/青瓷）× 暖（赤陶/古铜藤赭） */
+  --link: #3F6E7A !important;
+  --color-link: #3F6E7A !important;
+  --cta: #3F6E7A !important;
+  --cta-foreground: #FAF8F3 !important;
+  --success: #2B5E53 !important;
+  --color-success: #2B5E53 !important;
+  --warning: #9A6B28 !important;
+  --color-warning: #9A6B28 !important;
+  --error: #B84A3E !important;
+  --color-error: #B84A3E !important;
+  --color-gold: #B8843B !important;
+  --bg-selection: rgba(63, 110, 122, 0.20) !important;
+  --bg-selection-overlay: rgba(63, 110, 122, 0.16) !important;
+  --editor-comment-selection-background: rgba(63, 110, 122, 0.16) !important;
+  --bg-cursor-line: rgba(184, 132, 59, 0.08) !important;
+  --fg-cursor: #3F6E7A !important;
+  --rt-color-dark: #2B2925 !important;
+  --rt-color-info: #3F6E7A !important;
+  --rt-color-success: #2B5E53 !important;
+  --rt-color-warning: #B8843B !important;
+  --rt-color-error: #B84A3E !important;
+  --rt-color-white: #FAF8F3 !important;
+
+  /* Tailwind v4 全量彩色标尺重映射 -> 莫兰迪古典矿物色阶 */
+  --color-blue-300: #9BB7BF !important;
+  --color-blue-400: #6E9AA6 !important;
+  --color-blue-500: #4C7C89 !important;
+  --color-blue-600: #3F6E7A !important;
+  --color-blue-700: #315862 !important;
+  --color-blue-800: #25444C !important;
+  --color-sky-500: #568592 !important;
+  --color-cyan-400: #7CA4AF !important;
+  --color-cyan-500: #588794 !important;
+  --color-cyan-600: #3F6E7A !important;
+  --color-teal-400: #6F9E8F !important;
+  --color-teal-500: #4A7F70 !important;
+  --color-teal-600: #35665A !important;
+  --color-teal-700: #274F45 !important;
+  --color-green: #487D6E !important;
+  --color-green-300: #A3C1B6 !important;
+  --color-green-400: #6F9E8F !important;
+  --color-green-500: #487D6E !important;
+  --color-green-600: #2B5E53 !important;
+  --color-emerald-400: #6F9E8F !important;
+  --color-emerald-500: #487D6E !important;
+  --color-emerald-600: #2B5E53 !important;
+  --color-amber-300: #DEC496 !important;
+  --color-amber-400: #CCA668 !important;
+  --color-amber-500: #B8843B !important;
+  --color-amber-600: #9C6D2B !important;
+  --color-amber-700: #8A6228 !important;
+  --color-amber-900: #523916 !important;
+  --color-amber-950: #36250E !important;
+  --color-yellow-200: #EAE0CA !important;
+  --color-yellow-400: #D2B176 !important;
+  --color-yellow-500: #BC9350 !important;
+  --color-yellow-600: #9C7234 !important;
+  --color-yellow-800: #694B1F !important;
+  --color-orange: #D97757 !important;
+  --color-orange-500: #C86D51 !important;
+  --color-orange-600: #AE573D !important;
+  --color-purple-400: #9E8CA8 !important;
+  --color-purple-500: #7E6889 !important;
+  --color-purple-600: #655070 !important;
+  --color-violet-500: #846E90 !important;
+  --color-violet-600: #6A5476 !important;
+  --color-indigo-400: #7A849E !important;
+  --color-indigo-500: #5E6985 !important;
+  --color-pink-400: #C28C90 !important;
+  --color-pink-500: #A86D72 !important;
+  --color-rose-400: #C6867E !important;
+  --color-rose-500: #AF6860 !important;
+  --color-red-50: #F7EFEC !important;
+  --color-red-100: #F1E1DD !important;
+  --color-red-200: #E5C8C1 !important;
+  --color-red-300: #D5A59B !important;
+  --color-red-400: #C67B6E !important;
+  --color-red-500: #B84A3E !important;
+  --color-red-600: #9E3B30 !important;
+  --color-red-900: #5E231C !important;
+  --color-gray-200: #E4DFD6 !important;
+  --color-gray-300: #D2CCC1 !important;
+  --color-gray-400: #A69F93 !important;
+  --color-gray-500: #7D766B !important;
+  --color-gray-600: #5E584F !important;
+  --color-gray-700: #45403A !important;
+  --color-gray-800: #2E2B27 !important;
+  --color-zinc-300: #D2CCC1 !important;
+  --color-zinc-400: #A69F93 !important;
+  --color-zinc-500: #7D766B !important;
+  --color-zinc-700: #45403A !important;
+  --color-slate-400: #8E999D !important;
+  --color-slate-500: #68757A !important;
+  --color-neutral-400: #A69F93 !important;
+  --color-neutral-500: #7D766B !important;
+
+  /* Diff 行级对比（青瓷松石新增 × 矿物茜草删除）与图表六色 */
+  --color-diffEditor-insertedLineBackground: rgba(43, 94, 83, 0.11) !important;
+  --color-diffEditor-insertedTextBackground: rgba(43, 94, 83, 0.22) !important;
+  --color-diffEditor-removedLineBackground: rgba(184, 74, 62, 0.11) !important;
+  --color-diffEditor-removedTextBackground: rgba(184, 74, 62, 0.22) !important;
+  --chart-1: #3F6E7A !important;
+  --chart-2: #C86D51 !important;
+  --chart-3: #2B5E53 !important;
+  --chart-4: #B8843B !important;
+  --chart-5: #7E6889 !important;
+  --chart-6: #6E8288 !important;
+
+  /* 代码块语法高亮（古典矿物印谱调） */
+  --syntax-default-fg: #2A2824 !important;
+  --syntax-keyword: #3F6E7A !important;
+  --syntax-attr-value: #3F6E7A !important;
+  --syntax-string: #2B5E53 !important;
+  --syntax-inserted: #2B5E53 !important;
+  --syntax-attr-name: #386B5F !important;
+  --syntax-builtin: #386B5F !important;
+  --syntax-function: #B3583D !important;
+  --syntax-class-name: #9E4A32 !important;
+  --syntax-number: #8A6228 !important;
+  --syntax-variable: #9A6B28 !important;
+  --syntax-regex: #8A6228 !important;
+  --syntax-operator: #7D5E3C !important;
+  --syntax-constant: #6E5679 !important;
+  --syntax-property: #6E5679 !important;
+  --syntax-tag: #655070 !important;
+  --syntax-deleted: #B84A3E !important;
+  --syntax-comment: #857E73 !important;
+  --syntax-punctuation: #6E685E !important;
 }
 
-/* 白天预设 1（默认首选）：高对比暖白 (high-contrast) */
+/* 白天预设 1（默认首选）：莫兰迪宣纸矿灰 (high-contrast) */
 html:not([data-ag-theme-mode="dark"]):not(:has(> body.dark))[data-ag-preset="high-contrast"],
 html:not([data-ag-theme-mode="dark"]):not(:has(> body.dark)):not([data-ag-preset]),
 html:not([data-ag-theme-mode="dark"])[data-ag-preset="high-contrast"] body:not(.dark),
 html:not([data-ag-theme-mode="dark"]):not([data-ag-preset]) body:not(.dark) {
-  --primary: #D97757 !important;
-  --editor-selection-background: rgba(217, 119, 87, 0.34) !important;
-  --background: #FCFCFB !important;
-  --content: #FCFCFB !important;
-  --foreground: #1F1E1D !important;
-  --sidebar: #F7F5F0 !important;
-  --shell: #F7F5F0 !important;
-  --sidebar-secondary: #ECE9E1 !important;
-  --sidebar-muted: #F2EFE7 !important;
-  --sidebar-border: rgba(0, 0, 0, 0.35) !important;
-  --border: rgba(0, 0, 0, 0.38) !important;
-  --vscode-sideBar-background: #F7F5F0 !important;
-  --card: #FFFFFF !important;
-  --card-border: rgba(0, 0, 0, 0.35) !important;
-  --card-edge: rgba(0, 0, 0, 0.35) !important;
-  --sash-line: rgba(0, 0, 0, 0.35) !important;
-  --secondary-foreground: #0A0A0A !important;
-  --muted-foreground: #1A1A1A !important;
-  --onyx-frame: #ECE9E1 !important;
-  --onyx-well: #F7F5F0 !important;
-  --onyx-raised: #FFFFFF !important;
-  --onyx-selected: #ECE9E1 !important;
-  --onyx-key: #FFFFFF !important;
-  --glass: #F9F7F2 !important;
-  --glass-border: rgba(0, 0, 0, 0.35) !important;
+  --primary: #C86D51 !important;
+  --primary-foreground: #FAF8F3 !important;
+  --editor-selection-background: rgba(63, 110, 122, 0.22) !important;
+  --background: #F4F1EA !important;
+  --content: #F4F1EA !important;
+  --foreground: #24221F !important;
+  --sidebar: #E8E3D9 !important;
+  --shell: #E8E3D9 !important;
+  --sidebar-secondary: #DAD3C6 !important;
+  --sidebar-muted: #E1DCD1 !important;
+  --sidebar-border: rgba(54, 49, 43, 0.22) !important;
+  --border: rgba(54, 49, 43, 0.24) !important;
+  --vscode-sideBar-background: #E8E3D9 !important;
+  --card: #FAF8F3 !important;
+  --card-border: rgba(54, 49, 43, 0.22) !important;
+  --card-edge: rgba(54, 49, 43, 0.22) !important;
+  --sash-line: rgba(54, 49, 43, 0.22) !important;
+  --secondary: rgba(54, 49, 43, 0.065) !important;
+  --secondary-foreground: #2E2B27 !important;
+  --muted: rgba(54, 49, 43, 0.045) !important;
+  --muted-foreground: #5E584F !important;
+  --placeholder: #878075 !important;
+  --onyx-frame: #DDD7CA !important;
+  --onyx-well: #E8E3D9 !important;
+  --onyx-raised: #FAF8F3 !important;
+  --onyx-selected: #DAD3C6 !important;
+  --onyx-key: #FAF8F3 !important;
+  --glass: #F7F4ED !important;
+  --glass-border: rgba(54, 49, 43, 0.22) !important;
   --glass-highlight: transparent !important;
-  --home-glow: transparent !important;
+  --home-glow: rgba(63, 110, 122, 0.05) !important;
 }
 
-/* 白天预设 2：ClaudeDesktop 净白 (claude-desktop-purewhite) */
+/* 白天预设 2：莫兰迪素绢浅雾 (claude-desktop-purewhite) */
 html:not([data-ag-theme-mode="dark"]):not(:has(> body.dark))[data-ag-preset="claude-desktop-purewhite"],
 html:not([data-ag-theme-mode="dark"])[data-ag-preset="claude-desktop-purewhite"] body:not(.dark) {
-  --primary: #D97757 !important;
-  --editor-selection-background: rgba(217, 119, 87, 0.34) !important;
-  --background: #FCFCFB !important;
-  --content: #FCFCFB !important;
-  --foreground: #1F1E1D !important;
-  --sidebar: #FBFBF9 !important;
-  --shell: #FBFBF9 !important;
-  --sidebar-secondary: #EDECE9 !important;
-  --sidebar-muted: #F3F2EF !important;
-  --sidebar-border: #F0F0EE !important;
-  --border: rgba(44, 43, 41, 0.15) !important;
-  --secondary-foreground: #1F1E1D !important;
-  --muted-foreground: #57534E !important;
-  --vscode-sideBar-background: #FBFBF9 !important;
-  --card: color-mix(in srgb, #FBF9F5 70%, #ffffff) !important;
-  --card-border: color-mix(in srgb, #2C2B29 12%, color-mix(in srgb, #FBF9F5 70%, #ffffff)) !important;
-  --card-edge: rgba(44, 43, 41, 0.14) !important;
-  --sash-line: rgba(44, 43, 41, 0.14) !important;
-  --onyx-frame: #EDECE9 !important;
-  --onyx-well: #FBFBF9 !important;
-  --onyx-raised: #FFFFFF !important;
-  --onyx-selected: #EDECE9 !important;
-  --onyx-key: #FFFFFF !important;
-  --glass: #FFFFFF !important;
-  --glass-border: #F0F0EE !important;
+  --primary: #C86D51 !important;
+  --primary-foreground: #FCFBF8 !important;
+  --editor-selection-background: rgba(63, 110, 122, 0.20) !important;
+  --background: #F8F6F1 !important;
+  --content: #F8F6F1 !important;
+  --foreground: #262421 !important;
+  --sidebar: #EFECE5 !important;
+  --shell: #EFECE5 !important;
+  --sidebar-secondary: #E2DDD3 !important;
+  --sidebar-muted: #E9E5DC !important;
+  --sidebar-border: rgba(54, 49, 43, 0.14) !important;
+  --border: rgba(54, 49, 43, 0.15) !important;
+  --secondary-foreground: #3A3631 !important;
+  --muted-foreground: #686259 !important;
+  --placeholder: #8C857A !important;
+  --vscode-sideBar-background: #EFECE5 !important;
+  --card: #FCFBF8 !important;
+  --card-border: rgba(54, 49, 43, 0.14) !important;
+  --card-edge: rgba(54, 49, 43, 0.14) !important;
+  --sash-line: rgba(54, 49, 43, 0.14) !important;
+  --onyx-frame: #E3DED4 !important;
+  --onyx-well: #EFECE5 !important;
+  --onyx-raised: #FCFBF8 !important;
+  --onyx-selected: #E2DDD3 !important;
+  --onyx-key: #FCFBF8 !important;
+  --glass: #FCFBF8 !important;
+  --glass-border: rgba(54, 49, 43, 0.14) !important;
   --glass-highlight: transparent !important;
-  --home-glow: transparent !important;
-  --ag-composer-tray-bg: #F5F4F0;
+  --home-glow: rgba(63, 110, 122, 0.04) !important;
+  --ag-composer-tray-bg: #ECE8DF;
+  --ag-composer-card-bg: #FCFBF8;
 }
 
-/* 白天预设 3：复古深色羊皮纸 (vintage-deep) */
+/* 白天预设 3：莫兰迪敦煌古壁 (vintage-deep) */
 html:not([data-ag-theme-mode="dark"]):not(:has(> body.dark))[data-ag-preset="vintage-deep"],
 html:not([data-ag-theme-mode="dark"])[data-ag-preset="vintage-deep"] body:not(.dark) {
-  --primary: #D97757 !important;
-  --editor-selection-background: rgba(217, 119, 87, 0.34) !important;
-  --background: #FBF9F5 !important;
-  --content: #FBF9F5 !important;
-  --foreground: #26231E !important;
-  --secondary-foreground: #4A443C !important;
-  --muted-foreground: #6E665C !important;
-  --sidebar: #F1E8DC !important;
-  --shell: #F1E8DC !important;
-  --sidebar-secondary: #E6DCCE !important;
-  --sidebar-muted: #E8DFD1 !important;
-  --sidebar-border: #E0D4C3 !important;
-  --border: rgba(60, 45, 25, 0.18) !important;
-  --vscode-sideBar-background: #F1E8DC !important;
-  --card: #F8F3EC !important;
-  --card-border: rgba(60, 45, 25, 0.22) !important;
-  --card-edge: rgba(60, 45, 25, 0.22) !important;
-  --sash-line: rgba(60, 45, 25, 0.22) !important;
-  --onyx-frame: #E6DCCE !important;
-  --onyx-well: #F1E8DC !important;
-  --onyx-raised: #F8F3EC !important;
-  --onyx-selected: #E6DCCE !important;
-  --onyx-key: #F8F3EC !important;
-  --glass: #F8F3EC !important;
-  --glass-border: #E0D4C3 !important;
+  --primary: #C2664A !important;
+  --primary-foreground: #FAF6EE !important;
+  --editor-selection-background: rgba(63, 110, 122, 0.22) !important;
+  --background: #EFE8DC !important;
+  --content: #EFE8DC !important;
+  --foreground: #28241F !important;
+  --secondary-foreground: #48423A !important;
+  --muted-foreground: #6B6358 !important;
+  --placeholder: #8A8073 !important;
+  --sidebar: #E3D9C8 !important;
+  --shell: #E3D9C8 !important;
+  --sidebar-secondary: #D6C9B6 !important;
+  --sidebar-muted: #DCD1BF !important;
+  --sidebar-border: rgba(60, 48, 32, 0.18) !important;
+  --border: rgba(60, 48, 32, 0.20) !important;
+  --vscode-sideBar-background: #E3D9C8 !important;
+  --card: #F6F0E6 !important;
+  --card-border: rgba(60, 48, 32, 0.20) !important;
+  --card-edge: rgba(60, 48, 32, 0.20) !important;
+  --sash-line: rgba(60, 48, 32, 0.20) !important;
+  --onyx-frame: #D6C9B6 !important;
+  --onyx-well: #E3D9C8 !important;
+  --onyx-raised: #F6F0E6 !important;
+  --onyx-selected: #D6C9B6 !important;
+  --onyx-key: #F6F0E6 !important;
+  --glass: #F6F0E6 !important;
+  --glass-border: rgba(60, 48, 32, 0.18) !important;
   --glass-highlight: transparent !important;
-  --home-glow: transparent !important;
-  --ag-composer-tray-bg: #EAE0CE;
-  --ag-composer-card-bg: #F8F3EC;
-  --code-foreground: #332D25 !important;
+  --home-glow: rgba(63, 110, 122, 0.05) !important;
+  --ag-composer-tray-bg: #DFD4C1;
+  --ag-composer-card-bg: #F6F0E6;
+  --code-foreground: #312C25 !important;
 }
 
-/* 白天模式侧栏选中项与高对比边框细节（兼容 2.33.0+ 移除 data-newux-theme="onyx" 后的纯 body[data-agy-theme] 选择器） */
+/* 白天模式侧栏选中项、用户气泡、文件胶囊、引用块与代码块冷暖矿物互补细节 */
 body[data-agy-theme]:not(.dark) .agy-sidebar-row[data-selected="true"],
 body[data-agy-theme][data-newux-theme="onyx"]:not(.dark) .agy-sidebar-row[data-selected="true"],
 html:not([data-ag-theme-mode="dark"]) body:not(.dark) .agy-sidebar-row[data-selected="true"] {
   background-color: var(--sidebar-secondary) !important;
   --row-bg: var(--sidebar-secondary) !important;
-  box-shadow: none !important;
+  box-shadow: inset 2px 0 0 rgba(63, 110, 122, 0.55) !important;
 }
 
 html[data-ag-preset="high-contrast"]:not([data-ag-theme-mode="dark"]) body:not(.dark) :is(a[class*="inline-flex items-center"], .bg-sidebar a, .bg-sidebar button) {
-  border-color: rgba(0, 0, 0, 0.32) !important;
+  border-color: rgba(54, 49, 43, 0.22) !important;
 }
 
 html[data-ag-preset="high-contrast"]:not([data-ag-theme-mode="dark"]) body:not(.dark) .bg-border {
-  background-color: rgba(0, 0, 0, 0.28) !important;
+  background-color: rgba(54, 49, 43, 0.20) !important;
+}
+
+html:not([data-ag-theme-mode="dark"]) body:not(.dark) .agy-user-bubble {
+  background-color: #E8E2D5 !important;
+  border: 1px solid rgba(63, 110, 122, 0.16) !important;
+  color: #24221F !important;
+}
+
+html:not([data-ag-theme-mode="dark"]) body:not(.dark) :is([data-markdown-root], .select-text, .prose, .markdown) :not(pre) > code {
+  background-color: rgba(63, 110, 122, 0.085);
+  border: 1px solid rgba(63, 110, 122, 0.19);
+  border-radius: 5px;
+  padding: 0.1em 0.34em;
+  color: #2C535E !important;
+}
+
+html:not([data-ag-theme-mode="dark"]) body:not(.dark) :is(a.inline-pill[href^="file:"], a.inline-pill[href^="vscode-"], .inline-pill[data-uri^="file:"], .inline-pill[data-uri^="vscode-"]) {
+  background-color: rgba(63, 110, 122, 0.095) !important;
+  border-color: rgba(63, 110, 122, 0.24) !important;
+  color: #2B525D !important;
+}
+
+html:not([data-ag-theme-mode="dark"]) body:not(.dark) :is(a.inline-pill[href^="file:"], a.inline-pill[href^="vscode-"], .inline-pill[data-uri^="file:"], .inline-pill[data-uri^="vscode-"]):hover {
+  background-color: rgba(63, 110, 122, 0.16) !important;
+  border-color: rgba(63, 110, 122, 0.36) !important;
+}
+
+html:not([data-ag-theme-mode="dark"]) body:not(.dark) :is([data-markdown-root], .prose, .markdown) a:not(.inline-pill) {
+  color: #3F6E7A;
+  text-decoration-color: rgba(63, 110, 122, 0.38);
+}
+
+html:not([data-ag-theme-mode="dark"]) body:not(.dark) :is([data-markdown-root], .prose, .markdown) a:not(.inline-pill):hover {
+  color: #B85E43;
+  text-decoration-color: rgba(184, 94, 67, 0.55);
+}
+
+html:not([data-ag-theme-mode="dark"]) body:not(.dark) :is([data-markdown-root], .prose, .markdown) blockquote {
+  border-left: 3px solid #6E9AA6 !important;
+  background-color: rgba(63, 110, 122, 0.045);
+  border-radius: 0 6px 6px 0;
+  color: #46423C;
 }
 
 /* Swarm 插件子帧白天模式兜底：防止宿主曾推送过深色内联 style 变量在切换回浅色后残留 */
 html[data-ag-page-type="plugin"]:not([data-ag-theme-mode="dark"]) {
-  --primary-foreground: #FFFFFF !important;
-  --secondary: rgba(0, 0, 0, 0.06) !important;
-  --muted: rgba(0, 0, 0, 0.04) !important;
-  --placeholder: #78716C !important;
-  --error: #C23B32 !important;
+  --primary-foreground: #FAF8F3 !important;
+  --secondary: rgba(54, 49, 43, 0.065) !important;
+  --muted: rgba(54, 49, 43, 0.045) !important;
+  --placeholder: #857E73 !important;
+  --error: #B84A3E !important;
 }
 
 html[data-ag-page-type="plugin"][data-ag-preset="vintage-deep"]:not([data-ag-theme-mode="dark"]) {
-  --primary-foreground: #FFFFFF !important;
-  --secondary: rgba(60, 45, 25, 0.075) !important;
-  --muted: rgba(60, 45, 25, 0.05) !important;
-  --placeholder: #8A8074 !important;
-  --error: #B8382C !important;
+  --primary-foreground: #FAF6EE !important;
+  --secondary: rgba(60, 48, 32, 0.075) !important;
+  --muted: rgba(60, 48, 32, 0.05) !important;
+  --placeholder: #8A8073 !important;
+  --error: #B84A3E !important;
 }
 
 
 /* ============================================================================
- * PART III. 独立黑夜模式（Dark Mode · 切换深色按钮时自动激活）
- * 还原 Antigravity 2.30.0 / 2.31.0 官方 onyx Default Dark 基准色系，并专项强化深色可读性与边界可见性
+ * PART III. 独立黑夜模式（Dark Mode · 莫兰迪古典矿物双夜景：深海石青 onyx × 暖岩矿彩 claude-warm）
  * ============================================================================ */
 html[data-ag-theme-mode="dark"],
 html[data-ag-theme-mode="dark"] body,
@@ -908,130 +1088,236 @@ body.theme-dark,
 body[data-agy-theme].dark,
 html[data-ag-preset] body.dark,
 html[data-ag-preset] body[data-agy-theme].dark {
-  --background: #070708 !important;
-  --content: #070708 !important;
-  --foreground: #FFFFFF !important;
-  --primary: #2F71E3 !important;
-  --primary-foreground: #FFFFFF !important;
-  --editor-selection-background: rgba(47, 113, 227, 0.40) !important;
-  --editor-comment-selection-background: rgba(47, 113, 227, 0.24) !important;
-  --shell: #111114 !important;
-  --sidebar: #111114 !important;
-  --vscode-sideBar-background: #111114 !important;
-  --sidebar-secondary: rgba(255, 255, 255, 0.105) !important;
-  --sidebar-muted: rgba(255, 255, 255, 0.06) !important;
-  --sidebar-border: rgba(255, 255, 255, 0.11) !important;
-  --secondary: rgba(255, 255, 255, 0.09) !important;
-  --secondary-foreground: #D8DAE3 !important;
-  --muted: rgba(255, 255, 255, 0.055) !important;
-  --muted-foreground: #9EA0AC !important;
-  --placeholder: #7C7E8C !important;
-  --card: #131317 !important;
-  --card-border: rgba(255, 255, 255, 0.115) !important;
-  --card-edge: rgba(255, 255, 255, 0.115) !important;
-  --sash-line: rgba(255, 255, 255, 0.15) !important;
-  --border: rgba(255, 255, 255, 0.10) !important;
-  --glass: #16161C !important;
-  --glass-border: rgba(255, 255, 255, 0.11) !important;
-  --glass-highlight: rgba(255, 255, 255, 0.085) !important;
-  --scrim: rgba(0, 0, 0, 0.68) !important;
-  --onyx-frame: #0D0D11 !important;
-  --onyx-well: #111115 !important;
-  --onyx-raised: #15151A !important;
-  --onyx-selected: #1F1F24 !important;
-  --onyx-key: #24252A !important;
-  --home-glow: color-mix(in srgb, #2F71E3 11%, transparent) !important;
-  --error: #de5555 !important;
-  --warning: #f3c949 !important;
-  --link: #6a9fcb !important;
-  --success: #7aae66 !important;
+  --background: #15191C !important;
+  --body-background: #15191C !important;
+  --content: #15191C !important;
+  --foreground: #E4E8E9 !important;
+  --primary: #6E9AA6 !important;
+  --primary-foreground: #F5F8F9 !important;
+  --editor-selection-background: rgba(110, 154, 166, 0.32) !important;
+  --editor-comment-selection-background: rgba(110, 154, 166, 0.20) !important;
+  --bg-selection: rgba(110, 154, 166, 0.28) !important;
+  --bg-selection-overlay: rgba(110, 154, 166, 0.22) !important;
+  --bg-cursor-line: rgba(110, 154, 166, 0.08) !important;
+  --fg-cursor: #8EB6C2 !important;
+  --shell: #101417 !important;
+  --sidebar: #101417 !important;
+  --vscode-sideBar-background: #101417 !important;
+  --sidebar-secondary: rgba(220, 230, 233, 0.085) !important;
+  --sidebar-muted: rgba(220, 230, 233, 0.05) !important;
+  --sidebar-border: rgba(220, 230, 233, 0.10) !important;
+  --secondary: rgba(220, 230, 233, 0.075) !important;
+  --secondary-foreground: #C8D2D5 !important;
+  --muted: rgba(220, 230, 233, 0.05) !important;
+  --muted-foreground: #909EA3 !important;
+  --placeholder: #6E7C82 !important;
+  --card: #1B2125 !important;
+  --card-border: rgba(220, 230, 233, 0.11) !important;
+  --card-edge: rgba(220, 230, 233, 0.11) !important;
+  --sash-line: rgba(220, 230, 233, 0.13) !important;
+  --border: rgba(220, 230, 233, 0.095) !important;
+  --glass: #191F23 !important;
+  --glass-border: rgba(220, 230, 233, 0.11) !important;
+  --glass-highlight: rgba(220, 230, 233, 0.07) !important;
+  --scrim: rgba(8, 11, 13, 0.70) !important;
+  --onyx-frame: #101417 !important;
+  --onyx-well: #13181B !important;
+  --onyx-raised: #1C2226 !important;
+  --onyx-selected: #252E34 !important;
+  --onyx-key: #2C363D !important;
+  --home-glow: rgba(110, 154, 166, 0.10) !important;
+  --error: #D97368 !important;
+  --color-error: #D97368 !important;
+  --warning: #D6B475 !important;
+  --color-warning: #D6B475 !important;
+  --link: #86B0BC !important;
+  --color-link: #86B0BC !important;
+  --cta: #588794 !important;
+  --cta-foreground: #F5F8F9 !important;
+  --success: #8EC0AF !important;
+  --color-success: #8EC0AF !important;
+  --color-gold: #D6B475 !important;
+
+  /* 深色模式 Tailwind v4 彩色标尺与语法高亮莫兰迪矿物映射 */
+  --color-blue-300: #B0CDD5 !important;
+  --color-blue-400: #8EB6C2 !important;
+  --color-blue-500: #6E9AA6 !important;
+  --color-blue-600: #527E8A !important;
+  --color-blue-700: #3E636E !important;
+  --color-blue-800: #2D4A53 !important;
+  --color-sky-500: #7AA6B2 !important;
+  --color-cyan-400: #96BFC9 !important;
+  --color-cyan-500: #75A2AE !important;
+  --color-cyan-600: #56838F !important;
+  --color-teal-400: #8EC0AF !important;
+  --color-teal-500: #6FA694 !important;
+  --color-teal-600: #508574 !important;
+  --color-teal-700: #396356 !important;
+  --color-green: #8EC0AF !important;
+  --color-green-300: #B4D7CA !important;
+  --color-green-400: #8EC0AF !important;
+  --color-green-500: #6FA694 !important;
+  --color-green-600: #508574 !important;
+  --color-emerald-400: #8EC0AF !important;
+  --color-emerald-500: #6FA694 !important;
+  --color-emerald-600: #508574 !important;
+  --color-amber-300: #EBD6AE !important;
+  --color-amber-400: #DFBE82 !important;
+  --color-amber-500: #CFA063 !important;
+  --color-amber-600: #B8843B !important;
+  --color-amber-700: #95692C !important;
+  --color-yellow-200: #EFE2C6 !important;
+  --color-yellow-400: #E0C286 !important;
+  --color-yellow-500: #CFA968 !important;
+  --color-yellow-600: #AE8748 !important;
+  --color-orange: #E08567 !important;
+  --color-orange-500: #D97757 !important;
+  --color-orange-600: #BD6144 !important;
+  --color-purple-400: #C2AFCE !important;
+  --color-purple-500: #A892B6 !important;
+  --color-purple-600: #8B739A !important;
+  --color-violet-500: #AA94B8 !important;
+  --color-violet-600: #8D759C !important;
+  --color-indigo-400: #9BA5BE !important;
+  --color-indigo-500: #7E89A6 !important;
+  --color-pink-400: #D4A3A7 !important;
+  --color-pink-500: #BD858A !important;
+  --color-rose-400: #D89D96 !important;
+  --color-rose-500: #C07F77 !important;
+  --color-diffEditor-insertedLineBackground: rgba(142, 192, 175, 0.12) !important;
+  --color-diffEditor-insertedTextBackground: rgba(142, 192, 175, 0.24) !important;
+  --color-diffEditor-removedLineBackground: rgba(217, 115, 104, 0.13) !important;
+  --color-diffEditor-removedTextBackground: rgba(217, 115, 104, 0.25) !important;
+  --chart-1: #7AA6B2 !important;
+  --chart-2: #E08567 !important;
+  --chart-3: #8EC0AF !important;
+  --chart-4: #DFBE82 !important;
+  --chart-5: #B49EC0 !important;
+  --chart-6: #8FA0A6 !important;
+  --syntax-default-fg: #DCE2E4 !important;
+  --syntax-keyword: #8EB6C2 !important;
+  --syntax-attr-value: #8EB6C2 !important;
+  --syntax-string: #93C4B0 !important;
+  --syntax-inserted: #93C4B0 !important;
+  --syntax-attr-name: #85B8A6 !important;
+  --syntax-builtin: #85B8A6 !important;
+  --syntax-function: #E59B82 !important;
+  --syntax-class-name: #E08567 !important;
+  --syntax-number: #DFBE82 !important;
+  --syntax-variable: #DFBE82 !important;
+  --syntax-regex: #CFA063 !important;
+  --syntax-operator: #C7B293 !important;
+  --syntax-constant: #BEA9CA !important;
+  --syntax-property: #BEA9CA !important;
+  --syntax-tag: #B49EC0 !important;
+  --syntax-deleted: #E08075 !important;
+  --syntax-comment: #7D8B90 !important;
+  --syntax-punctuation: #95A3A8 !important;
+
   /* 深色背景下禁用黑色润墨阴影，消除亮字边缘发乌光晕 */
   --ag-ink-shadow-xs: none !important;
   --ag-ink-shadow-sm: none !important;
   --ag-ink-shadow-md: none !important;
   --ag-ink-shadow-prose: none !important;
   --ag-ink-shadow-prose-bold: none !important;
-  /* 黑夜模式组件级色彩变量绑定 */
-  --ag-composer-tray-bg: #0D0D11;
-  --ag-composer-card-bg: #15151A;
-  --ag-composer-card-border: rgba(255, 255, 255, 0.075);
-  --ag-composer-card-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07), 0 3px 10px -2px rgba(0, 0, 0, 0.35);
-  --ag-composer-card-focus-border: rgba(255, 255, 255, 0.11);
-  --ag-composer-card-focus-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.10), 0 6px 18px -3px rgba(0, 0, 0, 0.45);
-  --ag-seal-home-border: rgba(255, 255, 255, 0.085);
+  /* 黑夜模式组件级色彩变量绑定（深海石青 × 赤陶微光） */
+  --ag-composer-tray-bg: #111619;
+  --ag-composer-card-bg: #1B2125;
+  --ag-composer-card-border: rgba(220, 230, 233, 0.08);
+  --ag-composer-card-shadow: inset 0 1px 0 rgba(220, 230, 233, 0.06), 0 3px 10px -2px rgba(0, 0, 0, 0.38);
+  --ag-composer-card-focus-border: rgba(110, 154, 166, 0.38);
+  --ag-composer-card-focus-shadow: inset 0 1px 0 rgba(220, 230, 233, 0.09), 0 6px 18px -3px rgba(0, 0, 0, 0.48);
+  --ag-seal-home-border: rgba(220, 230, 233, 0.085);
   --ag-seal-home-shadow: 0 14px 34px -10px rgba(0, 0, 0, 0.45);
-  --ag-seal-home-focus-border: rgba(255, 255, 255, 0.18);
+  --ag-seal-home-focus-border: rgba(110, 154, 166, 0.48);
   --ag-seal-home-focus-shadow: 0 16px 36px -10px rgba(0, 0, 0, 0.55);
-  --ag-seal-chat-border: rgba(255, 255, 255, 0.14);
+  --ag-seal-chat-border: rgba(220, 230, 233, 0.13);
   --ag-seal-chat-shadow: 0 16px 36px -10px rgba(0, 0, 0, 0.5);
-  --ag-seal-chat-focus-border: var(--ag-dark-wax-seal-hover, rgba(47, 113, 227, 0.72));
-  --ag-seal-chat-focus-shadow: 0 0 0 1px rgba(47, 113, 227, 0.18), 0 18px 40px -12px rgba(0, 0, 0, 0.55);
-  --ag-seal-off-border: rgba(255, 255, 255, 0.12);
-  --ag-composer-top-fg: #D8DAE3;
-  --ag-composer-top-hover-bg: rgba(255, 255, 255, 0.08);
-  --ag-composer-top-hover-fg: #FFFFFF;
-  --ag-composer-ctrl-fg: #D8DAE3;
-  --ag-send-btn-bg: var(--primary, #2F71E3);
-  --ag-send-btn-hover-bg: #3B7EEF;
-  --ag-send-btn-border: rgba(255, 255, 255, 0.18);
-  --ag-send-btn-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28), inset 0 -1.5px 0 rgba(0, 0, 0, 0.15), 0 2px 6px rgba(0, 0, 0, 0.3);
-  --ag-sidebar-fg: #E4E5EC;
-  --ag-sidebar-row-fg: #D4D6DF;
-  --ag-sidebar-header-fg: #C8CAD4;
-  --ag-sidebar-header-title-fg: #EAEBF1;
-  --ag-sidebar-selected-fg: #FFFFFF;
-  --ag-sidebar-muted-fg: #989AA6;
-  --ag-menu-item-fg: #EAEBF1;
-  --ag-menu-header-fg: #9EA0AC;
-  --ag-dialog-title-fg: #FFFFFF;
-  --ag-dialog-item-fg: #EAEBF1;
-  --code-foreground: #EAEBF1 !important;
+  --ag-seal-chat-focus-border: var(--ag-dark-wax-seal-hover, rgba(110, 154, 166, 0.72));
+  --ag-seal-chat-focus-shadow: 0 0 0 1px rgba(110, 154, 166, 0.18), 0 18px 40px -12px rgba(0, 0, 0, 0.55);
+  --ag-seal-off-border: rgba(220, 230, 233, 0.12);
+  --ag-composer-top-fg: #C8D2D5;
+  --ag-composer-top-hover-bg: rgba(110, 154, 166, 0.12);
+  --ag-composer-top-hover-fg: #F0F4F5;
+  --ag-composer-ctrl-fg: #C8D2D5;
+  --ag-send-btn-bg: #4C7C89;
+  --ag-send-btn-hover-bg: #5B8C9A;
+  --ag-send-btn-border: rgba(220, 238, 242, 0.22);
+  --ag-send-btn-shadow: inset 0 1px 0 rgba(220, 238, 242, 0.24), inset 0 -1.5px 0 rgba(0, 0, 0, 0.18), 0 2px 6px rgba(0, 0, 0, 0.3);
+  --ag-sidebar-fg: #DCE3E5;
+  --ag-sidebar-row-fg: #CAD3D6;
+  --ag-sidebar-header-fg: #B8C4C8;
+  --ag-sidebar-header-title-fg: #E4EAEC;
+  --ag-sidebar-selected-fg: #F5F8F9;
+  --ag-sidebar-muted-fg: #87969B;
+  --ag-menu-item-fg: #E0E6E8;
+  --ag-menu-header-fg: #909EA3;
+  --ag-dialog-title-fg: #F2F6F7;
+  --ag-dialog-item-fg: #E0E6E8;
+  --code-foreground: #DCE2E4 !important;
 }
 
-/* 黑夜模式侧栏选中态：还原官方 onyx.dark 立体微高光胶囊 (#1F1F24) */
+/* 黑夜模式侧栏选中态：莫兰迪石青微高光胶囊 */
 body[data-agy-theme].dark .agy-sidebar-row[data-selected="true"],
 body[data-agy-theme][data-newux-theme="onyx"].dark .agy-sidebar-row[data-selected="true"],
 :is(html[data-ag-theme-mode="dark"] body, body.dark) .agy-sidebar-row[data-selected="true"] {
-  background-color: var(--onyx-selected, #1F1F24) !important;
-  --row-bg: var(--onyx-selected, #1F1F24) !important;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), inset 0 0 0 1px rgba(255, 255, 255, 0.07) !important;
+  background-color: var(--onyx-selected, #252E34) !important;
+  --row-bg: var(--onyx-selected, #252E34) !important;
+  box-shadow: inset 2px 0 0 rgba(122, 166, 178, 0.65), inset 0 1px 0 rgba(220, 230, 233, 0.07) !important;
 }
 
 :is(html[data-ag-theme-mode="dark"] body, body.dark) #antigravity\.agentSidePanelInputBox button:not([data-testid="send-button"]):not([data-testid="voice-start-button"]):not([data-testid="input-cancel-button"]):hover,
 :is(html[data-ag-theme-mode="dark"] body, body.dark) #antigravity\.agentSidePanelInputBox button:not([data-testid="send-button"]):not([data-testid="voice-start-button"]):not([data-testid="input-cancel-button"]):hover :is(span, svg) {
-  color: #FFFFFF !important;
+  color: #F2F6F7 !important;
 }
 
 :is(html[data-ag-theme-mode="dark"] body, body.dark) :is([data-testid="conversation-row-sidebar"], .agy-sidebar-row):not([data-selected="true"]):hover span.truncate {
-  color: #FFFFFF !important;
+  color: #F2F6F7 !important;
 }
 
 :is(html[data-ag-theme-mode="dark"] body, body.dark) :is(.bg-sidebar a[class*="border"], .bg-sidebar button[class*="border"], a[class*="inline-flex items-center"][class*="border"]) {
-  border-color: rgba(255, 255, 255, 0.12) !important;
+  border-color: rgba(220, 230, 233, 0.12) !important;
 }
 
 :is(html[data-ag-theme-mode="dark"] body, body.dark) .bg-border {
-  background-color: rgba(255, 255, 255, 0.10) !important;
+  background-color: rgba(220, 230, 233, 0.10) !important;
 }
 
-/* 黑夜模式正文阅读与行内代码可读性微调 */
+/* 黑夜模式正文阅读、气泡、文件胶囊与引用块莫兰迪矿物细节 */
 :is(html[data-ag-theme-mode="dark"] body, body.dark, body.theme-dark) :is([data-markdown-root], [data-testid="user-message-content"], .prose, .markdown) {
-  color: #ECEEF4;
+  color: #E0E6E7;
 }
 
 :is(html[data-ag-theme-mode="dark"] body, body.dark, body.theme-dark) :is([data-markdown-root], [data-testid="user-message-content"], .select-text, .prose, .markdown) :is(h1, h2, h3, h4, h5, h6, strong, b) {
-  color: #FFFFFF;
+  color: #F3F6F7;
+}
+
+:is(html[data-ag-theme-mode="dark"] body, body.dark, body.theme-dark) .agy-user-bubble {
+  background-color: #212A30 !important;
+  border: 1px solid rgba(122, 166, 178, 0.20) !important;
 }
 
 :is(html[data-ag-theme-mode="dark"] body, body.dark, body.theme-dark) :is([data-markdown-root], .select-text, .prose, .markdown) :not(pre) > code {
-  background-color: rgba(255, 255, 255, 0.085);
-  border: 1px solid rgba(255, 255, 255, 0.11);
+  background-color: rgba(122, 166, 178, 0.11);
+  border: 1px solid rgba(122, 166, 178, 0.22);
   border-radius: 5px;
   padding: 0.12em 0.36em;
-  color: #EAEBF1 !important;
+  color: #B4D2DC !important;
 }
 
-/* 黑夜预设 2（可选同族暖调）：Claude 暖纸深夜 (claude-warm · 暖炭底 #242320 + 象牙字 #F3F0E4 + 陶土暖橙 #D97757) */
+:is(html[data-ag-theme-mode="dark"] body, body.dark, body.theme-dark) :is(a.inline-pill[href^="file:"], a.inline-pill[href^="vscode-"], .inline-pill[data-uri^="file:"], .inline-pill[data-uri^="vscode-"]) {
+  background-color: rgba(122, 166, 178, 0.12) !important;
+  border-color: rgba(122, 166, 178, 0.26) !important;
+  color: #B4D2DC !important;
+}
+
+:is(html[data-ag-theme-mode="dark"] body, body.dark, body.theme-dark) :is([data-markdown-root], .prose, .markdown) blockquote {
+  border-left: 3px solid #6E9AA6 !important;
+  background-color: rgba(110, 154, 166, 0.06);
+  border-radius: 0 6px 6px 0;
+}
+
+/* 黑夜预设 2（莫兰迪暖玄武矿彩夜）：claude-warm · 暖玄武底 #21201D + 矿物象牙 #ECE7D9 + 赤陶 #D97757 × 粉青 #86B0BC 冷暖互补 */
 html[data-ag-dark-preset="claude-warm"][data-ag-theme-mode="dark"],
 html[data-ag-dark-preset="claude-warm"][data-ag-theme-mode="dark"] body,
 html[data-ag-dark-preset="claude-warm"]:has(> body.dark),
@@ -1040,85 +1326,92 @@ html[data-ag-dark-preset="claude-warm"] body.theme-dark,
 html[data-ag-dark-preset="claude-warm"] body[data-agy-theme].dark,
 html[data-ag-dark-preset="claude-warm"][data-ag-preset] body.dark,
 html[data-ag-dark-preset="claude-warm"][data-ag-preset] body[data-agy-theme].dark {
-  --background: #242320 !important;
-  --body-background: #242320 !important;
-  --content: #242320 !important;
-  --foreground: #F3F0E4 !important;
+  --background: #21201D !important;
+  --body-background: #21201D !important;
+  --content: #21201D !important;
+  --foreground: #ECE7D9 !important;
   --primary: #D97757 !important;
-  --primary-foreground: #FFFBF2 !important;
-  --editor-selection-background: rgba(217, 119, 87, 0.32) !important;
-  --editor-comment-selection-background: rgba(217, 119, 87, 0.20) !important;
-  --shell: #1B1A18 !important;
-  --sidebar: #1B1A18 !important;
-  --vscode-sideBar-background: #1B1A18 !important;
-  --sidebar-secondary: rgba(243, 240, 228, 0.08) !important;
-  --sidebar-muted: rgba(243, 240, 228, 0.05) !important;
-  --sidebar-border: rgba(243, 240, 228, 0.10) !important;
-  --secondary: rgba(243, 240, 228, 0.07) !important;
-  --secondary-foreground: #DAD5C5 !important;
-  --muted: rgba(243, 240, 228, 0.05) !important;
-  --muted-foreground: #A39E8D !important;
-  --placeholder: #7E7A6B !important;
-  --card: #2B2A26 !important;
-  --card-border: rgba(243, 240, 228, 0.10) !important;
-  --card-edge: rgba(243, 240, 228, 0.10) !important;
-  --sash-line: rgba(243, 240, 228, 0.12) !important;
-  --border: rgba(243, 240, 228, 0.09) !important;
-  --glass: #282724 !important;
-  --glass-border: rgba(243, 240, 228, 0.10) !important;
-  --glass-highlight: rgba(243, 240, 228, 0.07) !important;
-  --scrim: rgba(14, 13, 11, 0.70) !important;
-  --onyx-frame: #1B1A18 !important;
-  --onyx-well: #201F1C !important;
-  --onyx-raised: #2B2A26 !important;
-  --onyx-selected: #37342E !important;
-  --onyx-key: #403D36 !important;
-  --home-glow: rgba(217, 119, 87, 0.10) !important;
-  --error: #E0735C !important;
-  --warning: #DFAF5F !important;
-  --link: #DFA07E !important;
-  --success: #93AE78 !important;
-  --ag-composer-tray-bg: #1B1A18;
-  --ag-composer-card-bg: #2B2A26;
-  --ag-composer-card-border: rgba(243, 240, 228, 0.08);
-  --ag-composer-card-shadow: inset 0 1px 0 rgba(243, 240, 228, 0.06), 0 3px 10px -2px rgba(0, 0, 0, 0.40);
-  --ag-composer-card-focus-border: rgba(217, 119, 87, 0.45);
-  --ag-composer-card-focus-shadow: inset 0 1px 0 rgba(243, 240, 228, 0.08), 0 6px 18px -3px rgba(0, 0, 0, 0.50);
-  --ag-seal-home-border: rgba(243, 240, 228, 0.09);
+  --primary-foreground: #FAF6EE !important;
+  --editor-selection-background: rgba(122, 166, 178, 0.28) !important;
+  --editor-comment-selection-background: rgba(122, 166, 178, 0.18) !important;
+  --bg-selection: rgba(122, 166, 178, 0.26) !important;
+  --bg-selection-overlay: rgba(122, 166, 178, 0.20) !important;
+  --shell: #191815 !important;
+  --sidebar: #191815 !important;
+  --vscode-sideBar-background: #191815 !important;
+  --sidebar-secondary: rgba(236, 231, 217, 0.08) !important;
+  --sidebar-muted: rgba(236, 231, 217, 0.05) !important;
+  --sidebar-border: rgba(236, 231, 217, 0.10) !important;
+  --secondary: rgba(236, 231, 217, 0.07) !important;
+  --secondary-foreground: #D5CFC0 !important;
+  --muted: rgba(236, 231, 217, 0.05) !important;
+  --muted-foreground: #9E9888 !important;
+  --placeholder: #7C7769 !important;
+  --card: #292723 !important;
+  --card-border: rgba(236, 231, 217, 0.10) !important;
+  --card-edge: rgba(236, 231, 217, 0.10) !important;
+  --sash-line: rgba(236, 231, 217, 0.12) !important;
+  --border: rgba(236, 231, 217, 0.09) !important;
+  --glass: #262521 !important;
+  --glass-border: rgba(236, 231, 217, 0.10) !important;
+  --glass-highlight: rgba(236, 231, 217, 0.07) !important;
+  --scrim: rgba(12, 11, 10, 0.72) !important;
+  --onyx-frame: #191815 !important;
+  --onyx-well: #1E1D1A !important;
+  --onyx-raised: #292723 !important;
+  --onyx-selected: #34312B !important;
+  --onyx-key: #3D3A33 !important;
+  --home-glow: rgba(122, 166, 178, 0.08) !important;
+  --error: #DC7665 !important;
+  --color-error: #DC7665 !important;
+  --warning: #DFBE82 !important;
+  --color-warning: #DFBE82 !important;
+  --link: #8EB6C2 !important;
+  --color-link: #8EB6C2 !important;
+  --cta: #C86D51 !important;
+  --success: #8EC0AF !important;
+  --color-success: #8EC0AF !important;
+  --ag-composer-tray-bg: #191815;
+  --ag-composer-card-bg: #292723;
+  --ag-composer-card-border: rgba(236, 231, 217, 0.08);
+  --ag-composer-card-shadow: inset 0 1px 0 rgba(236, 231, 217, 0.06), 0 3px 10px -2px rgba(0, 0, 0, 0.42);
+  --ag-composer-card-focus-border: rgba(122, 166, 178, 0.36);
+  --ag-composer-card-focus-shadow: inset 0 1px 0 rgba(236, 231, 217, 0.08), 0 6px 18px -3px rgba(0, 0, 0, 0.50);
+  --ag-seal-home-border: rgba(236, 231, 217, 0.09);
   --ag-seal-home-shadow: 0 14px 34px -10px rgba(0, 0, 0, 0.50);
-  --ag-seal-home-focus-border: rgba(217, 119, 87, 0.55);
+  --ag-seal-home-focus-border: rgba(217, 119, 87, 0.50);
   --ag-seal-home-focus-shadow: 0 16px 36px -10px rgba(0, 0, 0, 0.60);
-  --ag-seal-chat-border: rgba(243, 240, 228, 0.13);
+  --ag-seal-chat-border: rgba(236, 231, 217, 0.13);
   --ag-seal-chat-shadow: 0 16px 36px -10px rgba(0, 0, 0, 0.55);
-  --ag-dark-wax-seal-hover: rgba(217, 119, 87, 0.72);
-  --ag-seal-chat-focus-border: var(--ag-dark-wax-seal-hover, rgba(217, 119, 87, 0.72));
-  --ag-seal-chat-focus-shadow: 0 0 0 1px rgba(217, 119, 87, 0.20), 0 18px 40px -12px rgba(0, 0, 0, 0.60);
-  --ag-seal-off-border: rgba(243, 240, 228, 0.11);
-  --ag-composer-top-fg: #DAD5C5;
-  --ag-composer-top-hover-bg: rgba(243, 240, 228, 0.08);
-  --ag-composer-top-hover-fg: #F8F5EA;
-  --ag-composer-ctrl-fg: #DAD5C5;
-  --ag-send-btn-bg: var(--primary, #D97757);
-  --ag-send-btn-hover-bg: #E08A6B;
-  --ag-send-btn-border: rgba(255, 244, 230, 0.24);
-  --ag-send-btn-shadow: inset 0 1px 0 rgba(255, 244, 230, 0.25), inset 0 -1.5px 0 rgba(0, 0, 0, 0.18), 0 2px 6px rgba(0, 0, 0, 0.32);
-  --ag-sidebar-fg: #E7E3D4;
-  --ag-sidebar-row-fg: #D8D4C4;
-  --ag-sidebar-header-fg: #C4BFAE;
-  --ag-sidebar-header-title-fg: #EEEADA;
-  --ag-sidebar-selected-fg: #FCF9EF;
-  --ag-sidebar-muted-fg: #948F80;
-  --ag-menu-item-fg: #EEEADA;
-  --ag-menu-header-fg: #A39E8D;
-  --ag-dialog-title-fg: #FCF9EF;
-  --ag-dialog-item-fg: #EEEADA;
-  --code-foreground: #EDE9D9 !important;
+  --ag-dark-wax-seal-hover: rgba(217, 119, 87, 0.68);
+  --ag-seal-chat-focus-border: var(--ag-dark-wax-seal-hover, rgba(217, 119, 87, 0.68));
+  --ag-seal-chat-focus-shadow: 0 0 0 1px rgba(217, 119, 87, 0.18), 0 18px 40px -12px rgba(0, 0, 0, 0.60);
+  --ag-seal-off-border: rgba(236, 231, 217, 0.11);
+  --ag-composer-top-fg: #D5CFC0;
+  --ag-composer-top-hover-bg: rgba(122, 166, 178, 0.11);
+  --ag-composer-top-hover-fg: #F5F1E5;
+  --ag-composer-ctrl-fg: #D5CFC0;
+  --ag-send-btn-bg: #C96E51;
+  --ag-send-btn-hover-bg: #D87D60;
+  --ag-send-btn-border: rgba(250, 243, 230, 0.22);
+  --ag-send-btn-shadow: inset 0 1px 0 rgba(250, 243, 230, 0.22), inset 0 -1.5px 0 rgba(0, 0, 0, 0.18), 0 2px 6px rgba(0, 0, 0, 0.32);
+  --ag-sidebar-fg: #E3DECF;
+  --ag-sidebar-row-fg: #D4CEBF;
+  --ag-sidebar-header-fg: #BFB9A9;
+  --ag-sidebar-header-title-fg: #EBE6D7;
+  --ag-sidebar-selected-fg: #F8F4E9;
+  --ag-sidebar-muted-fg: #918B7C;
+  --ag-menu-item-fg: #EAE5D6;
+  --ag-menu-header-fg: #9E9888;
+  --ag-dialog-title-fg: #F8F4E9;
+  --ag-dialog-item-fg: #EAE5D6;
+  --code-foreground: #E8E3D4 !important;
 }
 
 html[data-ag-dark-preset="claude-warm"] body[data-agy-theme].dark .agy-sidebar-row[data-selected="true"],
 html[data-ag-dark-preset="claude-warm"] body[data-agy-theme][data-newux-theme="onyx"].dark .agy-sidebar-row[data-selected="true"],
 :is(html[data-ag-dark-preset="claude-warm"][data-ag-theme-mode="dark"] body, html[data-ag-dark-preset="claude-warm"] body.dark) .agy-sidebar-row[data-selected="true"] {
-  box-shadow: inset 0 1px 0 rgba(243, 240, 228, 0.08), inset 0 0 0 1px rgba(243, 240, 228, 0.07) !important;
+  box-shadow: inset 2px 0 0 rgba(217, 119, 87, 0.65), inset 0 1px 0 rgba(236, 231, 217, 0.07) !important;
 }
 
 :is(html[data-ag-dark-preset="claude-warm"][data-ag-theme-mode="dark"] body, html[data-ag-dark-preset="claude-warm"] body.dark) #antigravity\.agentSidePanelInputBox button:not([data-testid="send-button"]):not([data-testid="voice-start-button"]):not([data-testid="input-cancel-button"]):hover,
@@ -1131,35 +1424,46 @@ html[data-ag-dark-preset="claude-warm"] body[data-agy-theme][data-newux-theme="o
 }
 
 :is(html[data-ag-dark-preset="claude-warm"][data-ag-theme-mode="dark"] body, html[data-ag-dark-preset="claude-warm"] body.dark) :is(.bg-sidebar a[class*="border"], .bg-sidebar button[class*="border"], a[class*="inline-flex items-center"][class*="border"]) {
-  border-color: rgba(243, 240, 228, 0.12) !important;
+  border-color: rgba(236, 231, 217, 0.12) !important;
 }
 
 :is(html[data-ag-dark-preset="claude-warm"][data-ag-theme-mode="dark"] body, html[data-ag-dark-preset="claude-warm"] body.dark) .bg-border {
-  background-color: rgba(243, 240, 228, 0.10) !important;
+  background-color: rgba(236, 231, 217, 0.10) !important;
 }
 
 :is(html[data-ag-dark-preset="claude-warm"][data-ag-theme-mode="dark"] body, html[data-ag-dark-preset="claude-warm"] body.dark, html[data-ag-dark-preset="claude-warm"] body.theme-dark) :is([data-markdown-root], [data-testid="user-message-content"], .prose, .markdown) {
-  color: #EDE9DA;
+  color: #E9E4D5;
 }
 
 :is(html[data-ag-dark-preset="claude-warm"][data-ag-theme-mode="dark"] body, html[data-ag-dark-preset="claude-warm"] body.dark, html[data-ag-dark-preset="claude-warm"] body.theme-dark) :is([data-markdown-root], [data-testid="user-message-content"], .select-text, .prose, .markdown) :is(h1, h2, h3, h4, h5, h6, strong, b) {
-  color: #F8F5EA;
+  color: #F6F2E6;
+}
+
+:is(html[data-ag-dark-preset="claude-warm"][data-ag-theme-mode="dark"] body, html[data-ag-dark-preset="claude-warm"] body.dark, html[data-ag-dark-preset="claude-warm"] body.theme-dark) .agy-user-bubble {
+  background-color: #2E2B26 !important;
+  border: 1px solid rgba(122, 166, 178, 0.18) !important;
 }
 
 :is(html[data-ag-dark-preset="claude-warm"][data-ag-theme-mode="dark"] body, html[data-ag-dark-preset="claude-warm"] body.dark, html[data-ag-dark-preset="claude-warm"] body.theme-dark) :is([data-markdown-root], .select-text, .prose, .markdown) :not(pre) > code {
-  background-color: rgba(243, 240, 228, 0.09);
-  border: 1px solid rgba(243, 240, 228, 0.11);
-  color: #EFEADB !important;
+  background-color: rgba(122, 166, 178, 0.11);
+  border: 1px solid rgba(122, 166, 178, 0.22);
+  color: #B4D2DC !important;
+}
+
+:is(html[data-ag-dark-preset="claude-warm"][data-ag-theme-mode="dark"] body, html[data-ag-dark-preset="claude-warm"] body.dark, html[data-ag-dark-preset="claude-warm"] body.theme-dark) :is(a.inline-pill[href^="file:"], a.inline-pill[href^="vscode-"], .inline-pill[data-uri^="file:"], .inline-pill[data-uri^="vscode-"]) {
+  background-color: rgba(122, 166, 178, 0.12) !important;
+  border-color: rgba(122, 166, 178, 0.25) !important;
+  color: #B8D5DF !important;
 }
 
 :is(html[data-ag-dark-preset="claude-warm"][data-ag-theme-mode="dark"] body, html[data-ag-dark-preset="claude-warm"] body.dark, html[data-ag-dark-preset="claude-warm"] body.theme-dark) #antigravity\.agentSidePanelInputBox button[data-testid="input-cancel-button"] {
-  background-color: rgba(243, 240, 228, 0.11) !important;
-  color: #F3F0E4 !important;
+  background-color: rgba(236, 231, 217, 0.11) !important;
+  color: #ECE7D9 !important;
 }
 
 :is(html[data-ag-dark-preset="claude-warm"][data-ag-theme-mode="dark"] body, html[data-ag-dark-preset="claude-warm"] body.dark, html[data-ag-dark-preset="claude-warm"] body.theme-dark) #antigravity\.agentSidePanelInputBox button[data-testid="input-cancel-button"]:hover {
   background-color: rgba(217, 119, 87, 0.22) !important;
-  color: #FFFBF2 !important;
+  color: #FAF6EE !important;
 }
 
 /* 外观界面「主题模式」四段式胶囊：在浅色(☀️)与深色(🌙)之间无损插入「暖纸深色(📖)」切换钮 */
@@ -1351,7 +1655,7 @@ html[data-ag-theme-mode="dark"] #ag-theme-btn-tooltip {
 
 :is(#antigravity\.agentSidePanelInputBox, [id="antigravity.agentSidePanelInputBox"]) :is(#ag-live-metrics-pill, .ag-live-metrics-pill) .ag-ctx-warn,
 :is(#ag-live-metrics-pill, .ag-live-metrics-pill) .ag-ctx-warn {
-  color: #B45309 !important;
+  color: #8A6228 !important;
   font-weight: 600 !important;
 }
 
@@ -1371,36 +1675,36 @@ html[data-ag-theme-mode="dark"] #ag-theme-btn-tooltip {
   font-size: 9.5px !important;
   font-weight: 600 !important;
   line-height: 1;
-  background-color: rgba(217, 119, 87, 0.12);
-  border: 1px solid rgba(217, 119, 87, 0.28);
-  color: #9E3E22 !important;
+  background-color: rgba(63, 110, 122, 0.12);
+  border: 1px solid rgba(63, 110, 122, 0.28);
+  color: #2E5661 !important;
 }
 
 :is(#antigravity\.agentSidePanelInputBox, [id="antigravity.agentSidePanelInputBox"]) :is(#ag-live-metrics-pill, .ag-live-metrics-pill) .ag-zh-warn-dot,
 :is(#ag-live-metrics-pill, .ag-live-metrics-pill) .ag-zh-warn-dot {
-  color: #B45309 !important;
+  color: #8A6228 !important;
   font-size: 9px !important;
   line-height: 1;
 }
 
 /* 黑夜模式指标胶囊配色与高可见预警色 */
 :is(html[data-ag-theme-mode="dark"] body, body.dark) :is(#ag-live-metrics-pill, .ag-live-metrics-pill) {
-  color: #C8CAD4 !important;
-  border-left-color: rgba(255, 255, 255, 0.18) !important;
+  color: #B8C4C8 !important;
+  border-left-color: rgba(220, 230, 233, 0.18) !important;
 }
 
 :is(html[data-ag-theme-mode="dark"] body, body.dark) :is(#ag-live-metrics-pill, .ag-live-metrics-pill):hover,
 :is(html[data-ag-theme-mode="dark"] body, body.dark) :is(#ag-live-metrics-pill, .ag-live-metrics-pill):hover :is(#ag-live-metrics-text, .ag-live-metrics-text) {
-  color: #FFFFFF !important;
+  color: #F2F6F7 !important;
 }
 
 :is(html[data-ag-theme-mode="dark"] body, body.dark) :is(#ag-live-metrics-pill, .ag-live-metrics-pill)[data-ag-row-mode="bottom"] {
-  border-top-color: rgba(255, 255, 255, 0.14) !important;
+  border-top-color: rgba(220, 230, 233, 0.14) !important;
 }
 
 :is(html[data-ag-theme-mode="dark"] body, body.dark) :is(#antigravity\.agentSidePanelInputBox, [id="antigravity.agentSidePanelInputBox"]) :is(#ag-live-metrics-pill, .ag-live-metrics-pill) .ag-ctx-warn,
 :is(html[data-ag-theme-mode="dark"] body, body.dark) :is(#ag-live-metrics-pill, .ag-live-metrics-pill) .ag-ctx-warn {
-  color: #FBBF24 !important;
+  color: #DFBE82 !important;
 }
 
 :is(html[data-ag-theme-mode="dark"] body, body.dark) :is(#antigravity\.agentSidePanelInputBox, [id="antigravity.agentSidePanelInputBox"]) :is(#ag-live-metrics-pill, .ag-live-metrics-pill) .ag-ctx-crit,
@@ -1410,14 +1714,14 @@ html[data-ag-theme-mode="dark"] #ag-theme-btn-tooltip {
 
 :is(html[data-ag-theme-mode="dark"] body, body.dark) :is(#antigravity\.agentSidePanelInputBox, [id="antigravity.agentSidePanelInputBox"]) :is(#ag-live-metrics-pill, .ag-live-metrics-pill) .ag-sub-badge,
 :is(html[data-ag-theme-mode="dark"] body, body.dark) :is(#ag-live-metrics-pill, .ag-live-metrics-pill) .ag-sub-badge {
-  background-color: rgba(47, 113, 227, 0.18);
-  border-color: rgba(96, 165, 250, 0.36);
-  color: #93C5FD !important;
+  background-color: rgba(122, 166, 178, 0.16);
+  border-color: rgba(122, 166, 178, 0.34);
+  color: #A6CBD5 !important;
 }
 
 :is(html[data-ag-theme-mode="dark"] body, body.dark) :is(#antigravity\.agentSidePanelInputBox, [id="antigravity.agentSidePanelInputBox"]) :is(#ag-live-metrics-pill, .ag-live-metrics-pill) .ag-zh-warn-dot,
 :is(html[data-ag-theme-mode="dark"] body, body.dark) :is(#ag-live-metrics-pill, .ag-live-metrics-pill) .ag-zh-warn-dot {
-  color: #FBBF24 !important;
+  color: #DFBE82 !important;
 }
 
 /* 黑夜预设 2 (claude-warm) 指标胶囊暖炭与暖陶徽标配色 */
@@ -1999,67 +2303,67 @@ html[data-ag-theme-mode="dark"] #ag-theme-btn-tooltip {
 
 /* __AG_TOKEN_ANALYTICS_CSS_START__ */
 /* ============================================================================
- * PART V. 系统设置弹窗「Token 统计」Tab（适配全部浅色 / Onyx / Claude-Warm 预设）
+ * PART V. 系统设置弹窗「Token 统计」Tab（全套莫兰迪古典矿物冷暖互补色系）
  * ============================================================================ */
 :root {
-  --ag-ta-bg: var(--background, #FBF8F3);
-  --ag-ta-content: var(--content, #FBF8F3);
-  --ag-ta-card: var(--card, #FFFFFF);
-  --ag-ta-sidebar: var(--sidebar, #F5EFE7);
-  --ag-ta-border: var(--border, rgba(31, 30, 29, 0.12));
-  --ag-ta-card-border: var(--card-border, rgba(31, 30, 29, 0.14));
-  --ag-ta-fg: var(--foreground, #1F1E1D);
-  --ag-ta-muted: var(--muted-foreground, #6E6A63);
-  --ag-ta-primary: var(--primary, #D97757);
-  --ag-ta-primary-fg: var(--primary-foreground, #FFFFFF);
-  --ag-ta-success: #15803D;
-  --ag-ta-warn: #B45309;
+  --ag-ta-bg: var(--background, #F4F1EA);
+  --ag-ta-content: var(--content, #F4F1EA);
+  --ag-ta-card: var(--card, #FAF8F3);
+  --ag-ta-sidebar: var(--sidebar, #E8E3D9);
+  --ag-ta-border: var(--border, rgba(54, 49, 43, 0.16));
+  --ag-ta-card-border: var(--card-border, rgba(54, 49, 43, 0.18));
+  --ag-ta-fg: var(--foreground, #24221F);
+  --ag-ta-muted: var(--muted-foreground, #686259);
+  --ag-ta-primary: var(--primary, #C86D51);
+  --ag-ta-primary-fg: var(--primary-foreground, #FAF8F3);
+  --ag-ta-success: #2B5E53;
+  --ag-ta-warn: #8A6228;
   --ag-ta-err: #DC2626;
-  --ag-ta-hover: rgba(31, 30, 29, 0.05);
-  --ag-ta-tint: rgba(31, 30, 29, 0.075);
-  --ag-ta-hm-0: rgba(31, 30, 29, 0.075);
-  --ag-ta-hm-1: rgba(217, 119, 87, 0.25);
-  --ag-ta-hm-2: rgba(217, 119, 87, 0.48);
-  --ag-ta-hm-3: rgba(217, 119, 87, 0.72);
-  --ag-ta-hm-4: #D97757;
-  --ag-ta-c1: #D97757;
-  --ag-ta-c2: #2563EB;
-  --ag-ta-c3: #0D9488;
-  --ag-ta-c4: #7C3AED;
-  --ag-ta-c5: #D97706;
-  --ag-ta-c6: #64748B;
+  --ag-ta-hover: rgba(54, 49, 43, 0.055);
+  --ag-ta-tint: rgba(54, 49, 43, 0.08);
+  --ag-ta-hm-0: rgba(54, 49, 43, 0.075);
+  --ag-ta-hm-1: rgba(63, 110, 122, 0.24);
+  --ag-ta-hm-2: rgba(63, 110, 122, 0.46);
+  --ag-ta-hm-3: rgba(200, 109, 81, 0.68);
+  --ag-ta-hm-4: #C86D51;
+  --ag-ta-c1: #C86D51;
+  --ag-ta-c2: #3F6E7A;
+  --ag-ta-c3: #2B5E53;
+  --ag-ta-c4: #B8843B;
+  --ag-ta-c5: #7E6889;
+  --ag-ta-c6: #7D766B;
 }
 
 html[data-ag-theme-mode="dark"],
 html[data-ag-theme-mode="dark"] body,
 body.dark,
 body.theme-dark {
-  --ag-ta-bg: var(--background, #0E0E12);
-  --ag-ta-content: var(--content, #111116);
-  --ag-ta-card: var(--onyx-raised, #16161C);
-  --ag-ta-sidebar: var(--sidebar, #0C0C10);
-  --ag-ta-border: rgba(255, 255, 255, 0.10);
-  --ag-ta-card-border: rgba(255, 255, 255, 0.12);
-  --ag-ta-fg: var(--foreground, #EAEBF1);
-  --ag-ta-muted: var(--muted-foreground, #9CA3AF);
-  --ag-ta-primary: var(--primary, #2F71E3);
-  --ag-ta-primary-fg: #FFFFFF;
-  --ag-ta-success: #34D399;
-  --ag-ta-warn: #FBBF24;
+  --ag-ta-bg: var(--background, #15191C);
+  --ag-ta-content: var(--content, #15191C);
+  --ag-ta-card: var(--onyx-raised, #1C2226);
+  --ag-ta-sidebar: var(--sidebar, #101417);
+  --ag-ta-border: rgba(220, 230, 233, 0.10);
+  --ag-ta-card-border: rgba(220, 230, 233, 0.12);
+  --ag-ta-fg: var(--foreground, #E4E8E9);
+  --ag-ta-muted: var(--muted-foreground, #909EA3);
+  --ag-ta-primary: var(--primary, #6E9AA6);
+  --ag-ta-primary-fg: #F5F8F9;
+  --ag-ta-success: #8EC0AF;
+  --ag-ta-warn: #DFBE82;
   --ag-ta-err: #F87171;
-  --ag-ta-hover: rgba(255, 255, 255, 0.055);
-  --ag-ta-tint: rgba(255, 255, 255, 0.085);
-  --ag-ta-hm-0: rgba(255, 255, 255, 0.07);
-  --ag-ta-hm-1: rgba(47, 113, 227, 0.28);
-  --ag-ta-hm-2: rgba(47, 113, 227, 0.50);
-  --ag-ta-hm-3: rgba(47, 113, 227, 0.75);
-  --ag-ta-hm-4: #3B82F6;
-  --ag-ta-c1: #3B82F6;
-  --ag-ta-c2: #22D3EE;
-  --ag-ta-c3: #34D399;
-  --ag-ta-c4: #A78BFA;
-  --ag-ta-c5: #FBBF24;
-  --ag-ta-c6: #94A3B8;
+  --ag-ta-hover: rgba(220, 230, 233, 0.055);
+  --ag-ta-tint: rgba(220, 230, 233, 0.085);
+  --ag-ta-hm-0: rgba(220, 230, 233, 0.07);
+  --ag-ta-hm-1: rgba(110, 154, 166, 0.28);
+  --ag-ta-hm-2: rgba(110, 154, 166, 0.50);
+  --ag-ta-hm-3: rgba(110, 154, 166, 0.74);
+  --ag-ta-hm-4: #7AA6B2;
+  --ag-ta-c1: #7AA6B2;
+  --ag-ta-c2: #E08567;
+  --ag-ta-c3: #8EC0AF;
+  --ag-ta-c4: #DFBE82;
+  --ag-ta-c5: #B49EC0;
+  --ag-ta-c6: #8FA0A6;
 }
 
 html[data-ag-dark-preset="claude-warm"][data-ag-theme-mode="dark"],
@@ -2067,32 +2371,32 @@ html[data-ag-dark-preset="claude-warm"][data-ag-theme-mode="dark"] body,
 html[data-ag-dark-preset="claude-warm"]:has(> body.dark),
 html[data-ag-dark-preset="claude-warm"] body.dark,
 html[data-ag-dark-preset="claude-warm"] body.theme-dark {
-  --ag-ta-bg: var(--background, #242320);
-  --ag-ta-content: var(--content, #242320);
-  --ag-ta-card: var(--onyx-raised, #2B2A26);
-  --ag-ta-sidebar: var(--sidebar, #1E1D1A);
-  --ag-ta-border: rgba(243, 240, 228, 0.11);
-  --ag-ta-card-border: rgba(243, 240, 228, 0.13);
-  --ag-ta-fg: var(--foreground, #EEEADA);
-  --ag-ta-muted: var(--muted-foreground, #A39E8D);
+  --ag-ta-bg: var(--background, #21201D);
+  --ag-ta-content: var(--content, #21201D);
+  --ag-ta-card: var(--onyx-raised, #292723);
+  --ag-ta-sidebar: var(--sidebar, #191815);
+  --ag-ta-border: rgba(236, 231, 217, 0.11);
+  --ag-ta-card-border: rgba(236, 231, 217, 0.13);
+  --ag-ta-fg: var(--foreground, #ECE7D9);
+  --ag-ta-muted: var(--muted-foreground, #9E9888);
   --ag-ta-primary: var(--primary, #D97757);
-  --ag-ta-primary-fg: #FFFFFF;
-  --ag-ta-success: #6EE7B7;
-  --ag-ta-warn: #DFAF5F;
-  --ag-ta-err: #E0735C;
-  --ag-ta-hover: rgba(243, 240, 228, 0.06);
-  --ag-ta-tint: rgba(243, 240, 228, 0.09);
-  --ag-ta-hm-0: rgba(243, 240, 228, 0.08);
-  --ag-ta-hm-1: rgba(217, 119, 87, 0.28);
-  --ag-ta-hm-2: rgba(217, 119, 87, 0.50);
-  --ag-ta-hm-3: rgba(217, 119, 87, 0.74);
+  --ag-ta-primary-fg: #FAF6EE;
+  --ag-ta-success: #8EC0AF;
+  --ag-ta-warn: #DFBE82;
+  --ag-ta-err: #F87171;
+  --ag-ta-hover: rgba(236, 231, 217, 0.06);
+  --ag-ta-tint: rgba(236, 231, 217, 0.09);
+  --ag-ta-hm-0: rgba(236, 231, 217, 0.08);
+  --ag-ta-hm-1: rgba(122, 166, 178, 0.28);
+  --ag-ta-hm-2: rgba(122, 166, 178, 0.50);
+  --ag-ta-hm-3: rgba(217, 119, 87, 0.72);
   --ag-ta-hm-4: #D97757;
   --ag-ta-c1: #D97757;
-  --ag-ta-c2: #60A5FA;
-  --ag-ta-c3: #5EEAD4;
-  --ag-ta-c4: #C084FC;
-  --ag-ta-c5: #DFAF5F;
-  --ag-ta-c6: #A39E8D;
+  --ag-ta-c2: #7AA6B2;
+  --ag-ta-c3: #8EC0AF;
+  --ag-ta-c4: #DFBE82;
+  --ag-ta-c5: #B49EC0;
+  --ag-ta-c6: #9E9888;
 }
 
 /* 无损切换控制：激活 Token 统计 Tab 时仅隐藏原生滚动层并取消原生导航按钮高亮 */
