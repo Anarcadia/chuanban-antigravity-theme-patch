@@ -127,7 +127,7 @@ body[data-agy-font="inter"] :where(.font-sans) {
 }
 
 /* macOS 专属全域活字润墨与 UI 字重微平衡（正文与 Markdown 保持饱满墨感；UI 标准字重极轻微收细 -10~-12、UI 加粗字重适度收细抵消墨感发粗；Windows 保持 100% 零改动） */
-html[data-ag-os="darwin"]:not([data-ag-theme-mode="dark"]):not(:has(> body.dark)):not(:has(> body.theme-dark)) {
+html[data-ag-os="darwin"]:not([data-ag-theme-mode="dark"]) {
   --ag-ink-shadow-xs: 0 0 0.38px color-mix(in srgb, currentColor 48%, transparent);
   --ag-ink-shadow-sm: 0 0 0.44px color-mix(in srgb, currentColor 54%, transparent);
   --ag-ink-shadow-md: 0 0 0.48px color-mix(in srgb, currentColor 58%, transparent);
@@ -253,7 +253,8 @@ body[data-agy-font="google-sans"]:not([data-has-browser-hole="true"]):not([data-
   background-color: var(--background) !important;
 }
 
-.bg-sidebar:not([data-has-browser-hole="true"]):not([data-has-drawer-browser-hole="true"]):not([data-has-three-layer-browser-hole="true"]):not(.agy-titlebar):not(.surface-opaque):not(.browser-hole-ancestor) {
+.bg-sidebar:not([data-has-browser-hole="true"]):not([data-has-drawer-browser-hole="true"]):not([data-has-three-layer-browser-hole="true"]):not(.agy-titlebar):not(.surface-opaque):not(.browser-hole-ancestor),
+[data-testid="conversation-list-sidebar"] {
   background-color: var(--sidebar) !important;
 }
 
@@ -639,8 +640,7 @@ html[data-ag-os="darwin"]:not([data-ag-theme-mode="dark"]) body:not(.dark):not(.
 button[data-testid="project-header"],
 button[data-project-card="true"],
 [data-project-label],
-[data-subtext] span[class*="text-muted"],
-.bg-sidebar span:has(> svg) + span {
+[data-subtext] span[class*="text-muted"] {
   font-weight: var(--ag-ui-w-mid, 450) !important;
   color: var(--ag-sidebar-header-fg, #383533) !important;
   text-shadow: var(--ag-ink-shadow-xs) !important;
@@ -722,7 +722,7 @@ button[data-project-card="true"] span {
  * ============================================================================ */
 
 /* 白天模式通用组件变量 + 全域 Tailwind / 语义色 / 语法高亮 / Diff 莫兰迪矿物接管（默认 morandi 激活） */
-html:not([data-ag-theme-mode="dark"]):not(:has(> body.dark)):not([data-ag-preset="absolutely"]),
+html:not([data-ag-theme-mode="dark"]):not([data-ag-preset="absolutely"]),
 html:not([data-ag-theme-mode="dark"]):not([data-ag-preset="absolutely"]) body:not(.dark) {
   --ag-composer-tray-bg: #EAE4D8;
   --ag-composer-card-bg: #FAF8F3;
@@ -891,9 +891,9 @@ html:not([data-ag-theme-mode="dark"]):not([data-ag-preset="absolutely"]) body:no
 }
 
 /* 白天预设 1（默认激活 MO 按钮）：莫兰迪宣纸矿灰 (morandi) */
-html:not([data-ag-theme-mode="dark"]):not(:has(> body.dark))[data-ag-preset="morandi"],
-html:not([data-ag-theme-mode="dark"]):not(:has(> body.dark))[data-ag-preset="high-contrast"],
-html:not([data-ag-theme-mode="dark"]):not(:has(> body.dark)):not([data-ag-preset]),
+html:not([data-ag-theme-mode="dark"])[data-ag-preset="morandi"],
+html:not([data-ag-theme-mode="dark"])[data-ag-preset="high-contrast"],
+html:not([data-ag-theme-mode="dark"]):not([data-ag-preset]),
 html:not([data-ag-theme-mode="dark"])[data-ag-preset="morandi"] body:not(.dark),
 html:not([data-ag-theme-mode="dark"])[data-ag-preset="high-contrast"] body:not(.dark),
 html:not([data-ag-theme-mode="dark"]):not([data-ag-preset]) body:not(.dark) {
@@ -931,7 +931,7 @@ html:not([data-ag-theme-mode="dark"]):not([data-ag-preset]) body:not(.dark) {
 }
 
 /* 白天预设 2：莫兰迪素绢浅雾 (claude-desktop-purewhite) */
-html:not([data-ag-theme-mode="dark"]):not(:has(> body.dark))[data-ag-preset="claude-desktop-purewhite"],
+html:not([data-ag-theme-mode="dark"])[data-ag-preset="claude-desktop-purewhite"],
 html:not([data-ag-theme-mode="dark"])[data-ag-preset="claude-desktop-purewhite"] body:not(.dark) {
   --primary: #C86D51 !important;
   --primary-foreground: #FCFBF8 !important;
@@ -967,7 +967,7 @@ html:not([data-ag-theme-mode="dark"])[data-ag-preset="claude-desktop-purewhite"]
 }
 
 /* 白天预设 3：莫兰迪敦煌古壁 (vintage-deep) */
-html:not([data-ag-theme-mode="dark"]):not(:has(> body.dark))[data-ag-preset="vintage-deep"],
+html:not([data-ag-theme-mode="dark"])[data-ag-preset="vintage-deep"],
 html:not([data-ag-theme-mode="dark"])[data-ag-preset="vintage-deep"] body:not(.dark) {
   --primary: #C2664A !important;
   --primary-foreground: #FAF6EE !important;
@@ -1085,7 +1085,7 @@ html[data-ag-preset="absolutely"] {
   --ag-ta-c6: #64748B;
 }
 
-html[data-ag-preset="absolutely"]:not([data-ag-theme-mode="dark"]):not(:has(> body.dark)),
+html[data-ag-preset="absolutely"]:not([data-ag-theme-mode="dark"]),
 html[data-ag-preset="absolutely"]:not([data-ag-theme-mode="dark"]) body:not(.dark) {
   --primary: #D97757 !important;
   --primary-foreground: #FFFFFF !important;
@@ -1182,7 +1182,6 @@ html[data-ag-page-type="plugin"][data-ag-preset="vintage-deep"]:not([data-ag-the
  * ============================================================================ */
 html[data-ag-theme-mode="dark"],
 html[data-ag-theme-mode="dark"] body,
-html:has(> body.dark),
 body.dark,
 body.theme-dark,
 body[data-agy-theme].dark,
@@ -1420,7 +1419,6 @@ body[data-agy-theme][data-newux-theme="onyx"].dark .agy-sidebar-row[data-selecte
 /* 黑夜预设 2（莫兰迪暖玄武矿彩夜）：claude-warm · 暖玄武底 #21201D + 矿物象牙 #ECE7D9 + 赤陶 #D97757 × 粉青 #86B0BC 冷暖互补 */
 html[data-ag-dark-preset="claude-warm"][data-ag-theme-mode="dark"],
 html[data-ag-dark-preset="claude-warm"][data-ag-theme-mode="dark"] body,
-html[data-ag-dark-preset="claude-warm"]:has(> body.dark),
 html[data-ag-dark-preset="claude-warm"] body.dark,
 html[data-ag-dark-preset="claude-warm"] body.theme-dark,
 html[data-ag-dark-preset="claude-warm"] body[data-agy-theme].dark,
@@ -1624,8 +1622,8 @@ body[data-agy-theme] [data-slot="toggle-group"][data-ag-theme-toggle-group="1"][
   color: #7AA6B2 !important;
 }
 
-/* 屏蔽改装后 System(原版配色) 与 Light(Absolutely！) 按钮的宿主原生气泡，统一走 #ag-theme-btn-tooltip */
-body:has([data-slot="toggle-group"][data-ag-theme-toggle-group="1"] > button:is([data-ag-native-theme-slot="system"], [data-ag-native-theme-slot="light"]):is(:hover, :focus-visible)) :is([role="tooltip"]:not(#ag-theme-btn-tooltip), [data-radix-popper-content-wrapper], [data-floating-ui-portal]) {
+/* 屏蔽改装后 System(原版配色) 与 Light(Absolutely！) 按钮的宿主原生气泡（纯静态属性选择器，零 :has() 重算开销） */
+html[data-ag-suppress-native-tt="1"] :is([role="tooltip"]:not(#ag-theme-btn-tooltip), [data-radix-popper-content-wrapper], [data-floating-ui-portal]) {
   opacity: 0 !important;
   visibility: hidden !important;
   pointer-events: none !important;
@@ -2512,7 +2510,6 @@ body.theme-dark {
 
 html[data-ag-dark-preset="claude-warm"][data-ag-theme-mode="dark"],
 html[data-ag-dark-preset="claude-warm"][data-ag-theme-mode="dark"] body,
-html[data-ag-dark-preset="claude-warm"]:has(> body.dark),
 html[data-ag-dark-preset="claude-warm"] body.dark,
 html[data-ag-dark-preset="claude-warm"] body.theme-dark {
   --ag-ta-bg: var(--background, #21201D);
