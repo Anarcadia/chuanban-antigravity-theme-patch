@@ -536,6 +536,9 @@ let activeConfig = {
   preset: 'morandi',
   darkPreset: 'onyx',
   installedLocale: 'zh-CN',
+  quotaBarStyle: 'bar',
+  quotaBarClick: 'popover',
+  quotaBarReset5h: false,
   metricsMode: 'compact',
   contextLimit: 256000,
   contextLimitOverride: 0,
@@ -543,6 +546,7 @@ let activeConfig = {
     i18n: true,
     metrics: true,
     tokenAnalytics: true,
+    quotaBar: true,
     composerWaxSeal: true,
     deadlockHealer: true,
     coldBootHealer: true,
@@ -882,6 +886,156 @@ function persistUiLangToUserConfig(rawUiLang, skipNewDocSync = false) {
   }
 }
 
+function normalizeQuotaBarStyleValue(rawVal) {
+  const s = String(rawVal || '').trim().toLowerCase();
+  if (s === 'ring' || s === 'circle' || s === '圆环') {
+    return 'ring';
+  }
+  return 'bar';
+}
+
+function normalizeQuotaBarClickValue(rawVal) {
+  const s = String(rawVal || '').trim().toLowerCase();
+  if (s === 'refresh' || s === '刷新') {
+    return 'refresh';
+  }
+  if (s === 'settings' || s === 'models' || s === '设置') {
+    return 'settings';
+  }
+  return 'popover';
+}
+
+function normalizeQuotaBarReset5hValue(rawVal) {
+  if (typeof rawVal === 'boolean') return rawVal;
+  const s = String(rawVal ?? '').trim().toLowerCase();
+  return s === 'true' || s === '1' || s === 'yes' || s === 'on';
+}
+
+function broadcastQuotaBarPrefsToTargets(rawPrefs, excludeTargetId = null) {
+  if (!activeConfig.enabled) return;
+  const payload = {};
+  if (rawPrefs && rawPrefs.style !== undefined) {
+    payload.style = normalizeQuotaBarStyleValue(rawPrefs.style);
+    activeConfig.quotaBarStyle = payload.style;
+  }
+  if (rawPrefs && rawPrefs.click !== undefined) {
+    payload.click = normalizeQuotaBarClickValue(rawPrefs.click);
+    activeConfig.quotaBarClick = payload.click;
+  }
+  if (rawPrefs && rawPrefs.reset5h !== undefined) {
+    payload.reset5h = normalizeQuotaBarReset5hValue(rawPrefs.reset5h);
+    activeConfig.quotaBarReset5h = payload.reset5h;
+  }
+  if (Object.keys(payload).length === 0) return;
+  const expr = `window.__ag_set_host_quota_prefs && window.__ag_set_host_quota_prefs(${JSON.stringify(payload)})`;
+  const tasks = [];
+  for (const [id, entry] of attachedTargets.entries()) {
+    if (!entry?.hostConfirmed) continue;
+    if (excludeTargetId && id === excludeTargetId) {
+      if (entry.updateNewDocScript) tasks.push(entry.updateNewDocScript().catch(() => {}));
+      continue;
+    }
+    if (entry.send) {
+      tasks.push(entry.send('Runtime.evaluate', { expression: expr, returnByValue: false }).catch(() => {}));
+    }
+    if (entry.updateNewDocScript) {
+      tasks.push(entry.updateNewDocScript().catch(() => {}));
+    }
+  }
+  if (tasks.length > 0) {
+    void Promise.allSettled(tasks);
+  }
+}
+
+function persistQuotaBarPrefsToUserConfig(rawPrefs) {
+  if (SAFE_MODE || !rawPrefs || typeof rawPrefs !== 'object') return false;
+  const hasStyle = rawPrefs.style !== undefined;
+  const hasClick = rawPrefs.click !== undefined;
+  const hasReset5h = rawPrefs.reset5h !== undefined;
+  if (!hasStyle && !hasClick && !hasReset5h) return false;
+  const nextStyle = hasStyle ? normalizeQuotaBarStyleValue(rawPrefs.style) : null;
+  const nextClick = hasClick ? normalizeQuotaBarClickValue(rawPrefs.click) : null;
+  const nextReset5h = hasReset5h ? normalizeQuotaBarReset5hValue(rawPrefs.reset5h) : null;
+  const cfgPath = path.join(USER_DIR, 'config.json');
+  const tmpPath = `${cfgPath}.tmp-${process.pid}-qb-${++cfgWriteSeq}`;
+  try {
+    fs.mkdirSync(USER_DIR, { recursive: true });
+    let currentObj = {};
+    if (fs.existsSync(cfgPath)) {
+      let parsed = null;
+      try {
+        const rawText = fs.readFileSync(cfgPath, 'utf8').replace(/^\uFEFF/, '');
+        parsed = JSON.parse(rawText);
+      } catch (parseErr) {
+        logDaemonEvent(`persistQuotaBarPrefs skipped: user/config.json unreadable (${parseErr?.message || parseErr})`);
+        return false;
+      }
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        return false;
+      }
+      currentObj = parsed;
+    }
+    const styleSame = !hasStyle || currentObj.quotaBarStyle === nextStyle;
+    const clickSame = !hasClick || currentObj.quotaBarClick === nextClick;
+    const reset5hSame = !hasReset5h || currentObj.quotaBarReset5h === nextReset5h;
+    if (styleSame && clickSame && reset5hSame) {
+      return false;
+    }
+    const updatedObj = {};
+    let insertedStyle = !hasStyle;
+    let insertedClick = !hasClick;
+    let insertedReset5h = !hasReset5h;
+    for (const [k, v] of Object.entries(currentObj)) {
+      if (k === 'quotaBarStyle' && hasStyle) {
+        updatedObj.quotaBarStyle = nextStyle;
+        insertedStyle = true;
+      } else if (k === 'quotaBarClick' && hasClick) {
+        updatedObj.quotaBarClick = nextClick;
+        insertedClick = true;
+      } else if (k === 'quotaBarReset5h' && hasReset5h) {
+        updatedObj.quotaBarReset5h = nextReset5h;
+        insertedReset5h = true;
+      } else {
+        updatedObj[k] = v;
+        if (k === 'installedLocale') {
+          if (!insertedStyle && !('quotaBarStyle' in currentObj)) {
+            updatedObj.quotaBarStyle = nextStyle;
+            insertedStyle = true;
+          }
+          if (!insertedClick && !('quotaBarClick' in currentObj)) {
+            updatedObj.quotaBarClick = nextClick;
+            insertedClick = true;
+          }
+          if (!insertedReset5h && !('quotaBarReset5h' in currentObj)) {
+            updatedObj.quotaBarReset5h = nextReset5h;
+            insertedReset5h = true;
+          }
+        }
+      }
+    }
+    if (!insertedStyle) updatedObj.quotaBarStyle = nextStyle;
+    if (!insertedClick) updatedObj.quotaBarClick = nextClick;
+    if (!insertedReset5h) updatedObj.quotaBarReset5h = nextReset5h;
+    atomicWriteTextFileSync(tmpPath, cfgPath, `${JSON.stringify(updatedObj, null, 2)}\n`);
+    if (rebuildBundleIfNeeded({ fromUiPersist: true })) {
+      const tasks = [];
+      for (const [, entry] of attachedTargets.entries()) {
+        if (entry?.hostConfirmed && entry.updateNewDocScript) {
+          tasks.push(entry.updateNewDocScript().catch(() => {}));
+        }
+      }
+      if (tasks.length > 0) void Promise.allSettled(tasks);
+    }
+    return true;
+  } catch (err) {
+    try {
+      if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath);
+    } catch {}
+    logDaemonEvent(`persistQuotaBarPrefs error: ${err?.message || err}`);
+    return false;
+  }
+}
+
 function readHostThemeMode() {
   const fileSig = getFileMtimeSig(HOST_CONFIG_PATH);
   if (fileSig === cachedHostCfgFileSig) {
@@ -938,9 +1092,18 @@ function rebuildBundleIfNeeded(opts = {}) {
   const rawInstalledLocale = String(userCfg.installedLocale || 'zh-CN').trim() || 'zh-CN';
   const installedLocale =
     rawInstalledLocale === 'none' || rawInstalledLocale === 'zh-CN' ? rawInstalledLocale : 'zh-CN';
+  const quotaBarStyle =
+    SAFE_MODE && activeConfig ? activeConfig.quotaBarStyle : normalizeQuotaBarStyleValue(userCfg.quotaBarStyle);
+  const quotaBarClick =
+    SAFE_MODE && activeConfig ? activeConfig.quotaBarClick : normalizeQuotaBarClickValue(userCfg.quotaBarClick);
+  const quotaBarReset5h =
+    SAFE_MODE && activeConfig ? Boolean(activeConfig.quotaBarReset5h) : normalizeQuotaBarReset5hValue(userCfg.quotaBarReset5h);
   const prevActivePreset = activeConfig ? activeConfig.preset : null;
   const prevActiveDarkPreset = activeConfig ? activeConfig.darkPreset : null;
   const prevActiveI18nEnabled = activeConfig?.modules ? activeConfig.modules.i18n !== false : null;
+  const prevQuotaBarStyle = activeConfig ? activeConfig.quotaBarStyle : null;
+  const prevQuotaBarClick = activeConfig ? activeConfig.quotaBarClick : null;
+  const prevQuotaBarReset5h = activeConfig ? activeConfig.quotaBarReset5h : null;
   if (activeConfig && preset !== prevActivePreset) {
     targetLightPresets.clear();
   }
@@ -973,6 +1136,7 @@ function rebuildBundleIfNeeded(opts = {}) {
       i18n: true,
       metrics: true,
       tokenAnalytics: true,
+      quotaBar: true,
       composerWaxSeal: true,
       deadlockHealer: true,
       coldBootHealer: true,
@@ -1048,6 +1212,14 @@ function rebuildBundleIfNeeded(opts = {}) {
     normalizedSelectors.excludeI18n +=
       ', #ag-token-nav-section, #ag-token-analytics-panel, #ag-ta-tooltip, [data-ag-token-ui]';
   }
+  if (
+    typeof normalizedSelectors.excludeI18n === 'string' &&
+    normalizedSelectors.excludeI18n.trim() &&
+    !normalizedSelectors.excludeI18n.includes('ag-sidebar-quota-wrap')
+  ) {
+    normalizedSelectors.excludeI18n +=
+      ', #ag-sidebar-quota-wrap, #ag-titlebar-quota-pill, #ag-quota-tooltip, [data-ag-quota-ui], [data-ag-quota-style-row="1"], [data-ag-quota-click-row="1"], [data-ag-quota-reset5h-row="1"]';
+  }
 
   const DEFAULT_ALLOWED_ORIGINS = [
     'http://127.0.0.1',
@@ -1064,6 +1236,9 @@ function rebuildBundleIfNeeded(opts = {}) {
     preset,
     darkPreset,
     installedLocale,
+    quotaBarStyle,
+    quotaBarClick,
+    quotaBarReset5h,
     metricsMode,
     contextLimit,
     contextLimitOverride,
@@ -1125,6 +1300,16 @@ function rebuildBundleIfNeeded(opts = {}) {
     if (prevActiveI18nEnabled !== null && (modules.i18n !== false) !== prevActiveI18nEnabled) {
       broadcastUiLangToTargets(modules.i18n === false ? 'en' : 'target', null);
     }
+    if (
+      (prevQuotaBarStyle && quotaBarStyle !== prevQuotaBarStyle) ||
+      (prevQuotaBarClick && quotaBarClick !== prevQuotaBarClick) ||
+      (typeof prevQuotaBarReset5h === 'boolean' && quotaBarReset5h !== prevQuotaBarReset5h)
+    ) {
+      broadcastQuotaBarPrefsToTargets(
+        { style: quotaBarStyle, click: quotaBarClick, reset5h: quotaBarReset5h },
+        null
+      );
+    }
   }
 
   const channelTag = channel === 'insiders' ? 'insiders' : 'stable';
@@ -1132,11 +1317,19 @@ function rebuildBundleIfNeeded(opts = {}) {
 
   const RE_STRIP_TA_CSS = /\/\* __AG_TOKEN_ANALYTICS_CSS_START__ \*\/[\s\S]*?\/\* __AG_TOKEN_ANALYTICS_CSS_END__ \*\//g;
   const RE_STRIP_TA_JS = /\/\* __AG_TOKEN_ANALYTICS_JS_START__ \*\/[\s\S]*?\/\* __AG_TOKEN_ANALYTICS_JS_END__ \*\//g;
+  const RE_STRIP_QB_CSS = /\/\* __AG_QUOTA_BAR_CSS_START__ \*\/[\s\S]*?\/\* __AG_QUOTA_BAR_CSS_END__ \*\//g;
+  const RE_STRIP_QB_JS = /\/\* __AG_QUOTA_BAR_JS_START__ \*\/[\s\S]*?\/\* __AG_QUOTA_BAR_JS_END__ \*\//g;
 
-  const pageCss = modules.tokenAnalytics ? baseCss : baseCss.replace(RE_STRIP_TA_CSS, '');
-  const pageRuntime = modules.tokenAnalytics
+  let pageCss = modules.tokenAnalytics ? baseCss : baseCss.replace(RE_STRIP_TA_CSS, '');
+  if (!modules.quotaBar) {
+    pageCss = pageCss.replace(RE_STRIP_QB_CSS, '');
+  }
+  let pageRuntime = modules.tokenAnalytics
     ? runtimeTemplate
     : runtimeTemplate.replace(RE_STRIP_TA_JS, '  cleanupTokenAnalyticsDom();');
+  if (!modules.quotaBar) {
+    pageRuntime = pageRuntime.replace(RE_STRIP_QB_JS, '  cleanupQuotaBarDom();');
+  }
 
   const bootPayload = {
     version: cachedPatchVersion,
@@ -1146,6 +1339,9 @@ function rebuildBundleIfNeeded(opts = {}) {
     preset,
     darkPreset,
     installedLocale,
+    quotaBarStyle,
+    quotaBarClick,
+    quotaBarReset5h,
     cssText: pageCss,
     customCss,
     themeVars,
@@ -1159,6 +1355,9 @@ function rebuildBundleIfNeeded(opts = {}) {
       preset,
       darkPreset,
       installedLocale,
+      quotaBarStyle,
+      quotaBarClick,
+      quotaBarReset5h,
       contextLimit,
       contextLimitOverride,
       modules,
@@ -1170,10 +1369,10 @@ function rebuildBundleIfNeeded(opts = {}) {
 
   cachedInjectScript = pageRuntime.replace('})(__AG_BOOT_PAYLOAD__);', () => `})(${JSON.stringify(bootPayload)});`);
 
-  // Swarm 等跨进程子 iframe 永不承载设置弹窗，固定裁剪 Token 统计 CSS+JS（单 iframe 立减 ~100 KB，且保持同一 version 哈希）
-  const iframeCss = baseCss.replace(RE_STRIP_TA_CSS, '');
-  const iframeRuntime = runtimeTemplate.replace(RE_STRIP_TA_JS, '');
-  const iframeModules = Object.assign({}, modules, { tokenAnalytics: false });
+  // Swarm 等跨进程子 iframe 永不承载设置弹窗或限额卡片，固定裁剪 Token 统计与配额进度条 CSS+JS（且保持同一 version 哈希）
+  const iframeCss = baseCss.replace(RE_STRIP_TA_CSS, '').replace(RE_STRIP_QB_CSS, '');
+  const iframeRuntime = runtimeTemplate.replace(RE_STRIP_TA_JS, '').replace(RE_STRIP_QB_JS, '');
+  const iframeModules = Object.assign({}, modules, { tokenAnalytics: false, quotaBar: false });
   const iframePayload = Object.assign({}, bootPayload, {
     cssText: iframeCss,
     modules: iframeModules,
@@ -5171,19 +5370,34 @@ function attachTarget(target, endpoint) {
 
       const buildTargetInjectScript = () => {
         const uiLangVal = activeConfig.modules?.i18n === false ? 'en' : 'target';
+        const qbStyleVal = activeConfig.quotaBarStyle || 'bar';
+        const qbClickVal = activeConfig.quotaBarClick || 'popover';
+        const qbReset5hVal = Boolean(activeConfig.quotaBarReset5h);
         if (target.type !== 'iframe') {
           return {
             script: activeConfig.enabled
-              ? `window.__ag_host_ui_lang=${JSON.stringify(uiLangVal)};\n${cachedInjectScript}`
+              ? `window.__ag_host_ui_lang=${JSON.stringify(uiLangVal)};\nwindow.__ag_host_quota_bar_style=${JSON.stringify(qbStyleVal)};\nwindow.__ag_host_quota_bar_click=${JSON.stringify(qbClickVal)};\nwindow.__ag_host_quota_bar_reset_5h=${JSON.stringify(qbReset5hVal)};\n${cachedInjectScript}`
               : cachedInjectScript,
             parentMode: '',
             parentDarkPreset: '',
             parentLightPreset: '',
-            uiLangVal
+            uiLangVal,
+            qbStyleVal,
+            qbClickVal,
+            qbReset5hVal
           };
         }
         if (!activeConfig.enabled) {
-          return { script: cachedIframeInjectScript, parentMode: '', parentDarkPreset: '', parentLightPreset: '', uiLangVal };
+          return {
+            script: cachedIframeInjectScript,
+            parentMode: '',
+            parentDarkPreset: '',
+            parentLightPreset: '',
+            uiLangVal,
+            qbStyleVal: '',
+            qbClickVal: '',
+            qbReset5hVal: false
+          };
         }
         const parentMode = resolveParentThemeMode(target, endpoint) || '';
         const parentDarkPreset = resolveParentDarkPreset(target, endpoint) || '';
@@ -5196,15 +5410,27 @@ function attachTarget(target, endpoint) {
           parentMode: modeVal || '',
           parentDarkPreset: darkVal || '',
           parentLightPreset: lightVal || '',
-          uiLangVal
+          uiLangVal,
+          qbStyleVal: '',
+          qbClickVal: '',
+          qbReset5hVal: false
         };
       };
 
       const updateNewDocScript = (force = false) => {
         newDocQueue = newDocQueue
           .then(async () => {
-            const { script, parentMode, parentDarkPreset, parentLightPreset, uiLangVal } = buildTargetInjectScript();
-            const nextSig = `${activeConfig.enabled}|${cachedPatchVersion}|${activeConfig.preset || ''}|${activeConfig.darkPreset || ''}|${uiLangVal || ''}|${parentMode}|${parentDarkPreset || ''}|${parentLightPreset || ''}`;
+            const {
+              script,
+              parentMode,
+              parentDarkPreset,
+              parentLightPreset,
+              uiLangVal,
+              qbStyleVal,
+              qbClickVal,
+              qbReset5hVal
+            } = buildTargetInjectScript();
+            const nextSig = `${activeConfig.enabled}|${cachedPatchVersion}|${activeConfig.preset || ''}|${activeConfig.darkPreset || ''}|${uiLangVal || ''}|${qbStyleVal || ''}|${qbClickVal || ''}|${qbReset5hVal ? '1' : '0'}|${parentMode}|${parentDarkPreset || ''}|${parentLightPreset || ''}`;
             if (!force && evalScriptId && nextSig === lastNewDocSig) return;
             if (evalScriptId) {
               await send('Page.removeScriptToEvaluateOnNewDocument', { identifier: evalScriptId });
@@ -5679,6 +5905,7 @@ function attachTarget(target, endpoint) {
             await send('Runtime.addBinding', { name: '__agSetDarkPreset' });
             await send('Runtime.addBinding', { name: '__agSetLightPreset' });
             await send('Runtime.addBinding', { name: '__agSetUiLang' });
+            await send('Runtime.addBinding', { name: '__agSetQuotaBarPrefs' });
             await send('Runtime.addBinding', { name: '__agSyncHostThemeMode' });
             await send('Runtime.addBinding', { name: '__agRequestTokenAnalytics' });
           }
@@ -5912,6 +6139,23 @@ function attachTarget(target, endpoint) {
             const persistedOk = SAFE_MODE ? true : persistUiLangToUserConfig(normLang, true);
             if (persistedOk) {
               broadcastUiLangToTargets(normLang, target.id);
+            }
+            return;
+          }
+          if (msg.method === 'Runtime.bindingCalled' && msg.params?.name === '__agSetQuotaBarPrefs') {
+            if (!hostConfirmed || target.type !== 'page' || !activeConfig.enabled) {
+              return;
+            }
+            let rawPrefs = null;
+            try {
+              rawPrefs = msg.params.payload ? JSON.parse(String(msg.params.payload)) : null;
+            } catch {}
+            if (!rawPrefs || typeof rawPrefs !== 'object') {
+              return;
+            }
+            broadcastQuotaBarPrefsToTargets(rawPrefs, target.id);
+            if (!SAFE_MODE) {
+              persistQuotaBarPrefsToUserConfig(rawPrefs);
             }
             return;
           }

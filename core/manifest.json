@@ -10,16 +10,16 @@
   },
   "files": {
     "daemon.mjs": {
-      "sha256": "812e91a725bebad412e01c4d1ca69cd09282e2a744337d0a713d4ee4de802dbf",
-      "bytes": 268438
+      "sha256": "ff709454613876cfb86ac8deb55096553a65dfaac141086bc62a4e59946ca1ad",
+      "bytes": 278210
     },
     "runtime.js": {
-      "sha256": "f631daa78fdf00dcbc487239769a643ba10ed95438b4c884dab852461bc02576",
-      "bytes": 335065
+      "sha256": "b6c8f46482ae1a7f4e9096e42adb1b5e42e635a6345ffd622726897ad56378ac",
+      "bytes": 428357
     },
     "theme.css": {
-      "sha256": "951e37850c32a1409c985ab89781c430f0116f7be94aae222d4cb9f22d24bf06",
-      "bytes": 152815
+      "sha256": "ee895e314eccb2d6fb1e3b30b00c4757bbe53f4b5ba7890394879e22a34815c1",
+      "bytes": 174787
     },
     "i18n.json": {
       "sha256": "3b59bf0e2ded518f5290d6af296a1e38de0c7ca39377b210b1a958e114214253",
