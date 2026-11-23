@@ -1565,7 +1565,8 @@ html[data-ag-dark-preset="claude-warm"] body[data-agy-theme][data-newux-theme="o
   color: #FAF6EE !important;
 }
 
-/* 外观界面「主题模式」五段式胶囊：[系统(1)] [✳️ Absolutely！(2)] [MO 莫兰迪色(3·原书卷位·默认激活)] [📖 暖纸深色(4)] [🌙 深色(5)] */
+/* __AG_WIDGETS_CSS_START__ */
+/* 外观界面「主题模式」五段式胶囊：[Antigravity 原版配色(1)] [✳️ Absolutely！(2)] [MO 莫兰迪色(3·默认激活)] [📖 暖纸深色(4)] [🌙 深色(5)] */
 [data-slot="toggle-group"][data-ag-theme-toggle-group="1"] > button[data-ag-native-theme-slot="system"] {
   order: 1;
 }
@@ -1590,9 +1591,11 @@ html[data-ag-dark-preset="claude-warm"] body[data-agy-theme][data-newux-theme="o
   order: 99;
 }
 
-/* 当 MO（莫兰迪色）默认或手动激活时，无损压制原生 Light/System 按钮的按下胶囊底色 */
+/* 当 MO（莫兰迪色）激活时压制 Light/System；当 原版配色(native) 激活时压制残留 Light/Dark 底色 */
 body[data-agy-theme] [data-slot="toggle-group"][data-ag-theme-toggle-group="1"][data-ag-active-light="morandi"] > button:is([data-ag-native-theme-slot="light"], [data-ag-native-theme-slot="system"])[data-pressed],
-[data-slot="toggle-group"][data-ag-theme-toggle-group="1"][data-ag-active-light="morandi"] > button:is([data-ag-native-theme-slot="light"], [data-ag-native-theme-slot="system"])[data-pressed] {
+[data-slot="toggle-group"][data-ag-theme-toggle-group="1"][data-ag-active-light="morandi"] > button:is([data-ag-native-theme-slot="light"], [data-ag-native-theme-slot="system"])[data-pressed],
+body[data-agy-theme] [data-slot="toggle-group"][data-ag-theme-toggle-group="1"][data-ag-active-native="1"] > button:is([data-ag-native-theme-slot="light"], [data-ag-native-theme-slot="dark"])[data-pressed],
+[data-slot="toggle-group"][data-ag-theme-toggle-group="1"][data-ag-active-native="1"] > button:is([data-ag-native-theme-slot="light"], [data-ag-native-theme-slot="dark"])[data-pressed] {
   background-color: transparent !important;
   box-shadow: none !important;
   color: var(--secondary-foreground) !important;
@@ -1603,7 +1606,11 @@ body[data-agy-theme] [data-slot="toggle-group"][data-ag-theme-toggle-group="1"][
   color: var(--foreground) !important;
 }
 
-/* ✳️ Absolutely！激活时星芒呈 Claude 陶土橙；MO 激活时呈矿物石青 */
+/* 原版配色激活时 A 标呈官方彩韵；✳️ Absolutely！激活时星芒呈 Claude 陶土橙；MO 激活时呈矿物石青 */
+[data-slot="toggle-group"][data-ag-theme-toggle-group="1"]:not([data-ag-active-light="morandi"]) > button[data-ag-native-theme-slot="system"][data-pressed] svg path[data-ag-agy-glyph="1"] {
+  fill: url(#ag-agy-brand-grad) !important;
+}
+
 [data-slot="toggle-group"][data-ag-theme-toggle-group="1"]:not([data-ag-active-light="morandi"]) > button[data-ag-native-theme-slot="light"][data-pressed] svg {
   color: #D97757 !important;
 }
@@ -1616,8 +1623,8 @@ body[data-agy-theme] [data-slot="toggle-group"][data-ag-theme-toggle-group="1"][
   color: #7AA6B2 !important;
 }
 
-/* 屏蔽改装后 Light(✳️) 按钮的宿主原生“浅色”气泡，统一走 #ag-theme-btn-tooltip 显示「Absolutely！」 */
-body:has([data-slot="toggle-group"][data-ag-theme-toggle-group="1"] > button[data-ag-native-theme-slot="light"]:is(:hover, :focus-visible)) :is([role="tooltip"]:not(#ag-theme-btn-tooltip), [data-radix-popper-content-wrapper], [data-floating-ui-portal]) {
+/* 屏蔽改装后 System(原版配色) 与 Light(Absolutely！) 按钮的宿主原生气泡，统一走 #ag-theme-btn-tooltip */
+body:has([data-slot="toggle-group"][data-ag-theme-toggle-group="1"] > button:is([data-ag-native-theme-slot="system"], [data-ag-native-theme-slot="light"]):is(:hover, :focus-visible)) :is([role="tooltip"]:not(#ag-theme-btn-tooltip), [data-radix-popper-content-wrapper], [data-floating-ui-portal]) {
   opacity: 0 !important;
   visibility: hidden !important;
   pointer-events: none !important;

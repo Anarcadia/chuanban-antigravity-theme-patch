@@ -629,23 +629,9 @@ function persistDarkPresetToUserConfig(rawDarkPreset) {
     fs.renameSync(tmpPath, cfgPath);
     if (rebuildBundleIfNeeded()) {
       void (async () => {
-        const pageEntries = [];
-        const iframeEntries = [];
         for (const [, entry] of attachedTargets.entries()) {
           if (!entry?.hostConfirmed) continue;
-          if (entry.type === 'iframe') iframeEntries.push(entry);
-          else pageEntries.push(entry);
-        }
-        for (const batch of [pageEntries, iframeEntries]) {
-          await Promise.allSettled(
-            batch.map(async (entry) => {
-              await entry.updateNewDocScript?.();
-              await entry.inject?.();
-              if (entry.type === 'page') {
-                await entry.syncMetricsForSession?.(true);
-              }
-            })
-          );
+          await entry.updateNewDocScript?.();
         }
       })();
     }
@@ -661,6 +647,7 @@ function persistDarkPresetToUserConfig(rawDarkPreset) {
 
 function normalizeLightPresetValue(rawVal) {
   const s = String(rawVal || '').trim().toLowerCase();
+  if (s === 'native' || s === 'stock' || s === 'original' || s === '原版配色') return 'native';
   if (s === 'absolutely' || s === 'claude-orange') return 'absolutely';
   if (s === 'claude-desktop-purewhite') return 'claude-desktop-purewhite';
   if (s === 'vintage-deep') return 'vintage-deep';
