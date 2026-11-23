@@ -519,10 +519,9 @@ body[data-agy-theme][data-newux-theme="onyx"] .surface-composer:focus-within > .
   border-radius: calc(var(--nux-composer-frame-radius, 21px) - 2px) calc(var(--nux-composer-frame-radius, 21px) - 2px) 0 0 !important;
 }
 
-/* 新建对话主界面（项目/环境/分支选择顶栏）：消除中间水平分界线与灰米色断层，融合为单一整张同底卡片 */
+/* 新建对话主界面（项目/环境/分支选择顶栏）：保留上部托盘深色底，仅消除中间 1px 水平分界线 */
 html[data-ag-page-type="home"] :is(#antigravity\.agentSidePanelInputBox, [id="antigravity.agentSidePanelInputBox"], .surface-composer) > div:first-child:not(.surface-composer-card):not([aria-hidden="true"]):not(.voice-glow-ring),
 :is(#antigravity\.agentSidePanelInputBox, [id="antigravity.agentSidePanelInputBox"], .surface-composer) > div:first-child:not(.surface-composer-card):not([aria-hidden="true"]):not(.voice-glow-ring):has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [data-testid="branch-pill-trigger"], [data-testid="project-branch-picker"], [aria-label^="Select project"], [aria-label^="选择项目"]) {
-  background-color: var(--ag-composer-card-bg, #FAF8F3) !important;
   border-bottom: 0 solid transparent !important;
 }
 
