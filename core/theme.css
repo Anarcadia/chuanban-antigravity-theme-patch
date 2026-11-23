@@ -512,11 +512,18 @@ body[data-agy-theme][data-newux-theme="onyx"] .surface-composer:focus-within > .
   border-top-right-radius: 0 !important;
 }
 
-/* 当存在展开的顶部附加栏（如排队消息、引用块或分支选择条）时，仅作底部分隔线而不产生外围套框 */
+/* 当普通对话存在展开的顶部附加栏（如排队消息或引用块）时，仅作底部分隔线而不产生外围套框 */
 :is(#antigravity\.agentSidePanelInputBox, [id="antigravity.agentSidePanelInputBox"], .surface-composer) > div:first-child:not(.surface-composer-card):not([aria-hidden="true"]):not(.voice-glow-ring) {
   background-color: var(--ag-composer-tray-bg, #EAE4D8) !important;
   border-bottom: 1px solid var(--ag-composer-tray-divider, rgba(154, 71, 50, 0.15)) !important;
   border-radius: calc(var(--nux-composer-frame-radius, 21px) - 2px) calc(var(--nux-composer-frame-radius, 21px) - 2px) 0 0 !important;
+}
+
+/* 新建对话主界面（项目/环境/分支选择顶栏）：消除中间水平分界线与灰米色断层，融合为单一整张同底卡片 */
+html[data-ag-page-type="home"] :is(#antigravity\.agentSidePanelInputBox, [id="antigravity.agentSidePanelInputBox"], .surface-composer) > div:first-child:not(.surface-composer-card):not([aria-hidden="true"]):not(.voice-glow-ring),
+:is(#antigravity\.agentSidePanelInputBox, [id="antigravity.agentSidePanelInputBox"], .surface-composer) > div:first-child:not(.surface-composer-card):not([aria-hidden="true"]):not(.voice-glow-ring):has([data-testid="project-selector-trigger"], [data-testid="location-selector-trigger"], [data-testid="branch-pill-trigger"], [data-testid="project-branch-picker"], [aria-label^="Select project"], [aria-label^="选择项目"]) {
+  background-color: var(--ag-composer-card-bg, #FAF8F3) !important;
+  border-bottom: 0 solid transparent !important;
 }
 
 /* 输入框顶部工具栏（排除 .surface-composer-card 本身）、底部按钮与发送/取消按钮 */
