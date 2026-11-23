@@ -1946,7 +1946,6 @@
   "Messaging subagents isn't supported in remote conversations yet.": "远程对话暂不支持向子 Agent 发送消息。",
   "Messaging subagents isn't supported in remote conversations yet": "远程对话暂不支持向子 Agent 发送消息",
   "Full View": "完整视图",
-  "Toggle sidebar": "切换侧边栏",
   "Swarm Worker": "蜂群协作者",
   "Loading subagent...": "正在加载子 Agent...",
   "Subagent ended": "子 Agent 已结束",
@@ -1960,12 +1959,9 @@
   "Artifact Viewer": "Artifact 查看器",
   "Collapse subagents": "折叠子 Agent",
   "Expand subagents": "展开子 Agent",
-  "Stop subagent": "停止子 Agent",
-  "Needs attention": "需要关注",
   "In chat": "在对话中查看",
-  "Promote to Conversation": "提升为主对话",
-  "Stop Side Question": "停止支线提问",
   "• Aggregate cost across all subagents": "• 汇总所有子 Agent 的总消耗",
   "• Includes nested subagent costs": "• 包含嵌套子 Agent 的消耗",
-  "Cannot start best-of-N mode: some subagents are still running.": "无法启动择优对比（Best-of-N）模式：仍有子 Agent 正在运行。"
+  "Cannot start best-of-N mode: some subagents are still running.": "无法启动择优对比（Best-of-N）模式：仍有子 Agent 正在运行。",
+  "Maximize Pane": "最大化面板"
 }

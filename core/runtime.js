@@ -681,6 +681,12 @@
           else btn.removeAttribute('aria-label');
         }
       });
+      document.querySelectorAll('button[data-ag-native-theme-slot="dark"]').forEach((btn) => {
+        if (typeof btn.__ag_orig_dark_aria === 'string') {
+          if (btn.__ag_orig_dark_aria) btn.setAttribute('aria-label', btn.__ag_orig_dark_aria);
+          else btn.removeAttribute('aria-label');
+        }
+      });
       document.querySelectorAll('[data-ag-theme-toggle-group]').forEach((g) => {
         g.removeAttribute('data-ag-theme-toggle-group');
         g.removeAttribute('data-ag-active-slot');
@@ -698,7 +704,12 @@
       } catch (e) {}
       window.__ag_tt_guard_interval = null;
     }
+    window.__ag_tt_suppressed_btn = null;
+    if (document.documentElement && document.documentElement.hasAttribute('data-ag-suppress-native-tt')) {
+      document.documentElement.removeAttribute('data-ag-suppress-native-tt');
+    }
     window.__ag_tt_global_dismiss_fn = null;
+    window.__ag_tt_global_dismiss_v2_fn = null;
     if (window.__ag_surface_sync_raf) {
       try {
         cancelAnimationFrame(window.__ag_surface_sync_raf);
@@ -2077,16 +2088,45 @@
     const MENU_BOOK_SVG_PATH =
       'M557.69-570.15v-52.61q32.62-15.15 68.27-22.73T700-653.08q24.08,0 46.77,3.42t45.54,9.04v50.15q-22.46-7.85-44.65-11.38T700-605.39q-38.38,0-74.35,9.12t-67.96,26.12Zm0,219.23v-53.38q31.85-15.15 68.08-22.73T700-434.61q24.08,0 46.77,3.42t45.54,9.04V-372q-22.46-7.85-44.65-11.38T700-386.92q-38.38,0-74.35,9.19t-67.96,26.81Zm0-109.23v-53.38q32.62-15.15 68.27-22.73T700-543.85q24.08,0 46.77,3.42t45.54,9.04v50.15q-22.46-7.85-44.65-11.38T700-496.15q-38.38,0-74.35,9.5t-67.96,26.5ZM260-319.23q49.69,0 96.69,11.27T450-272.61V-665.85q-42.15-27.46-91.23-41.19T260-720.77q-36,0-67.27,5.65t-64.27,18.5q-4.62,1.54-6.54,4.42T120-685.85v378.31q0,5.39 3.85,7.89t8.46,0.58q28.46-9.69 60.08-14.92T260-319.23Zm250,46.62q46.31-24.08 93.31-35.35T700-319.23q36,0 67.62,5.23t60.08,14.92q4.62,1.92 8.46-0.58t3.85-7.89V-685.85q0-3.46-1.92-6.15t-6.54-4.62q-33-12.85-64.27-18.5T700-720.77q-49.69,0-98.77,13.73T510-665.85v393.23Zm-30,88q-48.38-35.69-104.38-55.15T260-259.23q-36.61,0-71.92,8.12T120-227.23q-21.38,9.85-40.69-3.12T60-267.08v-434.3q0-12.92 6.65-24.27T85.85-742q40.61-19.77 84.65-29.27t89.5-9.5q58.38,0 114.08,15.96T480-717.69q50.23-31.15 105.92-47.12T700-780.77q45.46,0 89.5,9.5T874.15-742q12.54,5 19.19,16.35T900-701.38v434.3q0,23.77-20.08,36.35T837.69-228q-32.38-15.38-67.11-23.31T700-259.23q-59.62,0-115.62,19.46T480-184.62ZM285-496.69Z';
 
-    function hideThemeBtnTooltip() {
+    function releaseNativeTooltipSuppress() {
       if (window.__ag_tt_guard_interval) {
         try {
           clearInterval(window.__ag_tt_guard_interval);
         } catch (e) {}
         window.__ag_tt_guard_interval = null;
       }
+      window.__ag_tt_suppressed_btn = null;
       if (document.documentElement && document.documentElement.hasAttribute('data-ag-suppress-native-tt')) {
         document.documentElement.removeAttribute('data-ag-suppress-native-tt');
       }
+    }
+
+    function keepSuppressNativeTooltip(anchorBtn) {
+      if (!anchorBtn || !document.documentElement) return;
+      if (window.__ag_tt_guard_interval) {
+        try {
+          clearInterval(window.__ag_tt_guard_interval);
+        } catch (e) {}
+        window.__ag_tt_guard_interval = null;
+      }
+      window.__ag_tt_suppressed_btn = anchorBtn;
+      document.documentElement.setAttribute('data-ag-suppress-native-tt', '1');
+      window.__ag_tt_guard_interval = setInterval(() => {
+        const btn = window.__ag_tt_suppressed_btn;
+        const stillActive =
+          !!(
+            btn &&
+            btn.isConnected &&
+            typeof btn.matches === 'function' &&
+            btn.matches(':hover, :focus-visible')
+          );
+        if (!stillActive) {
+          hideThemeBtnTooltip(false);
+        }
+      }, 350);
+    }
+
+    function hideThemeBtnTooltip(keepSuppressIfHovered = false) {
       if (window.__ag_theme_btn_tt_timer) {
         try {
           clearTimeout(window.__ag_theme_btn_tt_timer);
@@ -2097,39 +2137,58 @@
       if (tt) {
         tt.removeAttribute('data-visible');
       }
+      if (keepSuppressIfHovered === true) {
+        const btn = window.__ag_tt_suppressed_btn;
+        const stillActive =
+          !!(
+            btn &&
+            btn.isConnected &&
+            typeof btn.matches === 'function' &&
+            (btn.matches(':hover, :focus-visible') || document.activeElement === btn)
+          );
+        if (stillActive) return;
+      }
+      releaseNativeTooltipSuppress();
     }
 
-    window.__ag_tt_global_dismiss_fn = hideThemeBtnTooltip;
-    if (!window.__ag_tt_global_listener_installed && typeof window.addEventListener === 'function') {
-      window.__ag_tt_global_listener_installed = true;
-      const onDismiss = () => {
-        if (typeof window.__ag_tt_global_dismiss_fn === 'function') {
-          window.__ag_tt_global_dismiss_fn();
+    // 废弃早期无参全局监听回调，交由带事件参数的 v2 监听统一分派，避免热重载后点击按钮提前解除原生气泡压制
+    window.__ag_tt_global_dismiss_fn = null;
+    window.__ag_tt_global_dismiss_v2_fn = (ev) => {
+      if (ev && ev.type === 'pointerdown') {
+        const target = ev.target;
+        const slotBtn =
+          target && typeof target.closest === 'function'
+            ? target.closest('button[data-ag-native-theme-slot]')
+            : null;
+        if (slotBtn) {
+          keepSuppressNativeTooltip(slotBtn);
+          hideThemeBtnTooltip(true);
+          return;
+        }
+      }
+      hideThemeBtnTooltip(false);
+    };
+    if (!window.__ag_tt_global_listener_v2_installed && typeof window.addEventListener === 'function') {
+      window.__ag_tt_global_listener_v2_installed = true;
+      const onDismissV2 = (ev) => {
+        if (typeof window.__ag_tt_global_dismiss_v2_fn === 'function') {
+          window.__ag_tt_global_dismiss_v2_fn(ev);
         }
       };
-      window.addEventListener('pointerdown', onDismiss, true);
-      window.addEventListener('keydown', onDismiss, true);
-      window.addEventListener('blur', onDismiss);
+      window.addEventListener('pointerdown', onDismissV2, true);
+      window.addEventListener('keydown', onDismissV2, true);
+      window.addEventListener('blur', onDismissV2);
     }
 
     function scheduleThemeBtnTooltip(anchorBtn, text, suppressNative = false) {
-      hideThemeBtnTooltip();
+      hideThemeBtnTooltip(false);
       if (suppressNative && document.documentElement) {
-        document.documentElement.setAttribute('data-ag-suppress-native-tt', '1');
-        window.__ag_tt_guard_interval = setInterval(() => {
-          if (
-            !anchorBtn ||
-            !anchorBtn.isConnected ||
-            (typeof anchorBtn.matches === 'function' && !anchorBtn.matches(':hover, :focus-visible'))
-          ) {
-            hideThemeBtnTooltip();
-          }
-        }, 500);
+        keepSuppressNativeTooltip(anchorBtn);
       }
       window.__ag_theme_btn_tt_timer = setTimeout(() => {
         window.__ag_theme_btn_tt_timer = null;
         if (!anchorBtn || !anchorBtn.isConnected || !document.body) {
-          hideThemeBtnTooltip();
+          hideThemeBtnTooltip(false);
           return;
         }
         let tt = document.getElementById('ag-theme-btn-tooltip');
@@ -2376,6 +2435,13 @@
             bookBtn.setAttribute('aria-label', wantBookAria);
           }
         }
+        const darkBtn = group.querySelector('button[data-ag-native-theme-slot="dark"]');
+        if (darkBtn) {
+          const wantDarkAria = getSelfUiStrings().themeTooltips.onyx;
+          if (darkBtn.getAttribute('aria-label') !== wantDarkAria) {
+            darkBtn.setAttribute('aria-label', wantDarkAria);
+          }
+        }
       }
 
       const activeLangSlot = isUiEnglish() ? 'en' : 'target';
@@ -2410,13 +2476,15 @@
 
     window.__ag_handle_native_theme_btn_hover = (btn, slot, entering) => {
       if (!entering) {
-        hideThemeBtnTooltip();
+        hideThemeBtnTooltip(false);
         return;
       }
       if (slot === 'system') {
         scheduleThemeBtnTooltip(btn, getSelfUiStrings().themeTooltips.native, true);
       } else if (slot === 'light') {
         scheduleThemeBtnTooltip(btn, getSelfUiStrings().themeTooltips.absolutely, true);
+      } else if (slot === 'dark') {
+        scheduleThemeBtnTooltip(btn, getSelfUiStrings().themeTooltips.onyx, true);
       }
     };
 
@@ -2428,7 +2496,12 @@
       }
       if (slot === 'light' && window.__ag_internal_sun_click) return;
       if (slot === 'dark' && window.__ag_internal_moon_click) return;
-      hideThemeBtnTooltip();
+      if (btn) {
+        keepSuppressNativeTooltip(btn);
+        hideThemeBtnTooltip(true);
+      } else {
+        hideThemeBtnTooltip(false);
+      }
 
       // 若目标原生按钮已处于按下态（如 MO->Absolutely! 或 📖->🌙），拦截多余 click 防 Base UI 反选取消
       const alreadyPressed =
@@ -2560,7 +2633,7 @@
           origSysSvg.parentNode.appendChild(agySvg);
         }
       }
-      sysBtn.setAttribute('aria-label', '原版配色');
+      sysBtn.setAttribute('aria-label', getSelfUiStrings().themeTooltips.native);
       if (sysBtn.hasAttribute('title')) sysBtn.removeAttribute('title');
 
       // 第 2 格：无损保留 React 原生 svg（由 CSS 隐藏），追加「Absolutely！」仿 Claude 放射性星芒标志
@@ -2593,27 +2666,37 @@
           origSvg.parentNode.appendChild(sparkSvg);
         }
       }
-      lightBtn.setAttribute('aria-label', 'Absolutely！');
+      lightBtn.setAttribute('aria-label', getSelfUiStrings().themeTooltips.absolutely);
       if (lightBtn.hasAttribute('title')) lightBtn.removeAttribute('title');
+
+      // 第 5 格：统一深色槽位多语无障碍标签与自定义提示气泡（兼容 EN / 目标语实时切换与卸载还原）
+      if (darkBtn.__ag_orig_dark_aria === undefined) {
+        darkBtn.__ag_orig_dark_aria = darkBtn.getAttribute('aria-label') || '';
+      }
+      darkBtn.setAttribute('aria-label', getSelfUiStrings().themeTooltips.onyx);
+      if (darkBtn.hasAttribute('title')) darkBtn.removeAttribute('title');
 
       // 统一动态委托事件，杜绝热更新后旧闭包残留与重复绑定
       const bindNativeSlotOnce = (btn, slot) => {
+        if (!btn.__ag_delegated_hover_v4 && (slot === 'system' || slot === 'light' || slot === 'dark')) {
+          btn.__ag_delegated_hover_v4 = true;
+          if (!btn.__ag_delegated_slot_v3 || slot === 'dark') {
+            btn.addEventListener('mouseenter', () => {
+              window.__ag_handle_native_theme_btn_hover?.(btn, slot, true);
+            });
+            btn.addEventListener('mouseleave', () => {
+              window.__ag_handle_native_theme_btn_hover?.(btn, slot, false);
+            });
+            btn.addEventListener('focus', () => {
+              window.__ag_handle_native_theme_btn_hover?.(btn, slot, true);
+            });
+            btn.addEventListener('blur', () => {
+              window.__ag_handle_native_theme_btn_hover?.(btn, slot, false);
+            });
+          }
+        }
         if (btn.__ag_delegated_slot_v3) return;
         btn.__ag_delegated_slot_v3 = true;
-        if (slot === 'system' || slot === 'light') {
-          btn.addEventListener('mouseenter', () => {
-            window.__ag_handle_native_theme_btn_hover?.(btn, slot, true);
-          });
-          btn.addEventListener('mouseleave', () => {
-            window.__ag_handle_native_theme_btn_hover?.(btn, slot, false);
-          });
-          btn.addEventListener('focus', () => {
-            window.__ag_handle_native_theme_btn_hover?.(btn, slot, true);
-          });
-          btn.addEventListener('blur', () => {
-            window.__ag_handle_native_theme_btn_hover?.(btn, slot, false);
-          });
-        }
         btn.addEventListener(
           'click',
           (ev) => {
