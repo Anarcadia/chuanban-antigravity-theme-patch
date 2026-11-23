@@ -4,6 +4,26 @@
 
 ---
 
+## [v6.0.2] - 2026-11-23
+
+> **适用版本**：Antigravity `2.34.0+` / `2.33.x`（向下完全兼容 `2.32.x` / `2.31.x` / `2.30.0`）  
+> **核验基线**：macOS `2.34.0` × Windows 11 `2.34.0.0`（PowerShell `5.1` · 无环境变量仅系统代理 `127.0.0.1:7897` · 中文路径 · `W-Font-Check 1 ~ 6` 双端真机实测全绿）
+
+### Added & Fixed（新用户一键直链自动下载字体、ZIP 自动解压、Windows UTF-16 注册表写入与全链路字体边缘场景加固）
+- **内置零依赖跨平台字体自动下载器，根治新用户直接复制 Prompt 报「字体缺失」（`install.mjs` / `SKILL.md` / `README.md`）**：
+  - 新增 `node install.mjs download-fonts` 与 `node install.mjs install-fonts --auto-download` 子命令：内置 3 枚 Anthropic 字体与 `170 MB` 拆分版更纱黑体 `Windows-Sarasa-Split-SC-TTF-v1.0.43.zip` 的 `drive.usercontent.google.com/download?id=...&export=download&confirm=t` 直链清单，绕过 Google Drive 文件夹 SPA 网页与 >100 MB 病毒扫描 HTML 拦截页；
+  - **代理感知三级下载回退 + 二进制魔数校验**：优先使用 `curl` / `curl.exe`（Windows 未配 `HTTP_PROXY`/`HTTPS_PROXY` 时自动读取 `HKCU\...\Internet Settings` 系统代理），失败自动回退 Windows `.NET HttpClient`（原生继承 WinINET/PAC 代理并流式落盘）与 Node `22+` `fetch`；强校验 ZIP（`PK\x03\x04`）与 TTF/OTF/TTC 文件头魔数及最小字节数，显式拦截 HTML 拦截页/配额页，支持缓存命中与按缺失项增量精准下载。
+- **`install-fonts --from` 原生支持 `.zip` 自动解压与防静默假成功（`install.mjs`）**：
+  - `--from` 现支持直接传入 `.zip` 压缩包（及目录内自动发现字体 `.zip` 解压，Windows 走 `.NET ZipFile`，macOS/Linux 走 `unzip` / `ditto` / `python3 -m zipfile`），同时兼容中文路径；
+  - 若目标目录内未找到任何字体文件（`0` 个）或 Windows 注册表写入失败，明确返回 `ok: false` 与非零退出码（不再假报 `ok: true`），并在 `--auto-download` 中精准入队下载产物与漏注册文件、按规范化目标路径去重。
+- **Windows 字体检测、UTF-16 注册表写入与 DirectWrite 重启感知加固（`install.mjs`）**：
+  - 将 `runInstallFonts()` 写注册表从 `reg.exe` 升级为单次 PowerShell `.NET Microsoft.Win32.Registry.CurrentUser.CreateSubKey(...)` UTF-16 原生写入并合并 `AddFontResource` + `WM_FONTCHANGE`，彻底消除中文用户名下的 CP936 路径乱码与首次建键/静默吞错问题，兼容 PowerShell 5.1 单元素数组序列化；
+  - 区分 `C:\Windows\Fonts` 与 `%LOCALAPPDATA%\Microsoft\Windows\Fonts`（`F-W602-1`），精准识别「手动复制文件但漏写 `HKCU\...\Fonts` 注册表」的伪已装字体并输出 `fonts.unregisteredWarning`（已装拆分 SC TTF 时自动过滤已退订/遗留 `.ttc`，`F-W602-3`）；`readWinHkcuFontRegistryEntries()` 超时提升至 `12s` 并补 `reg query` 兜底；
+  - 修复 Windows `Get-CimInstance Win32_Process` 遇线程耗尽 `0x800700a4` 时 `runningProcesses` 静默为空的隐患，增加 `Get-Process` 主窗体兜底（`F-W602-2`），确保运行期装字体准确提示 `restartAntigravityRequired: true`；
+  - 抽离公共 `buildFontReport()` 统一注入 `doctor` / `install` / `verify` 输出，并在 `SKILL.md` / `README.md` 同步升级新用户一键自动安装与断网手动兜底引导。
+
+---
+
 ## [v6.0.1] - 2026-11-23
 
 > **适用版本**：Antigravity `2.34.0+` / `2.33.x`（向下完全兼容 `2.32.x` / `2.31.x` / `2.30.0`）
