@@ -523,6 +523,8 @@
 
   // 若用户在 user/config.json 中将 enabled 设为 false，执行无损卸载还原
   if (!ENABLED) {
+    const s0f = document.getElementById('ag-font-faces');
+    if (s0f) s0f.remove();
     const s1 = document.getElementById('ag-custom-fonts');
     if (s1) s1.remove();
     const s1w = document.getElementById('ag-ui-widgets');
@@ -827,10 +829,37 @@
     } catch (e) {}
   }
 
+  // 三段式物理隔离：
+  // 1) #ag-font-faces（纯 @font-face 注册表，常驻永不 disabled，杜绝切换时销毁重建 CSSFontFace / Skia 字形纹理缓存引发的缺字空白）
+  // 2) #ag-custom-fonts（纯主题色彩与字体选择器规则，点「原版配色」时一键 disabled=true 零开销退回原版）
+  // 3) #ag-ui-widgets（五段式胶囊按钮、底部圆环小胶囊、Token 统计面板，常驻在线）
+  const THEME_RULES_SPLIT_MARKER = '/* __AG_THEME_RULES_START__ */';
   const WIDGETS_CSS_SPLIT_MARKER = '/* __AG_WIDGETS_CSS_START__ */';
+  const rulesSplitIdx = CSS_TEXT.indexOf(THEME_RULES_SPLIT_MARKER);
   const widgetsSplitIdx = CSS_TEXT.indexOf(WIDGETS_CSS_SPLIT_MARKER);
-  const THEME_ONLY_CSS = widgetsSplitIdx >= 0 ? CSS_TEXT.slice(0, widgetsSplitIdx) : CSS_TEXT;
+  const FONT_FACES_ONLY_CSS = rulesSplitIdx >= 0 ? CSS_TEXT.slice(0, rulesSplitIdx) : '';
+  const THEME_ONLY_CSS =
+    rulesSplitIdx >= 0
+      ? widgetsSplitIdx >= 0
+        ? CSS_TEXT.slice(rulesSplitIdx, widgetsSplitIdx)
+        : CSS_TEXT.slice(rulesSplitIdx)
+      : widgetsSplitIdx >= 0
+        ? CSS_TEXT.slice(0, widgetsSplitIdx)
+        : CSS_TEXT;
   const WIDGETS_ONLY_CSS = widgetsSplitIdx >= 0 ? CSS_TEXT.slice(widgetsSplitIdx) : '';
+
+  if (FONT_FACES_ONLY_CSS) {
+    let ffStyle = document.getElementById('ag-font-faces');
+    if (!ffStyle) {
+      ffStyle = document.createElement('style');
+      ffStyle.id = 'ag-font-faces';
+      if (headTarget) headTarget.appendChild(ffStyle);
+    }
+    if (ffStyle.textContent !== FONT_FACES_ONLY_CSS) {
+      ffStyle.textContent = FONT_FACES_ONLY_CSS;
+    }
+    if (ffStyle.disabled) ffStyle.disabled = false;
+  }
 
   let style = document.getElementById('ag-custom-fonts');
   if (!style) {
@@ -892,9 +921,10 @@
         } catch (e) {}
       }
     }
+    // 始终保持 Google Sans Flex 字体定义常驻，切勿翻转 @font-face 样式表的 disabled 状态以防清空 Skia 字形纹理缓存
     const gsfFallback = document.getElementById('ag-google-sans-flex-fonts');
-    if (gsfFallback && gsfFallback.disabled !== off) {
-      gsfFallback.disabled = off;
+    if (gsfFallback && gsfFallback.disabled) {
+      gsfFallback.disabled = false;
     }
     if (off) {
       document.documentElement.setAttribute('data-ag-wax-seal', 'off');
@@ -917,6 +947,7 @@
     if (!needsMove) {
       for (let sib = base.nextElementSibling; sib; sib = sib.nextElementSibling) {
         if (
+          sib.id !== 'ag-font-faces' &&
           sib.id !== 'ag-ui-widgets' &&
           sib.id !== 'ag-user-theme-vars' &&
           sib.id !== 'antigravity-user-custom-style' &&
@@ -928,6 +959,7 @@
       }
     }
     if (needsMove) {
+      // 注意：切勿移动常驻的 #ag-font-faces，防止重建 CSSFontFace 实例
       for (const id of ['ag-custom-fonts', 'ag-ui-widgets', 'ag-user-theme-vars', 'antigravity-user-custom-style']) {
         const el = document.getElementById(id);
         if (el) h.appendChild(el);
