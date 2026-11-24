@@ -2149,7 +2149,42 @@
   if (typeof window.matchMedia === 'function') {
     try {
       const mql = window.matchMedia('(prefers-color-scheme: dark)');
-      const onSchemeChange = () => {
+      const onSchemeChange = (ev) => {
+        const wantDark = !!(ev && typeof ev.matches === 'boolean' ? ev.matches : mql.matches);
+        const curPreset = document.documentElement.getAttribute('data-ag-preset') || DEFAULT_LIGHT_PRESET;
+        if (curPreset !== PRESETS.NATIVE) {
+          try {
+            Storage.prototype.setItem.call(localStorage, 'theme-mode', wantDark ? 'dark' : 'light');
+          } catch (e) {}
+          if (document.body) {
+            document.body.classList.toggle('dark', wantDark);
+            document.body.classList.toggle('theme-dark', wantDark);
+            document.body.classList.toggle('light', !wantDark);
+            document.body.classList.toggle('theme-light', !wantDark);
+          }
+          if (document.documentElement) {
+            document.documentElement.style.colorScheme = wantDark ? 'dark' : 'light';
+          }
+          const group = document.querySelector('[data-slot="toggle-group"][data-ag-theme-toggle-group="1"]');
+          if (group) {
+            const targetBtn = group.querySelector(
+              wantDark ? 'button[data-ag-native-theme-slot="dark"]' : 'button[data-ag-native-theme-slot="light"]'
+            );
+            const pressed = !!(
+              targetBtn &&
+              (targetBtn.hasAttribute('data-pressed') || targetBtn.getAttribute('aria-pressed') === 'true')
+            );
+            if (targetBtn && !pressed) {
+              const flag = wantDark ? '__ag_internal_moon_click' : '__ag_internal_sun_click';
+              window[flag] = true;
+              try {
+                targetBtn.click();
+              } finally {
+                window[flag] = false;
+              }
+            }
+          }
+        }
         if (typeof window.__ag_sync_preset_fn === 'function') window.__ag_sync_preset_fn();
       };
       mql.addEventListener?.('change', onSchemeChange);
