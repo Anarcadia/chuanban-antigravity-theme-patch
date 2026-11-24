@@ -1728,6 +1728,91 @@ html[data-ag-preset="absolutely"] [data-slot="toggle-group"][data-ag-lang-toggle
   color: #86B0BC !important;
 }
 
+/* 外观卡片独立「跟随系统 / Follow System」开关行（位于 #ag-ui-widgets，确保切入原版配色时仍保持完整样式） */
+[data-ag-sys-follow-desc="1"] {
+  font-size: 11.5px;
+  line-height: 1.35;
+  color: var(--muted-foreground, var(--secondary-foreground, #686259));
+}
+
+[role="switch"][data-ag-sys-follow-switch="1"] {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  width: 34px;
+  height: 19px;
+  padding: 2px;
+  border-radius: 999px;
+  border: 1px solid var(--border, rgba(31, 30, 29, 0.16));
+  background: var(--muted, rgba(31, 30, 29, 0.14));
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background-color 150ms ease, border-color 150ms ease, box-shadow 150ms ease;
+}
+
+[role="switch"][data-ag-sys-follow-switch="1"]:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--ring, rgba(63, 110, 122, 0.35));
+}
+
+:is(html[data-ag-theme-mode="dark"] body, body.dark) [role="switch"][data-ag-sys-follow-switch="1"] {
+  border-color: var(--border, rgba(255, 255, 255, 0.16));
+  background: var(--muted, rgba(255, 255, 255, 0.14));
+}
+
+[role="switch"][data-ag-sys-follow-switch="1"] .ag-sys-follow-thumb {
+  display: block;
+  width: 13px;
+  height: 13px;
+  border-radius: 999px;
+  background: var(--onyx-raised, var(--card, #FFFFFF));
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.22);
+  transform: translateX(0);
+  transition: transform 150ms ease, background-color 150ms ease;
+}
+
+[role="switch"][data-ag-sys-follow-switch="1"][aria-checked="true"] {
+  background: #3F6E7A;
+  border-color: #3F6E7A;
+}
+
+html[data-ag-preset="absolutely"] [role="switch"][data-ag-sys-follow-switch="1"][aria-checked="true"] {
+  background: #D97757;
+  border-color: #D97757;
+}
+
+html[data-ag-preset="native"] [role="switch"][data-ag-sys-follow-switch="1"][aria-checked="true"] {
+  background: var(--primary, #2F71E3);
+  border-color: var(--primary, #2F71E3);
+}
+
+:is(html[data-ag-theme-mode="dark"] body, body.dark) [role="switch"][data-ag-sys-follow-switch="1"][aria-checked="true"] {
+  background: #5E95A4;
+  border-color: #5E95A4;
+}
+
+:is(html[data-ag-theme-mode="dark"] body, body.dark):is(*, [data-agy-theme]) [role="switch"][data-ag-sys-follow-switch="1"][aria-checked="true"] {
+  background: #5E95A4;
+  border-color: #5E95A4;
+}
+
+html[data-ag-dark-preset="claude-warm"]:not([data-ag-preset="native"])[data-ag-theme-mode="dark"] [role="switch"][data-ag-sys-follow-switch="1"][aria-checked="true"],
+html[data-ag-dark-preset="claude-warm"]:not([data-ag-preset="native"]) body.dark [role="switch"][data-ag-sys-follow-switch="1"][aria-checked="true"] {
+  background: #D97757;
+  border-color: #D97757;
+}
+
+html[data-ag-preset="native"][data-ag-theme-mode="dark"] [role="switch"][data-ag-sys-follow-switch="1"][aria-checked="true"],
+html[data-ag-preset="native"] body.dark [role="switch"][data-ag-sys-follow-switch="1"][aria-checked="true"] {
+  background: var(--primary, #2F71E3);
+  border-color: var(--primary, #2F71E3);
+}
+
+[role="switch"][data-ag-sys-follow-switch="1"][aria-checked="true"] .ag-sys-follow-thumb {
+  background: #FFFFFF;
+  transform: translateX(15px);
+}
+
 /* 仅屏蔽宿主 [role="tooltip"] 提示气泡，严禁隐藏 Popper/Portal 容器以防误伤顶栏菜单 */
 html[data-ag-suppress-native-tt="1"] [role="tooltip"]:not(#ag-theme-btn-tooltip) {
   opacity: 0 !important;

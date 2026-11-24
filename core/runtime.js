@@ -155,7 +155,13 @@
         onyx: '深色'
       },
       extHeading: '本地扩展',
-      tokenTab: 'Token 统计'
+      tokenTab: 'Token 统计',
+      followSystemLabel: '跟随系统',
+      followSystemLightPrefix: '浅色：',
+      followSystemDarkPrefix: '深色：',
+      followSystemPairSep: ' · ',
+      followSystemNativeDesc: '原版浅色 · 原版深色',
+      followSystemTooltip: '随操作系统自动切换浅色与深色预设'
     },
     ja: {
       btnLabel: '日本語',
@@ -170,7 +176,13 @@
         onyx: 'ダーク'
       },
       extHeading: 'ローカル拡張',
-      tokenTab: 'Token 統計'
+      tokenTab: 'Token 統計',
+      followSystemLabel: 'システムに合わせる',
+      followSystemLightPrefix: 'ライト：',
+      followSystemDarkPrefix: 'ダーク：',
+      followSystemPairSep: ' · ',
+      followSystemNativeDesc: '純正ライト · 純正ダーク',
+      followSystemTooltip: 'OSの設定に合わせてライト／ダークを自動切替'
     }
   };
   const EN_UI_STRINGS = {
@@ -184,7 +196,13 @@
       onyx: 'Dark'
     },
     extHeading: 'Local Extensions',
-    tokenTab: 'Token Analytics'
+    tokenTab: 'Token Analytics',
+    followSystemLabel: 'Follow System',
+    followSystemLightPrefix: 'Light: ',
+    followSystemDarkPrefix: 'Dark: ',
+    followSystemPairSep: ' · ',
+    followSystemNativeDesc: 'Original Light · Original Dark',
+    followSystemTooltip: 'Automatically switch light and dark presets with OS appearance'
   };
 
   if (
@@ -692,6 +710,7 @@
       window.__ag_appearance_btn_attr_observer = null;
     }
     try {
+      document.querySelectorAll('[data-ag-sys-follow-row="1"]').forEach((el) => el.remove());
       document.querySelectorAll('[data-ag-lang-row="1"]').forEach((el) => el.remove());
       if (document.documentElement) document.documentElement.removeAttribute('data-ag-lang');
       document.querySelectorAll('button[data-ag-warm-night-btn], button[data-ag-morandi-btn]').forEach((el) => el.remove());
@@ -781,6 +800,7 @@
     window.__ag_handle_native_theme_btn_click = null;
     window.__ag_handle_native_theme_btn_hover = null;
     window.__ag_handle_custom_theme_btn_click = null;
+    window.__ag_handle_sys_follow_toggle = null;
     window.__ag_sync_warm_night_btn_fn = null;
     window.__ag_ensure_warm_night_btn_fn = null;
     if (window.__ag_i18n_observer) {
@@ -2453,13 +2473,40 @@
       return null;
     }
 
+    function isThemeBtnPressed(btn) {
+      return !!(btn && (btn.hasAttribute('data-pressed') || btn.getAttribute('aria-pressed') === 'true'));
+    }
+
+    function isCurrentThemeModeDark() {
+      return (
+        document.documentElement.getAttribute('data-ag-theme-mode') === 'dark' ||
+        !!(document.body && document.body.classList.contains('dark'))
+      );
+    }
+
+    function formatFollowSystemDesc(uiStr, currentPreset, currentDarkPreset) {
+      if (currentPreset === PRESETS.NATIVE) {
+        return uiStr.followSystemNativeDesc;
+      }
+      let lightName = uiStr.themeTooltips.morandi;
+      if (currentPreset === PRESETS.ABSOLUTELY) {
+        lightName = uiStr.themeTooltips.absolutely;
+      } else if (currentPreset === PRESETS.CLAUDE_PUREWHITE) {
+        lightName = isUiEnglish() ? 'Pure White' : INSTALLED_LOCALE === 'ja' ? 'ピュアホワイト' : '净白';
+      } else if (currentPreset === PRESETS.VINTAGE_DEEP) {
+        lightName = isUiEnglish() ? 'Vintage Deep' : INSTALLED_LOCALE === 'ja' ? 'ヴィンテージ' : '复古深色';
+      }
+      const darkName =
+        currentDarkPreset === DARK_PRESETS.CLAUDE_WARM ? uiStr.themeTooltips.warmDark : uiStr.themeTooltips.onyx;
+      return `${uiStr.followSystemLightPrefix}${lightName}${uiStr.followSystemPairSep}${uiStr.followSystemDarkPrefix}${darkName}`;
+    }
+
     function syncAppearanceWarmNightToggle() {
       const currentPreset = document.documentElement.getAttribute('data-ag-preset') || PRESETS.MORANDI;
+      const currentDarkPreset = document.documentElement.getAttribute('data-ag-dark-preset') || DEFAULT_DARK_PRESET;
       const isNativePreset = currentPreset === PRESETS.NATIVE;
-      const isWarmNight = document.documentElement.getAttribute('data-ag-dark-preset') === DARK_PRESETS.CLAUDE_WARM;
-      const isDarkNow =
-        document.documentElement.getAttribute('data-ag-theme-mode') === 'dark' ||
-        !!(document.body && document.body.classList.contains('dark'));
+      const isWarmNight = currentDarkPreset === DARK_PRESETS.CLAUDE_WARM;
+      const isDarkNow = isCurrentThemeModeDark();
 
       // 单一真值源：5 选 1 互斥穷举，从根源上消除双高亮或全灭
       let activeSlot = PRESETS.MORANDI;
@@ -2471,6 +2518,8 @@
         activeSlot = currentPreset === PRESETS.ABSOLUTELY ? PRESETS.ABSOLUTELY : PRESETS.MORANDI;
       }
 
+      const uiStr = getSelfUiStrings();
+      let anyFollowSystem = false;
       const groups = document.querySelectorAll('[data-slot="toggle-group"][data-ag-theme-toggle-group="1"]');
       for (let i = 0; i < groups.length; i++) {
         const group = groups[i];
@@ -2478,6 +2527,9 @@
           group.setAttribute('data-ag-active-slot', activeSlot);
         }
         const sysBtn = group.querySelector('button[data-ag-native-theme-slot="system"]');
+        if (isThemeBtnPressed(sysBtn)) {
+          anyFollowSystem = true;
+        }
         const morandiBtn = group.querySelector('button[data-ag-morandi-btn="1"]');
         const bookBtn = group.querySelector('button[data-ag-warm-night-btn="1"]');
 
@@ -2504,7 +2556,7 @@
         }
 
         if (sysBtn) {
-          const wantSysAria = getSelfUiStrings().themeTooltips.native;
+          const wantSysAria = uiStr.themeTooltips.native;
           if (sysBtn.getAttribute('aria-label') !== wantSysAria) {
             sysBtn.setAttribute('aria-label', wantSysAria);
           }
@@ -2519,26 +2571,26 @@
         }
         const lightBtn = group.querySelector('button[data-ag-native-theme-slot="light"]');
         if (lightBtn) {
-          const wantLightAria = getSelfUiStrings().themeTooltips.absolutely;
+          const wantLightAria = uiStr.themeTooltips.absolutely;
           if (lightBtn.getAttribute('aria-label') !== wantLightAria) {
             lightBtn.setAttribute('aria-label', wantLightAria);
           }
         }
         if (morandiBtn) {
-          const wantMoAria = getSelfUiStrings().themeTooltips.morandi;
+          const wantMoAria = uiStr.themeTooltips.morandi;
           if (morandiBtn.getAttribute('aria-label') !== wantMoAria) {
             morandiBtn.setAttribute('aria-label', wantMoAria);
           }
         }
         if (bookBtn) {
-          const wantBookAria = getSelfUiStrings().themeTooltips.warmDark;
+          const wantBookAria = uiStr.themeTooltips.warmDark;
           if (bookBtn.getAttribute('aria-label') !== wantBookAria) {
             bookBtn.setAttribute('aria-label', wantBookAria);
           }
         }
         const darkBtn = group.querySelector('button[data-ag-native-theme-slot="dark"]');
         if (darkBtn) {
-          const wantDarkAria = getSelfUiStrings().themeTooltips.onyx;
+          const wantDarkAria = uiStr.themeTooltips.onyx;
           if (darkBtn.getAttribute('aria-label') !== wantDarkAria) {
             darkBtn.setAttribute('aria-label', wantDarkAria);
           }
@@ -2546,7 +2598,7 @@
       }
 
       const activeLangSlot = isUiEnglish() ? 'en' : 'target';
-      const wantRowLabel = getSelfUiStrings().rowLabel;
+      const wantRowLabel = uiStr.rowLabel;
       const langRows = document.querySelectorAll('[data-ag-lang-row="1"]');
       for (let i = 0; i < langRows.length; i++) {
         const row = langRows[i];
@@ -2563,13 +2615,39 @@
           const tgtBtn = lGroup.querySelector('button[data-ag-lang-btn="target"]');
           if (enBtn) {
             const enOn = activeLangSlot === 'en';
-            const wantEnAria = getSelfUiStrings().enTooltip;
+            const wantEnAria = uiStr.enTooltip;
             if (enBtn.getAttribute('aria-label') !== wantEnAria) enBtn.setAttribute('aria-label', wantEnAria);
             if (enBtn.getAttribute('aria-pressed') !== String(enOn)) enBtn.setAttribute('aria-pressed', String(enOn));
           }
           if (tgtBtn) {
             const tgtOn = activeLangSlot === 'target';
             if (tgtBtn.getAttribute('aria-pressed') !== String(tgtOn)) tgtBtn.setAttribute('aria-pressed', String(tgtOn));
+          }
+        }
+      }
+
+      const wantFollowDesc = formatFollowSystemDesc(uiStr, currentPreset, currentDarkPreset);
+      const sysFollowRows = document.querySelectorAll('[data-ag-sys-follow-row="1"]');
+      for (let i = 0; i < sysFollowRows.length; i++) {
+        const row = sysFollowRows[i];
+        const card = row.parentElement;
+        const cardSysBtn = card ? card.querySelector('button[data-ag-native-theme-slot="system"]') : null;
+        const isFollowSystem = cardSysBtn ? isThemeBtnPressed(cardSysBtn) : anyFollowSystem;
+        const lbl = row.querySelector('[data-ag-sys-follow-label="1"]');
+        if (lbl && lbl.textContent !== uiStr.followSystemLabel) {
+          lbl.textContent = uiStr.followSystemLabel;
+        }
+        const desc = row.querySelector('[data-ag-sys-follow-desc="1"]');
+        if (desc && desc.textContent !== wantFollowDesc) {
+          desc.textContent = wantFollowDesc;
+        }
+        const sw = row.querySelector('[data-ag-sys-follow-switch="1"]');
+        if (sw) {
+          if (sw.getAttribute('aria-checked') !== String(isFollowSystem)) {
+            sw.setAttribute('aria-checked', String(isFollowSystem));
+          }
+          if (sw.getAttribute('aria-label') !== uiStr.followSystemLabel) {
+            sw.setAttribute('aria-label', uiStr.followSystemLabel);
           }
         }
       }
@@ -2589,12 +2667,58 @@
       }
     };
 
+    window.__ag_handle_sys_follow_toggle = (ev, group) => {
+      if (ev) {
+        ev.preventDefault();
+        ev.stopPropagation();
+      }
+      hideThemeBtnTooltip(false);
+      const targetGroup =
+        group && group.isConnected
+          ? group
+          : ev?.currentTarget?.closest?.('.agy-card')?.querySelector('[data-slot="toggle-group"][data-ag-theme-toggle-group="1"]');
+      if (!targetGroup) return;
+      const sysBtn = targetGroup.querySelector('button[data-ag-native-theme-slot="system"]');
+      const lightBtn = targetGroup.querySelector('button[data-ag-native-theme-slot="light"]');
+      const darkBtn = targetGroup.querySelector('button[data-ag-native-theme-slot="dark"]');
+      if (!sysBtn) return;
+
+      if (!isThemeBtnPressed(sysBtn)) {
+        window.__ag_internal_sys_click = true;
+        try {
+          sysBtn.click();
+        } finally {
+          window.__ag_internal_sys_click = false;
+        }
+      } else if (isCurrentThemeModeDark() && darkBtn) {
+        window.__ag_internal_moon_click = true;
+        try {
+          darkBtn.click();
+        } finally {
+          window.__ag_internal_moon_click = false;
+        }
+      } else if (lightBtn) {
+        window.__ag_internal_sun_click = true;
+        try {
+          lightBtn.click();
+        } finally {
+          window.__ag_internal_sun_click = false;
+        }
+      }
+      requestAnimationFrame(() => {
+        if (typeof window.__ag_sync_warm_night_btn_fn === 'function') {
+          window.__ag_sync_warm_night_btn_fn();
+        }
+      });
+    };
+
     window.__ag_handle_native_theme_btn_click = (ev, btn, slot) => {
       if (typeof ev === 'string') {
         slot = ev;
         ev = null;
         btn = null;
       }
+      if (slot === 'system' && window.__ag_internal_sys_click) return;
       if (slot === 'light' && window.__ag_internal_sun_click) return;
       if (slot === 'dark' && window.__ag_internal_moon_click) return;
       if (btn) {
@@ -2604,10 +2728,19 @@
         hideThemeBtnTooltip(false);
       }
 
-      // 若目标原生按钮已处于按下态（如 MO->Absolutely! 或 📖->🌙），拦截多余 click 防 Base UI 反选取消
-      const alreadyPressed =
-        !!(btn && (btn.hasAttribute('data-pressed') || btn.getAttribute('aria-pressed') === 'true'));
-      if (alreadyPressed && ev) {
+      const group = btn && btn.closest ? btn.closest('[data-slot="toggle-group"]') : null;
+      const sysBtn = group ? group.querySelector('button[data-ag-native-theme-slot="system"]') : null;
+      const isFollowSystem = isThemeBtnPressed(sysBtn);
+      const isDarkNow = isCurrentThemeModeDark();
+
+      // 若目标原生按钮已处于按下态，或在「跟随系统」开启时点击当前同极性预设，拦截多余 click 保持系统跟随不退出
+      const alreadyPressed = isThemeBtnPressed(btn);
+      const shouldIntercept =
+        slot === 'system' ||
+        alreadyPressed ||
+        (slot === 'light' && isFollowSystem && !isDarkNow) ||
+        (slot === 'dark' && isFollowSystem && isDarkNow);
+      if (shouldIntercept && ev) {
         ev.preventDefault();
         ev.stopPropagation();
       }
@@ -2636,12 +2769,15 @@
       }
       hideThemeBtnTooltip();
       if (!group) return;
+      const sysBtn = group.querySelector('button[data-ag-native-theme-slot="system"]');
+      const isFollowSystem = isThemeBtnPressed(sysBtn);
+      const isDarkNow = isCurrentThemeModeDark();
+
       if (kind === PRESETS.MORANDI) {
         setRuntimeLightPreset(PRESETS.MORANDI, true);
         const liveLightBtn = group.querySelector('button[data-ag-native-theme-slot="light"]');
-        const sunPressed =
-          !!(liveLightBtn && (liveLightBtn.hasAttribute('data-pressed') || liveLightBtn.getAttribute('aria-pressed') === 'true'));
-        if (liveLightBtn && !sunPressed) {
+        const sunPressed = isThemeBtnPressed(liveLightBtn);
+        if (liveLightBtn && !sunPressed && !(isFollowSystem && !isDarkNow)) {
           window.__ag_internal_sun_click = true;
           try {
             liveLightBtn.click();
@@ -2655,9 +2791,8 @@
         }
         setRuntimeDarkPreset(DARK_PRESETS.CLAUDE_WARM, true);
         const liveDarkBtn = group.querySelector('button[data-ag-native-theme-slot="dark"]');
-        const moonPressed =
-          !!(liveDarkBtn && (liveDarkBtn.hasAttribute('data-pressed') || liveDarkBtn.getAttribute('aria-pressed') === 'true'));
-        if (liveDarkBtn && !moonPressed) {
+        const moonPressed = isThemeBtnPressed(liveDarkBtn);
+        if (liveDarkBtn && !moonPressed && !(isFollowSystem && isDarkNow)) {
           window.__ag_internal_moon_click = true;
           try {
             liveDarkBtn.click();
@@ -2912,10 +3047,71 @@
         group.appendChild(bookBtn);
       }
 
+      // 外观卡片独立「跟随系统 / Follow System」开关行（挂载在 .agy-card 末尾，复用预设记忆，不新增 config 字段）
+      const themeRow = group.closest ? group.closest('.agy-card > div') : null;
+      const card = themeRow ? themeRow.parentElement : null;
+      if (card && !card.querySelector('[data-ag-sys-follow-row="1"]')) {
+        const uiStr = getSelfUiStrings();
+        const curPresetAttr = document.documentElement.getAttribute('data-ag-preset') || PRESETS.MORANDI;
+        const curDarkAttr = document.documentElement.getAttribute('data-ag-dark-preset') || DEFAULT_DARK_PRESET;
+        const isFollowInit = isThemeBtnPressed(sysBtn);
+
+        const sysFollowRow = document.createElement('div');
+        sysFollowRow.setAttribute('data-ag-sys-follow-row', '1');
+        sysFollowRow.className =
+          themeRow.className || 'py-2 px-3 w-full bg-transparent flex justify-between gap-4 items-center';
+
+        const leftCol = document.createElement('div');
+        leftCol.className = 'flex-1 flex flex-col gap-0.5';
+        const labelInner = document.createElement('div');
+        labelInner.className = 'flex items-center gap-1.5';
+        const labelSpan = document.createElement('span');
+        labelSpan.setAttribute('data-ag-sys-follow-label', '1');
+        labelSpan.textContent = uiStr.followSystemLabel;
+        labelInner.appendChild(labelSpan);
+        const descSpan = document.createElement('span');
+        descSpan.setAttribute('data-ag-sys-follow-desc', '1');
+        descSpan.textContent = formatFollowSystemDesc(uiStr, curPresetAttr, curDarkAttr);
+        leftCol.appendChild(labelInner);
+        leftCol.appendChild(descSpan);
+
+        const rightCol = document.createElement('div');
+        rightCol.className = 'shrink-0 flex items-center';
+        const swBtn = document.createElement('button');
+        swBtn.type = 'button';
+        swBtn.setAttribute('role', 'switch');
+        swBtn.setAttribute('data-ag-sys-follow-switch', '1');
+        swBtn.setAttribute('aria-checked', String(isFollowInit));
+        swBtn.setAttribute('aria-label', uiStr.followSystemLabel);
+        const thumb = document.createElement('span');
+        thumb.className = 'ag-sys-follow-thumb';
+        thumb.setAttribute('aria-hidden', 'true');
+        swBtn.appendChild(thumb);
+        swBtn.addEventListener('mouseenter', () => {
+          scheduleThemeBtnTooltip(swBtn, getSelfUiStrings().followSystemTooltip, false);
+        });
+        swBtn.addEventListener('mouseleave', hideThemeBtnTooltip);
+        swBtn.addEventListener('focus', () => {
+          scheduleThemeBtnTooltip(swBtn, getSelfUiStrings().followSystemTooltip, false);
+        });
+        swBtn.addEventListener('blur', hideThemeBtnTooltip);
+        swBtn.addEventListener('click', (ev) => {
+          window.__ag_handle_sys_follow_toggle?.(ev, group);
+        });
+        rightCol.appendChild(swBtn);
+
+        sysFollowRow.appendChild(leftCol);
+        sysFollowRow.appendChild(rightCol);
+        const existingLangRow = card.querySelector('[data-ag-lang-row="1"]');
+        if (existingLangRow && existingLangRow.parentElement === card) {
+          card.insertBefore(sysFollowRow, existingLangRow);
+        } else {
+          card.appendChild(sysFollowRow);
+        }
+      }
+
       // 外观卡片独立「界面语言 / Language」二元切换行（严格限定挂载在 .agy-card 内，零侵入 React 子节点顺序；预留 installedLocale 映射）
       if (HAS_LOCALE_PACK) {
-        const themeRow = group.closest ? group.closest('.agy-card > div') : null;
-        const card = themeRow ? themeRow.parentElement : null;
         if (card && !card.querySelector('[data-ag-lang-row="1"]')) {
           const localeInfo = LOCALE_META[INSTALLED_LOCALE] || LOCALE_META['zh-CN'];
           const langRow = document.createElement('div');
