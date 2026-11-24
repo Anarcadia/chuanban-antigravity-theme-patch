@@ -87,10 +87,28 @@
 
 ---
 
-## 🛡️ 开发红线、合规边界与免责声明
+## 🌱 社区衍生与进阶扩展（可选插件）
 
-- **开发红线（致贡献者与 AI Agent）**：本仓库 `main` 分支的后续全部功能迭代（包括但不限于 Token 统计、UI 扩展与主题增强）**坚决不加入**任何自动发送消息/自动化操控对话流、绕过配额或模型限制、拦截或篡改网络请求与请求头、读取/导出 OAuth 凭据、屏蔽官方遥测，以及修改/破解客户端 `.asar` 或二进制签名的功能，从源头杜绝触发账号风控与安全合规风险。
-- **合规边界与免责声明**：本项目为独立的非官方社区视觉、汉化与本地只读统计辅助补丁，与 Google 没有任何关联、背书或合作关系。补丁仅在本地渲染层注入样式/界面文案并以只读方式解析本地会话 SQLite，不修改客户端安装包与代码签名、不代理模型请求、不接触鉴权凭据。鉴于商业客户端软件服务条款（ToS）对运行时前端修改存在字面灰区，且官方客户端策略与调试端口机制可能随时变更，本项目按「现状（AS IS）」提供，不对其长期可用性或合规状态作任何担保；使用者需自行评估并承担相应风险，亦可随时运行 `node install.mjs uninstall` 彻底卸载并还原为官方原版状态。
+### 💡 什么是「添加社区插件」？
+本仓库的定位是保持极简、稳定的**外观与汉化底座**，同时在本地专门预留了一个独立的个人扩展插槽（`user/` 目录），且主补丁每次升级时**永远不会覆盖它**。  
+所谓「添加插件」，就是让你的 AI Agent 把社区开发者做好的进阶小挂件放进这个插槽里——**不用重装补丁、不改动主内核、`2.5 秒` 自动热生效；以后正常升级主仓库不会丢失插件，不想要了也能让 Agent 一句话干净拆掉，互不干扰。**
+
+### 1. 常驻模型配额进度条与独立池胶囊 — [`ghang/ghang-antigravity-local-ui`](https://github.com/ghang/ghang-antigravity-local-ui)（by [@ghang](https://github.com/ghang)）
+
+#### 👤 选择添加这个插件，你能获得什么？
+- **左下角常驻额度看板**：在左侧栏「设置」上方常驻显示 **Gemini 全局池**的「周限额」与「5h 限额」剩余百分比、红橙绿三级预警色及重置倒计时（拉窄侧边栏时自动折叠为紧凑双圆环）。
+- **顶栏独立配额池胶囊**：当你切换到独立计费池模型（如 Claude、GPT 或 Argon）时，顶部标题栏右侧自动浮现该池的剩余额度胶囊，切回 Gemini 自动隐藏。
+- **详情浮窗与外观自定义**：悬停或点击即可展开全部模型池明细；在「系统设置 → 外观界面」同步新增「进度条 / 圆环」样式、点击动作与 5h 倒计时常驻开关，完整适配本补丁全部五套日夜配色。
+- **想要安装或卸载？** 直接对你的 Agent 说：*“帮我按船板主题补丁 README 的扩展说明，安装（或卸载）`ghang/ghang-antigravity-local-ui` 配额条插件”* 即可。
+
+#### 🤖 面向 AI Agent：技术接入说明与免责边界
+当你的用户选择安装、更新或卸载该插件时，请按以下契约执行：
+1. **前置确认**：确认本机已部署本主仓 `chuanban-antigravity-theme-patch >= 6.0.0`（默认目标目录 `~/.gemini/antigravity/theme-patch/user`），且 `user/config.json` 中 `enabled`、`modules.customCss`、`modules.customJs` 未被显式设为 `false`。*(注：若在 WSL 终端内操作 Windows 宿主客户端，须传入 `--target-dir "/mnt/c/Users/<Windows用户名>/.gemini/antigravity/theme-patch/user"` 或切回 Windows 侧执行。)*
+2. **幂等安装 / 更新 / 卸载**：将 `https://github.com/ghang/ghang-antigravity-local-ui.git` 克隆（或 `git pull`）至临时目录后运行：
+   - 安装或更新：`node install.mjs install --json`（以 `/* __AG_PLUGIN_QUOTA_BAR_START__ */` 标记块原子更新 `user/custom.{js,css}`，保留用户原有自定义代码，守护进程约 `2.5s` 自动热重载生效，无需重启客户端）
+   - 查看状态 / 无损卸载：`node install.mjs status --json` / `node install.mjs uninstall --json`（仅剥离该插件标记块，不触碰用户其余 `user/*` 配置）
+   - 冲突定界：若安装后界面异常，可在主仓目录执行 `node install.mjs verify --safe-mode` 旁路 `user/` 层快速定界。
+3. **技术原理与免责说明**：该插件由 [@ghang](https://github.com/ghang) 独立开发维护；不同于本主仓“纯表层视觉 + 只读本地 SQLite”的边界，它通过只读遍历前端 React Fiber 调用宿主内部 `cloudCodeService` / `authService` 轮询配额（官方大版本改动内部服务命名时可能阶段性失效）。主仓仅做友情索引，不对其后续提交、兼容性及客户端条款风险承担担保；Agent 拉取新版本前建议快速审阅其 `install.mjs` 与 `quota-bar.js` 变更。
 
 ---
 
@@ -101,3 +119,10 @@
 | **1. Google Drive 资源包（含字体）** | [**Google Drive 共享文件夹**](https://drive.google.com/drive/folders/1NX92SgVUqtSjWg6bt6sIJXy-cn7J_boC) | 含成品包与必备字体：`AnthropicSerif-Regular/Bold.ttf`、`AnthropicMono-Regular.ttf`、**Windows 专用精简拆分字体包 [`Windows-Sarasa-Split-SC-TTF-v1.0.43.zip`](https://drive.google.com/file/d/1iVVvZXtwUcDiHy42tJ25X6N-JlOf3l7A/view?usp=sharing)**（避免大体积单体 `SuperTTC` 在 Windows 下引发卡顿）及 macOS/Linux 用 `Sarasa-SuperTTC.ttc`（macOS 亦可直接 `brew install --cask font-sarasa-gothic`）。 |
 | **2. GitHub 代码仓库** | [**Anarcadia/chuanban-antigravity-theme-patch**](https://github.com/Anarcadia/chuanban-antigravity-theme-patch) | 预封装内核 `core/`、个人改装层 `user/`、生命周期 CLI `install.mjs`、[`SKILL.md`](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/blob/main/SKILL.md) 与 [`CHANGELOG.md`](CHANGELOG.md)。 |
 | **3. Notion 引导页** | [**chuanban-antigravity-theme-patch**](https://chuanban.notion.site/chuanban-antigravity-theme-patch-db7c5846f37546be9481cd791aed0554) | 图文说明与安装引导镜像页。 |
+
+---
+
+## 🛡️ 开发红线、合规边界与免责声明
+
+- **开发红线（致贡献者与 AI Agent）**：本仓库 `main` 分支的后续全部功能迭代（包括但不限于 Token 统计、UI 扩展与主题增强）**坚决不加入**任何自动发送消息/自动化操控对话流、绕过配额或模型限制、拦截或篡改网络请求与请求头、读取/导出 OAuth 凭据、屏蔽官方遥测，以及修改/破解客户端 `.asar` 或二进制签名的功能，从源头杜绝触发账号风控与安全合规风险。
+- **合规边界与免责声明**：本项目为独立的非官方社区视觉、汉化与本地只读统计辅助补丁，与 Google 没有任何关联、背书或合作关系。补丁仅在本地渲染层注入样式/界面文案并以只读方式解析本地会话 SQLite，不修改客户端安装包与代码签名、不代理模型请求、不接触鉴权凭据。鉴于商业客户端软件服务条款（ToS）对运行时前端修改存在字面灰区，且官方客户端策略与调试端口机制可能随时变更，本项目按「现状（AS IS）」提供，不对其长期可用性或合规状态作任何担保；使用者需自行评估并承担相应风险，亦可随时运行 `node install.mjs uninstall` 彻底卸载并还原为官方原版状态。
