@@ -3080,7 +3080,7 @@ const TA_SLUG_LABELS = {
   'gpt-oss-120b-medium': 'GPT-OSS 120B (Medium)'
 };
 
-const TA_CACHE_SCHEMA_REV = 3;
+const TA_CACHE_SCHEMA_REV = 4;
 const TA_CACHE_FILE = path.join(CACHE_DIR, 'token-analytics-index.json');
 const TA_CACHE_SALT = crypto
   .createHash('sha1')
@@ -3363,9 +3363,9 @@ function taNormalizeProjectInfo(workspaceUris, projectId = '') {
 function taClassifyModelPool({ label = '', slug = '', modelEnum = '', usedClaude = '' } = {}) {
   const combined = `${label} ${slug} ${modelEnum}`.toLowerCase();
   if (combined.includes('argon')) return 'Argon';
-  if (combined.includes('claude') || combined.includes('gpt')) return 'Claude & GPT';
+  if (combined.includes('claude') || combined.includes('gpt')) return 'Claude';
   if (combined.includes('gemini') || combined.includes('orchestrator')) return 'Gemini';
-  if (String(usedClaude).toLowerCase() === 'true') return 'Claude & GPT';
+  if (String(usedClaude).toLowerCase() === 'true') return 'Claude';
   return 'Gemini';
 }
 

@@ -661,6 +661,13 @@
       } catch (e) {}
       window.__ag_metrics_tt_hide_timer = null;
     }
+    if (window.__ag_metrics_tt_show_timer) {
+      try {
+        clearTimeout(window.__ag_metrics_tt_show_timer);
+      } catch (e) {}
+      window.__ag_metrics_tt_show_timer = null;
+    }
+    window.__ag_metrics_tt_intent_pill = null;
     window.__ag_active_tooltip_pill = null;
     window.__ag_pill_tooltip_map = null;
     window.__ag_metrics_focusin_fn = null;
@@ -3326,6 +3333,18 @@
     return '';
   }
 
+  const METRICS_HOVER_INTENT_MS = 260;
+
+  function clearMetricsTooltipShowTimer() {
+    if (window.__ag_metrics_tt_show_timer) {
+      try {
+        clearTimeout(window.__ag_metrics_tt_show_timer);
+      } catch (e) {}
+      window.__ag_metrics_tt_show_timer = null;
+    }
+    window.__ag_metrics_tt_intent_pill = null;
+  }
+
   function clearMetricsTooltipHideTimer() {
     if (window.__ag_metrics_tt_hide_timer) {
       try {
@@ -3425,6 +3444,9 @@
   }
 
   function hideMetricsTooltipIfOwner(pill) {
+    if (!pill || window.__ag_metrics_tt_intent_pill === pill) {
+      clearMetricsTooltipShowTimer();
+    }
     if (!pill || window.__ag_active_tooltip_pill === pill) {
       clearMetricsTooltipHideTimer();
       const tt = document.getElementById('ag-live-metrics-tooltip');
@@ -3554,6 +3576,26 @@
     return state;
   }
 
+  function showMetricsTooltipForPill(pill) {
+    if (!pill || !pill.isConnected) return;
+    const map = isWeakMapInstance(window.__ag_pill_tooltip_map) ? window.__ag_pill_tooltip_map : pillTooltipMap;
+    const ttHtml = map.get(pill);
+    if (!ttHtml) return;
+    const tt = ensureMetricsTooltip();
+    if (!tt) return;
+    if (tt.innerHTML !== ttHtml) {
+      tt.innerHTML = ttHtml;
+    }
+    window.__ag_active_tooltip_pill = pill;
+    const r = pill.getBoundingClientRect();
+    const ttWidth = Math.min(450, Math.max(370, tt.offsetWidth || 400));
+    const left = Math.max(12, Math.min(r.left, window.innerWidth - ttWidth - 16));
+    const bottomPx = Math.min(window.innerHeight - r.top + 8, window.innerHeight - (tt.offsetHeight || 220) - 12);
+    tt.style.left = left + 'px';
+    tt.style.bottom = Math.max(8, bottomPx) + 'px';
+    tt.setAttribute('data-visible', '1');
+  }
+
   function createPillElement() {
     const pill = document.createElement('div');
     pill.className = 'ag-live-metrics-pill';
@@ -3565,24 +3607,28 @@
     pill.appendChild(span);
     pill.addEventListener('mouseenter', () => {
       clearMetricsTooltipHideTimer();
-      const map = isWeakMapInstance(window.__ag_pill_tooltip_map) ? window.__ag_pill_tooltip_map : pillTooltipMap;
-      const ttHtml = map.get(pill);
-      if (!ttHtml) return;
-      const tt = ensureMetricsTooltip();
-      if (!tt) return;
-      if (tt.innerHTML !== ttHtml) {
-        tt.innerHTML = ttHtml;
+      const tt = document.getElementById('ag-live-metrics-tooltip');
+      if (tt && tt.getAttribute('data-visible') === '1' && window.__ag_active_tooltip_pill === pill) {
+        showMetricsTooltipForPill(pill);
+        return;
       }
-      window.__ag_active_tooltip_pill = pill;
-      const r = pill.getBoundingClientRect();
-      const ttWidth = Math.min(450, Math.max(370, tt.offsetWidth || 400));
-      const left = Math.max(12, Math.min(r.left, window.innerWidth - ttWidth - 16));
-      const bottomPx = Math.min(window.innerHeight - r.top + 8, window.innerHeight - (tt.offsetHeight || 220) - 12);
-      tt.style.left = left + 'px';
-      tt.style.bottom = Math.max(8, bottomPx) + 'px';
-      tt.setAttribute('data-visible', '1');
+      if (window.__ag_metrics_tt_show_timer && window.__ag_metrics_tt_intent_pill === pill) {
+        return;
+      }
+      clearMetricsTooltipShowTimer();
+      window.__ag_metrics_tt_intent_pill = pill;
+      window.__ag_metrics_tt_show_timer = setTimeout(() => {
+        window.__ag_metrics_tt_show_timer = null;
+        window.__ag_metrics_tt_intent_pill = null;
+        if (!pill.isConnected) return;
+        if (typeof pill.matches === 'function' && !pill.matches(':hover')) return;
+        showMetricsTooltipForPill(pill);
+      }, METRICS_HOVER_INTENT_MS);
     });
     pill.addEventListener('mouseleave', () => {
+      if (window.__ag_metrics_tt_intent_pill === pill) {
+        clearMetricsTooltipShowTimer();
+      }
       if (window.__ag_active_tooltip_pill !== pill) return;
       const tt = document.getElementById('ag-live-metrics-tooltip');
       if (tt && tt.querySelector && tt.querySelector('.ag-tt-copy-btn')) {
@@ -6760,10 +6806,12 @@
           </div>
         </div>
 
-        <div id="ag-ta-filters-bar" class="ag-ta-filters-bar" hidden>
-          <span>当前联动筛选：</span>
-          <div id="ag-ta-filter-pills" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
-          <button type="button" id="ag-ta-clear-filters" class="ag-ta-clear-btn">清除全部</button>
+        <div id="ag-ta-filters-bar" class="ag-ta-filters-bar" data-active="0">
+          <span class="ag-ta-filters-lbl">当前联动筛选：</span>
+          <div id="ag-ta-filter-pills" class="ag-ta-filter-pills">
+            <span class="ag-ta-filter-placeholder">暂无筛选条件（点击下方日期、模型、场景或项目即可联动过滤）</span>
+          </div>
+          <button type="button" id="ag-ta-clear-filters" class="ag-ta-clear-btn" disabled tabindex="-1">清除全部</button>
         </div>
 
         <div id="ag-ta-status-banner" class="ag-ta-banner" hidden></div>
@@ -6781,7 +6829,7 @@
                 <button type="button" class="ag-ta-seg-btn active" data-dmode="heatmap">贡献网格</button>
                 <button type="button" class="ag-ta-seg-btn" data-dmode="bars">近14日趋势</button>
               </div>
-              <div id="ag-ta-hm-legend" class="ag-ta-hm-legend">
+              <div id="ag-ta-hm-legend" class="ag-ta-hm-legend" data-hidden="0">
                 <span>少</span>
                 <span class="ag-ta-hm-sw" data-lvl="0"></span>
                 <span class="ag-ta-hm-sw" data-lvl="1"></span>
@@ -6792,21 +6840,23 @@
               </div>
             </div>
           </div>
-          <div id="ag-ta-hm-wrap" class="ag-ta-hm-scroll">
-            <div class="ag-ta-hm-inner">
-              <div id="ag-ta-hm-months" class="ag-ta-hm-months"></div>
-              <div class="ag-ta-hm-body">
-                <div class="ag-ta-hm-days"><span>一</span><span>三</span><span>五</span><span>日</span></div>
-                <div id="ag-ta-hm-grid" class="ag-ta-hm-grid"></div>
+          <div class="ag-ta-daily-stage">
+            <div id="ag-ta-hm-wrap" class="ag-ta-hm-scroll">
+              <div class="ag-ta-hm-inner">
+                <div id="ag-ta-hm-months" class="ag-ta-hm-months"></div>
+                <div class="ag-ta-hm-body">
+                  <div class="ag-ta-hm-days"><span>一</span><span>三</span><span>五</span><span>日</span></div>
+                  <div id="ag-ta-hm-grid" class="ag-ta-hm-grid"></div>
+                </div>
               </div>
             </div>
-          </div>
-          <div id="ag-ta-bars-wrap" hidden>
-            <div id="ag-ta-bars-chart" class="ag-ta-bars-chart"></div>
-            <div class="ag-ta-legend" style="justify-content:flex-end;border-top:none;margin-top:4px;padding-top:4px;">
-              <span class="ag-ta-legend-item"><span class="ag-ta-swatch ag-ta-seg-in"></span>新输入</span>
-              <span class="ag-ta-legend-item"><span class="ag-ta-swatch ag-ta-seg-cache"></span>缓存读取</span>
-              <span class="ag-ta-legend-item"><span class="ag-ta-swatch ag-ta-seg-out"></span>输出（含思考）</span>
+            <div id="ag-ta-bars-wrap" hidden>
+              <div id="ag-ta-bars-chart" class="ag-ta-bars-chart"></div>
+              <div class="ag-ta-legend" style="justify-content:flex-end;border-top:none;margin-top:4px;padding-top:4px;">
+                <span class="ag-ta-legend-item"><span class="ag-ta-swatch ag-ta-seg-in"></span>新输入</span>
+                <span class="ag-ta-legend-item"><span class="ag-ta-swatch ag-ta-seg-cache"></span>缓存读取</span>
+                <span class="ag-ta-legend-item"><span class="ag-ta-swatch ag-ta-seg-out"></span>输出（含思考）</span>
+              </div>
             </div>
           </div>
           <div id="ag-ta-daily-footer" class="ag-ta-foot"></div>
@@ -6817,14 +6867,14 @@
             <div class="ag-ta-card-head">
               <div>
                 <h2 class="ag-ta-card-h2">按模型统计</h2>
-                <p class="ag-ta-card-desc">点击模型行联动过滤</p>
+                <p id="ag-ta-model-desc" class="ag-ta-card-desc">调用次数/缓存命中/消耗量/占比/配额池</p>
               </div>
               <div class="ag-ta-seg" id="ag-ta-model-sw">
                 <button type="button" class="ag-ta-seg-btn active" data-mg="model">具体模型</button>
                 <button type="button" class="ag-ta-seg-btn" data-mg="pool">配额池</button>
               </div>
             </div>
-            <div id="ag-ta-model-list" class="ag-ta-list"></div>
+            <div id="ag-ta-model-list" class="ag-ta-list ag-ta-list--model"></div>
             <div class="ag-ta-legend">
               <span class="ag-ta-legend-item"><span class="ag-ta-swatch ag-ta-seg-in"></span>新输入</span>
               <span class="ag-ta-legend-item"><span class="ag-ta-swatch ag-ta-seg-cache"></span>缓存命中</span>
@@ -6837,11 +6887,13 @@
             <div class="ag-ta-card-head">
               <div>
                 <h2 class="ag-ta-card-h2">按场景统计</h2>
-                <p class="ag-ta-card-desc">工具执行 / 子 Agent / 纯对话 / 规划 / 记忆压缩</p>
+                <p class="ag-ta-card-desc">工具执行/子 Agent/对话/规划/压缩</p>
               </div>
-              <span class="ag-ta-badge" title="所有数字来自本机已落盘的 conversations/*.db，不含未落盘的云端静默后台任务">本地轨迹口径</span>
+              <span class="ag-ta-seg ag-ta-seg--static" title="所有数字来自本机已落盘的 conversations/*.db，不含未落盘的云端静默后台任务">
+                <span class="ag-ta-seg-chip">本地轨迹口径</span>
+              </span>
             </div>
-            <div id="ag-ta-scenario-list" class="ag-ta-list"></div>
+            <div id="ag-ta-scenario-list" class="ag-ta-list ag-ta-list--scen"></div>
             <div class="ag-ta-foot">
               <span>仅统计本地已落盘对话轨迹；点击场景行可联动筛选</span>
             </div>
@@ -6987,6 +7039,32 @@
             renderPanel();
           });
         }
+        if (typeof ResizeObserver === 'function' && !panel._agTaResizeObs) {
+          const ro = new ResizeObserver(() => scheduleTaFadeSync(panel));
+          ro.observe(panel);
+          panel._agTaResizeObs = ro;
+        }
+      }
+
+      let fadeSyncRaf = null;
+      function syncTaFadeOverflow(panel) {
+        if (!panel || panel.hidden) return;
+        const els = panel.querySelectorAll(
+          '.ag-ta-row-name > span:first-child:not(.ag-ta-swatch), .ag-ta-row-label, .ag-ta-sess-title, .ag-ta-model-cell'
+        );
+        for (let i = 0; i < els.length; i += 1) {
+          const el = els[i];
+          const overflows = el.clientWidth > 0 && el.scrollWidth - el.clientWidth > 1;
+          el.classList.toggle('is-overflowing', overflows);
+        }
+      }
+      function scheduleTaFadeSync(panel) {
+        if (disposed) return;
+        if (fadeSyncRaf) cancelAnimationFrame(fadeSyncRaf);
+        fadeSyncRaf = requestAnimationFrame(() => {
+          fadeSyncRaf = null;
+          if (!disposed) syncTaFadeOverflow(panel);
+        });
       }
 
       function syncPanelSwitchers(panel) {
@@ -7002,6 +7080,13 @@
         panel.querySelectorAll('#ag-ta-model-sw .ag-ta-seg-btn').forEach((b) => {
           b.classList.toggle('active', b.getAttribute('data-mg') === uiState.modelGroup);
         });
+        const modelDescEl = panel.querySelector('#ag-ta-model-desc');
+        if (modelDescEl) {
+          modelDescEl.textContent =
+            uiState.modelGroup === 'pool'
+              ? '调用次数/缓存命中/消耗量/占比'
+              : '调用次数/缓存命中/消耗量/占比/配额池';
+        }
         panel.querySelectorAll('#ag-ta-explorer-sw .ag-ta-seg-btn').forEach((b) => {
           b.classList.toggle('active', b.getAttribute('data-emode') === uiState.explorerMode);
         });
@@ -7009,7 +7094,7 @@
         const hmLeg = panel.querySelector('#ag-ta-hm-legend');
         const barsWrap = panel.querySelector('#ag-ta-bars-wrap');
         if (hmWrap) hmWrap.hidden = uiState.dailyMode !== 'heatmap';
-        if (hmLeg) hmLeg.hidden = uiState.dailyMode !== 'heatmap';
+        if (hmLeg) hmLeg.setAttribute('data-hidden', uiState.dailyMode !== 'heatmap' ? '1' : '0');
         if (barsWrap) barsWrap.hidden = uiState.dailyMode !== 'bars';
 
         const sessWrap = panel.querySelector('#ag-ta-sessions-wrap');
@@ -7171,6 +7256,7 @@
         const vm = getOrComputeViewModel();
         if (!vm) return;
         renderExplorerSections(panel, vm);
+        scheduleTaFadeSync(panel);
       }
 
       function renderPanel() {
@@ -7223,16 +7309,30 @@
 
         const fBar = panel.querySelector('#ag-ta-filters-bar');
         const fWrap = panel.querySelector('#ag-ta-filter-pills');
+        const fClear = panel.querySelector('#ag-ta-clear-filters');
         if (fBar && fWrap) {
-          fBar.hidden = filterPills.length === 0;
+          const hasFilters = filterPills.length > 0;
+          fBar.hidden = false;
+          fBar.setAttribute('data-active', hasFilters ? '1' : '0');
+          if (fClear) {
+            fClear.disabled = !hasFilters;
+            fClear.tabIndex = hasFilters ? 0 : -1;
+          }
           fWrap.innerHTML = '';
-          for (const fp of filterPills) {
-            const b = document.createElement('button');
-            b.type = 'button';
-            b.className = 'ag-ta-filter-pill';
-            b.innerHTML = `<span>${esc(fp.label)}</span><span style="opacity:0.65;">×</span>`;
-            b.addEventListener('click', fp.clear);
-            fWrap.appendChild(b);
+          if (!hasFilters) {
+            const ph = document.createElement('span');
+            ph.className = 'ag-ta-filter-placeholder';
+            ph.textContent = '暂无筛选条件（点击下方日期、模型、场景或项目即可联动过滤）';
+            fWrap.appendChild(ph);
+          } else {
+            for (const fp of filterPills) {
+              const b = document.createElement('button');
+              b.type = 'button';
+              b.className = 'ag-ta-filter-pill';
+              b.innerHTML = `<span>${esc(fp.label)}</span><span style="opacity:0.65;">×</span>`;
+              b.addEventListener('click', fp.clear);
+              fWrap.appendChild(b);
+            }
           }
         }
 
@@ -7371,6 +7471,8 @@
 
         const modelListEl = panel.querySelector('#ag-ta-model-list');
         if (modelListEl) {
+          modelListEl.classList.toggle('ag-ta-list--model', uiState.modelGroup === 'model');
+          modelListEl.classList.toggle('ag-ta-list--pool', uiState.modelGroup !== 'model');
           if (vm.models.length === 0) {
             modelListEl.innerHTML = `<div class="ag-ta-empty">当前筛选下无模型记录</div>`;
           } else {
@@ -7388,17 +7490,21 @@
                 const respW = Math.max(0, 100 - inW - cacheW - thinkW);
                 const rateStr = m.cacheRate !== null ? `${Math.round(m.cacheRate * 100)}%` : '--';
                 const isSel = uiState.selectedModel === m.key;
+                const isModelGroup = uiState.modelGroup === 'model';
                 return (
                   `<div class="ag-ta-row-btn ${isSel ? 'active' : ''}" data-model-key="${esc(m.key)}">` +
                   `  <div class="ag-ta-row-top">` +
-                  `    <div class="ag-ta-row-name">` +
-                  `      <span title="${esc(m.key)}">${esc(m.key)}</span>` +
-                  (uiState.modelGroup === 'model' ? `<span class="ag-ta-badge">${esc(m.pool)}</span>` : '') +
+                  `    <div class="ag-ta-row-lead">` +
+                  `      <div class="ag-ta-row-name">` +
+                  `        <span title="${esc(m.key)}">${esc(m.key)}</span>` +
+                  `      </div>` +
+                  `      <span class="ag-ta-num-cell ag-ta-mono ag-ta-num-muted ag-ta-row-calls">${m.calls}次</span>` +
                   `    </div>` +
-                  `    <div class="ag-ta-row-nums ag-ta-mono">` +
-                  `      <span style="color:var(--ag-ta-muted);">${m.calls}次 · ${rateStr}</span>` +
-                  `      <span style="font-weight:600;">${esc(taFormatMetricVal(m, uiState.metric))}</span>` +
-                  `      <span style="color:var(--ag-ta-muted);width:38px;text-align:right;">${share.toFixed(1)}%</span>` +
+                  `    <div class="ag-ta-row-nums ${isModelGroup ? 'ag-ta-row-nums--model' : 'ag-ta-row-nums--pool'}">` +
+                  `      <span class="ag-ta-num-cell ag-ta-mono ag-ta-num-muted">${rateStr}</span>` +
+                  `      <span class="ag-ta-num-cell ag-ta-mono ag-ta-num-strong">${esc(taFormatMetricVal(m, uiState.metric))}</span>` +
+                  `      <span class="ag-ta-num-cell ag-ta-mono ag-ta-num-muted">${share.toFixed(1)}%</span>` +
+                  (isModelGroup ? `<span class="ag-ta-badge ag-ta-pool-badge" title="${esc(m.pool)}">${esc(m.pool)}</span>` : '') +
                   `    </div>` +
                   `  </div>` +
                   `  <div class="ag-ta-track">` +
@@ -7441,18 +7547,20 @@
                 return (
                   `<div class="ag-ta-row-btn ${isSel ? 'active' : ''}" data-scen-key="${esc(s.key)}">` +
                   `  <div class="ag-ta-row-top">` +
-                  `    <div class="ag-ta-row-name">` +
-                  `      <span class="ag-ta-swatch" style="background-color:${meta.color};"></span>` +
-                  `      <span class="ag-ta-row-label" title="${esc(meta.label + extra)}">${esc(meta.label + extra)}</span>` +
+                  `    <div class="ag-ta-row-lead">` +
+                  `      <div class="ag-ta-row-name">` +
+                  `        <span class="ag-ta-swatch" style="background-color:${meta.color};"></span>` +
+                  `        <span class="ag-ta-row-label" title="${esc(meta.label + extra)}">${esc(meta.label + extra)}</span>` +
+                  `      </div>` +
+                  `      <span class="ag-ta-num-cell ag-ta-mono ag-ta-num-muted ag-ta-row-calls">${s.calls}次</span>` +
                   `    </div>` +
-                  `    <div class="ag-ta-row-nums ag-ta-mono">` +
-                  `      <span style="color:var(--ag-ta-muted);">${s.calls}次</span>` +
-                  `      <span style="font-weight:600;">${esc(taFormatMetricVal(s, uiState.metric))}</span>` +
-                  `      <span style="color:var(--ag-ta-muted);width:38px;text-align:right;">${share.toFixed(1)}%</span>` +
+                  `    <div class="ag-ta-row-nums ag-ta-row-nums--scen">` +
+                  `      <span class="ag-ta-num-cell ag-ta-mono ag-ta-num-strong">${esc(taFormatMetricVal(s, uiState.metric))}</span>` +
+                  `      <span class="ag-ta-num-cell ag-ta-mono ag-ta-num-muted">${share.toFixed(1)}%</span>` +
                   `    </div>` +
                   `  </div>` +
                   `  <div class="ag-ta-track"><div class="ag-ta-track-inner" style="width:${barW}%;background-color:${meta.color};"></div></div>` +
-                  `  <div style="margin-top:3px;font-size:11px;color:var(--ag-ta-muted);">${esc(meta.desc)}</div>` +
+                  `  <div class="ag-ta-row-desc">${esc(meta.desc)}</div>` +
                   `</div>`
                 );
               })
@@ -7468,6 +7576,7 @@
         }
 
         renderExplorerSections(panel, vm);
+        scheduleTaFadeSync(panel);
       }
 
       function setTokenTabActive(modal, active) {
@@ -7752,6 +7861,17 @@
         cachedBaseVm = { key: '', payloadRef: null, vm: null };
         if (modalObs) modalObs.disconnect();
         if (backdropObs) backdropObs.disconnect();
+        const curPanel = document.getElementById(PANEL_ID);
+        if (curPanel && curPanel._agTaResizeObs) {
+          try {
+            curPanel._agTaResizeObs.disconnect();
+          } catch (e) {}
+          curPanel._agTaResizeObs = null;
+        }
+        if (fadeSyncRaf) {
+          cancelAnimationFrame(fadeSyncRaf);
+          fadeSyncRaf = null;
+        }
         if (syncRaf) cancelAnimationFrame(syncRaf);
         if (pendingOpenTimer) clearTimeout(pendingOpenTimer);
         if (searchDebounceTimer) clearTimeout(searchDebounceTimer);
