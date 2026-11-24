@@ -3744,12 +3744,23 @@
     return primary;
   }
 
+  function hasLocalMetricsDb(cached) {
+    if (!cached || typeof cached !== 'object') return false;
+    if (typeof cached.dbFound === 'boolean') return cached.dbFound;
+    return Boolean(cached.hasData || cached.sig);
+  }
+
   function isBoxActivelyRunning(box) {
     return !!(box && box.querySelector && box.querySelector('[data-testid="input-cancel-button"]'));
   }
 
   function shouldShowPendingForBox(box, cid) {
     if (!cid || !CASCADE_UUID_RE.test(cid)) return false;
+    const cached = metricsById[cid];
+    if (!hasLocalMetricsDb(cached)) {
+      delete pendingRunUntilByCid[cid];
+      return false;
+    }
     if (isBoxActivelyRunning(box)) {
       pendingRunUntilByCid[cid] = Date.now() + 2500;
       return true;

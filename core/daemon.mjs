@@ -2595,7 +2595,7 @@ function parseConversationMetrics(cascadeId, endpointOrDir, precomputedState = n
   if (!DatabaseSync) return null;
   if (!cascadeId || !UUID_RE.test(cascadeId)) return null;
   const state = precomputedState || getDbState(cascadeId, endpointOrDir);
-  if (!state || !state.dbPath || !state.sig) return { cascadeId, hasData: false };
+  if (!state || !state.dbPath || !state.sig) return { cascadeId, hasData: false, dbFound: false };
   const { dbPath, sig } = state;
   const conversationsDir = path.dirname(dbPath);
   const childSnap =
@@ -2740,6 +2740,7 @@ function parseConversationMetrics(cascadeId, endpointOrDir, precomputedState = n
       const emptyPayload = {
         cascadeId,
         hasData: false,
+        dbFound: true,
         sig: compositeSig,
         isDraining: Boolean(childSnap?.isDraining),
         partialStale: Boolean(childSnap?.partialStale)
@@ -2761,6 +2762,7 @@ function parseConversationMetrics(cascadeId, endpointOrDir, precomputedState = n
       const emptyPayload = {
         cascadeId,
         hasData: false,
+        dbFound: true,
         sig: compositeSig,
         isDraining: Boolean(childSnap?.isDraining),
         partialStale: Boolean(childSnap?.partialStale)
@@ -3029,6 +3031,7 @@ function parseConversationMetrics(cascadeId, endpointOrDir, precomputedState = n
     const payload = {
       cascadeId,
       hasData: true,
+      dbFound: true,
       sig: compositeSig,
       isDraining,
       partialStale,
@@ -5371,7 +5374,7 @@ function attachTarget(target, endpoint) {
             continue;
           }
 
-          const renderedSig = `${payload.hasData ? '1' : '0'}\n${payload.inlineHtml || ''}\n${payload.tooltipHtml || ''}`;
+          const renderedSig = `${payload.hasData ? '1' : '0'}:${payload.dbFound ? '1' : '0'}\n${payload.inlineHtml || ''}\n${payload.tooltipHtml || ''}`;
           if (force || renderedSig !== cState.lastRenderedSig) {
             pendingUpdates.push({
               payload,
