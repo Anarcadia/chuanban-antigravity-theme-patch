@@ -6630,17 +6630,25 @@ function ensureWin32CdpShortcutsIfUpdated(forceHeal = false) {
   const psHeal = [
     `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8`,
     `$ErrorActionPreference = 'SilentlyContinue'`,
-    `$dirs = @(`,
-    `  [Environment]::GetFolderPath('Desktop'),`,
-    `  [Environment]::GetFolderPath('CommonDesktopDirectory'),`,
-    `  [Environment]::GetFolderPath('Programs'),`,
-    `  [Environment]::GetFolderPath('CommonPrograms'),`,
-    `  (Join-Path $env:APPDATA 'Microsoft\\Internet Explorer\\Quick Launch\\User Pinned\\TaskBar')`,
-    `) | Where-Object { $_ -and (Test-Path $_) } | Select-Object -Unique`,
+    `$specs = @(`,
+    `  @{ dir = [Environment]::GetFolderPath('Desktop'); recurse = $false; depth = 0 },`,
+    `  @{ dir = [Environment]::GetFolderPath('CommonDesktopDirectory'); recurse = $false; depth = 0 },`,
+    `  @{ dir = [Environment]::GetFolderPath('Programs'); recurse = $true; depth = 2 },`,
+    `  @{ dir = [Environment]::GetFolderPath('CommonPrograms'); recurse = $true; depth = 2 },`,
+    `  @{ dir = (Join-Path $env:APPDATA 'Microsoft\\Internet Explorer\\Quick Launch\\User Pinned\\TaskBar'); recurse = $false; depth = 0 }`,
+    `) | Where-Object { $_.dir -and (Test-Path -LiteralPath $_.dir) }`,
+    `$seenDirs = @{}`,
     `$wsh = New-Object -ComObject WScript.Shell`,
     `$patched = 0`,
-    `foreach ($d in $dirs) {`,
-    `  $lnks = Get-ChildItem -Path $d -Filter '*.lnk' -Recurse -Depth 2 -ErrorAction SilentlyContinue`,
+    `foreach ($spec in $specs) {`,
+    `  $key = ([string]$spec.dir).ToLowerInvariant()`,
+    `  if ($seenDirs.ContainsKey($key)) { continue }`,
+    `  $seenDirs[$key] = $true`,
+    `  $lnks = if ($spec.recurse) {`,
+    `    Get-ChildItem -LiteralPath $spec.dir -Filter '*.lnk' -File -Recurse -Depth $spec.depth -ErrorAction SilentlyContinue`,
+    `  } else {`,
+    `    Get-ChildItem -LiteralPath $spec.dir -Filter '*.lnk' -File -ErrorAction SilentlyContinue`,
+    `  }`,
     `  foreach ($f in $lnks) {`,
     `    $sc = $wsh.CreateShortcut($f.FullName)`,
     `    $tp = [string]$sc.TargetPath`,
@@ -6684,6 +6692,183 @@ function ensureWin32CdpShortcutsIfUpdated(forceHeal = false) {
   try {
     child.stdin?.end();
   } catch {}
+}
+
+const DEFAULT_RELAUNCH_NO_PROXY = 'localhost,127.0.0.1,::1,[::1]';
+
+function tokenizeRelaunchCmdLine(cmdLine) {
+  const src = String(cmdLine || '');
+  const tokens = [];
+  let cur = '';
+  let quote = '';
+  const allowSingleQuote = process.platform !== 'win32';
+  for (let i = 0; i < src.length; i++) {
+    const ch = src[i];
+    if (quote) {
+      if (ch === '\\' && quote === '"' && i + 1 < src.length && src[i + 1] === '"') {
+        cur += '"';
+        i++;
+      } else if (ch === quote) {
+        quote = '';
+      } else {
+        cur += ch;
+      }
+    } else if (ch === '"' || (allowSingleQuote && ch === "'")) {
+      quote = ch;
+    } else if (/\s/.test(ch)) {
+      if (cur.length > 0) {
+        tokens.push(cur);
+        cur = '';
+      }
+    } else {
+      cur += ch;
+    }
+  }
+  if (cur.length > 0) tokens.push(cur);
+  return tokens;
+}
+
+function normalizeProxyUrl(address, defaultScheme = 'http') {
+  const trimmed = String(address || '').trim();
+  if (!trimmed) return '';
+  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed)) return trimmed;
+  return `${defaultScheme}://${trimmed}`;
+}
+
+function parseProxyServerSpec(raw) {
+  const text = String(raw || '').trim();
+  if (!text) return null;
+  if (!text.includes('=')) {
+    const url = normalizeProxyUrl(text, 'http');
+    return url ? { httpProxy: url, httpsProxy: url } : null;
+  }
+  const map = Object.create(null);
+  for (const entry of text.split(';')) {
+    const eq = entry.indexOf('=');
+    if (eq <= 0) continue;
+    const scheme = entry.slice(0, eq).trim().toLowerCase();
+    const val = entry.slice(eq + 1).trim();
+    if (scheme && val) map[scheme] = val;
+  }
+  let httpProxy = map.http ? normalizeProxyUrl(map.http, 'http') : '';
+  let httpsProxy = map.https ? normalizeProxyUrl(map.https, 'http') : '';
+  if (map.socks) {
+    const socks = normalizeProxyUrl(map.socks, 'socks5');
+    if (!httpProxy) httpProxy = socks;
+    if (!httpsProxy) httpsProxy = socks;
+  }
+  if (!httpProxy && httpsProxy) httpProxy = httpsProxy;
+  if (!httpsProxy && httpProxy) httpsProxy = httpProxy;
+  if (!httpProxy && !httpsProxy) {
+    const firstVal = Object.values(map)[0];
+    if (firstVal) {
+      const url = normalizeProxyUrl(firstVal, 'http');
+      httpProxy = url;
+      httpsProxy = url;
+    }
+  }
+  return httpProxy || httpsProxy ? { httpProxy, httpsProxy } : null;
+}
+
+function extractPreservedProxyArgs(cmdLine) {
+  const tokens = tokenizeRelaunchCmdLine(cmdLine);
+  if (tokens.length <= 1) return [];
+  const VALUE_FLAGS = new Set(['--proxy-server', '--proxy-bypass-list', '--proxy-pac-url']);
+  const BOOL_FLAGS = new Set(['--no-proxy-server', '--proxy-auto-detect']);
+  const preserved = [];
+  const seen = new Set();
+  for (let i = 1; i < tokens.length; i++) {
+    const tok = tokens[i];
+    if (!tok.startsWith('--')) continue;
+    const eqIdx = tok.indexOf('=');
+    const flag = (eqIdx >= 0 ? tok.slice(0, eqIdx) : tok).toLowerCase();
+    if (BOOL_FLAGS.has(flag)) {
+      if (!seen.has(flag)) {
+        seen.add(flag);
+        preserved.push(flag);
+      }
+      continue;
+    }
+    if (VALUE_FLAGS.has(flag)) {
+      let val = '';
+      if (eqIdx >= 0) {
+        val = tok.slice(eqIdx + 1).trim();
+      } else if (i + 1 < tokens.length && !tokens[i + 1].startsWith('--')) {
+        val = tokens[++i].trim();
+      }
+      if (val && !seen.has(flag)) {
+        seen.add(flag);
+        preserved.push(`${flag}=${val}`);
+      }
+    }
+  }
+  return preserved;
+}
+
+function readWindowsSystemProxyFresh() {
+  if (process.platform !== 'win32') return null;
+  try {
+    const r = spawnSync('reg', ['query', 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings'], {
+      encoding: 'utf8',
+      windowsHide: true,
+      timeout: 3000
+    });
+    if (r.status !== 0 || !r.stdout) return null;
+    const out = String(r.stdout);
+    const enabledMatch = out.match(/ProxyEnable\s+REG_DWORD\s+0x([0-9a-f]+)/i);
+    if (!enabledMatch || parseInt(enabledMatch[1], 16) !== 1) return null;
+    const serverMatch = out.match(/ProxyServer\s+REG_SZ\s+([^\r\n]+)/i);
+    if (!serverMatch) return null;
+    return parseProxyServerSpec(serverMatch[1]);
+  } catch {
+    return null;
+  }
+}
+
+function redactProxyCredentials(text) {
+  return String(text || '').replace(/(:\/\/)([^@\s/]+)@/g, '$1<redacted>@');
+}
+
+function buildRelaunchPlan(cmdLine) {
+  const preservedProxyArgs = extractPreservedProxyArgs(cmdLine);
+  const args = ['--remote-debugging-port=0', ...preservedProxyArgs];
+  const env = { ...process.env };
+  const hasExplicitNoProxyFlag = preservedProxyArgs.includes('--no-proxy-server');
+  const envAlreadyHasProxy = Boolean(
+    env.HTTP_PROXY || env.HTTPS_PROXY || env.ALL_PROXY || env.http_proxy || env.https_proxy || env.all_proxy
+  );
+
+  let proxySource = 'none';
+  if (hasExplicitNoProxyFlag) {
+    proxySource = 'cli-no-proxy';
+  } else if (envAlreadyHasProxy) {
+    proxySource = 'inherited-env';
+  } else {
+    const proxyServerArg = preservedProxyArgs.find((a) => a.startsWith('--proxy-server='));
+    let resolved = proxyServerArg ? parseProxyServerSpec(proxyServerArg.slice('--proxy-server='.length)) : null;
+    if (resolved) {
+      proxySource = 'cli-proxy-flag';
+    } else if (process.platform === 'win32') {
+      resolved = readWindowsSystemProxyFresh();
+      if (resolved) proxySource = 'win32-system-proxy';
+    }
+    if (resolved) {
+      if (resolved.httpProxy) {
+        env.HTTP_PROXY = resolved.httpProxy;
+        env.http_proxy = resolved.httpProxy;
+      }
+      if (resolved.httpsProxy) {
+        env.HTTPS_PROXY = resolved.httpsProxy;
+        env.https_proxy = resolved.httpsProxy;
+      }
+      if (!env.NO_PROXY && !env.no_proxy) {
+        env.NO_PROXY = DEFAULT_RELAUNCH_NO_PROXY;
+        env.no_proxy = DEFAULT_RELAUNCH_NO_PROXY;
+      }
+    }
+  }
+
+  return { args, env, preservedProxyArgs, proxySource };
 }
 
 function maybeAutoRelaunchColdStartWithoutCdp(reachableChannels = null) {
@@ -6786,13 +6971,16 @@ function maybeAutoRelaunchColdStartWithoutCdp(reachableChannels = null) {
       // 预留极短排空窗口确保 Electron SingletonLock 文件句柄完全释放
       sleepSync(180);
 
+      const relaunchPlan = buildRelaunchPlan(proc.cmd);
       if (process.platform === 'darwin' && proc.appPath) {
-        spawnSync('/usr/bin/open', ['-a', proc.appPath, '--args', '--remote-debugging-port=0'], {
+        spawnSync('/usr/bin/open', ['-a', proc.appPath, '--args', ...relaunchPlan.args], {
           stdio: 'ignore',
           timeout: 5000
         });
       } else if (proc.exePath) {
-        const child = spawn(proc.exePath, ['--remote-debugging-port=0'], {
+        const child = spawn(proc.exePath, relaunchPlan.args, {
+          cwd: os.homedir(),
+          env: relaunchPlan.env,
           detached: true,
           stdio: 'ignore',
           windowsHide: false
@@ -6800,7 +6988,8 @@ function maybeAutoRelaunchColdStartWithoutCdp(reachableChannels = null) {
         child.unref();
       }
 
-      const okMsg = `[Daemon] Cold-start auto-relaunched Antigravity (${proc.channel}, old PID ${proc.pid}, age ${proc.elapsedSec}s) with --remote-debugging-port=0.`;
+      const safeArgsLog = relaunchPlan.args.map(redactProxyCredentials).join(' ');
+      const okMsg = `[Daemon] Cold-start auto-relaunched Antigravity (${proc.channel}, old PID ${proc.pid}, age ${proc.elapsedSec}s) with ${safeArgsLog} (proxy=${relaunchPlan.proxySource}).`;
       console.log(okMsg);
       logDaemonEvent(okMsg);
       if (process.platform === 'win32' && proc.hasUpdatedFlag) {

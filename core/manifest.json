@@ -10,8 +10,8 @@
   },
   "files": {
     "daemon.mjs": {
-      "sha256": "d0b86c7c1aa559b42b5d2fe74eb97b551212b62b74908903fc1e3ce6903a3a94",
-      "bytes": 268552
+      "sha256": "d1cfe74f45e5c0ec5f50f0b3ba2831daa1e95f4782193196b5c41acf845aa461",
+      "bytes": 275139
     },
     "runtime.js": {
       "sha256": "3a785570a41e083a242d0b96780529ee40d1d6584af2eabb034d90166beea6fc",

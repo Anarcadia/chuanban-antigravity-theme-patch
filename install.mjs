@@ -378,6 +378,23 @@ function verifyCoreIntegrity(baseDir = __dirname) {
 // ============================================================================
 // 2. 环境、字体、2.33.0+ CDP Opt-in 状态、M1 启动器与实时 CDP 窗口检查
 // ============================================================================
+function buildWin32LnkSpecsPs() {
+  return [
+    `$lnkSpecs = if ($env:AG_WIN32_LNK_DIRS) {`,
+    `  @($env:AG_WIN32_LNK_DIRS -split ';' | Where-Object { $_ -and (Test-Path -LiteralPath $_) } | ForEach-Object { @{ dir = $_; recurse = $true; depth = 2 } })`,
+    `} else {`,
+    `  @(`,
+    `    @{ dir = [Environment]::GetFolderPath('Desktop'); recurse = $false; depth = 0 },`,
+    `    @{ dir = [Environment]::GetFolderPath('CommonDesktopDirectory'); recurse = $false; depth = 0 },`,
+    `    @{ dir = (Join-Path $env:APPDATA 'Microsoft\\Windows\\Start Menu\\Programs'); recurse = $true; depth = 2 },`,
+    `    @{ dir = (Join-Path $env:ProgramData 'Microsoft\\Windows\\Start Menu\\Programs'); recurse = $true; depth = 2 },`,
+    `    @{ dir = (Join-Path $env:APPDATA 'Microsoft\\Internet Explorer\\Quick Launch\\User Pinned\\TaskBar'); recurse = $false; depth = 0 }`,
+    `  ) | Where-Object { $_.dir -and (Test-Path -LiteralPath $_.dir) }`,
+    `}`,
+    `$seenLnkDirs = @{}`
+  ];
+}
+
 function readHostVersionAndProcesses(channel = 'auto') {
   const home = os.homedir();
   const allowStable = channel !== 'insiders';
@@ -432,6 +449,7 @@ function readHostVersionAndProcesses(channel = 'auto') {
           channel: ch,
           appPath: appMatch[1],
           exePath: `${appMatch[1]}/Contents/MacOS/${appMatch[2]}`,
+          cmd,
           hasCdpFlag: /--remote-debugging-port(?:=|\s|$)/.test(cmd)
         });
       }
@@ -463,8 +481,8 @@ function readHostVersionAndProcesses(channel = 'auto') {
       `if ($procs.Count -eq 0) { $byName = Get-Process -Name 'Antigravity','Antigravity - Insiders' -ErrorAction SilentlyContinue | Group-Object ProcessName; $procs = @(foreach ($g in $byName) { $p = ($g.Group | Where-Object { $_.MainWindowHandle -ne 0 } | Select-Object -First 1); if ($null -eq $p) { $p = $g.Group | Select-Object -First 1 }; if ($null -ne $p) { $exePath = ''; try { $exePath = [string]$p.Path } catch {}; @{ pid = [int]$p.Id; name = ([string]$p.ProcessName + '.exe'); exe = $exePath; cmd = '' } } }) }`,
       `$lnkOk = $false`,
       `$wsh = New-Object -ComObject WScript.Shell`,
-      `$lnkDirs = if ($env:AG_WIN32_LNK_DIRS) { $env:AG_WIN32_LNK_DIRS -split ';' } else { @([Environment]::GetFolderPath('Desktop'), [Environment]::GetFolderPath('CommonDesktopDirectory'), (Join-Path $env:APPDATA 'Microsoft\\Windows\\Start Menu\\Programs'), (Join-Path $env:ProgramData 'Microsoft\\Windows\\Start Menu\\Programs'), (Join-Path $env:APPDATA 'Microsoft\\Internet Explorer\\Quick Launch\\User Pinned\\TaskBar')) }`,
-      `foreach ($d in $lnkDirs) { if ($d -and (Test-Path -LiteralPath $d)) { Get-ChildItem -LiteralPath $d -Filter '*.lnk' -Recurse -ErrorAction SilentlyContinue | ForEach-Object { try { $s = $wsh.CreateShortcut($_.FullName); $leaf = [IO.Path]::GetFileName([string]$s.TargetPath); $matchTarget = (($leaf -ieq 'Antigravity.exe' -and $allowStable) -or ($leaf -ieq 'Antigravity - Insiders.exe' -and $allowInsiders)); if ($matchTarget -and ($s.Arguments -match '--remote-debugging-port')) { $lnkOk = $true } } catch {} } } }`,
+      ...buildWin32LnkSpecsPs(),
+      `foreach ($spec in $lnkSpecs) { $dk = ([string]$spec.dir).ToLowerInvariant(); if ($seenLnkDirs.ContainsKey($dk)) { continue }; $seenLnkDirs[$dk] = $true; $items = if ($spec.recurse) { Get-ChildItem -LiteralPath $spec.dir -Filter '*.lnk' -File -Recurse -Depth $spec.depth -ErrorAction SilentlyContinue } else { Get-ChildItem -LiteralPath $spec.dir -Filter '*.lnk' -File -ErrorAction SilentlyContinue }; foreach ($item in $items) { try { $s = $wsh.CreateShortcut($item.FullName); $leaf = [IO.Path]::GetFileName([string]$s.TargetPath); $matchTarget = (($leaf -ieq 'Antigravity.exe' -and $allowStable) -or ($leaf -ieq 'Antigravity - Insiders.exe' -and $allowInsiders)); if ($matchTarget -and ($s.Arguments -match '--remote-debugging-port')) { $lnkOk = $true } } catch {} } }`,
       `@{ appVersion = $ver; launcherInstalled = $lnkOk; procs = $procs } | ConvertTo-Json -Compress -Depth 4`
     ]
       .filter(Boolean)
@@ -483,12 +501,14 @@ function readHostVersionAndProcesses(channel = 'auto') {
         runningProcesses = rawProcs
           .map((p) => {
             const ch = /insiders/i.test(p.name || p.exe || '') ? 'insiders' : 'stable';
+            const cmd = String(p.cmd || '');
             return {
               pid: Number(p.pid) || 0,
               channel: ch,
               appPath: '',
               exePath: String(p.exe || existingExe || ''),
-              hasCdpFlag: /--remote-debugging-port(?:=|\s|$)/i.test(String(p.cmd || ''))
+              cmd,
+              hasCdpFlag: /--remote-debugging-port(?:=|\s|$)/i.test(cmd)
             };
           })
           .filter(
@@ -550,6 +570,7 @@ function readHostVersionAndProcesses(channel = 'auto') {
           channel: ch,
           appPath: '',
           exePath: binMatch[1],
+          cmd,
           hasCdpFlag: /--remote-debugging-port(?:=|\s|$)/.test(cmd)
         });
       }
@@ -1239,26 +1260,27 @@ function ensureCdpLaunchers(channel = 'auto', options = {}) {
       `$allowStable = $${allowStable ? 'true' : 'false'}`,
       `$allowInsiders = $${allowInsiders ? 'true' : 'false'}`,
       `$wsh = New-Object -ComObject WScript.Shell`,
-      `$rawDirs = if ($env:AG_WIN32_LNK_DIRS) { $env:AG_WIN32_LNK_DIRS -split ';' } else { @(`,
-      `  [Environment]::GetFolderPath('Desktop'),`,
-      `  [Environment]::GetFolderPath('CommonDesktopDirectory'),`,
-      `  (Join-Path $env:APPDATA 'Microsoft\\Windows\\Start Menu\\Programs'),`,
-      `  (Join-Path $env:ProgramData 'Microsoft\\Windows\\Start Menu\\Programs'),`,
-      `  (Join-Path $env:APPDATA 'Microsoft\\Internet Explorer\\Quick Launch\\User Pinned\\TaskBar')`,
-      `) }`,
-      `$dirs = @($rawDirs | Where-Object { $_ -and (Test-Path -LiteralPath $_) })`,
+      ...buildWin32LnkSpecsPs(),
       `$patched = @(); $already = @(); $skipped = @()`,
-      `foreach ($d in $dirs) {`,
-      `  Get-ChildItem -LiteralPath $d -Filter '*.lnk' -Recurse -ErrorAction SilentlyContinue | ForEach-Object {`,
-      `    $lnkPath = $_.FullName`,
+      `foreach ($spec in $lnkSpecs) {`,
+      `  $dk = ([string]$spec.dir).ToLowerInvariant()`,
+      `  if ($seenLnkDirs.ContainsKey($dk)) { continue }`,
+      `  $seenLnkDirs[$dk] = $true`,
+      `  $items = if ($spec.recurse) {`,
+      `    Get-ChildItem -LiteralPath $spec.dir -Filter '*.lnk' -File -Recurse -Depth $spec.depth -ErrorAction SilentlyContinue`,
+      `  } else {`,
+      `    Get-ChildItem -LiteralPath $spec.dir -Filter '*.lnk' -File -ErrorAction SilentlyContinue`,
+      `  }`,
+      `  foreach ($item in $items) {`,
+      `    $lnkPath = $item.FullName`,
       `    try {`,
       `      $sc = $wsh.CreateShortcut($lnkPath)`,
       `      $leaf = [IO.Path]::GetFileName([string]$sc.TargetPath)`,
       `      $isStable = ($leaf -ieq 'Antigravity.exe')`,
       `      $isIns = ($leaf -ieq 'Antigravity - Insiders.exe')`,
-      `      if ((-not $isStable -or -not $allowStable) -and (-not $isIns -or -not $allowInsiders)) { return }`,
+      `      if ((-not $isStable -or -not $allowStable) -and (-not $isIns -or -not $allowInsiders)) { continue }`,
       `      $argsStr = [string]$sc.Arguments`,
-      `      if ($argsStr -match '--remote-debugging-port') { $already += $lnkPath; return }`,
+      `      if ($argsStr -match '--remote-debugging-port') { $already += $lnkPath; continue }`,
       `      $sc.Arguments = if ($argsStr.Trim()) { "$($argsStr.Trim()) --remote-debugging-port=0" } else { '--remote-debugging-port=0' }`,
       `      $sc.Save()`,
       `      $patched += $lnkPath`,
@@ -1352,18 +1374,19 @@ function removeCdpLaunchers() {
       `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8`,
       `$ErrorActionPreference = 'SilentlyContinue'`,
       `$wsh = New-Object -ComObject WScript.Shell`,
-      `$rawDirs = if ($env:AG_WIN32_LNK_DIRS) { $env:AG_WIN32_LNK_DIRS -split ';' } else { @(`,
-      `  [Environment]::GetFolderPath('Desktop'),`,
-      `  [Environment]::GetFolderPath('CommonDesktopDirectory'),`,
-      `  (Join-Path $env:APPDATA 'Microsoft\\Windows\\Start Menu\\Programs'),`,
-      `  (Join-Path $env:ProgramData 'Microsoft\\Windows\\Start Menu\\Programs'),`,
-      `  (Join-Path $env:APPDATA 'Microsoft\\Internet Explorer\\Quick Launch\\User Pinned\\TaskBar')`,
-      `) }`,
-      `$dirs = @($rawDirs | Where-Object { $_ -and (Test-Path -LiteralPath $_) })`,
-      `foreach ($d in $dirs) {`,
-      `  Get-ChildItem -LiteralPath $d -Filter '*.lnk' -Recurse -ErrorAction SilentlyContinue | ForEach-Object {`,
+      ...buildWin32LnkSpecsPs(),
+      `foreach ($spec in $lnkSpecs) {`,
+      `  $dk = ([string]$spec.dir).ToLowerInvariant()`,
+      `  if ($seenLnkDirs.ContainsKey($dk)) { continue }`,
+      `  $seenLnkDirs[$dk] = $true`,
+      `  $items = if ($spec.recurse) {`,
+      `    Get-ChildItem -LiteralPath $spec.dir -Filter '*.lnk' -File -Recurse -Depth $spec.depth -ErrorAction SilentlyContinue`,
+      `  } else {`,
+      `    Get-ChildItem -LiteralPath $spec.dir -Filter '*.lnk' -File -ErrorAction SilentlyContinue`,
+      `  }`,
+      `  foreach ($item in $items) {`,
       `    try {`,
-      `      $sc = $wsh.CreateShortcut($_.FullName)`,
+      `      $sc = $wsh.CreateShortcut($item.FullName)`,
       `      $leaf = [IO.Path]::GetFileName([string]$sc.TargetPath)`,
       `      if (($leaf -ieq 'Antigravity.exe') -or ($leaf -ieq 'Antigravity - Insiders.exe')) {`,
       `        $orig = [string]$sc.Arguments`,
@@ -1597,7 +1620,7 @@ async function runDoctor() {
       cdpStatus: live.reachable ? 'ready' : env.cdpStatus,
       launcherMode,
       launcherInstalled: env.launcherInstalled,
-      runningProcesses: env.runningProcesses,
+      runningProcesses: env.runningProcesses.map(({ cmd: _cmd, ...rest }) => rest),
       remediation,
       portFile: env.portFile,
       portFileExists: env.portFileExists,
@@ -2526,6 +2549,183 @@ function isPidRunning(pid) {
   }
 }
 
+const DEFAULT_RELAUNCH_NO_PROXY = 'localhost,127.0.0.1,::1,[::1]';
+
+function tokenizeRelaunchCmdLine(cmdLine) {
+  const src = String(cmdLine || '');
+  const tokens = [];
+  let cur = '';
+  let quote = '';
+  const allowSingleQuote = process.platform !== 'win32';
+  for (let i = 0; i < src.length; i++) {
+    const ch = src[i];
+    if (quote) {
+      if (ch === '\\' && quote === '"' && i + 1 < src.length && src[i + 1] === '"') {
+        cur += '"';
+        i++;
+      } else if (ch === quote) {
+        quote = '';
+      } else {
+        cur += ch;
+      }
+    } else if (ch === '"' || (allowSingleQuote && ch === "'")) {
+      quote = ch;
+    } else if (/\s/.test(ch)) {
+      if (cur.length > 0) {
+        tokens.push(cur);
+        cur = '';
+      }
+    } else {
+      cur += ch;
+    }
+  }
+  if (cur.length > 0) tokens.push(cur);
+  return tokens;
+}
+
+function normalizeProxyUrl(address, defaultScheme = 'http') {
+  const trimmed = String(address || '').trim();
+  if (!trimmed) return '';
+  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed)) return trimmed;
+  return `${defaultScheme}://${trimmed}`;
+}
+
+function parseProxyServerSpec(raw) {
+  const text = String(raw || '').trim();
+  if (!text) return null;
+  if (!text.includes('=')) {
+    const url = normalizeProxyUrl(text, 'http');
+    return url ? { httpProxy: url, httpsProxy: url } : null;
+  }
+  const map = Object.create(null);
+  for (const entry of text.split(';')) {
+    const eq = entry.indexOf('=');
+    if (eq <= 0) continue;
+    const scheme = entry.slice(0, eq).trim().toLowerCase();
+    const val = entry.slice(eq + 1).trim();
+    if (scheme && val) map[scheme] = val;
+  }
+  let httpProxy = map.http ? normalizeProxyUrl(map.http, 'http') : '';
+  let httpsProxy = map.https ? normalizeProxyUrl(map.https, 'http') : '';
+  if (map.socks) {
+    const socks = normalizeProxyUrl(map.socks, 'socks5');
+    if (!httpProxy) httpProxy = socks;
+    if (!httpsProxy) httpsProxy = socks;
+  }
+  if (!httpProxy && httpsProxy) httpProxy = httpsProxy;
+  if (!httpsProxy && httpProxy) httpsProxy = httpProxy;
+  if (!httpProxy && !httpsProxy) {
+    const firstVal = Object.values(map)[0];
+    if (firstVal) {
+      const url = normalizeProxyUrl(firstVal, 'http');
+      httpProxy = url;
+      httpsProxy = url;
+    }
+  }
+  return httpProxy || httpsProxy ? { httpProxy, httpsProxy } : null;
+}
+
+function extractPreservedProxyArgs(cmdLine) {
+  const tokens = tokenizeRelaunchCmdLine(cmdLine);
+  if (tokens.length <= 1) return [];
+  const VALUE_FLAGS = new Set(['--proxy-server', '--proxy-bypass-list', '--proxy-pac-url']);
+  const BOOL_FLAGS = new Set(['--no-proxy-server', '--proxy-auto-detect']);
+  const preserved = [];
+  const seen = new Set();
+  for (let i = 1; i < tokens.length; i++) {
+    const tok = tokens[i];
+    if (!tok.startsWith('--')) continue;
+    const eqIdx = tok.indexOf('=');
+    const flag = (eqIdx >= 0 ? tok.slice(0, eqIdx) : tok).toLowerCase();
+    if (BOOL_FLAGS.has(flag)) {
+      if (!seen.has(flag)) {
+        seen.add(flag);
+        preserved.push(flag);
+      }
+      continue;
+    }
+    if (VALUE_FLAGS.has(flag)) {
+      let val = '';
+      if (eqIdx >= 0) {
+        val = tok.slice(eqIdx + 1).trim();
+      } else if (i + 1 < tokens.length && !tokens[i + 1].startsWith('--')) {
+        val = tokens[++i].trim();
+      }
+      if (val && !seen.has(flag)) {
+        seen.add(flag);
+        preserved.push(`${flag}=${val}`);
+      }
+    }
+  }
+  return preserved;
+}
+
+function readWindowsSystemProxyFresh() {
+  if (process.platform !== 'win32') return null;
+  try {
+    const r = spawnSync('reg', ['query', 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings'], {
+      encoding: 'utf8',
+      windowsHide: true,
+      timeout: 3000
+    });
+    if (r.status !== 0 || !r.stdout) return null;
+    const out = String(r.stdout);
+    const enabledMatch = out.match(/ProxyEnable\s+REG_DWORD\s+0x([0-9a-f]+)/i);
+    if (!enabledMatch || parseInt(enabledMatch[1], 16) !== 1) return null;
+    const serverMatch = out.match(/ProxyServer\s+REG_SZ\s+([^\r\n]+)/i);
+    if (!serverMatch) return null;
+    return parseProxyServerSpec(serverMatch[1]);
+  } catch {
+    return null;
+  }
+}
+
+function redactProxyCredentials(text) {
+  return String(text || '').replace(/(:\/\/)([^@\s/]+)@/g, '$1<redacted>@');
+}
+
+function buildRelaunchPlan(cmdLine) {
+  const preservedProxyArgs = extractPreservedProxyArgs(cmdLine);
+  const args = ['--remote-debugging-port=0', ...preservedProxyArgs];
+  const env = { ...process.env };
+  const hasExplicitNoProxyFlag = preservedProxyArgs.includes('--no-proxy-server');
+  const envAlreadyHasProxy = Boolean(
+    env.HTTP_PROXY || env.HTTPS_PROXY || env.ALL_PROXY || env.http_proxy || env.https_proxy || env.all_proxy
+  );
+
+  let proxySource = 'none';
+  if (hasExplicitNoProxyFlag) {
+    proxySource = 'cli-no-proxy';
+  } else if (envAlreadyHasProxy) {
+    proxySource = 'inherited-env';
+  } else {
+    const proxyServerArg = preservedProxyArgs.find((a) => a.startsWith('--proxy-server='));
+    let resolved = proxyServerArg ? parseProxyServerSpec(proxyServerArg.slice('--proxy-server='.length)) : null;
+    if (resolved) {
+      proxySource = 'cli-proxy-flag';
+    } else if (process.platform === 'win32') {
+      resolved = readWindowsSystemProxyFresh();
+      if (resolved) proxySource = 'win32-system-proxy';
+    }
+    if (resolved) {
+      if (resolved.httpProxy) {
+        env.HTTP_PROXY = resolved.httpProxy;
+        env.http_proxy = resolved.httpProxy;
+      }
+      if (resolved.httpsProxy) {
+        env.HTTPS_PROXY = resolved.httpsProxy;
+        env.https_proxy = resolved.httpsProxy;
+      }
+      if (!env.NO_PROXY && !env.no_proxy) {
+        env.NO_PROXY = DEFAULT_RELAUNCH_NO_PROXY;
+        env.no_proxy = DEFAULT_RELAUNCH_NO_PROXY;
+      }
+    }
+  }
+
+  return { args, env, preservedProxyArgs, proxySource };
+}
+
 async function runRelaunch() {
   const channel = getArg('--channel', 'auto');
   const force = hasFlag('--force');
@@ -2638,14 +2838,16 @@ async function runRelaunch() {
   // 确保 Electron SingletonLock 完全释放后再启动带 --remote-debugging-port=0 的新宿主实例
   sleepSync(250);
 
+  const relaunchPlan = buildRelaunchPlan(launchTarget.cmd);
   if (process.platform === 'darwin' && launchTarget.appPath) {
-    spawnSync('/usr/bin/open', ['-a', launchTarget.appPath, '--args', '--remote-debugging-port=0'], {
+    spawnSync('/usr/bin/open', ['-a', launchTarget.appPath, '--args', ...relaunchPlan.args], {
       stdio: 'ignore',
       timeout: 5000
     });
   } else if (launchTarget.exePath) {
-    const child = spawn(launchTarget.exePath, ['--remote-debugging-port=0'], {
+    const child = spawn(launchTarget.exePath, relaunchPlan.args, {
       cwd: os.homedir(),
+      env: relaunchPlan.env,
       detached: true,
       stdio: 'ignore',
       windowsHide: false
@@ -2678,6 +2880,8 @@ async function runRelaunch() {
       {
         ok,
         stoppedPids: procsToStop.map((p) => p.pid),
+        proxySource: relaunchPlan.proxySource,
+        preservedProxyArgs: relaunchPlan.preservedProxyArgs.map(redactProxyCredentials),
         version: live.state?.version || null,
         themeStyle: Boolean(live.state?.hasStyle),
         dictCount: live.state?.dictCount || 0,
