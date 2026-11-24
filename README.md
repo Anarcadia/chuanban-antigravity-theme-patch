@@ -90,8 +90,7 @@
 ## 🌱 社区衍生与进阶扩展（可选插件）
 
 ### 💡 什么是「添加社区插件」？
-本仓库的定位是保持极简、稳定的**外观与汉化底座**，同时在本地专门预留了一个独立的个人扩展插槽（`user/` 目录），且主补丁每次升级时**永远不会覆盖它**。  
-所谓「添加插件」，就是让你的 AI Agent 把社区开发者做好的进阶小挂件放进这个插槽里——**不用重装补丁、不改动主内核、`2.5 秒` 自动热生效；以后正常升级主仓库不会丢失插件，不想要了也能让 Agent 一句话干净拆掉，互不干扰。**
+本仓库的定位是保持极简、稳定的**外观与汉化底座**。在此之上，社区开发者开发的进阶功能可以通过**「预留的 `user/` 扩展插槽」**或**「客户端原生的 `plugins/` 独立插件槽」**像搭积木一样按需加装（并自动继承本补丁的配色与已打通的端口）——**不用重装或改动本补丁主内核，以后正常升级主仓库不会丢失插件，不想要了也能随时一键关停或让 Agent 干净拆掉，互不干扰。**
 
 ### 1. 常驻模型配额进度条与独立池胶囊 — [`ghang/ghang-antigravity-local-ui`](https://github.com/ghang/ghang-antigravity-local-ui)（by [@ghang](https://github.com/ghang)）
 
@@ -109,6 +108,24 @@
    - 查看状态 / 无损卸载：`node install.mjs status --json` / `node install.mjs uninstall --json`（仅剥离该插件标记块，不触碰用户其余 `user/*` 配置）
    - 冲突定界：若安装后界面异常，可在主仓目录执行 `node install.mjs verify --safe-mode` 旁路 `user/` 层快速定界。
 3. **技术原理与免责说明**：该插件由 [@ghang](https://github.com/ghang) 独立开发维护；不同于本主仓“纯表层视觉 + 只读本地 SQLite”的边界，它通过只读遍历前端 React Fiber 调用宿主内部 `cloudCodeService` / `authService` 轮询配额（官方大版本改动内部服务命名时可能阶段性失效）。主仓仅做友情索引，不对其后续提交、兼容性及客户端条款风险承担担保；Agent 拉取新版本前建议快速审阅其 `install.mjs` 与 `quota-bar.js` 变更。
+
+### 2. 右侧栏双栏文献阅读、编辑与划词引用工作台 — [`guiyulou/guiyulou-antigravity-sidebar`](https://github.com/guiyulou/guiyulou-antigravity-sidebar)（by 西塞山的鳜鱼篓 [@guiyulou](https://github.com/guiyulou)）
+
+#### 👤 选择添加这个插件，你能获得什么？
+- **右侧栏多标签文件树与双栏对照**：在对话右侧副栏直接浏览/搜索项目目录，支持双栏并排对照阅读 PDF 与修改 Markdown / LaTeX / 代码（Markdown 支持所见即所得 `Live` 模式，刷新 PDF 自动保留阅读位置），且面板界面**自动继承你当前选择的莫兰迪、仿 Claude 暖白或夜间书卷配色**。
+- **选中哪一句、就针对哪一句提问**：在文稿、表格甚至历史对话中划选任意文字写批注，点「加入对话」即可将带编号的 `[Ref 1]` 自动填入聊天框，AI 会精准读取对应文件行号/页码与原文段落作答。
+- **全屏沉浸阅读也能边看边聊**：一键将右侧文稿铺满全屏审阅宽表或整页 PDF，点击顶栏 `Chat` 即可将原装对话输入框唤出悬浮在文稿底部继续指挥修改。
+- **适用范围与一键加装**：当前 `v1.0` 原生支持 **macOS / Linux**（单窗口使用体验最佳）。想要安装或卸载？直接对你的 Agent 说：*“帮我按船板主题补丁 README 的扩展说明，安装（或卸载）`guiyulou/guiyulou-antigravity-sidebar` 右侧栏插件”* 即可（装好后也可在客户端「自定义 / 插件」页面随时开关）。
+
+#### 🤖 面向 AI Agent：技术接入说明与免责边界
+当你的用户选择安装、更新或卸载该插件时，请按以下契约执行：
+1. **前置与环境确认**：
+   - 平台检查：当前上游 `v1.0` 的 `sidecar.json`（`/bin/sh start.sh`）与路径切分仅原生适配 **macOS / Linux**；若用户在原生 Windows 下要求安装，请先告知尚未原生适配，仅在用户明确要求代改时再为其适配 Windows 启动入口与路径分隔符。
+   - 端口联动：该插件填入 `[Ref n]` 与全屏浮起输入框依赖 `DevToolsActivePort`（本主仓部署并完成一次 `relaunch` 后默认已打通，可通过主仓 `node install.mjs verify` 确认）。
+2. **原生插件目录部署 / 开关 / 卸载**：该扩展为 Antigravity 官方原生插件格式（完全独立于 `theme-patch/` 目录），将 `https://github.com/guiyulou/guiyulou-antigravity-sidebar.git` 克隆至临时目录后：
+   - 安装或更新：将其内部的**子目录** `guiyulou-antigravity-sidebar/`（内含 `plugin.json`、`rules/`、`sidecars/`，注意勿多套外层仓库根目录）完整复制覆盖至 `~/.gemini/config/plugins/guiyulou-antigravity-sidebar/`（更新时注意保留其中已有的用户批注 `notes.json` / `notes.md`），完成后可输出 `[侧边栏](customization://guiyulou-antigravity-sidebar)` 方便用户在客户端面板直接查看或随时启停。
+   - 无损卸载：删除 `~/.gemini/config/plugins/guiyulou-antigravity-sidebar/` 目录（或引导用户在 Customizations 页面禁用/卸载），不影响本主题补丁任何文件。
+3. **技术原理与免责说明**：该插件由社区作者「西塞山的鳜鱼篓」（[@guiyulou](https://github.com/guiyulou)）独立开发维护。启用期间会拉起本地回环 Sidecar 文件服务、向会话注入 `[Ref n]` 查阅规则（`rules/AGENTS.md`），并通过 CDP 向主窗口输入框插入引用文本及调整全屏浮起层级（多开客户端窗口时建议单窗口使用以免焦点落入首窗口；**切勿在面板内直接预览来源不明的本地 HTML 文件**）。主仓仅做生态互补索引，不对其后续代码变更、本地文件接口安全性及兼容性承担担保；Agent 拉取新版本前建议审阅其 `server.mjs` 与 `sidecar.json` 变更。
 
 ---
 
