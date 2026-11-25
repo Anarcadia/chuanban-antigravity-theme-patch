@@ -121,6 +121,7 @@
       tokenAnalytics: true,
       googleFonts: true,
       composerWaxSeal: true,
+      contextMenu: true,
       deadlockHealer: true,
       coldBootHealer: true,
       zoomShortcuts: true,
@@ -279,6 +280,16 @@
     }
   }
 
+  function cleanupContextMenuDom() {
+    try {
+      const m = document.getElementById('ag-custom-context-menu');
+      if (m) m.remove();
+      const s = document.getElementById('ag-custom-context-submenu');
+      if (s) s.remove();
+      window.__ag_core_context_menu_active = false;
+    } catch (e) {}
+  }
+
   const SELECTORS = Object.assign(
     {
       inputBoxId: 'antigravity.agentSidePanelInputBox',
@@ -327,6 +338,7 @@
       staleTt.remove();
     }
     cleanupTokenAnalyticsDom();
+    cleanupContextMenuDom();
   } catch (e) {}
   if (window.__ag_dcl_handler) {
     try {
@@ -745,6 +757,7 @@
     window.__ag_watched_cascade_sig = '';
     window.__ag_last_metrics = null;
     cleanupTokenAnalyticsDom();
+    cleanupContextMenuDom();
     const themeBtnTt = document.getElementById('ag-theme-btn-tooltip');
     if (themeBtnTt) themeBtnTt.remove();
     if (window.__ag_theme_btn_tt_timer) {
@@ -8813,6 +8826,1622 @@
   }
   /* __AG_TOKEN_ANALYTICS_JS_END__ */
 
+  /* __AG_CONTEXT_MENU_JS_START__ */
+  if (!IS_SWARM_PLUGIN_FRAME && window.top === window && ENABLED && MODULES.contextMenu !== false) {
+    (() => {
+      cleanupContextMenuDom();
+      window.__ag_core_context_menu_active = true;
+
+      const MENU_ID = 'ag-custom-context-menu';
+      const SUBMENU_ID = 'ag-custom-context-submenu';
+      const IS_MAC = DETECTED_OS === 'darwin';
+      const IS_WIN = DETECTED_OS === 'win32';
+      const MOD = IS_MAC ? '⌘' : 'Ctrl+';
+
+      let ideInstalled = false;
+      try {
+        window.ide?.isInstalled?.().then((v) => {
+          ideInstalled = Boolean(v);
+        }).catch(() => {});
+      } catch (e) {}
+
+      const PASS_THROUGH_SEL = [
+        '.monaco-editor',
+        '.monaco-diff-editor',
+        '.xterm',
+        '[data-testid="conversation-list-sidebar"]',
+        '[data-testid="conversation-row-sidebar"]',
+        '[data-testid="conversation-row-history"]',
+        '[data-testid^="sidebar-agent-row-"]',
+        '.agy-titlebar',
+        'header',
+        'nav',
+        '[role="menubar"]',
+        '[role="tablist"]',
+        '[role="tab"]'
+      ].join(', ');
+
+      const EDITABLE_SEL = [
+        '[data-lexical-editor="true"]',
+        '[contenteditable="true"]',
+        'textarea',
+        'input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="file"])'
+      ].join(', ');
+
+      const COMPOSER_SEL = [
+        '[id="antigravity.agentSidePanelInputBox"]',
+        '[data-testid="side-question-tab-composer"]',
+        '[data-side-panel-composer]',
+        '.surface-composer'
+      ].join(', ');
+
+      const CHAT_ZONE_SEL = [
+        '[data-markdown-root]',
+        '[data-testid="conversation-view"]',
+        '[data-testid="user-message-content"]',
+        '[data-testid="side-question-tab-content"]',
+        '[data-testid="side-question-tab-conversation"]',
+        '[data-testid="subagent-tab-conversation"]',
+        '[data-main-content-body]',
+        '.agy-user-bubble',
+        '.prose',
+        '.markdown',
+        'article'
+      ].join(', ');
+
+      const FILE_HINT_SEL = [
+        '.inline-pill',
+        '[class*="file-title"]',
+        '[class*="file-path"]',
+        '[data-testid="doc-row-title"]',
+        '[data-testid="overview-panel-host"]',
+        '[data-side-panel-body]'
+      ].join(', ');
+
+      const FILE_CLICKABLE_SEL =
+        'a, button, [role="button"], [role="listitem"], [role="treeitem"], .inline-pill, [class*="file-title"], [class*="cursor-pointer"]';
+
+      const WIN_ABS_RE = /^[A-Za-z]:[\\/]/;
+      const UNC_ABS_RE = /^\\\\[^\\]+\\[^\\]+/;
+      const POSIX_ABS_RE =
+        /^\/(?:(?:Users|Volumes|Applications|Library|System|Network|Developer|private|home|root|var|tmp|opt|etc|mnt|media|srv|usr|run|nix|proc|sys|boot|bin|sbin|lib|lib64|snap|workspaces?|app|apps|data|code|projects?|repos?|work|src|scratch|storage|kaggle|content|nfs|afs|gpfs|lustre|host)\/[^\0\r\n]+|(?!(?:\/|[A-Za-z]:[\\/]|c\/[0-9a-fA-F-]{8,}(?:\/|$)|api\/))[A-Za-z0-9._-]+\/(?:[^\0\r\n/]+\/)*[^\0\r\n/]+\.[A-Za-z0-9]{1,16}(?::\d+(?::\d+)?|#[Ll]\d+(?:-[Ll]?\d+)?)?)/;
+
+      function isAbsolutePath(str) {
+        if (typeof str !== 'string') return false;
+        const s = str.trim();
+        return WIN_ABS_RE.test(s) || UNC_ABS_RE.test(s) || POSIX_ABS_RE.test(s);
+      }
+
+      function isFileOrUri(str) {
+        if (typeof str !== 'string') return false;
+        const s = str.trim();
+        return /^(?:file|vscode-file):\/\//i.test(s) || isAbsolutePath(s);
+      }
+
+      function parseLineAnchor(hashStr) {
+        if (!hashStr) return { lineStart: null, lineEnd: null };
+        const m = String(hashStr).match(/^#?L(\d+)(?:-L?(\d+))?/i);
+        if (!m) return { lineStart: null, lineEnd: null };
+        const lineStart = Number(m[1]);
+        const lineEnd = m[2] ? Number(m[2]) : null;
+        return {
+          lineStart: Number.isFinite(lineStart) ? lineStart : null,
+          lineEnd: Number.isFinite(lineEnd) ? lineEnd : null
+        };
+      }
+
+      function formatLineLabel(lineStart, lineEnd) {
+        if (!lineStart) return '';
+        return lineEnd && lineEnd !== lineStart ? `L${lineStart}-${lineEnd}` : `L${lineStart}`;
+      }
+
+      function normalizeFileInput(rawInput) {
+        if (typeof rawInput !== 'string') return null;
+        let raw = rawInput.trim();
+        if (!raw) return null;
+
+        let lineStart = null;
+        let lineEnd = null;
+        let cleanFileUrl = '';
+        let fsPath = '';
+
+        if (/^(?:file|vscode-file):\/\//i.test(raw)) {
+          let u;
+          try {
+            u = new URL(raw);
+          } catch (e) {
+            return null;
+          }
+          if (u.hash) {
+            const parsedLine = parseLineAnchor(u.hash);
+            lineStart = parsedLine.lineStart;
+            lineEnd = parsedLine.lineEnd;
+          }
+          let pathname = u.pathname || '';
+          if (u.protocol.toLowerCase() === 'vscode-file:') {
+            pathname = pathname.replace(/^\/vscode-app(?=\/)/i, '');
+          }
+          pathname = pathname.replace(/^\/([A-Za-z])%3A(\/|$)/i, '/$1:$2');
+          if (!pathname || pathname === '/') return null;
+
+          let decodedPath;
+          try {
+            decodedPath = decodeURIComponent(pathname);
+          } catch (e) {
+            decodedPath = pathname;
+          }
+
+          if (u.protocol.toLowerCase() === 'file:' && u.hostname && u.hostname.toLowerCase() !== 'localhost') {
+            cleanFileUrl = `file://${u.hostname}${pathname}`;
+            fsPath = `\\\\${u.hostname}${decodedPath.replace(/\//g, '\\')}`;
+          } else {
+            cleanFileUrl = `file://${pathname}`;
+            if (/^\/[A-Za-z]:(?:\/|$)/.test(decodedPath)) {
+              fsPath = decodedPath.slice(1).replace(/\//g, '\\');
+            } else {
+              fsPath = decodedPath;
+            }
+          }
+        } else if (isAbsolutePath(raw)) {
+          const hashMatch = raw.match(/^(.*?\S)(#L\d+(?:-L?\d+)?)$/i);
+          if (hashMatch && isAbsolutePath(hashMatch[1])) {
+            const parsedHash = parseLineAnchor(hashMatch[2]);
+            if (parsedHash.lineStart) {
+              raw = hashMatch[1];
+              lineStart = parsedHash.lineStart;
+              lineEnd = parsedHash.lineEnd;
+            }
+          } else {
+            const lineMatch = raw.match(/^(.*?\S):(\d+)(?::\d+)?$/);
+            if (lineMatch && isAbsolutePath(lineMatch[1])) {
+              raw = lineMatch[1];
+              const parsedLine = Number(lineMatch[2]);
+              if (Number.isFinite(parsedLine)) lineStart = parsedLine;
+            }
+          }
+
+          if (WIN_ABS_RE.test(raw)) {
+            const drive = `${raw[0].toUpperCase()}:`;
+            const rest = raw.slice(2).replace(/\\/g, '/').replace(/^\/+/, '');
+            const encodedRest = rest
+              .split('/')
+              .filter((s) => s.length > 0)
+              .map((seg) => encodeURIComponent(seg))
+              .join('/');
+            cleanFileUrl = `file:///${drive}/${encodedRest}`;
+            fsPath = `${drive}\\${rest.replace(/\//g, '\\')}`;
+          } else if (UNC_ABS_RE.test(raw)) {
+            const uncParts = raw.replace(/^\\\\+/, '').split(/[\\/]+/);
+            const host = uncParts.shift() || '';
+            const encodedRest = uncParts.map((seg) => encodeURIComponent(seg)).join('/');
+            cleanFileUrl = `file://${host}/${encodedRest}`;
+            fsPath = `\\\\${host}\\${uncParts.join('\\')}`;
+          } else {
+            const cleanPosix = raw.replace(/\/+/g, '/');
+            const encoded = cleanPosix
+              .split('/')
+              .map((seg) => encodeURIComponent(seg))
+              .join('/');
+            cleanFileUrl = `file://${encoded}`;
+            fsPath = cleanPosix;
+          }
+        } else {
+          return null;
+        }
+
+        const baseParts = fsPath.split(/[\\/]+/).filter(Boolean);
+        const fileName = baseParts.length > 0 ? baseParts[baseParts.length - 1] : fsPath;
+        if (!fileName) return null;
+
+        return {
+          fsPath,
+          cleanFileUrl,
+          fileName,
+          lineStart,
+          lineEnd,
+          lineLabel: formatLineLabel(lineStart, lineEnd)
+        };
+      }
+
+      function buildEditorUri(scheme, fsPath, line) {
+        const slash = String(fsPath || '').replace(/\\/g, '/');
+        const parts = slash.split('/');
+        const encoded = parts
+          .map((seg, i) => (i === 0 && /^[A-Za-z]:$/.test(seg) ? seg : encodeURIComponent(seg)))
+          .join('/');
+        const normalized = encoded.startsWith('/') ? encoded : `/${encoded}`;
+        return `${scheme}://file${normalized}${line ? `:${line}:1` : ''}`;
+      }
+
+      function extractCandidateFromValue(val, depth = 0) {
+        if (!val || depth > 2) return null;
+        if (typeof val === 'string') {
+          return isFileOrUri(val) ? val : null;
+        }
+        if (typeof val === 'object') {
+          if (val.scheme === 'file' || val.scheme === 'vscode-file') {
+            if (typeof val.fsPath === 'string' && isAbsolutePath(val.fsPath)) return val.fsPath;
+            if (typeof val.path === 'string' && isAbsolutePath(val.path)) return val.path;
+          }
+          const keys = ['uri', 'fileUri', 'href', 'filePath', 'fullPath', 'absPath', 'absolutePath', 'fsPath', 'path'];
+          for (const k of keys) {
+            if (k === 'href' && typeof val[k] === 'string' && !/^(?:file|vscode-file):\/\//i.test(val[k].trim())) {
+              continue;
+            }
+            const hit = extractCandidateFromValue(val[k], depth + 1);
+            if (hit) return hit;
+          }
+          for (const nestedKey of ['file', 'item', 'node', 'entry']) {
+            if (val[nestedKey] && typeof val[nestedKey] === 'object') {
+              const hit = extractCandidateFromValue(val[nestedKey], depth + 1);
+              if (hit) return hit;
+            }
+          }
+        }
+        return null;
+      }
+
+      function findFiberKey(el) {
+        if (!el || typeof el !== 'object') return null;
+        const keys = Object.keys(el);
+        for (let i = 0; i < keys.length; i++) {
+          if (keys[i].startsWith('__reactFiber$') || keys[i].startsWith('__reactInternalInstance$')) {
+            return keys[i];
+          }
+        }
+        return null;
+      }
+
+      function resolveFileFromDom(target) {
+        let el = target;
+        for (let i = 0; i < 6 && el && el instanceof Element; i++) {
+          if (
+            el === document.body ||
+            el.matches('[data-testid="conversation-view"], [data-main-content-body], [data-side-panel-body]')
+          ) {
+            break;
+          }
+          const rawHref = el.tagName === 'A' ? el.getAttribute('href') : null;
+          const safeHref = rawHref && /^(?:file|vscode-file):\/\//i.test(rawHref.trim()) ? rawHref : null;
+          const candidates = [
+            el.getAttribute('data-uri'),
+            safeHref,
+            el.getAttribute('data-file-path'),
+            el.getAttribute('data-path')
+          ];
+          if (el.matches('.inline-pill, [class*="file-title"], [class*="file-path"], [data-testid="doc-row-title"]')) {
+            const title = el.getAttribute('title');
+            if (isAbsolutePath(title)) candidates.push(title);
+          }
+          for (const c of candidates) {
+            const parsed = normalizeFileInput(c);
+            if (parsed) {
+              return {
+                ...parsed,
+                clickableEl: el.closest(FILE_CLICKABLE_SEL) || el
+              };
+            }
+          }
+          el = el.parentElement;
+        }
+        return null;
+      }
+
+      function resolveFileFromFiber(target) {
+        if (!target.closest(FILE_HINT_SEL)) return null;
+        if (!target.closest('.inline-pill, [class*="file-title"], [class*="file-path"], [data-testid="doc-row-title"], button, a, [role="button"], [role="listitem"], [role="treeitem"], li, [class*="cursor-pointer"]')) {
+          return null;
+        }
+        let el = target;
+        for (let d = 0; d < 5 && el && el instanceof Element; d++) {
+          if (
+            el === document.body ||
+            el.matches('[data-testid="overview-panel-host"], [data-side-panel-body], [data-testid="conversation-view"], [data-main-content-body]')
+          ) {
+            break;
+          }
+          const fKey = findFiberKey(el);
+          if (fKey) {
+            let fiber = el[fKey];
+            for (let f = 0; f < 6 && fiber; f++) {
+              const props = fiber.memoizedProps;
+              if (props && typeof props === 'object') {
+                const cand = extractCandidateFromValue(props, 0);
+                const parsed = normalizeFileInput(cand);
+                if (parsed) {
+                  return {
+                    ...parsed,
+                    clickableEl: el.closest(FILE_CLICKABLE_SEL) || el
+                  };
+                }
+              }
+              fiber = fiber.return;
+            }
+          }
+          el = el.parentElement;
+        }
+        return null;
+      }
+
+      function resolveFileTarget(target) {
+        return resolveFileFromDom(target) || resolveFileFromFiber(target);
+      }
+
+      const ICONS = {
+        fileOpen:
+          '<path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/>',
+        openIn:
+          '<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>',
+        folder:
+          '<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>',
+        path:
+          '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9.5 16.5 14.5 11.5"/>',
+        copy:
+          '<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',
+        globe:
+          '<circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>',
+        link:
+          '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>',
+        code:
+          '<polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>',
+        cut:
+          '<circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.12" y2="15.88"/><line x1="14.47" y1="14.48" x2="20" y2="20"/><line x1="8.12" y1="8.12" x2="12" y2="12"/>',
+        paste:
+          '<rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>',
+        selectAll:
+          '<path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/><line x1="8" y1="12" x2="16" y2="12"/>',
+        image:
+          '<rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>',
+        download:
+          '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>'
+      };
+
+      function createIconSvg(name) {
+        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        svg.setAttribute('class', 'ag-ctx-icon');
+        svg.setAttribute('viewBox', '0 0 24 24');
+        svg.setAttribute('fill', 'none');
+        svg.setAttribute('stroke', 'currentColor');
+        svg.setAttribute('stroke-width', '1.65');
+        svg.setAttribute('stroke-linecap', 'round');
+        svg.setAttribute('stroke-linejoin', 'round');
+        svg.setAttribute('aria-hidden', 'true');
+        svg.innerHTML = ICONS[name] || ICONS.copy;
+        return svg;
+      }
+
+      function getDetectedExternalEditors(isSsh) {
+        const list = [];
+        const seen = new Set();
+        const addEditor = (item, viaUri) => {
+          if (!item || typeof item !== 'object') return;
+          const label = typeof item.label === 'string' ? item.label.trim() : '';
+          const rawId = typeof item.id === 'string' ? item.id.trim().toLowerCase() : '';
+          const rawScheme = typeof item.scheme === 'string' ? item.scheme.trim() : '';
+          const validScheme = /^[a-z][a-z0-9+.-]*$/i.test(rawScheme) ? rawScheme : '';
+          const key = rawId || validScheme.toLowerCase();
+          if (!label || !key || seen.has(key)) return;
+          if (viaUri && !validScheme) return;
+          seen.add(key);
+          list.push({ id: key, label, scheme: validScheme, viaUri: Boolean(viaUri) });
+        };
+
+        if (ideInstalled) {
+          addEditor({ id: 'antigravity', label: 'Antigravity IDE', scheme: 'antigravity' }, true);
+        }
+
+        if (!isSsh) {
+          const daemonEditors = Array.isArray(boot.installedEditors) ? boot.installedEditors : [];
+          for (let i = 0; i < daemonEditors.length; i++) {
+            addEditor(daemonEditors[i], false);
+          }
+          const customEditors = Array.isArray(boot.config?.installedEditors) ? boot.config.installedEditors : [];
+          for (let i = 0; i < customEditors.length; i++) {
+            addEditor(customEditors[i], true);
+          }
+        }
+        return list;
+      }
+
+      function openInExternalEditor(ed, file, isSsh) {
+        if (!ed || !file) return;
+        if (!ed.viaUri && !isSsh && typeof window.__agOpenInEditor === 'function') {
+          return window.__agOpenInEditor(
+            JSON.stringify({
+              id: ed.id,
+              fileUrl: file.cleanFileUrl,
+              line: file.lineStart || 0
+            })
+          );
+        }
+        if (ed.scheme) {
+          return openExternalUri(buildEditorUri(ed.scheme, file.fsPath, file.lineStart));
+        }
+      }
+
+      function contextStrings() {
+        const en = isUiEnglish();
+        if (!en && INSTALLED_LOCALE === 'ja') {
+          const revealInOsJa = IS_MAC
+            ? 'Finder で表示'
+            : IS_WIN
+            ? 'エクスプローラーで表示'
+            : 'ファイルマネージャーで表示';
+          return {
+            openInEditor: 'エディターで開く',
+            openPreview: 'プレビューで開く',
+            openIn: '外部アプリで開く',
+            openInSingle: (label) => `${label} で開く`,
+            revealInOs: revealInOsJa,
+            copyPath: 'パスをコピー',
+            copyFileName: 'ファイル名をコピー',
+            copyBrowserUrl: 'ブラウザー URL をコピー',
+            openInBrowser: 'ブラウザーで開く',
+            copyLink: 'リンクをコピー',
+            copySelection: '選択範囲をコピー',
+            copyLinkText: 'リンクテキストをコピー',
+            copy: 'コピー',
+            copyCodeBlock: 'コードブロックをコピー',
+            copyImage: '画像をコピー',
+            saveImage: '画像を保存',
+            openImageInBrowser: 'ブラウザーで画像を開く',
+            copyImageUrl: '画像の URL をコピー',
+            cut: '切り取り',
+            paste: '貼り付け',
+            selectAll: 'すべて選択'
+          };
+        }
+        const revealInOs = IS_MAC
+          ? en ? 'Reveal in Finder' : '在访达中显示'
+          : IS_WIN
+          ? en ? 'Show in File Explorer' : '在文件资源管理器中显示'
+          : en ? 'Show in File Manager' : '在文件管理器中显示';
+
+        return {
+          openInEditor: en ? 'Open in Editor' : '在编辑器中打开',
+          openPreview: en ? 'Open Preview' : '在预览面板中打开',
+          openIn: en ? 'Open In' : '打开方式',
+          openInSingle: (label) => (en ? `Open in ${label}` : `在 ${label} 中打开`),
+          revealInOs,
+          copyPath: en ? 'Copy Path' : '复制路径',
+          copyFileName: en ? 'Copy File Name' : '复制文件名',
+          copyBrowserUrl: en ? 'Copy Browser URL' : '复制浏览器地址',
+          openInBrowser: en ? 'Open in Browser' : '在浏览器中打开',
+          copyLink: en ? 'Copy Link' : '复制链接',
+          copySelection: en ? 'Copy Selection' : '复制选中文本',
+          copyLinkText: en ? 'Copy Link Text' : '复制链接文字',
+          copy: en ? 'Copy' : '复制',
+          copyCodeBlock: en ? 'Copy Code Block' : '复制代码块',
+          copyImage: en ? 'Copy Image' : '复制图片',
+          saveImage: en ? 'Save Image' : '另存图片',
+          openImageInBrowser: en ? 'Open Image in Browser' : '在浏览器中打开图片',
+          copyImageUrl: en ? 'Copy Image Address' : '复制图片地址',
+          cut: en ? 'Cut' : '剪切',
+          paste: en ? 'Paste' : '粘贴',
+          selectAll: en ? 'Select All' : '全选'
+        };
+      }
+
+      function createChevronSvg() {
+        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        svg.setAttribute('class', 'ag-ctx-chevron');
+        svg.setAttribute('viewBox', '0 0 24 24');
+        svg.setAttribute('fill', 'none');
+        svg.setAttribute('stroke', 'currentColor');
+        svg.setAttribute('stroke-width', '2');
+        svg.setAttribute('stroke-linecap', 'round');
+        svg.setAttribute('stroke-linejoin', 'round');
+        svg.setAttribute('aria-hidden', 'true');
+        svg.innerHTML = '<polyline points="9 18 15 12 9 6"/>';
+        return svg;
+      }
+
+      function openExternalUri(uri) {
+        if (!uri) return;
+        if (window.electronNative && typeof window.electronNative.openExternal === 'function') {
+          return window.electronNative.openExternal(uri);
+        }
+        window.open(uri, '_blank', 'noopener,noreferrer');
+      }
+
+      async function copyText(text) {
+        if (!text) return false;
+        try {
+          if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+            await navigator.clipboard.writeText(text);
+            return true;
+          }
+        } catch (e) {}
+        try {
+          const ta = document.createElement('textarea');
+          ta.value = text;
+          ta.style.position = 'fixed';
+          ta.style.left = '-9999px';
+          ta.style.top = '-9999px';
+          ta.style.opacity = '0';
+          document.body.appendChild(ta);
+          ta.focus({ preventScroll: true });
+          ta.select();
+          const ok = document.execCommand('copy');
+          ta.remove();
+          return ok;
+        } catch (e) {
+          return false;
+        }
+      }
+
+      function resolveChatImageTarget(target) {
+        const img = target && target.closest ? target.closest('img') : null;
+        if (!img) return null;
+        if (img.closest('[aria-hidden="true"], .inline-pill, [data-ag-metrics-pill], #ag-live-metrics-pill')) {
+          return null;
+        }
+        const rawSrc = String(img.currentSrc || img.getAttribute('src') || '').trim();
+        if (!rawSrc) return null;
+        if (img.closest('button, [role="button"], summary, select')) {
+          const rect = typeof img.getBoundingClientRect === 'function' ? img.getBoundingClientRect() : { width: 0, height: 0 };
+          const w = Math.max(rect.width || 0, img.naturalWidth || 0);
+          const h = Math.max(rect.height || 0, img.naturalHeight || 0);
+          if (w < 32 || h < 32) return null;
+        }
+        return {
+          img,
+          src: rawSrc,
+          localFile: normalizeFileInput(rawSrc)
+        };
+      }
+
+      function deriveImageDownloadName(rawSrc, mimeType = '') {
+        const mimeLow = String(mimeType || '').toLowerCase();
+        const extFromMime = mimeLow.includes('jpeg') || mimeLow.includes('jpg')
+          ? 'jpg'
+          : mimeLow.includes('webp')
+          ? 'webp'
+          : mimeLow.includes('gif')
+          ? 'gif'
+          : mimeLow.includes('svg')
+          ? 'svg'
+          : 'png';
+        const local = normalizeFileInput(rawSrc);
+        if (local && local.fileName) {
+          return local.fileName.replace(/[\\/:*?"<>|\0]+/g, '_');
+        }
+        const dataMatch = String(rawSrc || '').match(/^data:image\/([a-z0-9+.-]+)/i);
+        if (dataMatch) {
+          let sub = dataMatch[1].toLowerCase().split('+')[0];
+          if (sub === 'jpeg') sub = 'jpg';
+          return `image.${sub || extFromMime}`;
+        }
+        try {
+          const u = new URL(rawSrc, (window.location && window.location.href) || 'https://localhost');
+          const segs = String(u.pathname || '').split('/').filter(Boolean);
+          const last = segs.length > 0 ? decodeURIComponent(segs[segs.length - 1]) : '';
+          const clean = last.replace(/[\\/:*?"<>|\0]+/g, '_');
+          if (clean) {
+            return /\.[a-z0-9]{2,5}$/i.test(clean) ? clean : `${clean}.${extFromMime}`;
+          }
+        } catch (e) {}
+        return `image.${extFromMime}`;
+      }
+
+      function renderImgElementToPngBlob(imgEl) {
+        if (!imgEl || !imgEl.complete || !(imgEl.naturalWidth > 0) || !(imgEl.naturalHeight > 0)) {
+          return Promise.resolve(null);
+        }
+        try {
+          const canvas = document.createElement('canvas');
+          canvas.width = imgEl.naturalWidth;
+          canvas.height = imgEl.naturalHeight;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) return Promise.resolve(null);
+          ctx.drawImage(imgEl, 0, 0);
+          return new Promise((resolve) => {
+            try {
+              canvas.toBlob((blob) => resolve(blob || null), 'image/png');
+            } catch (e) {
+              resolve(null);
+            }
+          });
+        } catch (e) {
+          return Promise.resolve(null);
+        }
+      }
+
+      async function copyImageToClipboard(imgEl, rawSrc) {
+        if (navigator.clipboard && typeof navigator.clipboard.write === 'function' && typeof ClipboardItem === 'function') {
+          try {
+            let pngBlob = await renderImgElementToPngBlob(imgEl);
+            if (!pngBlob && rawSrc && typeof fetch === 'function') {
+              try {
+                const resp = await fetch(rawSrc);
+                if (resp.ok) {
+                  const blob = await resp.blob();
+                  if (blob.type === 'image/png') {
+                    pngBlob = blob;
+                  } else if (typeof createImageBitmap === 'function') {
+                    const bmp = await createImageBitmap(blob);
+                    const c = document.createElement('canvas');
+                    c.width = bmp.width;
+                    c.height = bmp.height;
+                    const ctx = c.getContext('2d');
+                    if (ctx) {
+                      ctx.drawImage(bmp, 0, 0);
+                      pngBlob = await new Promise((res) => c.toBlob((b) => res(b || null), 'image/png'));
+                    }
+                    if (typeof bmp.close === 'function') bmp.close();
+                  }
+                }
+              } catch (e) {}
+            }
+            if (pngBlob) {
+              await navigator.clipboard.write([new ClipboardItem({ 'image/png': pngBlob })]);
+              return true;
+            }
+          } catch (e) {}
+        }
+
+        if (imgEl && window.getSelection && document.createRange) {
+          const sel = window.getSelection();
+          const savedRanges = [];
+          if (sel) {
+            for (let i = 0; i < sel.rangeCount; i++) {
+              savedRanges.push(sel.getRangeAt(i).cloneRange());
+            }
+            try {
+              const range = document.createRange();
+              range.selectNode(imgEl);
+              sel.removeAllRanges();
+              sel.addRange(range);
+              if (document.execCommand('copy')) {
+                return true;
+              }
+            } catch (e) {
+            } finally {
+              try {
+                sel.removeAllRanges();
+                for (const r of savedRanges) sel.addRange(r);
+              } catch (e) {}
+            }
+          }
+        }
+        return false;
+      }
+
+      async function saveImageTarget(imgEl, rawSrc) {
+        let blob = null;
+        if (rawSrc && typeof fetch === 'function') {
+          try {
+            const resp = await fetch(rawSrc);
+            if (resp.ok) blob = await resp.blob();
+          } catch (e) {}
+        }
+        if (!blob) {
+          blob = await renderImgElementToPngBlob(imgEl);
+        }
+        if (blob && typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function' && document.body) {
+          const objUrl = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = objUrl;
+          a.download = deriveImageDownloadName(rawSrc, blob.type);
+          a.style.display = 'none';
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          setTimeout(() => {
+            try {
+              URL.revokeObjectURL(objUrl);
+            } catch (e) {}
+          }, 15000);
+          return true;
+        }
+        if (/^https?:/i.test(rawSrc)) {
+          openExternalUri(rawSrc);
+          return true;
+        }
+        return false;
+      }
+
+      function buildImageActionItems(imgTarget, t, opts = {}) {
+        const { img, src, localFile } = imgTarget;
+        const isSsh = Boolean(window.sshRemote && window.sshRemote.kind === 'ssh');
+        const items = [
+          {
+            label: t.copyImage,
+            icon: 'image',
+            onSelect: () => copyImageToClipboard(img, src)
+          },
+          {
+            label: t.saveImage,
+            icon: 'download',
+            onSelect: () => saveImageTarget(img, src)
+          }
+        ];
+
+        if (localFile) {
+          if (!isSsh && /\.svg$/i.test(localFile.fileName) && typeof window.__agOpenInBrowser === 'function') {
+            items.push({
+              label: t.openInBrowser,
+              icon: 'globe',
+              onSelect: () => window.__agOpenInBrowser(localFile.cleanFileUrl)
+            });
+          }
+          if (!isSsh && window.electronNative && typeof window.electronNative.revealInFilePicker === 'function') {
+            items.push({
+              label: t.revealInOs,
+              icon: 'folder',
+              onSelect: () => window.electronNative.revealInFilePicker(localFile.cleanFileUrl)
+            });
+          }
+          items.push(
+            { type: 'separator' },
+            {
+              label: t.copyPath,
+              icon: 'path',
+              onSelect: () => copyText(localFile.fsPath)
+            }
+          );
+        } else {
+          if (/^https?:/i.test(src)) {
+            items.push({
+              label: t.openImageInBrowser,
+              icon: 'globe',
+              onSelect: () => openExternalUri(src)
+            });
+          }
+          if (/^(?:https?:|data:)/i.test(src) && src !== opts.skipDuplicateHref) {
+            items.push(
+              { type: 'separator' },
+              {
+                label: t.copyImageUrl,
+                icon: 'link',
+                onSelect: () => copyText(src)
+              }
+            );
+          }
+        }
+        return items;
+      }
+
+      function extractPreCodeText(pre) {
+        if (!pre) return '';
+        const codeEl = pre.querySelector('code');
+        if (codeEl) return (codeEl.innerText || codeEl.textContent || '').replace(/\n$/, '');
+        const clone = pre.cloneNode(true);
+        clone.querySelectorAll('button, [role="button"]').forEach((b) => b.remove());
+        return (clone.innerText || clone.textContent || '').replace(/\n$/, '');
+      }
+
+      function getSelectionInside(root) {
+        const sel = window.getSelection ? window.getSelection() : null;
+        if (!sel || sel.rangeCount === 0) return { text: '', range: null };
+        const range = sel.getRangeAt(0);
+        if (root) {
+          const common = range.commonAncestorContainer;
+          if (!root.contains(common)) {
+            return { text: '', range: null };
+          }
+        }
+        return { text: sel.toString(), range: range.cloneRange() };
+      }
+
+      function captureEditableSnapshot(editable) {
+        const isInput = editable.tagName === 'TEXTAREA' || editable.tagName === 'INPUT';
+        if (isInput) {
+          const start = typeof editable.selectionStart === 'number' ? editable.selectionStart : editable.value.length;
+          const end = typeof editable.selectionEnd === 'number' ? editable.selectionEnd : start;
+          const selectedText = editable.value.slice(start, end);
+          const readOnly = Boolean(editable.readOnly || editable.disabled);
+          const hasContent = editable.value.length > 0;
+          return { editable, isInput: true, start, end, selectedText, readOnly, hasContent, range: null };
+        }
+
+        if (document.activeElement !== editable) {
+          try {
+            editable.focus({ preventScroll: true });
+          } catch (e) {}
+        }
+        const { text, range } = getSelectionInside(editable);
+        const readOnly = editable.getAttribute('contenteditable') === 'false';
+        const hasContent =
+          Boolean((editable.innerText || editable.textContent || '').trim()) ||
+          Boolean(editable.querySelector('[data-lexical-decorator="true"], img, span[data-lexical-text="true"]'));
+        return {
+          editable,
+          isInput: false,
+          start: 0,
+          end: 0,
+          selectedText: text,
+          readOnly,
+          hasContent,
+          range
+        };
+      }
+
+      function restoreEditableSelection(snap) {
+        const { editable, isInput, start, end, range } = snap;
+        try {
+          editable.focus({ preventScroll: true });
+        } catch (e) {}
+        if (isInput) {
+          try {
+            editable.setSelectionRange(start, end);
+          } catch (e) {}
+          return;
+        }
+        if (range && window.getSelection) {
+          const sel = window.getSelection();
+          if (sel) {
+            try {
+              sel.removeAllRanges();
+              sel.addRange(range);
+            } catch (e) {}
+          }
+        }
+      }
+
+      function setNativeInputText(el, start, end, text) {
+        const proto = el.tagName === 'TEXTAREA' ? window.HTMLTextAreaElement?.prototype : window.HTMLInputElement?.prototype;
+        const setter = proto ? Object.getOwnPropertyDescriptor(proto, 'value')?.set : null;
+        const nextVal = el.value.slice(0, start) + text + el.value.slice(end);
+        if (setter) setter.call(el, nextVal);
+        else el.value = nextVal;
+        const caret = start + text.length;
+        try {
+          el.setSelectionRange(caret, caret);
+        } catch (e) {}
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+
+      async function performCut(snap) {
+        if (snap.readOnly || !snap.selectedText) return;
+        restoreEditableSelection(snap);
+        let ok = false;
+        try {
+          ok = document.execCommand('cut');
+        } catch (e) {}
+        if (!ok) {
+          await copyText(snap.selectedText);
+          if (snap.isInput) {
+            let deleted = false;
+            try {
+              deleted = document.execCommand('insertText', false, '');
+            } catch (e) {}
+            if (!deleted) setNativeInputText(snap.editable, snap.start, snap.end, '');
+          } else {
+            try {
+              document.execCommand('delete');
+            } catch (e) {}
+          }
+        }
+      }
+
+      async function performCopy(snap) {
+        if (!snap.selectedText) return;
+        restoreEditableSelection(snap);
+        let ok = false;
+        try {
+          ok = document.execCommand('copy');
+        } catch (e) {}
+        if (!ok) {
+          await copyText(snap.selectedText);
+        }
+      }
+
+      async function performPaste(snap) {
+        if (snap.readOnly) return;
+        restoreEditableSelection(snap);
+
+        if (navigator.clipboard && typeof navigator.clipboard.read === 'function') {
+          try {
+            const items = await navigator.clipboard.read();
+            for (const item of items) {
+              const imgType = item.types.find((t) => t.startsWith('image/'));
+              if (imgType) {
+                const blob = await item.getType(imgType);
+                const ext = imgType.split('/')[1]?.split('+')[0] || 'png';
+                const file = new File([blob], `clipboard.${ext}`, { type: imgType });
+                const dt = new DataTransfer();
+                dt.items.add(file);
+                const ev = new ClipboardEvent('paste', {
+                  clipboardData: dt,
+                  bubbles: true,
+                  cancelable: true
+                });
+                snap.editable.dispatchEvent(ev);
+                return;
+              }
+            }
+          } catch (e) {}
+        }
+
+        let text = '';
+        if (navigator.clipboard && typeof navigator.clipboard.readText === 'function') {
+          try {
+            text = await navigator.clipboard.readText();
+          } catch (e) {}
+        }
+        if (!text) return;
+
+        restoreEditableSelection(snap);
+        if (snap.isInput) {
+          let inserted = false;
+          try {
+            inserted = document.execCommand('insertText', false, text);
+          } catch (e) {}
+          if (!inserted) setNativeInputText(snap.editable, snap.start, snap.end, text);
+          return;
+        }
+
+        let handled = false;
+        try {
+          const dt = new DataTransfer();
+          dt.setData('text/plain', text);
+          const ev = new ClipboardEvent('paste', {
+            clipboardData: dt,
+            bubbles: true,
+            cancelable: true
+          });
+          handled = !snap.editable.dispatchEvent(ev) || ev.defaultPrevented;
+        } catch (e) {}
+        if (!handled) {
+          try {
+            document.execCommand('insertText', false, text);
+          } catch (e) {}
+        }
+      }
+
+      function performSelectAll(snap) {
+        try {
+          snap.editable.focus({ preventScroll: true });
+        } catch (e) {}
+        if (snap.isInput) {
+          try {
+            snap.editable.select();
+          } catch (e) {}
+          return;
+        }
+        let ok = false;
+        try {
+          ok = document.execCommand('selectAll');
+        } catch (e) {}
+        if (!ok && window.getSelection) {
+          try {
+            const range = document.createRange();
+            range.selectNodeContents(snap.editable);
+            const sel = window.getSelection();
+            if (sel) {
+              sel.removeAllRanges();
+              sel.addRange(range);
+            }
+          } catch (e) {}
+        }
+      }
+
+      let menuEl = null;
+      let subMenuEl = null;
+      let subOwnerBtn = null;
+      let activeIndex = -1;
+      let subActiveIndex = -1;
+      let inSubmenu = false;
+      let itemButtons = [];
+      let subItemButtons = [];
+      let dismissListenersBound = false;
+      const SCROLL_DISMISS_OPTS = { capture: true, passive: true };
+
+      function bindMenuDismissListeners() {
+        if (dismissListenersBound) return;
+        dismissListenersBound = true;
+        window.addEventListener('pointerdown', onPointerDown, true);
+        window.addEventListener('keydown', onKeyDown, true);
+        window.addEventListener('blur', onDismiss);
+        window.addEventListener('resize', onDismiss);
+        window.addEventListener('scroll', onDismiss, SCROLL_DISMISS_OPTS);
+      }
+
+      function unbindMenuDismissListeners() {
+        if (!dismissListenersBound) return;
+        dismissListenersBound = false;
+        window.removeEventListener('pointerdown', onPointerDown, true);
+        window.removeEventListener('keydown', onKeyDown, true);
+        window.removeEventListener('blur', onDismiss);
+        window.removeEventListener('resize', onDismiss);
+        window.removeEventListener('scroll', onDismiss, SCROLL_DISMISS_OPTS);
+      }
+
+      function closeSubmenu() {
+        if (subMenuEl) {
+          subMenuEl.remove();
+          subMenuEl = null;
+        }
+        if (subOwnerBtn) {
+          subOwnerBtn.removeAttribute('data-sub-open');
+          subOwnerBtn = null;
+        }
+        subItemButtons = [];
+        subActiveIndex = -1;
+        inSubmenu = false;
+      }
+
+      function closeMenu() {
+        closeSubmenu();
+        if (menuEl) {
+          menuEl.remove();
+          menuEl = null;
+        }
+        activeIndex = -1;
+        itemButtons = [];
+        unbindMenuDismissListeners();
+      }
+
+      function setMainActive(nextIdx) {
+        if (!itemButtons.length) return;
+        itemButtons.forEach((btn, idx) => {
+          if (idx === nextIdx) btn.setAttribute('data-active', '1');
+          else btn.removeAttribute('data-active');
+        });
+        activeIndex = nextIdx;
+      }
+
+      function setSubActive(nextIdx) {
+        if (!subItemButtons.length) return;
+        subItemButtons.forEach((btn, idx) => {
+          if (idx === nextIdx) btn.setAttribute('data-active', '1');
+          else btn.removeAttribute('data-active');
+        });
+        subActiveIndex = nextIdx;
+      }
+
+      function moveInList(buttons, curIdx, delta, setter) {
+        if (!buttons.length) return -1;
+        const len = buttons.length;
+        let idx = curIdx;
+        for (let step = 0; step < len; step++) {
+          idx = idx === -1 ? (delta > 0 ? 0 : len - 1) : (idx + delta + len) % len;
+          if (buttons[idx].getAttribute('aria-disabled') !== 'true') {
+            setter(idx);
+            return idx;
+          }
+        }
+        return -1;
+      }
+
+      function buildCardDom(id, items, isSubmenu) {
+        const card = document.createElement('div');
+        card.id = id;
+        card.className = 'ag-ctx-card';
+        card.setAttribute('role', 'menu');
+        card.setAttribute('data-ag-token-ui', '1');
+        card.style.visibility = 'hidden';
+        card.style.left = '0px';
+        card.style.top = '0px';
+
+        card.addEventListener('mousedown', (ev) => {
+          ev.preventDefault();
+        });
+
+        const buttons = [];
+        for (const item of items) {
+          if (item.type === 'header') {
+            const hdr = document.createElement('div');
+            hdr.className = 'ag-ctx-header';
+            hdr.textContent = item.label;
+            hdr.title = item.title || item.label;
+            card.appendChild(hdr);
+            continue;
+          }
+          if (item.type === 'separator') {
+            const sep = document.createElement('div');
+            sep.className = 'ag-ctx-sep';
+            sep.setAttribute('role', 'separator');
+            card.appendChild(sep);
+            continue;
+          }
+
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'ag-ctx-item';
+          btn.setAttribute('role', 'menuitem');
+          if (item.disabled) btn.setAttribute('aria-disabled', 'true');
+          if (Array.isArray(item.submenu) && item.submenu.length > 0) {
+            btn.setAttribute('aria-haspopup', 'menu');
+          }
+
+          const lead = document.createElement('span');
+          lead.className = 'ag-ctx-lead';
+          if (item.icon) {
+            lead.appendChild(createIconSvg(item.icon));
+          }
+
+          const label = document.createElement('span');
+          label.className = 'ag-ctx-label';
+          label.textContent = item.label;
+          lead.appendChild(label);
+          btn.appendChild(lead);
+
+          if (Array.isArray(item.submenu) && item.submenu.length > 0) {
+            btn.appendChild(createChevronSvg());
+          } else if (item.kbd) {
+            const kbd = document.createElement('span');
+            kbd.className = 'ag-ctx-kbd';
+            kbd.textContent = item.kbd;
+            btn.appendChild(kbd);
+          }
+
+          btn.__agOnSelect = item.onSelect;
+          btn.__agSubmenu = Array.isArray(item.submenu) && item.submenu.length > 0 ? item.submenu : null;
+
+          btn.addEventListener('mousedown', (ev) => {
+            ev.preventDefault();
+          });
+
+          btn.addEventListener('mouseenter', () => {
+            if (isSubmenu) {
+              inSubmenu = true;
+              if (!item.disabled) {
+                const idx = buttons.indexOf(btn);
+                if (idx !== -1) setSubActive(idx);
+              }
+              return;
+            }
+            inSubmenu = false;
+            const idx = buttons.indexOf(btn);
+            if (!item.disabled && idx !== -1) setMainActive(idx);
+            if (btn.__agSubmenu && !item.disabled) {
+              openSubmenu(btn, btn.__agSubmenu, false);
+            } else {
+              closeSubmenu();
+            }
+          });
+
+          btn.addEventListener('click', (ev) => {
+            ev.preventDefault();
+            ev.stopPropagation();
+            if (item.disabled) return;
+            if (btn.__agSubmenu) {
+              openSubmenu(btn, btn.__agSubmenu, true);
+              return;
+            }
+            closeMenu();
+            try {
+              const res = item.onSelect?.();
+              if (res && typeof res.catch === 'function') res.catch(() => {});
+            } catch (err) {}
+          });
+
+          buttons.push(btn);
+          card.appendChild(btn);
+        }
+
+        return { card, buttons };
+      }
+
+      function openSubmenu(ownerBtn, subItems, focusFirst) {
+        if (subOwnerBtn === ownerBtn && subMenuEl) {
+          if (focusFirst) {
+            inSubmenu = true;
+            moveInList(subItemButtons, -1, 1, setSubActive);
+          }
+          return;
+        }
+        closeSubmenu();
+        if (!subItems || subItems.length === 0 || !document.body) return;
+
+        const { card, buttons } = buildCardDom(SUBMENU_ID, subItems, true);
+        document.body.appendChild(card);
+        subMenuEl = card;
+        subOwnerBtn = ownerBtn;
+        subItemButtons = buttons;
+        ownerBtn.setAttribute('data-sub-open', '1');
+
+        const parentRect = ownerBtn.getBoundingClientRect();
+        const subRect = card.getBoundingClientRect();
+        const vw = window.innerWidth || document.documentElement.clientWidth || 1200;
+        const vh = window.innerHeight || document.documentElement.clientHeight || 800;
+
+        let left = parentRect.right + 4;
+        if (left + subRect.width > vw - 8) {
+          left = Math.max(8, parentRect.left - subRect.width - 4);
+        }
+        let top = parentRect.top - 4;
+        if (top + subRect.height > vh - 8) {
+          top = Math.max(8, vh - subRect.height - 8);
+        }
+        card.style.left = `${Math.round(left)}px`;
+        card.style.top = `${Math.round(Math.max(8, top))}px`;
+        card.style.visibility = '';
+
+        if (focusFirst) {
+          inSubmenu = true;
+          moveInList(subItemButtons, -1, 1, setSubActive);
+        }
+
+        requestAnimationFrame(() => {
+          if (subMenuEl === card) card.setAttribute('data-open', '1');
+        });
+      }
+
+      function openMenu(items, clientX, clientY) {
+        closeMenu();
+        if (!items || items.length === 0 || !document.body) return;
+
+        const { card, buttons } = buildCardDom(MENU_ID, items, false);
+        document.body.appendChild(card);
+        menuEl = card;
+        itemButtons = buttons;
+        bindMenuDismissListeners();
+
+        const rect = card.getBoundingClientRect();
+        const vw = window.innerWidth || document.documentElement.clientWidth || 1200;
+        const vh = window.innerHeight || document.documentElement.clientHeight || 800;
+        const left = clientX + rect.width > vw - 8 ? Math.max(8, clientX - rect.width) : Math.max(8, clientX);
+        const top = clientY + rect.height > vh - 8 ? Math.max(8, clientY - rect.height) : Math.max(8, clientY);
+        card.style.left = `${Math.round(left)}px`;
+        card.style.top = `${Math.round(top)}px`;
+        card.style.visibility = '';
+
+        requestAnimationFrame(() => {
+          if (menuEl === card) card.setAttribute('data-open', '1');
+        });
+      }
+
+      function buildFileMenuItems(file, t) {
+        const isHtml = /\.html?$/i.test(file.fileName);
+        const isBrowserPreviewable = /\.(html?|pdf|svg)$/i.test(file.fileName);
+        const isSsh = Boolean(window.sshRemote && window.sshRemote.kind === 'ssh');
+        const canDaemonOpenInBrowser = !isSsh && isBrowserPreviewable && typeof window.__agOpenInBrowser === 'function';
+        const items = [
+          {
+            type: 'header',
+            label: file.lineLabel ? `${file.fileName} · ${file.lineLabel}` : file.fileName,
+            title: file.fsPath
+          },
+          { type: 'separator' }
+        ];
+
+        if (file.clickableEl && typeof file.clickableEl.click === 'function') {
+          items.push({
+            label: isHtml ? t.openPreview : t.openInEditor,
+            icon: 'fileOpen',
+            onSelect: () => {
+              file.clickableEl.click();
+            }
+          });
+        }
+
+        if (canDaemonOpenInBrowser) {
+          items.push({
+            label: t.openInBrowser,
+            icon: 'globe',
+            onSelect: () => window.__agOpenInBrowser(file.cleanFileUrl)
+          });
+        }
+
+        const extEditors = getDetectedExternalEditors(isSsh);
+        if (extEditors.length === 1) {
+          const ed = extEditors[0];
+          items.push({
+            label: t.openInSingle(ed.label),
+            icon: 'openIn',
+            onSelect: () => openInExternalEditor(ed, file, isSsh)
+          });
+        } else if (extEditors.length > 1) {
+          items.push({
+            label: t.openIn,
+            icon: 'openIn',
+            submenu: extEditors.map((ed) => ({
+              label: ed.label,
+              icon: 'openIn',
+              onSelect: () => openInExternalEditor(ed, file, isSsh)
+            }))
+          });
+        }
+
+        if (!isSsh && window.electronNative && typeof window.electronNative.revealInFilePicker === 'function') {
+          items.push({
+            label: t.revealInOs,
+            icon: 'folder',
+            onSelect: () => window.electronNative.revealInFilePicker(file.cleanFileUrl)
+          });
+        }
+
+        items.push(
+          { type: 'separator' },
+          {
+            label: t.copyPath,
+            icon: 'path',
+            onSelect: () => copyText(file.fsPath)
+          },
+          {
+            label: t.copyFileName,
+            icon: 'copy',
+            onSelect: () => copyText(file.fileName)
+          }
+        );
+
+        if (isHtml && (isSsh || typeof window.__agOpenInBrowser !== 'function')) {
+          items.push({
+            label: t.copyBrowserUrl,
+            icon: 'link',
+            onSelect: () => copyText(file.cleanFileUrl)
+          });
+        }
+
+        return items;
+      }
+
+      function onContextMenu(e) {
+        if (e.shiftKey) return;
+        const target =
+          e.target instanceof Element
+            ? e.target
+            : e.target && e.target.parentElement instanceof Element
+            ? e.target.parentElement
+            : null;
+        if (!target) return;
+
+        if (target.closest(`#${MENU_ID}, #${SUBMENU_ID}`)) {
+          e.preventDefault();
+          return;
+        }
+
+        if (target.closest(PASS_THROUGH_SEL)) return;
+
+        const t = contextStrings();
+        const insidePureEditor = Boolean(target.closest('[data-lexical-editor="true"], textarea, input'));
+        const isFilePillInsideEditor = Boolean(target.closest('.inline-pill, [data-uri], a[href^="file:"], a[href^="vscode-"]'));
+
+        if (!insidePureEditor || isFilePillInsideEditor) {
+          const fileTarget = resolveFileTarget(target);
+          if (fileTarget) {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            openMenu(buildFileMenuItems(fileTarget, t), e.clientX, e.clientY);
+            return;
+          }
+        }
+
+        let editable = target.closest(EDITABLE_SEL);
+        if (!editable) {
+          const composer = target.closest(COMPOSER_SEL);
+          if (composer && !target.closest('button, [role="button"], a, [data-ag-metrics-pill], #ag-live-metrics-pill')) {
+            editable = composer.querySelector('[data-lexical-editor="true"], [contenteditable="true"], textarea');
+          }
+        }
+
+        if (editable) {
+          if (window.sshRemote && window.sshRemote.kind === 'ssh') return;
+          e.preventDefault();
+          e.stopImmediatePropagation();
+
+          const snap = captureEditableSnapshot(editable);
+          const hasSel = Boolean(snap.selectedText);
+          const items = [
+            {
+              label: t.cut,
+              icon: 'cut',
+              kbd: `${MOD}X`,
+              disabled: snap.readOnly || !hasSel,
+              onSelect: () => performCut(snap)
+            },
+            {
+              label: t.copy,
+              icon: 'copy',
+              kbd: `${MOD}C`,
+              disabled: !hasSel,
+              onSelect: () => performCopy(snap)
+            },
+            {
+              label: t.paste,
+              icon: 'paste',
+              kbd: `${MOD}V`,
+              disabled: snap.readOnly,
+              onSelect: () => performPaste(snap)
+            },
+            { type: 'separator' },
+            {
+              label: t.selectAll,
+              icon: 'selectAll',
+              kbd: `${MOD}A`,
+              disabled: !snap.hasContent,
+              onSelect: () => performSelectAll(snap)
+            }
+          ];
+          openMenu(items, e.clientX, e.clientY);
+          return;
+        }
+
+        const chatZone = target.closest(CHAT_ZONE_SEL);
+        if (!chatZone) return;
+
+        const inDialog = target.closest('[role="dialog"]');
+        if (inDialog && !target.closest('[data-markdown-root], .prose, .markdown')) return;
+
+        const linkRaw = target.closest('a[href]');
+        const linkEl = linkRaw && /^(https?:|mailto:)/i.test(linkRaw.href || '') ? linkRaw : null;
+        const imgTarget = resolveChatImageTarget(target);
+        const { text: selectedText } = getSelectionInside(null);
+
+        if (!linkEl && !imgTarget && !selectedText && target.closest('video, audio, canvas, button, [role="button"], summary, select')) {
+          return;
+        }
+
+        e.preventDefault();
+        e.stopImmediatePropagation();
+
+        const items = [];
+        if (linkEl) {
+          const href = linkEl.href;
+          const linkText = (linkEl.innerText || linkEl.textContent || '').trim();
+          items.push(
+            {
+              label: t.openInBrowser,
+              icon: 'globe',
+              onSelect: () => openExternalUri(href)
+            },
+            {
+              label: t.copyLink,
+              icon: 'link',
+              onSelect: () => copyText(href)
+            }
+          );
+
+          if (selectedText) {
+            items.push(
+              { type: 'separator' },
+              {
+                label: t.copySelection,
+                icon: 'copy',
+                kbd: `${MOD}C`,
+                onSelect: () => copyText(selectedText)
+              }
+            );
+          } else if (linkText && linkText !== href) {
+            items.push({
+              label: t.copyLinkText,
+              icon: 'copy',
+              onSelect: () => copyText(linkText)
+            });
+          }
+          if (imgTarget) {
+            items.push({ type: 'separator' }, ...buildImageActionItems(imgTarget, t, { skipDuplicateHref: href }));
+          }
+        } else if (imgTarget) {
+          items.push(...buildImageActionItems(imgTarget, t));
+          if (selectedText) {
+            items.push(
+              { type: 'separator' },
+              {
+                label: t.copySelection,
+                icon: 'copy',
+                kbd: `${MOD}C`,
+                onSelect: () => copyText(selectedText)
+              }
+            );
+          }
+        } else {
+          items.push({
+            label: t.copy,
+            icon: 'copy',
+            kbd: `${MOD}C`,
+            disabled: !selectedText,
+            onSelect: () => copyText(selectedText)
+          });
+
+          const preEl = target.closest('pre');
+          if (preEl) {
+            const codeText = extractPreCodeText(preEl);
+            if (codeText) {
+              items.push({
+                label: t.copyCodeBlock,
+                icon: 'code',
+                onSelect: () => copyText(codeText)
+              });
+            }
+          }
+        }
+
+        openMenu(items, e.clientX, e.clientY);
+      }
+
+      function onPointerDown(e) {
+        if (!menuEl) return;
+        if (e.target instanceof Node && (menuEl.contains(e.target) || (subMenuEl && subMenuEl.contains(e.target)))) {
+          return;
+        }
+        closeMenu();
+      }
+
+      function onKeyDown(e) {
+        if (!menuEl) return;
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          e.stopPropagation();
+          closeMenu();
+          return;
+        }
+
+        if (inSubmenu && subMenuEl && subItemButtons.length > 0) {
+          if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            e.stopPropagation();
+            moveInList(subItemButtons, subActiveIndex, 1, setSubActive);
+          } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            e.stopPropagation();
+            moveInList(subItemButtons, subActiveIndex, -1, setSubActive);
+          } else if (e.key === 'ArrowLeft') {
+            e.preventDefault();
+            e.stopPropagation();
+            closeSubmenu();
+          } else if (e.key === 'Enter' && subActiveIndex >= 0 && subItemButtons[subActiveIndex]) {
+            const btn = subItemButtons[subActiveIndex];
+            if (btn.getAttribute('aria-disabled') !== 'true') {
+              e.preventDefault();
+              e.stopPropagation();
+              closeMenu();
+              try {
+                const res = btn.__agOnSelect?.();
+                if (res && typeof res.catch === 'function') res.catch(() => {});
+              } catch (err) {}
+            }
+          }
+          return;
+        }
+
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          e.stopPropagation();
+          closeSubmenu();
+          moveInList(itemButtons, activeIndex, 1, setMainActive);
+        } else if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          e.stopPropagation();
+          closeSubmenu();
+          moveInList(itemButtons, activeIndex, -1, setMainActive);
+        } else if (e.key === 'ArrowRight' && activeIndex >= 0 && itemButtons[activeIndex]) {
+          const btn = itemButtons[activeIndex];
+          if (btn.__agSubmenu && btn.getAttribute('aria-disabled') !== 'true') {
+            e.preventDefault();
+            e.stopPropagation();
+            openSubmenu(btn, btn.__agSubmenu, true);
+          }
+        } else if (e.key === 'Enter' && activeIndex >= 0 && itemButtons[activeIndex]) {
+          const btn = itemButtons[activeIndex];
+          if (btn.getAttribute('aria-disabled') !== 'true') {
+            e.preventDefault();
+            e.stopPropagation();
+            if (btn.__agSubmenu) {
+              openSubmenu(btn, btn.__agSubmenu, true);
+              return;
+            }
+            closeMenu();
+            try {
+              const res = btn.__agOnSelect?.();
+              if (res && typeof res.catch === 'function') res.catch(() => {});
+            } catch (err) {}
+          }
+        }
+      }
+
+      function onDismiss() {
+        if (menuEl) closeMenu();
+      }
+
+      // 平时全局仅保留 contextmenu 单一捕获监听；关闭类监听在 openMenu 时按需挂载、closeMenu 时立即解绑
+      window.addEventListener('contextmenu', onContextMenu, true);
+
+      window.__ag_cleanup_fns.push(() => {
+        closeMenu();
+        unbindMenuDismissListeners();
+        window.removeEventListener('contextmenu', onContextMenu, true);
+        cleanupContextMenuDom();
+      });
+    })();
+  } else {
+    cleanupContextMenuDom();
+  }
+  /* __AG_CONTEXT_MENU_JS_END__ */
+
   // ============================================================================
   // 5. 开放用户自定义前端脚本钩子 (user/custom.js，沙箱异常隔离，同时提供 ctx 与 boot)
   // ============================================================================
@@ -8823,6 +10452,7 @@
     config: boot.config || {},
     modules: MODULES,
     features: MODULES,
+    installedEditors: Array.isArray(boot.installedEditors) ? boot.installedEditors : [],
     themeVars: THEME_VARS,
     darkThemeVars: DARK_THEME_VARS,
     dict: DICT,
