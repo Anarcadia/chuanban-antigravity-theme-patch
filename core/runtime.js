@@ -9189,7 +9189,11 @@
         paste:
           '<rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>',
         selectAll:
-          '<path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/><line x1="8" y1="12" x2="16" y2="12"/>'
+          '<path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/><line x1="8" y1="12" x2="16" y2="12"/>',
+        image:
+          '<rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>',
+        download:
+          '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>'
       };
 
       function createIconSvg(name) {
@@ -9278,6 +9282,10 @@
             copyLinkText: 'リンクテキストをコピー',
             copy: 'コピー',
             copyCodeBlock: 'コードブロックをコピー',
+            copyImage: '画像をコピー',
+            saveImage: '画像を保存',
+            openImageInBrowser: 'ブラウザーで画像を開く',
+            copyImageUrl: '画像の URL をコピー',
             cut: '切り取り',
             paste: '貼り付け',
             selectAll: 'すべて選択'
@@ -9304,6 +9312,10 @@
           copyLinkText: en ? 'Copy Link Text' : '复制链接文字',
           copy: en ? 'Copy' : '复制',
           copyCodeBlock: en ? 'Copy Code Block' : '复制代码块',
+          copyImage: en ? 'Copy Image' : '复制图片',
+          saveImage: en ? 'Save Image' : '另存图片',
+          openImageInBrowser: en ? 'Open Image in Browser' : '在浏览器中打开图片',
+          copyImageUrl: en ? 'Copy Image Address' : '复制图片地址',
           cut: en ? 'Cut' : '剪切',
           paste: en ? 'Paste' : '粘贴',
           selectAll: en ? 'Select All' : '全选'
@@ -9356,6 +9368,238 @@
         } catch (e) {
           return false;
         }
+      }
+
+      function resolveChatImageTarget(target) {
+        const img = target && target.closest ? target.closest('img') : null;
+        if (!img) return null;
+        if (img.closest('[aria-hidden="true"], .inline-pill, [data-ag-metrics-pill], #ag-live-metrics-pill')) {
+          return null;
+        }
+        const rawSrc = String(img.currentSrc || img.getAttribute('src') || '').trim();
+        if (!rawSrc) return null;
+        if (img.closest('button, [role="button"], summary, select')) {
+          const rect = typeof img.getBoundingClientRect === 'function' ? img.getBoundingClientRect() : { width: 0, height: 0 };
+          const w = Math.max(rect.width || 0, img.naturalWidth || 0);
+          const h = Math.max(rect.height || 0, img.naturalHeight || 0);
+          if (w < 32 || h < 32) return null;
+        }
+        return {
+          img,
+          src: rawSrc,
+          localFile: normalizeFileInput(rawSrc)
+        };
+      }
+
+      function deriveImageDownloadName(rawSrc, mimeType = '') {
+        const mimeLow = String(mimeType || '').toLowerCase();
+        const extFromMime = mimeLow.includes('jpeg') || mimeLow.includes('jpg')
+          ? 'jpg'
+          : mimeLow.includes('webp')
+          ? 'webp'
+          : mimeLow.includes('gif')
+          ? 'gif'
+          : mimeLow.includes('svg')
+          ? 'svg'
+          : 'png';
+        const local = normalizeFileInput(rawSrc);
+        if (local && local.fileName) {
+          return local.fileName.replace(/[\\/:*?"<>|\0]+/g, '_');
+        }
+        const dataMatch = String(rawSrc || '').match(/^data:image\/([a-z0-9+.-]+)/i);
+        if (dataMatch) {
+          let sub = dataMatch[1].toLowerCase().split('+')[0];
+          if (sub === 'jpeg') sub = 'jpg';
+          return `image.${sub || extFromMime}`;
+        }
+        try {
+          const u = new URL(rawSrc, (window.location && window.location.href) || 'https://localhost');
+          const segs = String(u.pathname || '').split('/').filter(Boolean);
+          const last = segs.length > 0 ? decodeURIComponent(segs[segs.length - 1]) : '';
+          const clean = last.replace(/[\\/:*?"<>|\0]+/g, '_');
+          if (clean) {
+            return /\.[a-z0-9]{2,5}$/i.test(clean) ? clean : `${clean}.${extFromMime}`;
+          }
+        } catch (e) {}
+        return `image.${extFromMime}`;
+      }
+
+      function renderImgElementToPngBlob(imgEl) {
+        if (!imgEl || !imgEl.complete || !(imgEl.naturalWidth > 0) || !(imgEl.naturalHeight > 0)) {
+          return Promise.resolve(null);
+        }
+        try {
+          const canvas = document.createElement('canvas');
+          canvas.width = imgEl.naturalWidth;
+          canvas.height = imgEl.naturalHeight;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) return Promise.resolve(null);
+          ctx.drawImage(imgEl, 0, 0);
+          return new Promise((resolve) => {
+            try {
+              canvas.toBlob((blob) => resolve(blob || null), 'image/png');
+            } catch (e) {
+              resolve(null);
+            }
+          });
+        } catch (e) {
+          return Promise.resolve(null);
+        }
+      }
+
+      async function copyImageToClipboard(imgEl, rawSrc) {
+        if (navigator.clipboard && typeof navigator.clipboard.write === 'function' && typeof ClipboardItem === 'function') {
+          try {
+            let pngBlob = await renderImgElementToPngBlob(imgEl);
+            if (!pngBlob && rawSrc && typeof fetch === 'function') {
+              try {
+                const resp = await fetch(rawSrc);
+                if (resp.ok) {
+                  const blob = await resp.blob();
+                  if (blob.type === 'image/png') {
+                    pngBlob = blob;
+                  } else if (typeof createImageBitmap === 'function') {
+                    const bmp = await createImageBitmap(blob);
+                    const c = document.createElement('canvas');
+                    c.width = bmp.width;
+                    c.height = bmp.height;
+                    const ctx = c.getContext('2d');
+                    if (ctx) {
+                      ctx.drawImage(bmp, 0, 0);
+                      pngBlob = await new Promise((res) => c.toBlob((b) => res(b || null), 'image/png'));
+                    }
+                    if (typeof bmp.close === 'function') bmp.close();
+                  }
+                }
+              } catch (e) {}
+            }
+            if (pngBlob) {
+              await navigator.clipboard.write([new ClipboardItem({ 'image/png': pngBlob })]);
+              return true;
+            }
+          } catch (e) {}
+        }
+
+        if (imgEl && window.getSelection && document.createRange) {
+          const sel = window.getSelection();
+          const savedRanges = [];
+          if (sel) {
+            for (let i = 0; i < sel.rangeCount; i++) {
+              savedRanges.push(sel.getRangeAt(i).cloneRange());
+            }
+            try {
+              const range = document.createRange();
+              range.selectNode(imgEl);
+              sel.removeAllRanges();
+              sel.addRange(range);
+              if (document.execCommand('copy')) {
+                return true;
+              }
+            } catch (e) {
+            } finally {
+              try {
+                sel.removeAllRanges();
+                for (const r of savedRanges) sel.addRange(r);
+              } catch (e) {}
+            }
+          }
+        }
+        return false;
+      }
+
+      async function saveImageTarget(imgEl, rawSrc) {
+        let blob = null;
+        if (rawSrc && typeof fetch === 'function') {
+          try {
+            const resp = await fetch(rawSrc);
+            if (resp.ok) blob = await resp.blob();
+          } catch (e) {}
+        }
+        if (!blob) {
+          blob = await renderImgElementToPngBlob(imgEl);
+        }
+        if (blob && typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function' && document.body) {
+          const objUrl = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = objUrl;
+          a.download = deriveImageDownloadName(rawSrc, blob.type);
+          a.style.display = 'none';
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          setTimeout(() => {
+            try {
+              URL.revokeObjectURL(objUrl);
+            } catch (e) {}
+          }, 15000);
+          return true;
+        }
+        if (/^https?:/i.test(rawSrc)) {
+          openExternalUri(rawSrc);
+          return true;
+        }
+        return false;
+      }
+
+      function buildImageActionItems(imgTarget, t, opts = {}) {
+        const { img, src, localFile } = imgTarget;
+        const isSsh = Boolean(window.sshRemote && window.sshRemote.kind === 'ssh');
+        const items = [
+          {
+            label: t.copyImage,
+            icon: 'image',
+            onSelect: () => copyImageToClipboard(img, src)
+          },
+          {
+            label: t.saveImage,
+            icon: 'download',
+            onSelect: () => saveImageTarget(img, src)
+          }
+        ];
+
+        if (localFile) {
+          if (!isSsh && /\.svg$/i.test(localFile.fileName) && typeof window.__agOpenInBrowser === 'function') {
+            items.push({
+              label: t.openInBrowser,
+              icon: 'globe',
+              onSelect: () => window.__agOpenInBrowser(localFile.cleanFileUrl)
+            });
+          }
+          if (!isSsh && window.electronNative && typeof window.electronNative.revealInFilePicker === 'function') {
+            items.push({
+              label: t.revealInOs,
+              icon: 'folder',
+              onSelect: () => window.electronNative.revealInFilePicker(localFile.cleanFileUrl)
+            });
+          }
+          items.push(
+            { type: 'separator' },
+            {
+              label: t.copyPath,
+              icon: 'path',
+              onSelect: () => copyText(localFile.fsPath)
+            }
+          );
+        } else {
+          if (/^https?:/i.test(src)) {
+            items.push({
+              label: t.openImageInBrowser,
+              icon: 'globe',
+              onSelect: () => openExternalUri(src)
+            });
+          }
+          if (/^(?:https?:|data:)/i.test(src) && src !== opts.skipDuplicateHref) {
+            items.push(
+              { type: 'separator' },
+              {
+                label: t.copyImageUrl,
+                icon: 'link',
+                onSelect: () => copyText(src)
+              }
+            );
+          }
+        }
+        return items;
       }
 
       function extractPreCodeText(pre) {
@@ -10014,9 +10258,12 @@
 
         const linkRaw = target.closest('a[href]');
         const linkEl = linkRaw && /^(https?:|mailto:)/i.test(linkRaw.href || '') ? linkRaw : null;
+        const imgTarget = resolveChatImageTarget(target);
         const { text: selectedText } = getSelectionInside(null);
 
-        if (!linkEl && !selectedText && target.closest('button, [role="button"], summary, select')) return;
+        if (!linkEl && !imgTarget && !selectedText && target.closest('video, audio, canvas, button, [role="button"], summary, select')) {
+          return;
+        }
 
         e.preventDefault();
         e.stopImmediatePropagation();
@@ -10054,6 +10301,22 @@
               icon: 'copy',
               onSelect: () => copyText(linkText)
             });
+          }
+          if (imgTarget) {
+            items.push({ type: 'separator' }, ...buildImageActionItems(imgTarget, t, { skipDuplicateHref: href }));
+          }
+        } else if (imgTarget) {
+          items.push(...buildImageActionItems(imgTarget, t));
+          if (selectedText) {
+            items.push(
+              { type: 'separator' },
+              {
+                label: t.copySelection,
+                icon: 'copy',
+                kbd: `${MOD}C`,
+                onSelect: () => copyText(selectedText)
+              }
+            );
           }
         } else {
           items.push({
