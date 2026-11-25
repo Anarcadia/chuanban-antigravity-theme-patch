@@ -8903,7 +8903,8 @@
 
       const WIN_ABS_RE = /^[A-Za-z]:[\\/]/;
       const UNC_ABS_RE = /^\\\\[^\\]+\\[^\\]+/;
-      const POSIX_ABS_RE = /^\/(?:Users|home|var|tmp|opt|etc|mnt|workspaces|private)\//;
+      const POSIX_ABS_RE =
+        /^\/(?:(?:Users|Volumes|Applications|Library|System|Network|Developer|private|home|root|var|tmp|opt|etc|mnt|media|srv|usr|run|nix|proc|sys|boot|bin|sbin|lib|lib64|snap|workspaces?|app|apps|data|code|projects?|repos?|work|src|scratch|storage|kaggle|content|nfs|afs|gpfs|lustre|host)\/[^\0\r\n]+|(?!(?:\/|[A-Za-z]:[\\/]|c\/[0-9a-fA-F-]{8,}(?:\/|$)|api\/))[A-Za-z0-9._-]+\/(?:[^\0\r\n/]+\/)*[^\0\r\n/]+\.[A-Za-z0-9]{1,16}(?::\d+(?::\d+)?|#[Ll]\d+(?:-[Ll]?\d+)?)?)/;
 
       function isAbsolutePath(str) {
         if (typeof str !== 'string') return false;
@@ -8982,11 +8983,21 @@
             }
           }
         } else if (isAbsolutePath(raw)) {
-          const lineMatch = raw.match(/^(.*?\S):(\d+)(?::\d+)?$/);
-          if (lineMatch && lineMatch[1].length >= 3) {
-            raw = lineMatch[1];
-            const parsedLine = Number(lineMatch[2]);
-            if (Number.isFinite(parsedLine)) lineStart = parsedLine;
+          const hashMatch = raw.match(/^(.*?\S)(#L\d+(?:-L?\d+)?)$/i);
+          if (hashMatch && isAbsolutePath(hashMatch[1])) {
+            const parsedHash = parseLineAnchor(hashMatch[2]);
+            if (parsedHash.lineStart) {
+              raw = hashMatch[1];
+              lineStart = parsedHash.lineStart;
+              lineEnd = parsedHash.lineEnd;
+            }
+          } else {
+            const lineMatch = raw.match(/^(.*?\S):(\d+)(?::\d+)?$/);
+            if (lineMatch && isAbsolutePath(lineMatch[1])) {
+              raw = lineMatch[1];
+              const parsedLine = Number(lineMatch[2]);
+              if (Number.isFinite(parsedLine)) lineStart = parsedLine;
+            }
           }
 
           if (WIN_ABS_RE.test(raw)) {
@@ -9054,6 +9065,9 @@
           }
           const keys = ['uri', 'fileUri', 'href', 'filePath', 'fullPath', 'absPath', 'absolutePath', 'fsPath', 'path'];
           for (const k of keys) {
+            if (k === 'href' && typeof val[k] === 'string' && !/^(?:file|vscode-file):\/\//i.test(val[k].trim())) {
+              continue;
+            }
             const hit = extractCandidateFromValue(val[k], depth + 1);
             if (hit) return hit;
           }
@@ -9087,9 +9101,11 @@
           ) {
             break;
           }
+          const rawHref = el.tagName === 'A' ? el.getAttribute('href') : null;
+          const safeHref = rawHref && /^(?:file|vscode-file):\/\//i.test(rawHref.trim()) ? rawHref : null;
           const candidates = [
             el.getAttribute('data-uri'),
-            el.tagName === 'A' ? el.getAttribute('href') : null,
+            safeHref,
             el.getAttribute('data-file-path'),
             el.getAttribute('data-path')
           ];
@@ -9565,6 +9581,28 @@
       let inSubmenu = false;
       let itemButtons = [];
       let subItemButtons = [];
+      let dismissListenersBound = false;
+      const SCROLL_DISMISS_OPTS = { capture: true, passive: true };
+
+      function bindMenuDismissListeners() {
+        if (dismissListenersBound) return;
+        dismissListenersBound = true;
+        window.addEventListener('pointerdown', onPointerDown, true);
+        window.addEventListener('keydown', onKeyDown, true);
+        window.addEventListener('blur', onDismiss);
+        window.addEventListener('resize', onDismiss);
+        window.addEventListener('scroll', onDismiss, SCROLL_DISMISS_OPTS);
+      }
+
+      function unbindMenuDismissListeners() {
+        if (!dismissListenersBound) return;
+        dismissListenersBound = false;
+        window.removeEventListener('pointerdown', onPointerDown, true);
+        window.removeEventListener('keydown', onKeyDown, true);
+        window.removeEventListener('blur', onDismiss);
+        window.removeEventListener('resize', onDismiss);
+        window.removeEventListener('scroll', onDismiss, SCROLL_DISMISS_OPTS);
+      }
 
       function closeSubmenu() {
         if (subMenuEl) {
@@ -9588,6 +9626,7 @@
         }
         activeIndex = -1;
         itemButtons = [];
+        unbindMenuDismissListeners();
       }
 
       function setMainActive(nextIdx) {
@@ -9785,6 +9824,7 @@
         document.body.appendChild(card);
         menuEl = card;
         itemButtons = buttons;
+        bindMenuDismissListeners();
 
         const rect = card.getBoundingClientRect();
         const vw = window.innerWidth || document.documentElement.clientWidth || 1200;
@@ -10124,21 +10164,13 @@
         if (menuEl) closeMenu();
       }
 
+      // 平时全局仅保留 contextmenu 单一捕获监听；关闭类监听在 openMenu 时按需挂载、closeMenu 时立即解绑
       window.addEventListener('contextmenu', onContextMenu, true);
-      window.addEventListener('pointerdown', onPointerDown, true);
-      window.addEventListener('keydown', onKeyDown, true);
-      window.addEventListener('blur', onDismiss);
-      window.addEventListener('resize', onDismiss);
-      window.addEventListener('scroll', onDismiss, true);
 
       window.__ag_cleanup_fns.push(() => {
         closeMenu();
+        unbindMenuDismissListeners();
         window.removeEventListener('contextmenu', onContextMenu, true);
-        window.removeEventListener('pointerdown', onPointerDown, true);
-        window.removeEventListener('keydown', onKeyDown, true);
-        window.removeEventListener('blur', onDismiss);
-        window.removeEventListener('resize', onDismiss);
-        window.removeEventListener('scroll', onDismiss, true);
         cleanupContextMenuDom();
       });
     })();

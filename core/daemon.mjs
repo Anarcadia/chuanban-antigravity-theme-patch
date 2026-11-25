@@ -883,6 +883,635 @@ function persistUiLangToUserConfig(rawUiLang, skipNewDocSync = false) {
   }
 }
 
+const BROWSER_PREVIEW_EXT_WHITELIST_RE = /^\.(html?|pdf|svg)$/i;
+const EXTERNAL_EDITOR_PROBE_TTL_MS = 300000;
+const EXTERNAL_EDITORS_CACHE_FILE = path.join(CACHE_DIR, 'external-editors.json');
+let lastOpenExternalActionAt = 0;
+let externalEditorsRefreshPromise = null;
+let cachedExternalEditors = {
+  probedAt: 0,
+  platform: '',
+  sig: '',
+  publicList: [],
+  byId: new Map()
+};
+
+const EXTERNAL_EDITOR_SPECS = [
+  {
+    id: 'vscode',
+    label: 'VS Code',
+    scheme: 'vscode',
+    family: 'vscode',
+    winExeNames: ['Code.exe'],
+    winRelPaths: ['Microsoft VS Code\\Code.exe'],
+    winRegCheck: true,
+    macApps: ['/Applications/Visual Studio Code.app', '~/Applications/Visual Studio Code.app'],
+    macCliRel: 'Contents/Resources/app/bin/code',
+    linuxBins: ['code']
+  },
+  {
+    id: 'vscode-insiders',
+    label: 'VS Code Insiders',
+    scheme: 'vscode-insiders',
+    family: 'vscode',
+    winExeNames: ['Code - Insiders.exe'],
+    winRelPaths: ['Microsoft VS Code Insiders\\Code - Insiders.exe'],
+    winRegCheck: true,
+    macApps: ['/Applications/Visual Studio Code - Insiders.app', '~/Applications/Visual Studio Code - Insiders.app'],
+    macCliRel: 'Contents/Resources/app/bin/code-insiders',
+    linuxBins: ['code-insiders']
+  },
+  {
+    id: 'cursor',
+    label: 'Cursor',
+    scheme: 'cursor',
+    family: 'vscode',
+    winExeNames: ['Cursor.exe'],
+    winRelPaths: ['cursor\\Cursor.exe', 'Cursor\\Cursor.exe'],
+    winRegCheck: true,
+    macApps: ['/Applications/Cursor.app', '~/Applications/Cursor.app'],
+    macCliRel: 'Contents/Resources/app/bin/cursor',
+    linuxBins: ['cursor']
+  },
+  {
+    id: 'windsurf',
+    label: 'Windsurf',
+    scheme: 'windsurf',
+    family: 'vscode',
+    winExeNames: ['Windsurf.exe'],
+    winRelPaths: ['Windsurf\\Windsurf.exe'],
+    winRegCheck: true,
+    macApps: ['/Applications/Windsurf.app', '~/Applications/Windsurf.app'],
+    macCliRel: 'Contents/Resources/app/bin/windsurf',
+    linuxBins: ['windsurf']
+  },
+  {
+    id: 'zed',
+    label: 'Zed',
+    scheme: 'zed',
+    family: 'zed',
+    winExeNames: ['Zed.exe', 'zed.exe'],
+    winRelPaths: ['Zed\\Zed.exe', 'Zed\\bin\\zed.exe'],
+    winRegCheck: true,
+    macApps: ['/Applications/Zed.app', '~/Applications/Zed.app'],
+    macCliRel: 'Contents/MacOS/cli',
+    linuxBins: ['zed', 'zeditor']
+  },
+  {
+    id: 'idea',
+    label: 'IntelliJ IDEA',
+    scheme: 'jetbrains',
+    family: 'jetbrains',
+    winExeNames: ['idea64.exe', 'idea.exe'],
+    winCmdNames: ['idea.cmd', 'idea64.cmd'],
+    winRelPaths: [],
+    macApps: [
+      '/Applications/IntelliJ IDEA.app',
+      '/Applications/IntelliJ IDEA CE.app',
+      '~/Applications/IntelliJ IDEA.app',
+      '~/Applications/IntelliJ IDEA CE.app'
+    ],
+    macCliRel: 'Contents/MacOS/idea',
+    linuxBins: ['idea', 'idea.sh', 'intellij-idea-ultimate', 'intellij-idea-community']
+  },
+  {
+    id: 'pycharm',
+    label: 'PyCharm',
+    scheme: 'jetbrains',
+    family: 'jetbrains',
+    winExeNames: ['pycharm64.exe', 'pycharm.exe'],
+    winCmdNames: ['pycharm.cmd', 'pycharm64.cmd'],
+    winRelPaths: [],
+    macApps: [
+      '/Applications/PyCharm.app',
+      '/Applications/PyCharm CE.app',
+      '~/Applications/PyCharm.app',
+      '~/Applications/PyCharm CE.app'
+    ],
+    macCliRel: 'Contents/MacOS/pycharm',
+    linuxBins: ['pycharm', 'pycharm.sh', 'pycharm-professional', 'pycharm-community']
+  },
+  {
+    id: 'webstorm',
+    label: 'WebStorm',
+    scheme: 'jetbrains',
+    family: 'jetbrains',
+    winExeNames: ['webstorm64.exe', 'webstorm.exe'],
+    winCmdNames: ['webstorm.cmd', 'webstorm64.cmd'],
+    winRelPaths: [],
+    macApps: ['/Applications/WebStorm.app', '~/Applications/WebStorm.app'],
+    macCliRel: 'Contents/MacOS/webstorm',
+    linuxBins: ['webstorm', 'webstorm.sh']
+  },
+  {
+    id: 'goland',
+    label: 'GoLand',
+    scheme: 'jetbrains',
+    family: 'jetbrains',
+    winExeNames: ['goland64.exe', 'goland.exe'],
+    winCmdNames: ['goland.cmd', 'goland64.cmd'],
+    winRelPaths: [],
+    macApps: ['/Applications/GoLand.app', '~/Applications/GoLand.app'],
+    macCliRel: 'Contents/MacOS/goland',
+    linuxBins: ['goland', 'goland.sh']
+  },
+  {
+    id: 'clion',
+    label: 'CLion',
+    scheme: 'jetbrains',
+    family: 'jetbrains',
+    winExeNames: ['clion64.exe', 'clion.exe'],
+    winCmdNames: ['clion.cmd', 'clion64.cmd'],
+    winRelPaths: [],
+    macApps: ['/Applications/CLion.app', '~/Applications/CLion.app'],
+    macCliRel: 'Contents/MacOS/clion',
+    linuxBins: ['clion', 'clion.sh']
+  },
+  {
+    id: 'rustrover',
+    label: 'RustRover',
+    scheme: 'jetbrains',
+    family: 'jetbrains',
+    winExeNames: ['rustrover64.exe', 'rustrover.exe'],
+    winCmdNames: ['rustrover.cmd', 'rustrover64.cmd'],
+    winRelPaths: [],
+    macApps: ['/Applications/RustRover.app', '~/Applications/RustRover.app'],
+    macCliRel: 'Contents/MacOS/rustrover',
+    linuxBins: ['rustrover', 'rustrover.sh']
+  },
+  {
+    id: 'sublimetext',
+    label: 'Sublime Text',
+    scheme: '',
+    family: 'sublime',
+    winExeNames: ['subl.exe', 'sublime_text.exe'],
+    winRelPaths: [
+      'Sublime Text\\subl.exe',
+      'Sublime Text\\sublime_text.exe',
+      'Sublime Text 3\\sublime_text.exe'
+    ],
+    winRegCheck: false,
+    macApps: ['/Applications/Sublime Text.app', '~/Applications/Sublime Text.app'],
+    macCliRel: 'Contents/SharedSupport/bin/subl',
+    linuxBins: ['subl', 'sublime_text']
+  }
+];
+const EXTERNAL_EDITOR_SPEC_MAP = new Map(EXTERNAL_EDITOR_SPECS.map((s) => [s.id, s]));
+
+function isExistingRegularFile(filePath) {
+  try {
+    return Boolean(filePath && fs.statSync(filePath, { throwIfNoEntry: false })?.isFile());
+  } catch {
+    return false;
+  }
+}
+
+function isValidEditorEntryOnDisk(spec, execPath, isMacApp = false) {
+  if (!spec || typeof execPath !== 'string' || !execPath || /[\0\r\n]/.test(execPath) || !path.isAbsolute(execPath)) {
+    return false;
+  }
+  if (process.platform === 'win32') {
+    return /\.exe$/i.test(execPath) && isExistingRegularFile(execPath);
+  }
+  if (process.platform === 'darwin' && isMacApp) {
+    try {
+      return fs.existsSync(execPath);
+    } catch {
+      return false;
+    }
+  }
+  return isExistingRegularFile(execPath);
+}
+
+function extractExeFromWinCmdWrapper(cmdPath, allowedExeNames = []) {
+  try {
+    if (!isExistingRegularFile(cmdPath)) return '';
+    const raw = fs.readFileSync(cmdPath, 'utf8');
+    const matches = raw.match(/"([^"\r\n]+\.exe)"/gi) || [];
+    for (const m of matches) {
+      const exe = m.slice(1, -1).trim();
+      if (!exe) continue;
+      if (allowedExeNames.length > 0) {
+        const base = path.win32.basename(exe).toLowerCase();
+        if (!allowedExeNames.some((n) => n.toLowerCase() === base)) continue;
+      }
+      if (isExistingRegularFile(exe)) return exe;
+    }
+  } catch {}
+  return '';
+}
+
+function parseWin32ProtocolCommandStdout(stdout) {
+  const m = String(stdout || '').match(/REG_SZ\s+(?:"([^"\r\n]+\.exe)"|([^\r\n"]*?\.exe))(?:\s|$)/i);
+  const candidate = m && (m[1] || m[2]) ? (m[1] || m[2]).trim() : '';
+  return candidate && isExistingRegularFile(candidate) ? candidate : '';
+}
+
+function probeWin32ProtocolExeSync(scheme) {
+  if (process.platform !== 'win32' || !/^[a-z][a-z0-9+.-]*$/i.test(scheme)) return '';
+  try {
+    // HKCR 已由系统自动合并 HKCU\Software\Classes 与 HKLM\Software\Classes，单次查询即可替代双重 hive 子进程
+    const r = spawnSync('reg', ['query', `HKCR\\${scheme}\\shell\\open\\command`, '/ve'], {
+      encoding: 'utf8',
+      windowsHide: true,
+      timeout: 900
+    });
+    if (r.status === 0 && r.stdout) {
+      return parseWin32ProtocolCommandStdout(r.stdout);
+    }
+  } catch {}
+  return '';
+}
+
+function probeWin32ProtocolExeAsync(scheme) {
+  if (process.platform !== 'win32' || !/^[a-z][a-z0-9+.-]*$/i.test(scheme)) return Promise.resolve('');
+  return new Promise((resolve) => {
+    try {
+      execFile(
+        'reg',
+        ['query', `HKCR\\${scheme}\\shell\\open\\command`, '/ve'],
+        { encoding: 'utf8', windowsHide: true, timeout: 900 },
+        (err, stdout) => {
+          resolve(!err && stdout ? parseWin32ProtocolCommandStdout(stdout) : '');
+        }
+      );
+    } catch {
+      resolve('');
+    }
+  });
+}
+
+function applyExternalEditorsEntries(entries, probedAt = Date.now()) {
+  const byId = new Map();
+  const publicList = [];
+  const rawById = new Map();
+  for (const item of Array.isArray(entries) ? entries : []) {
+    if (item && item.id) rawById.set(item.id, item);
+  }
+  for (const spec of EXTERNAL_EDITOR_SPECS) {
+    const item = rawById.get(spec.id);
+    if (!item || !item.execPath) continue;
+    const entry = {
+      id: spec.id,
+      label: spec.label,
+      scheme: spec.scheme,
+      family: spec.family,
+      execPath: item.execPath,
+      isMacApp: Boolean(item.isMacApp)
+    };
+    byId.set(spec.id, entry);
+    publicList.push({ id: spec.id, label: spec.label, scheme: spec.scheme });
+  }
+  cachedExternalEditors = {
+    probedAt,
+    platform: process.platform,
+    sig: publicList.map((e) => e.id).join(','),
+    publicList,
+    byId
+  };
+  return cachedExternalEditors;
+}
+
+function loadExternalEditorsDiskCache(now = Date.now()) {
+  const parsed = readJsonSafe(EXTERNAL_EDITORS_CACHE_FILE, null);
+  if (
+    !parsed ||
+    parsed.version !== 1 ||
+    parsed.platform !== process.platform ||
+    !Number.isFinite(parsed.probedAt) ||
+    now - parsed.probedAt < 0 ||
+    now - parsed.probedAt >= EXTERNAL_EDITOR_PROBE_TTL_MS ||
+    !Array.isArray(parsed.entries)
+  ) {
+    return null;
+  }
+  const rawMap = new Map();
+  for (const item of parsed.entries) {
+    if (item && typeof item.id === 'string') rawMap.set(item.id, item);
+  }
+  const validEntries = [];
+  for (const spec of EXTERNAL_EDITOR_SPECS) {
+    const item = rawMap.get(spec.id);
+    if (!item) continue;
+    const isMacApp = Boolean(item.isMacApp);
+    if (!isValidEditorEntryOnDisk(spec, item.execPath, isMacApp)) continue;
+    validEntries.push({
+      id: spec.id,
+      label: spec.label,
+      scheme: spec.scheme,
+      family: spec.family,
+      execPath: item.execPath,
+      isMacApp
+    });
+  }
+  return applyExternalEditorsEntries(validEntries, parsed.probedAt);
+}
+
+function saveExternalEditorsDiskCache(state) {
+  if (!state || !state.platform) return;
+  const tmpPath = `${EXTERNAL_EDITORS_CACHE_FILE}.tmp-${process.pid}`;
+  try {
+    fs.mkdirSync(CACHE_DIR, { recursive: true });
+    const payload = {
+      version: 1,
+      platform: state.platform,
+      probedAt: state.probedAt,
+      entries: Array.from(state.byId.values()).map((e) => ({
+        id: e.id,
+        execPath: e.execPath,
+        isMacApp: Boolean(e.isMacApp)
+      }))
+    };
+    atomicWriteTextFileSync(tmpPath, EXTERNAL_EDITORS_CACHE_FILE, `${JSON.stringify(payload, null, 2)}\n`);
+  } catch {
+    try {
+      if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath);
+    } catch {}
+  }
+}
+
+function pruneMissingCachedExternalEditors() {
+  if (cachedExternalEditors.platform !== process.platform || cachedExternalEditors.probedAt <= 0) {
+    return cachedExternalEditors;
+  }
+  let changed = false;
+  const kept = [];
+  for (const [id, entry] of cachedExternalEditors.byId.entries()) {
+    const spec = EXTERNAL_EDITOR_SPEC_MAP.get(id);
+    if (isValidEditorEntryOnDisk(spec, entry.execPath, entry.isMacApp)) {
+      kept.push(entry);
+    } else {
+      changed = true;
+    }
+  }
+  if (!changed) return cachedExternalEditors;
+  const next = applyExternalEditorsEntries(kept, cachedExternalEditors.probedAt);
+  saveExternalEditorsDiskCache(next);
+  return next;
+}
+
+function scanExternalEditorsFilesystem() {
+  const home = os.homedir();
+  const pathDirs = String(process.env.PATH || '')
+    .split(path.delimiter)
+    .map((s) => s.trim().replace(/^"+|"+$/g, ''))
+    .filter(Boolean);
+  const fsResolvedById = new Map();
+  const pendingWinRegSpecs = [];
+
+  if (process.platform === 'win32') {
+    const localAppData = process.env.LOCALAPPDATA || path.join(home, 'AppData', 'Local');
+    const progFiles = process.env.ProgramFiles || 'C:\\Program Files';
+    const progFilesX86 = process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)';
+    const jbToolboxScripts = path.join(localAppData, 'JetBrains', 'Toolbox', 'scripts');
+
+    const winSearchRoots = [localAppData, path.join(localAppData, 'Programs'), progFiles, progFilesX86];
+    const extraJbDirs = [];
+    for (const parent of [
+      path.join(progFiles, 'JetBrains'),
+      path.join(localAppData, 'Programs'),
+      path.join(localAppData, 'JetBrains')
+    ]) {
+      try {
+        if (!fs.existsSync(parent)) continue;
+        for (const entry of fs.readdirSync(parent, { withFileTypes: true })) {
+          if (!entry.isDirectory()) continue;
+          extraJbDirs.push(path.join(parent, entry.name, 'bin'));
+        }
+      } catch {}
+    }
+
+    const searchDirs = Array.from(new Set([...pathDirs, jbToolboxScripts, ...extraJbDirs]));
+    const dirEntriesCache = new Map();
+    const getDirEntriesMap = (dirPath) => {
+      if (dirEntriesCache.has(dirPath)) return dirEntriesCache.get(dirPath);
+      const fileMap = new Map();
+      try {
+        for (const name of fs.readdirSync(dirPath)) {
+          const low = name.toLowerCase();
+          if (!fileMap.has(low)) fileMap.set(low, name);
+        }
+      } catch {}
+      dirEntriesCache.set(dirPath, fileMap);
+      return fileMap;
+    };
+
+    for (const spec of EXTERNAL_EDITOR_SPECS) {
+      let resolvedExe = '';
+
+      for (const dir of searchDirs) {
+        const dirMap = getDirEntriesMap(dir);
+        for (const exeName of spec.winExeNames || []) {
+          const hitDirect = dirMap.get(exeName.toLowerCase());
+          if (hitDirect) {
+            const direct = path.join(dir, hitDirect);
+            if (isExistingRegularFile(direct)) {
+              resolvedExe = direct;
+              break;
+            }
+          }
+          const parentDir = path.dirname(dir);
+          if (parentDir && parentDir !== dir) {
+            const hitParent = getDirEntriesMap(parentDir).get(exeName.toLowerCase());
+            if (hitParent) {
+              const parentExe = path.join(parentDir, hitParent);
+              if (isExistingRegularFile(parentExe)) {
+                resolvedExe = parentExe;
+                break;
+              }
+            }
+          }
+        }
+        if (resolvedExe) break;
+
+        for (const cmdName of spec.winCmdNames || []) {
+          const hitCmd = dirMap.get(cmdName.toLowerCase());
+          if (!hitCmd) continue;
+          const cmdPath = path.join(dir, hitCmd);
+          const extracted = extractExeFromWinCmdWrapper(cmdPath, spec.winExeNames || []);
+          if (extracted) {
+            resolvedExe = extracted;
+            break;
+          }
+        }
+        if (resolvedExe) break;
+      }
+
+      if (!resolvedExe && Array.isArray(spec.winRelPaths)) {
+        for (const rootDir of winSearchRoots) {
+          for (const rel of spec.winRelPaths) {
+            const cand = path.join(rootDir, rel);
+            if (isExistingRegularFile(cand)) {
+              resolvedExe = cand;
+              break;
+            }
+          }
+          if (resolvedExe) break;
+        }
+      }
+
+      if (resolvedExe) {
+        fsResolvedById.set(spec.id, { execPath: resolvedExe, isMacApp: false });
+      } else if (spec.winRegCheck && spec.scheme) {
+        pendingWinRegSpecs.push(spec);
+      }
+    }
+  } else if (process.platform === 'darwin') {
+    for (const spec of EXTERNAL_EDITOR_SPECS) {
+      let resolvedPath = '';
+      let isMacApp = false;
+      for (const rawApp of spec.macApps || []) {
+        const appPath = rawApp.startsWith('~/') ? path.join(home, rawApp.slice(2)) : rawApp;
+        if (!fs.existsSync(appPath)) continue;
+        if (spec.macCliRel) {
+          const cliPath = path.join(appPath, spec.macCliRel);
+          if (isExistingRegularFile(cliPath)) {
+            resolvedPath = cliPath;
+            isMacApp = false;
+            break;
+          }
+        }
+        resolvedPath = appPath;
+        isMacApp = true;
+        break;
+      }
+      if (resolvedPath) {
+        fsResolvedById.set(spec.id, { execPath: resolvedPath, isMacApp });
+      }
+    }
+  } else {
+    const linuxSearchDirs = Array.from(
+      new Set([...pathDirs, '/usr/local/bin', '/usr/bin', '/snap/bin', path.join(home, '.local', 'bin')])
+    );
+    for (const spec of EXTERNAL_EDITOR_SPECS) {
+      let resolvedBin = '';
+      for (const dir of linuxSearchDirs) {
+        for (const binName of spec.linuxBins || []) {
+          const cand = path.join(dir, binName);
+          if (isExistingRegularFile(cand)) {
+            resolvedBin = cand;
+            break;
+          }
+        }
+        if (resolvedBin) break;
+      }
+      if (resolvedBin) {
+        fsResolvedById.set(spec.id, { execPath: resolvedBin, isMacApp: false });
+      }
+    }
+  }
+
+  return { fsResolvedById, pendingWinRegSpecs };
+}
+
+function buildEntriesFromResolvedMaps(fsResolvedById, regResolvedById) {
+  const entries = [];
+  for (const spec of EXTERNAL_EDITOR_SPECS) {
+    const hit = fsResolvedById.get(spec.id) || regResolvedById?.get(spec.id);
+    if (!hit || !hit.execPath) continue;
+    entries.push({
+      id: spec.id,
+      label: spec.label,
+      scheme: spec.scheme,
+      family: spec.family,
+      execPath: hit.execPath,
+      isMacApp: Boolean(hit.isMacApp)
+    });
+  }
+  return entries;
+}
+
+function detectInstalledExternalEditors(opts = {}) {
+  const force = Boolean(opts && opts.force);
+  const now = Date.now();
+  if (
+    !force &&
+    cachedExternalEditors.platform === process.platform &&
+    cachedExternalEditors.probedAt > 0 &&
+    now - cachedExternalEditors.probedAt < EXTERNAL_EDITOR_PROBE_TTL_MS
+  ) {
+    return pruneMissingCachedExternalEditors();
+  }
+  if (!force) {
+    const diskHit = loadExternalEditorsDiskCache(now);
+    if (diskHit) return diskHit;
+  }
+
+  const { fsResolvedById, pendingWinRegSpecs } = scanExternalEditorsFilesystem();
+  const regResolvedById = new Map();
+  for (const spec of pendingWinRegSpecs) {
+    const regExe = probeWin32ProtocolExeSync(spec.scheme);
+    if (regExe) {
+      regResolvedById.set(spec.id, { execPath: regExe, isMacApp: false });
+    }
+  }
+  const next = applyExternalEditorsEntries(buildEntriesFromResolvedMaps(fsResolvedById, regResolvedById), Date.now());
+  saveExternalEditorsDiskCache(next);
+  return next;
+}
+
+async function refreshInstalledExternalEditorsAsync(opts = {}) {
+  const force = Boolean(opts && opts.force);
+  if (externalEditorsRefreshPromise) {
+    return externalEditorsRefreshPromise;
+  }
+  const now = Date.now();
+  if (
+    !force &&
+    cachedExternalEditors.platform === process.platform &&
+    cachedExternalEditors.probedAt > 0 &&
+    now - cachedExternalEditors.probedAt < EXTERNAL_EDITOR_PROBE_TTL_MS
+  ) {
+    return pruneMissingCachedExternalEditors();
+  }
+  if (!force) {
+    const diskHit = loadExternalEditorsDiskCache(now);
+    if (diskHit) return diskHit;
+  }
+
+  const p = (async () => {
+    const { fsResolvedById, pendingWinRegSpecs } = scanExternalEditorsFilesystem();
+    const regResolvedById = new Map();
+    if (pendingWinRegSpecs.length > 0) {
+      const regHits = await Promise.all(
+        pendingWinRegSpecs.map(async (spec) => [spec.id, await probeWin32ProtocolExeAsync(spec.scheme)])
+      );
+      for (const [id, regExe] of regHits) {
+        if (regExe) {
+          regResolvedById.set(id, { execPath: regExe, isMacApp: false });
+        }
+      }
+    }
+    const next = applyExternalEditorsEntries(buildEntriesFromResolvedMaps(fsResolvedById, regResolvedById), Date.now());
+    saveExternalEditorsDiskCache(next);
+    return next;
+  })();
+
+  externalEditorsRefreshPromise = p;
+  try {
+    return await p;
+  } finally {
+    if (externalEditorsRefreshPromise === p) {
+      externalEditorsRefreshPromise = null;
+    }
+  }
+}
+
+function getExternalEditorsBundleState() {
+  const now = Date.now();
+  if (cachedExternalEditors.probedAt === 0 || cachedExternalEditors.platform !== process.platform) {
+    if (!loadExternalEditorsDiskCache(now)) {
+      detectInstalledExternalEditors({ force: true });
+    }
+  } else {
+    pruneMissingCachedExternalEditors();
+    if (!RUN_ONCE && now - cachedExternalEditors.probedAt >= EXTERNAL_EDITOR_PROBE_TTL_MS) {
+      void refreshInstalledExternalEditorsAsync({ force: true });
+    }
+  }
+  return cachedExternalEditors;
+}
+
 function readHostThemeMode() {
   const fileSig = getFileMtimeSig(HOST_CONFIG_PATH);
   if (fileSig === cachedHostCfgFileSig) {
@@ -923,9 +1552,10 @@ function rebuildBundleIfNeeded(opts = {}) {
       ];
 
   const hostThemeMode = readHostThemeMode();
+  const editorsState = getExternalEditorsBundleState();
   const sig =
     [...coreFiles, ...userFiles].map(getFileMtimeSig).join('|') +
-    `|hostTheme:${hostThemeMode || ''}|safe:${SAFE_MODE}|cli:${CLI_CHANNEL || ''}`;
+    `|hostTheme:${hostThemeMode || ''}|safe:${SAFE_MODE}|cli:${CLI_CHANNEL || ''}|editors:${editorsState.sig}`;
   if (sig === cachedBundleSig && cachedInjectScript) {
     return false;
   }
@@ -1101,8 +1731,7 @@ function rebuildBundleIfNeeded(opts = {}) {
 
   const customJs = !SAFE_MODE && modules.customJs ? readTextSafe(path.join(USER_DIR, 'custom.js'), '') : '';
   const runtimeTemplate = readTextSafe(path.join(CORE_DIR, 'runtime.js'), '');
-  const externalEditorsInfo = detectInstalledExternalEditors();
-  const installedEditors = externalEditorsInfo.publicList;
+  const installedEditors = editorsState.publicList;
 
   const { i18n: _omitI18nFromHash, ...hashModules } = modules;
   const hash = crypto
@@ -1223,7 +1852,10 @@ const attachingTargetIds = new Set();
 const destroyedWhileAttaching = new Set();
 
 // --keep-alive 健康检查在 daemon 存活时会在下方 PID 锁段直接 exit(0)，无需预先构建注入 bundle
-if (!KEEP_ALIVE_ONLY) rebuildBundleIfNeeded();
+if (!KEEP_ALIVE_ONLY) {
+  await refreshInstalledExternalEditorsAsync();
+  rebuildBundleIfNeeded();
+}
 
 const MY_PROC_START_MS = Math.round(Date.now() - process.uptime() * 1000);
 const DAEMON_LOG_FILE = path.join(os.tmpdir(), 'ag-theme-daemon.log');
@@ -5268,402 +5900,6 @@ function parseMetricsSubscriptionPayload(rawPayload) {
   return { valid: ids.length > 0, ids };
 }
 
-const BROWSER_PREVIEW_EXT_WHITELIST_RE = /^\.(html?|pdf|svg)$/i;
-const EXTERNAL_EDITOR_PROBE_TTL_MS = 300000;
-let lastOpenExternalActionAt = 0;
-let cachedExternalEditors = {
-  probedAt: 0,
-  platform: '',
-  publicList: [],
-  byId: new Map()
-};
-
-const EXTERNAL_EDITOR_SPECS = [
-  {
-    id: 'vscode',
-    label: 'VS Code',
-    scheme: 'vscode',
-    family: 'vscode',
-    winExeNames: ['Code.exe'],
-    winRelPaths: ['Microsoft VS Code\\Code.exe'],
-    winRegCheck: true,
-    macApps: ['/Applications/Visual Studio Code.app', '~/Applications/Visual Studio Code.app'],
-    macCliRel: 'Contents/Resources/app/bin/code',
-    linuxBins: ['code']
-  },
-  {
-    id: 'vscode-insiders',
-    label: 'VS Code Insiders',
-    scheme: 'vscode-insiders',
-    family: 'vscode',
-    winExeNames: ['Code - Insiders.exe'],
-    winRelPaths: ['Microsoft VS Code Insiders\\Code - Insiders.exe'],
-    winRegCheck: true,
-    macApps: ['/Applications/Visual Studio Code - Insiders.app', '~/Applications/Visual Studio Code - Insiders.app'],
-    macCliRel: 'Contents/Resources/app/bin/code-insiders',
-    linuxBins: ['code-insiders']
-  },
-  {
-    id: 'cursor',
-    label: 'Cursor',
-    scheme: 'cursor',
-    family: 'vscode',
-    winExeNames: ['Cursor.exe'],
-    winRelPaths: ['cursor\\Cursor.exe', 'Cursor\\Cursor.exe'],
-    winRegCheck: true,
-    macApps: ['/Applications/Cursor.app', '~/Applications/Cursor.app'],
-    macCliRel: 'Contents/Resources/app/bin/cursor',
-    linuxBins: ['cursor']
-  },
-  {
-    id: 'windsurf',
-    label: 'Windsurf',
-    scheme: 'windsurf',
-    family: 'vscode',
-    winExeNames: ['Windsurf.exe'],
-    winRelPaths: ['Windsurf\\Windsurf.exe'],
-    winRegCheck: true,
-    macApps: ['/Applications/Windsurf.app', '~/Applications/Windsurf.app'],
-    macCliRel: 'Contents/Resources/app/bin/windsurf',
-    linuxBins: ['windsurf']
-  },
-  {
-    id: 'zed',
-    label: 'Zed',
-    scheme: 'zed',
-    family: 'zed',
-    winExeNames: ['Zed.exe', 'zed.exe'],
-    winRelPaths: ['Zed\\Zed.exe', 'Zed\\bin\\zed.exe'],
-    winRegCheck: true,
-    macApps: ['/Applications/Zed.app', '~/Applications/Zed.app'],
-    macCliRel: 'Contents/MacOS/cli',
-    linuxBins: ['zed', 'zeditor']
-  },
-  {
-    id: 'idea',
-    label: 'IntelliJ IDEA',
-    scheme: 'jetbrains',
-    family: 'jetbrains',
-    winExeNames: ['idea64.exe', 'idea.exe'],
-    winCmdNames: ['idea.cmd', 'idea64.cmd'],
-    winRelPaths: [],
-    macApps: [
-      '/Applications/IntelliJ IDEA.app',
-      '/Applications/IntelliJ IDEA CE.app',
-      '~/Applications/IntelliJ IDEA.app',
-      '~/Applications/IntelliJ IDEA CE.app'
-    ],
-    macCliRel: 'Contents/MacOS/idea',
-    linuxBins: ['idea', 'idea.sh', 'intellij-idea-ultimate', 'intellij-idea-community']
-  },
-  {
-    id: 'pycharm',
-    label: 'PyCharm',
-    scheme: 'jetbrains',
-    family: 'jetbrains',
-    winExeNames: ['pycharm64.exe', 'pycharm.exe'],
-    winCmdNames: ['pycharm.cmd', 'pycharm64.cmd'],
-    winRelPaths: [],
-    macApps: [
-      '/Applications/PyCharm.app',
-      '/Applications/PyCharm CE.app',
-      '~/Applications/PyCharm.app',
-      '~/Applications/PyCharm CE.app'
-    ],
-    macCliRel: 'Contents/MacOS/pycharm',
-    linuxBins: ['pycharm', 'pycharm.sh', 'pycharm-professional', 'pycharm-community']
-  },
-  {
-    id: 'webstorm',
-    label: 'WebStorm',
-    scheme: 'jetbrains',
-    family: 'jetbrains',
-    winExeNames: ['webstorm64.exe', 'webstorm.exe'],
-    winCmdNames: ['webstorm.cmd', 'webstorm64.cmd'],
-    winRelPaths: [],
-    macApps: ['/Applications/WebStorm.app', '~/Applications/WebStorm.app'],
-    macCliRel: 'Contents/MacOS/webstorm',
-    linuxBins: ['webstorm', 'webstorm.sh']
-  },
-  {
-    id: 'goland',
-    label: 'GoLand',
-    scheme: 'jetbrains',
-    family: 'jetbrains',
-    winExeNames: ['goland64.exe', 'goland.exe'],
-    winCmdNames: ['goland.cmd', 'goland64.cmd'],
-    winRelPaths: [],
-    macApps: ['/Applications/GoLand.app', '~/Applications/GoLand.app'],
-    macCliRel: 'Contents/MacOS/goland',
-    linuxBins: ['goland', 'goland.sh']
-  },
-  {
-    id: 'clion',
-    label: 'CLion',
-    scheme: 'jetbrains',
-    family: 'jetbrains',
-    winExeNames: ['clion64.exe', 'clion.exe'],
-    winCmdNames: ['clion.cmd', 'clion64.cmd'],
-    winRelPaths: [],
-    macApps: ['/Applications/CLion.app', '~/Applications/CLion.app'],
-    macCliRel: 'Contents/MacOS/clion',
-    linuxBins: ['clion', 'clion.sh']
-  },
-  {
-    id: 'rustrover',
-    label: 'RustRover',
-    scheme: 'jetbrains',
-    family: 'jetbrains',
-    winExeNames: ['rustrover64.exe', 'rustrover.exe'],
-    winCmdNames: ['rustrover.cmd', 'rustrover64.cmd'],
-    winRelPaths: [],
-    macApps: ['/Applications/RustRover.app', '~/Applications/RustRover.app'],
-    macCliRel: 'Contents/MacOS/rustrover',
-    linuxBins: ['rustrover', 'rustrover.sh']
-  },
-  {
-    id: 'sublimetext',
-    label: 'Sublime Text',
-    scheme: '',
-    family: 'sublime',
-    winExeNames: ['subl.exe', 'sublime_text.exe'],
-    winRelPaths: [
-      'Sublime Text\\subl.exe',
-      'Sublime Text\\sublime_text.exe',
-      'Sublime Text 3\\sublime_text.exe'
-    ],
-    winRegCheck: false,
-    macApps: ['/Applications/Sublime Text.app', '~/Applications/Sublime Text.app'],
-    macCliRel: 'Contents/SharedSupport/bin/subl',
-    linuxBins: ['subl', 'sublime_text']
-  }
-];
-
-function isExistingRegularFile(filePath) {
-  try {
-    return Boolean(filePath && fs.statSync(filePath, { throwIfNoEntry: false })?.isFile());
-  } catch {
-    return false;
-  }
-}
-
-function extractExeFromWinCmdWrapper(cmdPath, allowedExeNames = []) {
-  try {
-    if (!isExistingRegularFile(cmdPath)) return '';
-    const raw = fs.readFileSync(cmdPath, 'utf8');
-    const matches = raw.match(/"([^"\r\n]+\.exe)"/gi) || [];
-    for (const m of matches) {
-      const exe = m.slice(1, -1).trim();
-      if (!exe) continue;
-      if (allowedExeNames.length > 0) {
-        const base = path.win32.basename(exe).toLowerCase();
-        if (!allowedExeNames.some((n) => n.toLowerCase() === base)) continue;
-      }
-      if (isExistingRegularFile(exe)) return exe;
-    }
-  } catch {}
-  return '';
-}
-
-function probeWin32ProtocolExe(scheme) {
-  if (process.platform !== 'win32' || !/^[a-z][a-z0-9+.-]*$/i.test(scheme)) return '';
-  for (const hivePath of [
-    `HKCU\\Software\\Classes\\${scheme}\\shell\\open\\command`,
-    `HKLM\\Software\\Classes\\${scheme}\\shell\\open\\command`
-  ]) {
-    try {
-      const r = spawnSync('reg', ['query', hivePath, '/ve'], {
-        encoding: 'utf8',
-        windowsHide: true,
-        timeout: 900
-      });
-      if (r.status !== 0 || !r.stdout) continue;
-      const m = String(r.stdout).match(/REG_SZ\s+(?:"([^"\r\n]+\.exe)"|([^\r\n"]*?\.exe))(?:\s|$)/i);
-      const candidate = (m && (m[1] || m[2]) ? (m[1] || m[2]).trim() : '');
-      if (candidate && isExistingRegularFile(candidate)) {
-        return candidate;
-      }
-    } catch {}
-  }
-  return '';
-}
-
-function detectInstalledExternalEditors(opts = {}) {
-  const force = Boolean(opts && opts.force);
-  const now = Date.now();
-  if (
-    !force &&
-    cachedExternalEditors.platform === process.platform &&
-    cachedExternalEditors.probedAt > 0 &&
-    now - cachedExternalEditors.probedAt < EXTERNAL_EDITOR_PROBE_TTL_MS
-  ) {
-    return cachedExternalEditors;
-  }
-
-  const home = os.homedir();
-  const pathDirs = String(process.env.PATH || '')
-    .split(path.delimiter)
-    .map((s) => s.trim().replace(/^"+|"+$/g, ''))
-    .filter(Boolean);
-
-  const byId = new Map();
-  const publicList = [];
-
-  if (process.platform === 'win32') {
-    const localAppData = process.env.LOCALAPPDATA || path.join(home, 'AppData', 'Local');
-    const progFiles = process.env.ProgramFiles || 'C:\\Program Files';
-    const progFilesX86 = process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)';
-    const jbToolboxScripts = path.join(localAppData, 'JetBrains', 'Toolbox', 'scripts');
-
-    const winSearchRoots = [localAppData, path.join(localAppData, 'Programs'), progFiles, progFilesX86];
-    const extraJbDirs = [];
-    for (const parent of [
-      path.join(progFiles, 'JetBrains'),
-      path.join(localAppData, 'Programs'),
-      path.join(localAppData, 'JetBrains')
-    ]) {
-      try {
-        if (!fs.existsSync(parent)) continue;
-        for (const entry of fs.readdirSync(parent, { withFileTypes: true })) {
-          if (!entry.isDirectory()) continue;
-          extraJbDirs.push(path.join(parent, entry.name, 'bin'));
-        }
-      } catch {}
-    }
-
-    const searchDirs = Array.from(new Set([...pathDirs, jbToolboxScripts, ...extraJbDirs]));
-
-    for (const spec of EXTERNAL_EDITOR_SPECS) {
-      let resolvedExe = '';
-
-      for (const dir of searchDirs) {
-        for (const exeName of spec.winExeNames || []) {
-          const direct = path.join(dir, exeName);
-          if (isExistingRegularFile(direct)) {
-            resolvedExe = direct;
-            break;
-          }
-          const parentDir = path.dirname(dir);
-          if (parentDir && parentDir !== dir) {
-            const parentExe = path.join(parentDir, exeName);
-            if (isExistingRegularFile(parentExe)) {
-              resolvedExe = parentExe;
-              break;
-            }
-          }
-        }
-        if (resolvedExe) break;
-
-        for (const cmdName of spec.winCmdNames || []) {
-          const cmdPath = path.join(dir, cmdName);
-          const extracted = extractExeFromWinCmdWrapper(cmdPath, spec.winExeNames || []);
-          if (extracted) {
-            resolvedExe = extracted;
-            break;
-          }
-        }
-        if (resolvedExe) break;
-      }
-
-      if (!resolvedExe && Array.isArray(spec.winRelPaths)) {
-        for (const rootDir of winSearchRoots) {
-          for (const rel of spec.winRelPaths) {
-            const cand = path.join(rootDir, rel);
-            if (isExistingRegularFile(cand)) {
-              resolvedExe = cand;
-              break;
-            }
-          }
-          if (resolvedExe) break;
-        }
-      }
-
-      if (!resolvedExe && spec.winRegCheck && spec.scheme) {
-        resolvedExe = probeWin32ProtocolExe(spec.scheme);
-      }
-
-      if (resolvedExe) {
-        byId.set(spec.id, {
-          id: spec.id,
-          label: spec.label,
-          scheme: spec.scheme,
-          family: spec.family,
-          execPath: resolvedExe,
-          isMacApp: false
-        });
-        publicList.push({ id: spec.id, label: spec.label, scheme: spec.scheme });
-      }
-    }
-  } else if (process.platform === 'darwin') {
-    for (const spec of EXTERNAL_EDITOR_SPECS) {
-      let resolvedPath = '';
-      let isMacApp = false;
-      for (const rawApp of spec.macApps || []) {
-        const appPath = rawApp.startsWith('~/') ? path.join(home, rawApp.slice(2)) : rawApp;
-        if (!fs.existsSync(appPath)) continue;
-        if (spec.macCliRel) {
-          const cliPath = path.join(appPath, spec.macCliRel);
-          if (isExistingRegularFile(cliPath)) {
-            resolvedPath = cliPath;
-            isMacApp = false;
-            break;
-          }
-        }
-        resolvedPath = appPath;
-        isMacApp = true;
-        break;
-      }
-      if (resolvedPath) {
-        byId.set(spec.id, {
-          id: spec.id,
-          label: spec.label,
-          scheme: spec.scheme,
-          family: spec.family,
-          execPath: resolvedPath,
-          isMacApp
-        });
-        publicList.push({ id: spec.id, label: spec.label, scheme: spec.scheme });
-      }
-    }
-  } else {
-    const linuxSearchDirs = Array.from(
-      new Set([...pathDirs, '/usr/local/bin', '/usr/bin', '/snap/bin', path.join(home, '.local', 'bin')])
-    );
-    for (const spec of EXTERNAL_EDITOR_SPECS) {
-      let resolvedBin = '';
-      for (const dir of linuxSearchDirs) {
-        for (const binName of spec.linuxBins || []) {
-          const cand = path.join(dir, binName);
-          if (isExistingRegularFile(cand)) {
-            resolvedBin = cand;
-            break;
-          }
-        }
-        if (resolvedBin) break;
-      }
-      if (resolvedBin) {
-        byId.set(spec.id, {
-          id: spec.id,
-          label: spec.label,
-          scheme: spec.scheme,
-          family: spec.family,
-          execPath: resolvedBin,
-          isMacApp: false
-        });
-        publicList.push({ id: spec.id, label: spec.label, scheme: spec.scheme });
-      }
-    }
-  }
-
-  cachedExternalEditors = {
-    probedAt: now,
-    platform: process.platform,
-    publicList,
-    byId
-  };
-  return cachedExternalEditors;
-}
-
 function resolveWslCandidatePathsForPosixPath(decodedPosixPath, endpoint = null) {
   if (process.platform !== 'win32') return [];
   const posix = String(decodedPosixPath || '');
@@ -5676,7 +5912,7 @@ function resolveWslCandidatePathsForPosixPath(decodedPosixPath, endpoint = null)
     return [`${drive}:\\${rest}`];
   }
 
-  if (!/^\/(?:home|root|tmp|var|opt|usr|etc|mnt|srv|run|workspaces)\//.test(posix)) {
+  if (/^\/(?:\/|[A-Za-z]:(?:\/|$))/.test(posix) || !/^\/[A-Za-z0-9._-]+\/[^\0\r\n]+$/.test(posix)) {
     return [];
   }
 
@@ -8172,6 +8408,18 @@ async function sync() {
         tokenAnalyticsLastJsonCache = { dataRef: null, jsonStr: '' };
         cleanupWslSqliteStagingCache();
       }
+    }
+    if (cachedExternalEditors.probedAt === 0 || cachedExternalEditors.platform !== process.platform) {
+      await refreshInstalledExternalEditorsAsync();
+    } else if (
+      !RUN_ONCE &&
+      syncTickCount % 12 === 4 &&
+      attachedTargets.size > 0 &&
+      activeConfig?.enabled &&
+      activeConfig?.modules?.contextMenu !== false &&
+      Date.now() - cachedExternalEditors.probedAt >= EXTERNAL_EDITOR_PROBE_TTL_MS
+    ) {
+      await refreshInstalledExternalEditorsAsync({ force: true });
     }
     const bundleChanged = rebuildBundleIfNeeded();
     if (!activeConfig.enabled) {
