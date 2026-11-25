@@ -2513,6 +2513,7 @@ async function runInstall() {
     'i18n',
     'metrics',
     'composerWaxSeal',
+    'contextMenu',
     'deadlockHealer',
     'coldBootHealer',
     'zoomShortcuts',

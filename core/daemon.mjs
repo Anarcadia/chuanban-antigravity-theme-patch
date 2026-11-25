@@ -22,7 +22,7 @@ import http from 'node:http';
 import crypto from 'node:crypto';
 import { performance } from 'node:perf_hooks';
 import { execFile, spawn, spawnSync } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -544,6 +544,7 @@ let activeConfig = {
     metrics: true,
     tokenAnalytics: true,
     composerWaxSeal: true,
+    contextMenu: true,
     deadlockHealer: true,
     coldBootHealer: true,
     zoomShortcuts: true,
@@ -974,6 +975,7 @@ function rebuildBundleIfNeeded(opts = {}) {
       metrics: true,
       tokenAnalytics: true,
       composerWaxSeal: true,
+      contextMenu: true,
       deadlockHealer: true,
       coldBootHealer: true,
       zoomShortcuts: true,
@@ -1099,6 +1101,8 @@ function rebuildBundleIfNeeded(opts = {}) {
 
   const customJs = !SAFE_MODE && modules.customJs ? readTextSafe(path.join(USER_DIR, 'custom.js'), '') : '';
   const runtimeTemplate = readTextSafe(path.join(CORE_DIR, 'runtime.js'), '');
+  const externalEditorsInfo = detectInstalledExternalEditors();
+  const installedEditors = externalEditorsInfo.publicList;
 
   const { i18n: _omitI18nFromHash, ...hashModules } = modules;
   const hash = crypto
@@ -1117,7 +1121,8 @@ function rebuildBundleIfNeeded(opts = {}) {
         themeVars,
         darkThemeVars,
         selectors: activeConfig.selectors,
-        hostThemeMode
+        hostThemeMode,
+        installedEditors
       })
     )
     .digest('hex')
@@ -1140,11 +1145,17 @@ function rebuildBundleIfNeeded(opts = {}) {
 
   const RE_STRIP_TA_CSS = /\/\* __AG_TOKEN_ANALYTICS_CSS_START__ \*\/[\s\S]*?\/\* __AG_TOKEN_ANALYTICS_CSS_END__ \*\//g;
   const RE_STRIP_TA_JS = /\/\* __AG_TOKEN_ANALYTICS_JS_START__ \*\/[\s\S]*?\/\* __AG_TOKEN_ANALYTICS_JS_END__ \*\//g;
+  const RE_STRIP_CM_CSS = /\/\* __AG_CONTEXT_MENU_CSS_START__ \*\/[\s\S]*?\/\* __AG_CONTEXT_MENU_CSS_END__ \*\//g;
+  const RE_STRIP_CM_JS = /\/\* __AG_CONTEXT_MENU_JS_START__ \*\/[\s\S]*?\/\* __AG_CONTEXT_MENU_JS_END__ \*\//g;
 
-  const pageCss = modules.tokenAnalytics ? baseCss : baseCss.replace(RE_STRIP_TA_CSS, '');
-  const pageRuntime = modules.tokenAnalytics
+  let pageCss = modules.tokenAnalytics ? baseCss : baseCss.replace(RE_STRIP_TA_CSS, '');
+  let pageRuntime = modules.tokenAnalytics
     ? runtimeTemplate
     : runtimeTemplate.replace(RE_STRIP_TA_JS, '  cleanupTokenAnalyticsDom();');
+  if (modules.contextMenu === false) {
+    pageCss = pageCss.replace(RE_STRIP_CM_CSS, '');
+    pageRuntime = pageRuntime.replace(RE_STRIP_CM_JS, '  cleanupContextMenuDom();');
+  }
 
   const bootPayload = {
     version: cachedPatchVersion,
@@ -1160,6 +1171,7 @@ function rebuildBundleIfNeeded(opts = {}) {
     darkThemeVars,
     i18nDict: mergedDict,
     modules,
+    installedEditors,
     selectors: activeConfig.selectors,
     config: {
       enabled,
@@ -1178,12 +1190,13 @@ function rebuildBundleIfNeeded(opts = {}) {
 
   cachedInjectScript = pageRuntime.replace('})(__AG_BOOT_PAYLOAD__);', () => `})(${JSON.stringify(bootPayload)});`);
 
-  // Swarm 等跨进程子 iframe 永不承载设置弹窗，固定裁剪 Token 统计 CSS+JS（单 iframe 立减 ~100 KB，且保持同一 version 哈希）
-  const iframeCss = baseCss.replace(RE_STRIP_TA_CSS, '');
-  const iframeRuntime = runtimeTemplate.replace(RE_STRIP_TA_JS, '');
-  const iframeModules = Object.assign({}, modules, { tokenAnalytics: false });
+  // Swarm 等跨进程子 iframe 永不承载设置弹窗或顶层右键菜单，固定裁剪对应 CSS+JS 载荷并保持同一 version 哈希
+  const iframeCss = baseCss.replace(RE_STRIP_TA_CSS, '').replace(RE_STRIP_CM_CSS, '');
+  const iframeRuntime = runtimeTemplate.replace(RE_STRIP_TA_JS, '').replace(RE_STRIP_CM_JS, '');
+  const iframeModules = Object.assign({}, modules, { tokenAnalytics: false, contextMenu: false });
   const iframePayload = Object.assign({}, bootPayload, {
     cssText: iframeCss,
+    installedEditors: [],
     modules: iframeModules,
     config: Object.assign({}, bootPayload.config, { modules: iframeModules })
   });
@@ -5255,6 +5268,632 @@ function parseMetricsSubscriptionPayload(rawPayload) {
   return { valid: ids.length > 0, ids };
 }
 
+const BROWSER_PREVIEW_EXT_WHITELIST_RE = /^\.(html?|pdf|svg)$/i;
+const EXTERNAL_EDITOR_PROBE_TTL_MS = 300000;
+let lastOpenExternalActionAt = 0;
+let cachedExternalEditors = {
+  probedAt: 0,
+  platform: '',
+  publicList: [],
+  byId: new Map()
+};
+
+const EXTERNAL_EDITOR_SPECS = [
+  {
+    id: 'vscode',
+    label: 'VS Code',
+    scheme: 'vscode',
+    family: 'vscode',
+    winExeNames: ['Code.exe'],
+    winRelPaths: ['Microsoft VS Code\\Code.exe'],
+    winRegCheck: true,
+    macApps: ['/Applications/Visual Studio Code.app', '~/Applications/Visual Studio Code.app'],
+    macCliRel: 'Contents/Resources/app/bin/code',
+    linuxBins: ['code']
+  },
+  {
+    id: 'vscode-insiders',
+    label: 'VS Code Insiders',
+    scheme: 'vscode-insiders',
+    family: 'vscode',
+    winExeNames: ['Code - Insiders.exe'],
+    winRelPaths: ['Microsoft VS Code Insiders\\Code - Insiders.exe'],
+    winRegCheck: true,
+    macApps: ['/Applications/Visual Studio Code - Insiders.app', '~/Applications/Visual Studio Code - Insiders.app'],
+    macCliRel: 'Contents/Resources/app/bin/code-insiders',
+    linuxBins: ['code-insiders']
+  },
+  {
+    id: 'cursor',
+    label: 'Cursor',
+    scheme: 'cursor',
+    family: 'vscode',
+    winExeNames: ['Cursor.exe'],
+    winRelPaths: ['cursor\\Cursor.exe', 'Cursor\\Cursor.exe'],
+    winRegCheck: true,
+    macApps: ['/Applications/Cursor.app', '~/Applications/Cursor.app'],
+    macCliRel: 'Contents/Resources/app/bin/cursor',
+    linuxBins: ['cursor']
+  },
+  {
+    id: 'windsurf',
+    label: 'Windsurf',
+    scheme: 'windsurf',
+    family: 'vscode',
+    winExeNames: ['Windsurf.exe'],
+    winRelPaths: ['Windsurf\\Windsurf.exe'],
+    winRegCheck: true,
+    macApps: ['/Applications/Windsurf.app', '~/Applications/Windsurf.app'],
+    macCliRel: 'Contents/Resources/app/bin/windsurf',
+    linuxBins: ['windsurf']
+  },
+  {
+    id: 'zed',
+    label: 'Zed',
+    scheme: 'zed',
+    family: 'zed',
+    winExeNames: ['Zed.exe', 'zed.exe'],
+    winRelPaths: ['Zed\\Zed.exe', 'Zed\\bin\\zed.exe'],
+    winRegCheck: true,
+    macApps: ['/Applications/Zed.app', '~/Applications/Zed.app'],
+    macCliRel: 'Contents/MacOS/cli',
+    linuxBins: ['zed', 'zeditor']
+  },
+  {
+    id: 'idea',
+    label: 'IntelliJ IDEA',
+    scheme: 'jetbrains',
+    family: 'jetbrains',
+    winExeNames: ['idea64.exe', 'idea.exe'],
+    winCmdNames: ['idea.cmd', 'idea64.cmd'],
+    winRelPaths: [],
+    macApps: [
+      '/Applications/IntelliJ IDEA.app',
+      '/Applications/IntelliJ IDEA CE.app',
+      '~/Applications/IntelliJ IDEA.app',
+      '~/Applications/IntelliJ IDEA CE.app'
+    ],
+    macCliRel: 'Contents/MacOS/idea',
+    linuxBins: ['idea', 'idea.sh', 'intellij-idea-ultimate', 'intellij-idea-community']
+  },
+  {
+    id: 'pycharm',
+    label: 'PyCharm',
+    scheme: 'jetbrains',
+    family: 'jetbrains',
+    winExeNames: ['pycharm64.exe', 'pycharm.exe'],
+    winCmdNames: ['pycharm.cmd', 'pycharm64.cmd'],
+    winRelPaths: [],
+    macApps: [
+      '/Applications/PyCharm.app',
+      '/Applications/PyCharm CE.app',
+      '~/Applications/PyCharm.app',
+      '~/Applications/PyCharm CE.app'
+    ],
+    macCliRel: 'Contents/MacOS/pycharm',
+    linuxBins: ['pycharm', 'pycharm.sh', 'pycharm-professional', 'pycharm-community']
+  },
+  {
+    id: 'webstorm',
+    label: 'WebStorm',
+    scheme: 'jetbrains',
+    family: 'jetbrains',
+    winExeNames: ['webstorm64.exe', 'webstorm.exe'],
+    winCmdNames: ['webstorm.cmd', 'webstorm64.cmd'],
+    winRelPaths: [],
+    macApps: ['/Applications/WebStorm.app', '~/Applications/WebStorm.app'],
+    macCliRel: 'Contents/MacOS/webstorm',
+    linuxBins: ['webstorm', 'webstorm.sh']
+  },
+  {
+    id: 'goland',
+    label: 'GoLand',
+    scheme: 'jetbrains',
+    family: 'jetbrains',
+    winExeNames: ['goland64.exe', 'goland.exe'],
+    winCmdNames: ['goland.cmd', 'goland64.cmd'],
+    winRelPaths: [],
+    macApps: ['/Applications/GoLand.app', '~/Applications/GoLand.app'],
+    macCliRel: 'Contents/MacOS/goland',
+    linuxBins: ['goland', 'goland.sh']
+  },
+  {
+    id: 'clion',
+    label: 'CLion',
+    scheme: 'jetbrains',
+    family: 'jetbrains',
+    winExeNames: ['clion64.exe', 'clion.exe'],
+    winCmdNames: ['clion.cmd', 'clion64.cmd'],
+    winRelPaths: [],
+    macApps: ['/Applications/CLion.app', '~/Applications/CLion.app'],
+    macCliRel: 'Contents/MacOS/clion',
+    linuxBins: ['clion', 'clion.sh']
+  },
+  {
+    id: 'rustrover',
+    label: 'RustRover',
+    scheme: 'jetbrains',
+    family: 'jetbrains',
+    winExeNames: ['rustrover64.exe', 'rustrover.exe'],
+    winCmdNames: ['rustrover.cmd', 'rustrover64.cmd'],
+    winRelPaths: [],
+    macApps: ['/Applications/RustRover.app', '~/Applications/RustRover.app'],
+    macCliRel: 'Contents/MacOS/rustrover',
+    linuxBins: ['rustrover', 'rustrover.sh']
+  },
+  {
+    id: 'sublimetext',
+    label: 'Sublime Text',
+    scheme: '',
+    family: 'sublime',
+    winExeNames: ['subl.exe', 'sublime_text.exe'],
+    winRelPaths: [
+      'Sublime Text\\subl.exe',
+      'Sublime Text\\sublime_text.exe',
+      'Sublime Text 3\\sublime_text.exe'
+    ],
+    winRegCheck: false,
+    macApps: ['/Applications/Sublime Text.app', '~/Applications/Sublime Text.app'],
+    macCliRel: 'Contents/SharedSupport/bin/subl',
+    linuxBins: ['subl', 'sublime_text']
+  }
+];
+
+function isExistingRegularFile(filePath) {
+  try {
+    return Boolean(filePath && fs.statSync(filePath, { throwIfNoEntry: false })?.isFile());
+  } catch {
+    return false;
+  }
+}
+
+function extractExeFromWinCmdWrapper(cmdPath, allowedExeNames = []) {
+  try {
+    if (!isExistingRegularFile(cmdPath)) return '';
+    const raw = fs.readFileSync(cmdPath, 'utf8');
+    const matches = raw.match(/"([^"\r\n]+\.exe)"/gi) || [];
+    for (const m of matches) {
+      const exe = m.slice(1, -1).trim();
+      if (!exe) continue;
+      if (allowedExeNames.length > 0) {
+        const base = path.win32.basename(exe).toLowerCase();
+        if (!allowedExeNames.some((n) => n.toLowerCase() === base)) continue;
+      }
+      if (isExistingRegularFile(exe)) return exe;
+    }
+  } catch {}
+  return '';
+}
+
+function probeWin32ProtocolExe(scheme) {
+  if (process.platform !== 'win32' || !/^[a-z][a-z0-9+.-]*$/i.test(scheme)) return '';
+  for (const hivePath of [
+    `HKCU\\Software\\Classes\\${scheme}\\shell\\open\\command`,
+    `HKLM\\Software\\Classes\\${scheme}\\shell\\open\\command`
+  ]) {
+    try {
+      const r = spawnSync('reg', ['query', hivePath, '/ve'], {
+        encoding: 'utf8',
+        windowsHide: true,
+        timeout: 900
+      });
+      if (r.status !== 0 || !r.stdout) continue;
+      const m = String(r.stdout).match(/REG_SZ\s+(?:"([^"\r\n]+\.exe)"|([^\r\n"]*?\.exe))(?:\s|$)/i);
+      const candidate = (m && (m[1] || m[2]) ? (m[1] || m[2]).trim() : '');
+      if (candidate && isExistingRegularFile(candidate)) {
+        return candidate;
+      }
+    } catch {}
+  }
+  return '';
+}
+
+function detectInstalledExternalEditors(opts = {}) {
+  const force = Boolean(opts && opts.force);
+  const now = Date.now();
+  if (
+    !force &&
+    cachedExternalEditors.platform === process.platform &&
+    cachedExternalEditors.probedAt > 0 &&
+    now - cachedExternalEditors.probedAt < EXTERNAL_EDITOR_PROBE_TTL_MS
+  ) {
+    return cachedExternalEditors;
+  }
+
+  const home = os.homedir();
+  const pathDirs = String(process.env.PATH || '')
+    .split(path.delimiter)
+    .map((s) => s.trim().replace(/^"+|"+$/g, ''))
+    .filter(Boolean);
+
+  const byId = new Map();
+  const publicList = [];
+
+  if (process.platform === 'win32') {
+    const localAppData = process.env.LOCALAPPDATA || path.join(home, 'AppData', 'Local');
+    const progFiles = process.env.ProgramFiles || 'C:\\Program Files';
+    const progFilesX86 = process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)';
+    const jbToolboxScripts = path.join(localAppData, 'JetBrains', 'Toolbox', 'scripts');
+
+    const winSearchRoots = [localAppData, path.join(localAppData, 'Programs'), progFiles, progFilesX86];
+    const extraJbDirs = [];
+    for (const parent of [
+      path.join(progFiles, 'JetBrains'),
+      path.join(localAppData, 'Programs'),
+      path.join(localAppData, 'JetBrains')
+    ]) {
+      try {
+        if (!fs.existsSync(parent)) continue;
+        for (const entry of fs.readdirSync(parent, { withFileTypes: true })) {
+          if (!entry.isDirectory()) continue;
+          extraJbDirs.push(path.join(parent, entry.name, 'bin'));
+        }
+      } catch {}
+    }
+
+    const searchDirs = Array.from(new Set([...pathDirs, jbToolboxScripts, ...extraJbDirs]));
+
+    for (const spec of EXTERNAL_EDITOR_SPECS) {
+      let resolvedExe = '';
+
+      for (const dir of searchDirs) {
+        for (const exeName of spec.winExeNames || []) {
+          const direct = path.join(dir, exeName);
+          if (isExistingRegularFile(direct)) {
+            resolvedExe = direct;
+            break;
+          }
+          const parentDir = path.dirname(dir);
+          if (parentDir && parentDir !== dir) {
+            const parentExe = path.join(parentDir, exeName);
+            if (isExistingRegularFile(parentExe)) {
+              resolvedExe = parentExe;
+              break;
+            }
+          }
+        }
+        if (resolvedExe) break;
+
+        for (const cmdName of spec.winCmdNames || []) {
+          const cmdPath = path.join(dir, cmdName);
+          const extracted = extractExeFromWinCmdWrapper(cmdPath, spec.winExeNames || []);
+          if (extracted) {
+            resolvedExe = extracted;
+            break;
+          }
+        }
+        if (resolvedExe) break;
+      }
+
+      if (!resolvedExe && Array.isArray(spec.winRelPaths)) {
+        for (const rootDir of winSearchRoots) {
+          for (const rel of spec.winRelPaths) {
+            const cand = path.join(rootDir, rel);
+            if (isExistingRegularFile(cand)) {
+              resolvedExe = cand;
+              break;
+            }
+          }
+          if (resolvedExe) break;
+        }
+      }
+
+      if (!resolvedExe && spec.winRegCheck && spec.scheme) {
+        resolvedExe = probeWin32ProtocolExe(spec.scheme);
+      }
+
+      if (resolvedExe) {
+        byId.set(spec.id, {
+          id: spec.id,
+          label: spec.label,
+          scheme: spec.scheme,
+          family: spec.family,
+          execPath: resolvedExe,
+          isMacApp: false
+        });
+        publicList.push({ id: spec.id, label: spec.label, scheme: spec.scheme });
+      }
+    }
+  } else if (process.platform === 'darwin') {
+    for (const spec of EXTERNAL_EDITOR_SPECS) {
+      let resolvedPath = '';
+      let isMacApp = false;
+      for (const rawApp of spec.macApps || []) {
+        const appPath = rawApp.startsWith('~/') ? path.join(home, rawApp.slice(2)) : rawApp;
+        if (!fs.existsSync(appPath)) continue;
+        if (spec.macCliRel) {
+          const cliPath = path.join(appPath, spec.macCliRel);
+          if (isExistingRegularFile(cliPath)) {
+            resolvedPath = cliPath;
+            isMacApp = false;
+            break;
+          }
+        }
+        resolvedPath = appPath;
+        isMacApp = true;
+        break;
+      }
+      if (resolvedPath) {
+        byId.set(spec.id, {
+          id: spec.id,
+          label: spec.label,
+          scheme: spec.scheme,
+          family: spec.family,
+          execPath: resolvedPath,
+          isMacApp
+        });
+        publicList.push({ id: spec.id, label: spec.label, scheme: spec.scheme });
+      }
+    }
+  } else {
+    const linuxSearchDirs = Array.from(
+      new Set([...pathDirs, '/usr/local/bin', '/usr/bin', '/snap/bin', path.join(home, '.local', 'bin')])
+    );
+    for (const spec of EXTERNAL_EDITOR_SPECS) {
+      let resolvedBin = '';
+      for (const dir of linuxSearchDirs) {
+        for (const binName of spec.linuxBins || []) {
+          const cand = path.join(dir, binName);
+          if (isExistingRegularFile(cand)) {
+            resolvedBin = cand;
+            break;
+          }
+        }
+        if (resolvedBin) break;
+      }
+      if (resolvedBin) {
+        byId.set(spec.id, {
+          id: spec.id,
+          label: spec.label,
+          scheme: spec.scheme,
+          family: spec.family,
+          execPath: resolvedBin,
+          isMacApp: false
+        });
+        publicList.push({ id: spec.id, label: spec.label, scheme: spec.scheme });
+      }
+    }
+  }
+
+  cachedExternalEditors = {
+    probedAt: now,
+    platform: process.platform,
+    publicList,
+    byId
+  };
+  return cachedExternalEditors;
+}
+
+function resolveWslCandidatePathsForPosixPath(decodedPosixPath, endpoint = null) {
+  if (process.platform !== 'win32') return [];
+  const posix = String(decodedPosixPath || '');
+  if (!posix.startsWith('/') || posix.includes('\0')) return [];
+
+  const mntMatch = posix.match(/^\/mnt\/([a-zA-Z])(?:\/(.*))?$/);
+  if (mntMatch) {
+    const drive = mntMatch[1].toUpperCase();
+    const rest = (mntMatch[2] || '').replace(/\//g, '\\');
+    return [`${drive}:\\${rest}`];
+  }
+
+  if (!/^\/(?:home|root|tmp|var|opt|usr|etc|mnt|srv|run|workspaces)\//.test(posix)) {
+    return [];
+  }
+
+  const candidateDistros = [];
+  const addDistro = (name) => {
+    const clean = String(name || '').trim();
+    if (!clean || /^docker-desktop/i.test(clean) || !/^[A-Za-z0-9._-]+$/.test(clean)) return;
+    if (!candidateDistros.includes(clean)) candidateDistros.push(clean);
+  };
+
+  if (endpoint && endpoint.portFile) {
+    const wslStatePath = path.join(path.dirname(endpoint.portFile), 'wsl_state.json');
+    const wslState = readJsonSafe(wslStatePath, {});
+    addDistro(wslState?.distro || wslState?.distroName || wslState?.defaultDistro);
+  }
+  addDistro(process.env.ANTIGRAVITY_WSL_DISTRO);
+  for (const d of resolveWslDistrosFromRegistry()) {
+    addDistro(d);
+  }
+  if (candidateDistros.length === 0) return [];
+
+  const runningWsl = resolveRunningWslDistros();
+  const activeDistros = runningWsl.ok
+    ? candidateDistros.filter((d) => runningWsl.distros.has(d.toLowerCase()))
+    : [];
+  if (activeDistros.length === 0) return [];
+
+  const winRel = posix.replace(/\//g, '\\');
+  const out = [];
+  for (const distro of activeDistros) {
+    out.push(`\\\\wsl.localhost\\${distro}${winRel}`);
+    out.push(`\\\\wsl$\\${distro}${winRel}`);
+  }
+  return out;
+}
+
+function resolveSafeLocalFileFromUrl(rawUrl, endpoint = null) {
+  if (typeof rawUrl !== 'string') {
+    return { ok: false, reason: 'invalid_payload_type' };
+  }
+  const trimmed = rawUrl.trim();
+  if (!trimmed || trimmed.length > 4096 || /[\0\r\n]/.test(trimmed)) {
+    return { ok: false, reason: 'invalid_payload_format' };
+  }
+
+  let u;
+  try {
+    u = new URL(trimmed);
+  } catch {
+    return { ok: false, reason: 'invalid_url' };
+  }
+  if (u.protocol !== 'file:' || u.username || u.password) {
+    return { ok: false, reason: 'disallowed_scheme_or_auth' };
+  }
+  u.search = '';
+  u.hash = '';
+  u.pathname = u.pathname.replace(/^\/([A-Za-z])%3A(\/|$)/i, '/$1:$2');
+
+  const hostLow = (u.hostname || '').toLowerCase();
+  const candidatePaths = [];
+  if (hostLow === '' || hostLow === 'localhost') {
+    let directPath = '';
+    try {
+      directPath = fileURLToPath(u);
+    } catch {
+      directPath = '';
+    }
+    if (directPath) {
+      candidatePaths.push(directPath);
+    } else if (process.platform === 'win32') {
+      let decoded = '';
+      try {
+        decoded = decodeURIComponent(u.pathname || '');
+      } catch {
+        return { ok: false, reason: 'invalid_uri_encoding' };
+      }
+      if (!decoded || decoded.includes('\0')) {
+        return { ok: false, reason: 'invalid_pathname' };
+      }
+      candidatePaths.push(...resolveWslCandidatePathsForPosixPath(decoded, endpoint));
+    }
+  } else if (
+    process.platform === 'win32' &&
+    (hostLow === 'wsl.localhost' || hostLow === 'wsl$' || hostLow === 'wsl%24')
+  ) {
+    let decoded = '';
+    try {
+      decoded = decodeURIComponent(u.pathname || '');
+    } catch {
+      return { ok: false, reason: 'invalid_uri_encoding' };
+    }
+    if (!/^\/[^/]+\/.+/.test(decoded) || decoded.includes('\0')) {
+      return { ok: false, reason: 'invalid_wsl_unc_path' };
+    }
+    const winRel = decoded.replace(/\//g, '\\');
+    const hosts = hostLow === 'wsl.localhost' ? ['wsl.localhost', 'wsl$'] : ['wsl$', 'wsl.localhost'];
+    for (const h of hosts) {
+      candidatePaths.push(`\\\\${h}${winRel}`);
+    }
+  } else {
+    return { ok: false, reason: 'disallowed_file_host' };
+  }
+
+  if (candidatePaths.length === 0) {
+    return { ok: false, reason: 'no_candidate_path' };
+  }
+
+  let realPath = '';
+  for (const cand of candidatePaths) {
+    if (!cand || typeof cand !== 'string' || cand.includes('\0')) continue;
+    try {
+      realPath = fs.realpathSync(cand);
+      if (realPath) break;
+    } catch {}
+  }
+  if (!realPath) {
+    return { ok: false, reason: 'realpath_failed' };
+  }
+
+  if (!/^(?:[A-Za-z]:[\\/]|\\\\|\/)/.test(realPath) || /[\0\r\n]/.test(realPath)) {
+    return { ok: false, reason: 'invalid_resolved_path' };
+  }
+
+  if (process.platform === 'win32' && realPath.replace(/^[A-Za-z]:/, '').includes(':')) {
+    return { ok: false, reason: 'ntfs_ads_forbidden' };
+  }
+
+  let st;
+  try {
+    st = fs.statSync(realPath);
+  } catch {
+    return { ok: false, reason: 'stat_failed' };
+  }
+  if (!st.isFile()) {
+    return { ok: false, reason: 'not_regular_file' };
+  }
+
+  return { ok: true, realPath };
+}
+
+function resolveSafeBrowserPreviewFileUrl(rawPayload, endpoint = null) {
+  const fileRes = resolveSafeLocalFileFromUrl(rawPayload, endpoint);
+  if (!fileRes.ok) return fileRes;
+
+  const { realPath } = fileRes;
+  const ext = path.extname(realPath);
+  if (!BROWSER_PREVIEW_EXT_WHITELIST_RE.test(ext)) {
+    return { ok: false, reason: 'extension_not_allowed', ext };
+  }
+
+  const safeFileUrl = pathToFileURL(realPath).href;
+  if (!safeFileUrl.startsWith('file://') || /[\0\r\n]/.test(safeFileUrl)) {
+    return { ok: false, reason: 'invalid_safe_file_url' };
+  }
+  return { ok: true, realPath, safeFileUrl };
+}
+
+function launchSafeFileUrlInDefaultBrowser(safeFileUrl) {
+  if (!safeFileUrl || typeof safeFileUrl !== 'string') return;
+  if (process.platform === 'win32') {
+    execFile('rundll32.exe', ['url.dll,FileProtocolHandler', safeFileUrl], { windowsHide: true }, () => {});
+  } else if (process.platform === 'darwin') {
+    execFile('open', [safeFileUrl], () => {});
+  } else {
+    execFile('xdg-open', [safeFileUrl], () => {});
+  }
+}
+
+function launchSafeFileInDetectedEditor(rawPayload, endpoint = null) {
+  if (typeof rawPayload !== 'string' || rawPayload.length > 4608) {
+    return { ok: false, reason: 'invalid_payload' };
+  }
+  let req;
+  try {
+    req = JSON.parse(rawPayload);
+  } catch {
+    return { ok: false, reason: 'invalid_json' };
+  }
+  const editorId = typeof req?.id === 'string' ? req.id.trim().toLowerCase() : '';
+  const editors = detectInstalledExternalEditors();
+  const editor = editors.byId.get(editorId);
+  if (!editor || !editor.execPath) {
+    return { ok: false, reason: 'editor_not_installed' };
+  }
+  if (!fs.existsSync(editor.execPath)) {
+    return { ok: false, reason: 'editor_missing_on_disk' };
+  }
+
+  const fileRes = resolveSafeLocalFileFromUrl(req?.fileUrl, endpoint);
+  if (!fileRes.ok) return fileRes;
+
+  const { realPath } = fileRes;
+  const rawLine = Number(req?.line);
+  const line = Number.isInteger(rawLine) && rawLine > 0 && rawLine <= 10000000 ? rawLine : 0;
+
+  let editorArgs;
+  if (editor.family === 'jetbrains') {
+    editorArgs = line > 0 ? ['--line', String(line), realPath] : [realPath];
+  } else if (editor.family === 'zed') {
+    editorArgs = [line > 0 ? `${realPath}:${line}:1` : realPath];
+  } else if (editor.family === 'sublime') {
+    editorArgs = [line > 0 ? `${realPath}:${line}` : realPath];
+  } else {
+    editorArgs = ['--goto', line > 0 ? `${realPath}:${line}:1` : realPath];
+  }
+
+  const cleanEnv = { ...process.env };
+  delete cleanEnv.ELECTRON_RUN_AS_NODE;
+
+  if (process.platform === 'darwin' && editor.isMacApp) {
+    execFile('/usr/bin/open', ['-a', editor.execPath, '--args', ...editorArgs], { env: cleanEnv }, () => {});
+  } else {
+    execFile(editor.execPath, editorArgs, { windowsHide: true, env: cleanEnv }, () => {});
+  }
+  return { ok: true, editorId, realPath, line };
+}
+
 function attachTarget(target, endpoint) {
   const wsUrl = target.webSocketDebuggerUrl;
   if (!wsUrl) return Promise.resolve(false);
@@ -5851,6 +6490,8 @@ function attachTarget(target, endpoint) {
             await send('Runtime.addBinding', { name: '__agSetUiLang' });
             await send('Runtime.addBinding', { name: '__agSyncHostThemeMode' });
             await send('Runtime.addBinding', { name: '__agRequestTokenAnalytics' });
+            await send('Runtime.addBinding', { name: '__agOpenInBrowser' });
+            await send('Runtime.addBinding', { name: '__agOpenInEditor' });
           }
         }
         if (ws.readyState !== WebSocket.OPEN || nonHostSettled) {
@@ -6130,6 +6771,34 @@ function attachTarget(target, endpoint) {
                 } catch {}
               }
             })();
+            return;
+          }
+          if (
+            msg.method === 'Runtime.bindingCalled' &&
+            (msg.params?.name === '__agOpenInBrowser' || msg.params?.name === '__agOpenInEditor')
+          ) {
+            if (
+              RUN_ONCE ||
+              !hostConfirmed ||
+              target.type !== 'page' ||
+              !activeConfig.enabled ||
+              activeConfig.modules.contextMenu === false
+            ) {
+              return;
+            }
+            const now = Date.now();
+            if (now - lastOpenExternalActionAt < 500) {
+              return;
+            }
+            lastOpenExternalActionAt = now;
+            if (msg.params.name === '__agOpenInBrowser') {
+              const resolved = resolveSafeBrowserPreviewFileUrl(msg.params.payload, endpoint);
+              if (resolved.ok) {
+                launchSafeFileUrlInDefaultBrowser(resolved.safeFileUrl);
+              }
+            } else {
+              launchSafeFileInDetectedEditor(msg.params.payload, endpoint);
+            }
             return;
           }
           if (
