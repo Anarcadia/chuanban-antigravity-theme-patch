@@ -2221,5 +2221,8 @@
   "Find References": "查找引用",
   "Cut": "剪切",
   "Paste": "粘贴",
-  "Share": "分享"
+  "Share": "分享",
+  "Applies to messages sent after this turn": "对本轮之后发送的消息生效",
+  "Applies to /btw and messages sent after this turn": "对支线提问 (/btw) 及本轮之后发送的消息生效",
+  "Customizations views": "自定义视图"
 }

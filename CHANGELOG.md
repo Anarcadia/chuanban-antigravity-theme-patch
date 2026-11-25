@@ -4,13 +4,16 @@
 
 ---
 
-## [v6.0.4] - 2026-11-25
+## [v6.0.4] - 2026-11-26
 
-> **适用版本**：Antigravity `2.35.1+` / `2.35.0` / `2.34.0+`  
+> **适用版本**：Antigravity `2.35.2+` / `2.35.1` / `2.35.0` / `2.34.0+`（macOS `2.35.2` `CL=1029311855` × Windows 11 `2.35.1+`）  
+> **多语言平行版**：自 `v6.0.4` 起同步推出物理分仓的 **[Global 纯英文轻量版 (`chuanban-antigravity-theme`)](https://github.com/Anarcadia/chuanban-antigravity-theme)**（零汉化词典、免更纱黑体、`<1 MB` 字体或 `0 MB` 原生模式，中文主线零交叉污染）  
 > **社区致谢**：特别感谢 [@shixiaogaoya](https://github.com/shixiaogaoya)（[PR #46](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/pull/46) 仿 Claude 紧凑右键浮窗卡片、全场景汉化与安全浏览器/外部 IDE 桥接）与 [@Oct1AtJoe](https://github.com/Oct1AtJoe)（[Issue #44](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/issues/44) 左侧会话栏原生右键菜单 IPC 未汉化排查）！
 
 ### Added & Fixed
-- **新增 Electron 原生右键菜单（`showContextMenu`）跨隔离世界三级免 GC 汉化（`core/daemon.mjs` / `core/runtime.js` / `core/i18n.json`，修复 [#44](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/issues/44)，`2,223` 条词典）**：
+- **适配 Antigravity `2.35.2`（`CL=1029311855`）运行期模型选择器解锁与词典扩充（`core/i18n.json` / `core/runtime.js`，`2,226` 条词典）**：
+  - 补齐 `2.35.2` 解锁任务执行期模型下拉框后新增的悬停提示词条（`Applies to messages sent after this turn`、`Applies to /btw and messages sent after this turn`）及自定义页导航无障碍标签；升级 `RE_ARIA_MODEL` 动态解析逻辑，兼容句号拼接的新运行态尾巴，保持模型名与思考档位精准翻译。
+- **新增 Electron 原生右键菜单（`showContextMenu`）跨隔离世界三级免 GC 汉化（`core/daemon.mjs` / `core/runtime.js` / `core/i18n.json`，修复 [#44](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/issues/44)）**：
   - 针对左侧会话栏、Monaco 编辑器等走 `window.electronNative.showContextMenu` 原生系统菜单的场景，在 `Electron Isolated Context` 通过 `0.3ms` 符号缓存 → `5.9ms` 免 GC `[[Scopes]]` 闭包定位 → 带指数退避熔断的 SSH 兜底包裹 `IpcRenderer.prototype.invoke`；
   - 采用零 DOM 变更的双同步 `CustomEvent`（`__ag_cm_req` / `__ag_cm_res`）握手 + `mergeLabelsOnly` 结构防篡改校验 + `CM_SCOPED_DICT` 菜单专属词表（保留 `user/i18n.override.json` 最高优先级并豁免用户分组/项目名），与下方 PR #46 自绘浮窗卡片实现全区域右键菜单 100% 汉化闭环。
 - **新增仿 Claude 紧凑右键浮窗卡片、全场景汉化与安全浏览器/外部 IDE 桥接（`core/runtime.js` / `core/theme.css` / `core/daemon.mjs`，合入 [#46](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/pull/46)）**：

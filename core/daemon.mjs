@@ -4,7 +4,7 @@
  *
  * 架构特性（v6.0.3）：
  * 1. 动态 Node 分级：
- *    - Node >= 22.0：完整启用昼夜双模式独立主题（暖纸浅色三预设 + 深色 onyx / claude-warm 双预设 + 外观「跟随系统」开关）、Google Sans Flex 原生西文引擎 × 更纱黑体 UI 精密字重桥接 + Anthropic Serif 正文、输入框三态、2223条母语级汉化（含原生右键菜单跨隔离世界零 GC 汉化）、宿主独占指纹门禁、死锁与冷启动兜底包自愈及 2.33.0+ ~ 2.35.1+ CDP Opt-in 自动接力（M2 · SingletonLock/lockfile 零子进程空闲短路 + OS 分层启动参数与代理保留）。
+ *    - Node >= 22.0：完整启用昼夜双模式独立主题（暖纸浅色三预设 + 深色 onyx / claude-warm 双预设 + 外观「跟随系统」开关）、Google Sans Flex 原生西文引擎 × 更纱黑体 UI 精密字重桥接 + Anthropic Serif 正文、输入框三态、2226条母语级汉化（含原生右键菜单跨隔离世界零 GC 汉化）、宿主独占指纹门禁、死锁与冷启动兜底包自愈及 2.33.0+ ~ 2.35.2+ CDP Opt-in 自动接力（M2 · SingletonLock/lockfile 零子进程空闲短路 + OS 分层启动参数与代理保留）。
  *    - Node >= 22.13：动态 `await import('node:sqlite')` 解锁底部实时会话指标胶囊（O(1) 增量尾行解析 + WSL2 双轨只读读取）；低版本优雅降级绝不崩溃。
  * 2. 模块化与热重载：
  *    - 周期性检测 `user/config.json`、`user/custom.css`、`user/i18n.override.json`、`user/custom.js` 的 mtime，
@@ -488,7 +488,7 @@ function resolveActiveChannelEndpoints(channelMode = 'auto', userCfg = {}) {
 // ============================================================================
 // 2. 动态构建注入载荷（支持 core/ + user/ 实时合并与热更新签名）
 // ============================================================================
-const BASE_VERSION = '20261125-v6.0.4';
+const BASE_VERSION = '20261126-v6.0.4';
 let cachedBundleSig = '';
 let cachedInjectScript = '';
 let cachedIframeInjectScript = '';
@@ -1862,12 +1862,6 @@ const browserWatcherBackoffUntil = new Map(); // `${channel}:${port}` -> timesta
 const attachingTargetIds = new Set();
 const destroyedWhileAttaching = new Set();
 
-// --keep-alive 健康检查在 daemon 存活时会在下方 PID 锁段直接 exit(0)，无需预先构建注入 bundle
-if (!KEEP_ALIVE_ONLY) {
-  await refreshInstalledExternalEditorsAsync();
-  rebuildBundleIfNeeded();
-}
-
 const MY_PROC_START_MS = Math.round(Date.now() - process.uptime() * 1000);
 const DAEMON_LOG_FILE = path.join(os.tmpdir(), 'ag-theme-daemon.log');
 
@@ -2213,8 +2207,9 @@ if (!RUN_ONCE) {
   }
 }
 
-// --keep-alive 确认原 daemon 已退出、由本进程接管后，再构建注入 bundle
-if (KEEP_ALIVE_ONLY) rebuildBundleIfNeeded();
+// 确认单实例 PID 锁已由本进程持有（或 --once 单次运行）后，异步刷新外部 IDE 缓存并构建注入 bundle
+await refreshInstalledExternalEditorsAsync();
+rebuildBundleIfNeeded();
 
 // ============================================================================
 // 4. SQLite + Protobuf 实时会话指标解析器（读取 ~/.gemini/antigravity/conversations/<id>.db）

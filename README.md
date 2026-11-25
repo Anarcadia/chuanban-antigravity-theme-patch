@@ -1,12 +1,14 @@
 # 船板的 Antigravity 主题、字体与汉化补丁 (v6.0.4)
 
 [![Version](https://img.shields.io/badge/version-6.0.4-3D6470.svg)](https://github.com/Anarcadia/chuanban-antigravity-theme-patch)
-[![Antigravity](https://img.shields.io/badge/Antigravity-2.35.1%2B-3F6E7A.svg)](https://github.com/Anarcadia/chuanban-antigravity-theme-patch)
+[![Antigravity](https://img.shields.io/badge/Antigravity-2.35.2%2B-3F6E7A.svg)](https://github.com/Anarcadia/chuanban-antigravity-theme-patch)
 [![Node](https://img.shields.io/badge/node-%3E%3D22.0.0%20(22.13%2B%20Full)-339933.svg)](https://nodejs.org/)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey.svg)](https://github.com/Anarcadia/chuanban-antigravity-theme-patch)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-面向 Google Antigravity（支持 `2.35.1+` / `2.35.0` / `2.34.0+`）的轻量级外观、排版、汉化与本地只读统计增强补丁。专注于纯粹的界面审美与信息可读性优化，由 AI Agent 一键部署，支持热重载个性化定制与随时无损还原。
+> **Language Editions / 语言平行版**：**简体中文完整汉化版（当前仓库）** · **[Global English Lightweight Edition (`chuanban-antigravity-theme` · 0 CJK Dict / `<1 MB` Fonts)](https://github.com/Anarcadia/chuanban-antigravity-theme)**
+
+面向 Google Antigravity（支持 `2.35.2+` / `2.35.1` / `2.35.0` / `2.34.0+`）的轻量级外观、排版、汉化与本地只读统计增强补丁。专注于纯粹的界面审美与信息可读性优化，由 AI Agent 一键部署，支持热重载个性化定制与随时无损还原。
 
 > 供 AI Agent 读取的完整部署与改装契约见仓库根目录 **[`SKILL.md`](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/blob/main/SKILL.md)**，历史版本记录见 **[`CHANGELOG.md`](CHANGELOG.md)**。
 
@@ -15,7 +17,7 @@
 ## ✨ 核心特性
 
 - **多套打磨风格与系统日夜自动跟随**：内置温润耐看的**莫兰迪古典矿物风格**（默认）、深度打磨的**仿 Claude 书卷暖白风格（`Absolutely！`）**、护眼的**温润书卷夜间风格**与深海冷碳深色模式，提供独立的**「跟随系统」**自动日夜配对开关，并支持在设置面板一键切回**官方原版风格**（同步恢复官方原版字体）。
-- **母语级汉化与中英一键双切**：内置 **`2,223` 条**覆盖主界面、设置项、编排器、Swarm 蜂群工作台与子 Agent 面板的自然中文汉化，严格隔离代码块、终端与文件名避免误翻；外观面板提供 **`[ EN | 中文 ]`** 独立按钮，可随时一键退回纯英文原版界面。
+- **母语级汉化与中英一键双切**：内置 **`2,226` 条**覆盖主界面、设置项、编排器、Swarm 蜂群工作台与子 Agent 面板的自然中文汉化，严格隔离代码块、终端与文件名避免误翻；外观面板提供 **`[ EN | 中文 ]`** 独立按钮，可随时一键退回纯英文原版界面。
 - **字体美化与润墨感特效**：精选书卷衬线长文、现代无衬线界面与人文等宽代码字体组合，并在浅色纸面融入细腻的活字微润墨效果，柔化电子屏笔画生硬感，增加典雅温润的层次质感。
 - **精细中西文混排调校**：按界面 UI、对话正文、代码终端与输入框分层桥接中西文字重比例，消除中英文混排发虚与字重断层。
 - **极简美观的上下文信息胶囊**：在输入框底栏内嵌低干扰状态胶囊，支持主窗口、分屏、支线提问与子 Agent 独立显示生成速率、首字延迟与上下文占用圆环，悬停即可查看当轮与会话级精简指标。
@@ -74,11 +76,11 @@
 > 4. 检查输出中的 `cdpStatus`（以及 Windows 新装字体后的 `restartAntigravityRequired`）：若为 `"missing_opt_in_flag"` 或 Windows 刚新装完字体，**如果你当前正在 Antigravity 内部对话中运行，请勿执行 `--force` 强行重启自断会话**，只需把空闲时执行的命令 `node ~/.gemini/antigravity/theme-patch/install.mjs relaunch`（Windows 为 `node "$HOME\.gemini\antigravity\theme-patch\install.mjs" relaunch`，或提示我手动退出重开一次客户端）发给我；如果你在外部独立终端运行且客户端空闲，请直接执行 `node install.mjs relaunch`。
 > 5. 在端口就绪后运行 `node install.mjs verify`，确认 `"ok": true`、`"hasStyle": true` 且 `fonts.allRequiredInstalled: true` 即完成验收。
 
-### 二、老用户升级至 v6.0.3
+### 二、老用户升级至 v6.0.4
 `node install.mjs install` 会自动备份旧版 `core/` 内核、将旧版默认浅色预设平滑迁移至 `"morandi"`，并完整保留 `user/` 目录下的个人自定义设置：
 
 > **💬 复制发给 Agent（老用户无缝升级）**：  
-> 请帮我拉取最新的 `https://github.com/Anarcadia/chuanban-antigravity-theme-patch.git`（或读取最新解压目录），阅读其中的 `SKILL.md` 后直接运行 `node install.mjs install` 升级至 `v6.0.3`（若我此前使用的是早期单文件版脚本且有自定义字号/配色，请先迁移到 `~/.gemini/antigravity/theme-patch/user/`）。若安装后 `cdpStatus` 为 `"missing_opt_in_flag"` 且你正在 Antigravity 内部会话中运行，请勿直接中断当前对话，告诉我空闲时运行 `node ~/.gemini/antigravity/theme-patch/install.mjs relaunch`（或手动重开一次客户端）即可；端口已就绪则直接运行 `node install.mjs verify` 验收。
+> 请帮我拉取最新的 `https://github.com/Anarcadia/chuanban-antigravity-theme-patch.git`（或读取最新解压目录），阅读其中的 `SKILL.md` 后直接运行 `node install.mjs install` 升级至 `v6.0.4`（若我此前使用的是早期单文件版脚本且有自定义字号/配色，请先迁移到 `~/.gemini/antigravity/theme-patch/user/`）。若安装后 `cdpStatus` 为 `"missing_opt_in_flag"` 且你正在 Antigravity 内部会话中运行，请勿直接中断当前对话，告诉我空闲时运行 `node ~/.gemini/antigravity/theme-patch/install.mjs relaunch`（或手动重开一次客户端）即可；端口已就绪则直接运行 `node install.mjs verify` 验收。
 
 ### 三、日常定制与排障话术
 - **🎨 切换风格、语言或微调字号**：日常切换主题与中英文可直接在「系统设置 → 外观界面」点击对应按钮；如需修改扩展预设或字号，可让 Agent 按 `SKILL.md` 修改 `user/config.json`（如调大 `"--ag-chat-font-size"`）。

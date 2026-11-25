@@ -106,7 +106,7 @@
     }
   }
 
-  const PATCH_VERSION = boot.version || '20261125-v6.0.3';
+  const PATCH_VERSION = boot.version || '20261126-v6.0.4';
   const DETECTED_OS =
     boot.platform || (/Win/i.test(navigator.platform || '') ? 'win32' : /Mac/i.test(navigator.platform || '') ? 'darwin' : 'linux');
   const ENABLED = boot.enabled !== false;
@@ -6004,6 +6004,17 @@
       if (mModel) {
         let mName = mModel[1].trim();
         if (mName === 'Select model' || mName === 'Select Model') return '模型，当前：选择模型';
+        let noteZh = '';
+        const mNoteSplit = mName.match(
+          /^(.+?)(?:\.\s+(Applies to\b.*)$|,\s+(Model cannot be changed\b.*)$)/i
+        );
+        if (mNoteSplit) {
+          mName = mNoteSplit[1].trim();
+          const rawTailNote = (mNoteSplit[2] || mNoteSplit[3] || '').trim().replace(/\.$/, '');
+          if (rawTailNote) {
+            noteZh = dictLookup(rawTailNote) || computeTextTranslation(rawTailNote, el) || rawTailNote;
+          }
+        }
         const directModelZh = dictLookup(mName) || computeTextTranslation(mName, el);
         if (directModelZh) {
           mName = directModelZh;
@@ -6018,7 +6029,7 @@
             mName = baseZh + (mEff[2] ? ' (' + effZh + ')' : ' · ' + effZh) + ctxTail;
           }
         }
-        return '模型，当前：' + mName;
+        return '模型，当前：' + mName + (noteZh ? '（' + noteZh + '）' : '');
       }
       const lookupPerm = (s) =>
         dictLookup(s) || dictLookup(s.charAt(0).toUpperCase() + s.slice(1)) || s;

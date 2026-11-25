@@ -1,14 +1,14 @@
 ---
 name: chuanban-antigravity-theme-patch
-description: 船板的 Antigravity 2.0 主题、字体与汉化补丁（v6.0.4 · 适配 Antigravity 2.35.1+ / 2.35.0 / 2.34.0+ macOS / Windows / Linux 单图标 M1+M2 零子进程空闲短路启动接力与 OS 分层参数/代理保留 + Windows TimeTrigger 5 分钟全时段保活 + 一键自动直链字体下载/ZIP 解压与 Windows UTF-16 注册表写入 + 全新默认「莫兰迪古典矿物 (morandi)」冷暖互补配色体系与烟岚石青单层合并输入框 + 外观面板五段式主题秒切 `[ A 原版配色 | ✳️ Absolutely！ | MO 莫兰迪色 | 📖 暖纸深色 | 🌙 深色 ]` 与独立「跟随系统」日夜配对开关 + 外观 `[ EN | 中文 ]` 一键零重刷语言切换 + UI 西文 Google Sans Flex 可变字体引擎 × 中文更纱黑体映射 + 对话正文 Anthropic Serif 衬线 + 2,223 条零冲突词典 + Swarm 1.5s 轮询零闪烁翻译护盾 + 分屏/支线提问(/btw)/子Agent侧栏独立实时指标胶囊 + 系统设置「本地扩展 → Token 统计」磁盘持久化毫秒级分析面板）。采用「core/ 只读内核 + user/ 永不覆盖改装层 + install.mjs CLI」，支持 Agent 一键部署、2.5 秒热重载定制与 --safe-mode 沙箱排障。当用户提到“安装船板 Antigravity 主题”、“升级/修复 Antigravity 汉化与字体”、“定制 Antigravity 界面样式或汉化词条”时触发。
+description: 船板的 Antigravity 2.0 主题、字体与汉化补丁（v6.0.4 · 适配 Antigravity 2.35.2+ / 2.35.0 / 2.34.0+ macOS / Windows / Linux 单图标 M1+M2 零子进程空闲短路启动接力与 OS 分层参数/代理保留 + Windows TimeTrigger 5 分钟全时段保活 + 一键自动直链字体下载/ZIP 解压与 Windows UTF-16 注册表写入 + 全新默认「莫兰迪古典矿物 (morandi)」冷暖互补配色体系与烟岚石青单层合并输入框 + 外观面板五段式主题秒切 `[ A 原版配色 | ✳️ Absolutely！ | MO 莫兰迪色 | 📖 暖纸深色 | 🌙 深色 ]` 与独立「跟随系统」日夜配对开关 + 外观 `[ EN | 中文 ]` 一键零重刷语言切换 + UI 西文 Google Sans Flex 可变字体引擎 × 中文更纱黑体映射 + 对话正文 Anthropic Serif 衬线 + 2,226 条零冲突词典 + Swarm 1.5s 轮询零闪烁翻译护盾 + 分屏/支线提问(/btw)/子Agent侧栏独立实时指标胶囊 + 系统设置「本地扩展 → Token 统计」磁盘持久化毫秒级分析面板）。采用「core/ 只读内核 + user/ 永不覆盖改装层 + install.mjs CLI」，支持 Agent 一键部署、2.5 秒热重载定制与 --safe-mode 沙箱排障。当用户提到“安装船板 Antigravity 主题”、“升级/修复 Antigravity 汉化与字体”、“定制 Antigravity 界面样式或汉化词条”时触发。
 ---
 
 # 船板的 Antigravity 主题、字体与汉化补丁（v6.0.4 · AI Agent 部署与改装契约）
 
 > **核心摘要（致执行端 AI Agent）**：
-> - **功能边界**：纯运行时本地回环 CDP 注入（不改 `.asar`、不破系统签名、零第三方 npm 依赖），适配 Google Antigravity **`2.35.1+` / `2.35.0` / `2.34.0+`**：
+> - **功能边界**：纯运行时本地回环 CDP 注入（不改 `.asar`、不破系统签名、零第三方 npm 依赖），适配 Google Antigravity **`2.35.2+` / `2.35.0` / `2.34.0+`**：
 >   - **五段式主题、跟随系统开关与双语热切换**：默认启用 **`"morandi"`（莫兰迪古典矿物：暖宣纸底 × 烟岚石青单层 `2px` 输入框与按钮）**；在「系统设置 → 外观界面」嵌入 **`[ A 原版配色 | ✳️ Absolutely！ | MO 莫兰迪色 | 📖 暖纸深色 | 🌙 深色 ]`** 五段式切换（`A` 原版配色 `<1ms` 零开销回退官方配色与原版字体）、独立 **「跟随系统」** 日夜配对开关（保留浅色 `preset` 与深色 `darkPreset` 配对，点击相反极性预设即时预览并自动退出跟随）及独立 **`[ EN | 中文 ]`** 二元语言切换（`EN` 态观察器零开销休眠），自动持久化至 `user/config.json` 并同步 Windows 原生标题栏（含 `--custom-window-controls` 高对比自绘控制键）与 `Swarm` 子帧；
->   - **四层排版与双层遥测**：UI 西文直连官方 `Google Sans Flex` 可变字体（`#ag-font-faces` 常驻隔离防切换缺字）× 中文 `AgSarasaUI` 更纱黑体字重桥接；对话正文采用 `Anthropic Serif` + `Sarasa Mono Slab SC` 衬线；代码与 `.inline-pill[data-uri]` 文件胶囊采用 `Anthropic Mono` 等宽；输入框采用打字机粗衬线配 `2px` 单层合并边框；内置 `2,223` 条零冲突汉化（含 Swarm 面板 `1.5s` 轮询零闪烁实例级护盾）、多路分屏/`/btw`/子 Agent 侧栏独立 SQLite 实时指标胶囊（`260ms` 悬浮意图防误触 + Remote SSH 无本地库自动隐身），以及「系统设置 → 本地扩展 → Token 统计」全量多维归因面板（支持 `modules.tokenAnalytics: false` 动态裁剪 ~100 KB 载荷）。
+>   - **四层排版与双层遥测**：UI 西文直连官方 `Google Sans Flex` 可变字体（`#ag-font-faces` 常驻隔离防切换缺字）× 中文 `AgSarasaUI` 更纱黑体字重桥接；对话正文采用 `Anthropic Serif` + `Sarasa Mono Slab SC` 衬线；代码与 `.inline-pill[data-uri]` 文件胶囊采用 `Anthropic Mono` 等宽；输入框采用打字机粗衬线配 `2px` 单层合并边框；内置 `2,226` 条零冲突汉化（含 Swarm 面板 `1.5s` 轮询零闪烁实例级护盾）、多路分屏/`/btw`/子 Agent 侧栏独立 SQLite 实时指标胶囊（`260ms` 悬浮意图防误触 + Remote SSH 无本地库自动隐身），以及「系统设置 → 本地扩展 → Token 统计」全量多维归因面板（支持 `modules.tokenAnalytics: false` 动态裁剪 ~100 KB 载荷）。
 > - **真注入肉眼验真三特征（防 `2.33.0` 原生 `Google Sans Flex` 视觉假象）**：
 >   1. 对话正文与 Markdown 为 `Anthropic Serif` 衬线体（`A` 原版配色除外）；
 >   2. 主输入框为单层 `2px` 合并粗线（`MO` 下为烟岚石青 `#A3B5BA → #3D6470`，`Absolutely！` 下为暖橙火漆 `#DFAC98 → #A64229`）；
@@ -40,7 +40,7 @@ description: 船板的 Antigravity 2.0 主题、字体与汉化补丁（v6.0.4 �
 
 > **多版本环境提示**：若用户电脑装有 `nvm` / `fnm` / `volta` / Homebrew Node，请优先选用 **`Node.js >= 22.13.0`** 执行 `node install.mjs install`（安装器会将当前 `process.execPath` 绝对路径固化写入系统自启服务）。
 
-| 运行时版本 | 五段式主题 + 跟随系统 / 单线矿物框 / 四层字体 | 2,223 条汉化 + `[ EN \| 中文 ]` 零重刷切换 | 死锁/冷启动自愈 + M2 端口与参数接力 + 缩放修复 | SQLite 实时指标胶囊 + 设置「Token 统计」 (`node:sqlite`) |
+| 运行时版本 | 五段式主题 + 跟随系统 / 单线矿物框 / 四层字体 | 2,226 条汉化 + `[ EN \| 中文 ]` 零重刷切换 | 死锁/冷启动自愈 + M2 端口与参数接力 + 缩放修复 | SQLite 实时指标胶囊 + 设置「Token 统计」 (`node:sqlite`) |
 | :--- | :---: | :---: | :---: | :---: |
 | **Node.js `>= 22.13.0`**（推荐） | ✅ 全量启用 | ✅ 全量启用 | ✅ 全量启用 | ✅ **自动启用**（实时胶囊 + 全量多维 Token 归因统计） |
 | **Node.js `22.0.0 ~ 22.12.x`** | ✅ 全量启用 | ✅ 全量启用 | ✅ 全量启用 | ⚠️ 自动优雅关闭（后台零报错） |
@@ -61,10 +61,10 @@ chuanban-antigravity-theme-patch/
 ├── LICENSE                     # MIT 开源许可协议
 ├── core/                       # 【只读内核】随版本升级原子替换，Agent 严禁直接修改
 │   ├── manifest.json           # 版本号（6.0.4）、三端地址与 core/* 四件套 SHA-256 校验清单
-│   ├── daemon.mjs              # Node CDP 守护进程（宿主独占指纹门禁、2.33.0+~2.35.1+ M2 冷启动自动接力重启与 OS 分层启动参数/Windows 系统代理保留、Windows .lnk 限深更新自愈、NTFS 原子写盘退避防锁、SingletonLock/lockfile 全平台零子进程空闲短路、SQLite O(1) 增量胶囊与全量 Token 统计归因、WSL2 双轨只读读取、Swarm 子帧同步与载荷裁剪、2.5s 热重载感知）
+│   ├── daemon.mjs              # Node CDP 守护进程（宿主独占指纹门禁、2.33.0+~2.35.2+ M2 冷启动自动接力重启与 OS 分层启动参数/Windows 系统代理保留、Windows .lnk 限深更新自愈、NTFS 原子写盘退避防锁、SingletonLock/lockfile 全平台零子进程空闲短路、SQLite O(1) 增量胶囊与全量 Token 统计归因、WSL2 双轨只读读取、Swarm 子帧同步与载荷裁剪、2.5s 热重载感知）
 │   ├── runtime.js              # 浏览器端注入引擎（五段式外观主题 +「跟随系统」日夜配对开关 + `[ EN | 中文 ]` 二元语言零重刷切换、#ag-font-faces 常驻字库防缺字、Windows TitleBarOverlay 零过渡污染同步、Swarm 子帧 1.5s 轮询零闪烁护盾与原版底色还原、O(1) 观察器短路、指标胶囊 260ms 悬浮意图与 rAF 合批）
 │   ├── theme.css               # 样式表（莫兰迪古典矿物默认视觉、烟岚石青/火漆单层 `2px` 合并输入框、`Absolutely！` 与双深色预设、2.35.0+ 自绘窗口控制键高对比适配、指标胶囊与 Token 统计 `@container` 自适应面板）
-│   └── i18n.json               # 2,223 条零冲突标准 JSON 基准词典（兼容 PowerShell 5.1 ConvertFrom-Json，挂载至 Object.create(null)）
+│   └── i18n.json               # 2,226 条零冲突标准 JSON 基准词典（兼容 PowerShell 5.1 ConvertFrom-Json，挂载至 Object.create(null)）
 └── user/                       # 【用户改装层】升级 100% 保留，守护进程每 2.5s 检测 mtimeMs 热重载注入
     ├── config.json             # 开关配置（enabled / channel / preset / darkPreset / contextLimit / contextLimitOverride / modules / themeVars / darkThemeVars）
     ├── custom.css              # 自定义追加 CSS（独立挂载于 #antigravity-user-custom-style）
@@ -127,7 +127,7 @@ node install.mjs install --sync-user
 ```bash
 node install.mjs verify
 ```
-当输出 `"ok": true`、`"bodyReady": true`、`"hasStyle": true`、`"dictCount": 2223` 且 `fonts.allRequiredInstalled: true`（在源码仓库目录运行 `doctor` 时还会返回 `sourceSync.inSync: true` 校验仓库与已安装内核是否一致）时，代表主题、字体、汉化与指标胶囊已全部实机生效。
+当输出 `"ok": true`、`"bodyReady": true`、`"hasStyle": true`、`"dictCount": 2226` 且 `fonts.allRequiredInstalled: true`（在源码仓库目录运行 `doctor` 时还会返回 `sourceSync.inSync: true` 校验仓库与已安装内核是否一致）时，代表主题、字体、汉化与指标胶囊已全部实机生效。
 
 ---
 
