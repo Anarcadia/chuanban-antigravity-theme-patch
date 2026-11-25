@@ -4,6 +4,20 @@
 
 ---
 
+## [v6.0.4] - 2026-11-25
+
+> **适用版本**：Antigravity `2.35.1+` / `2.35.0` / `2.34.0+`  
+> **社区致谢**：特别感谢 [@shixiaogaoya](https://github.com/shixiaogaoya)（[PR #46](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/pull/46) 仿 Claude 紧凑右键浮窗卡片、全场景汉化与安全浏览器/外部 IDE 桥接）！
+
+### Added & Fixed
+- **新增仿 Claude 紧凑右键浮窗卡片、全场景汉化与安全浏览器/外部 IDE 桥接（`core/runtime.js` / `core/theme.css` / `core/daemon.mjs`，合入 [#46](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/pull/46)）**：
+  - 接管对话正文、代码块、网页外链、对话内图片（复制图片/另存图片）、本地文件胶囊与右侧文件栏、底部输入框右键菜单，全面适配 5 浅 + 3 深配色预设与中英双语实时切换（`Shift + 右键` 随时透传官方原生菜单，支持 `modules.contextMenu: false` 完整剥离载荷）；
+  - 守护进程新增带磁盘缓存与异步并发 `HKCR` 查询的实盘外部 IDE 探测（`VS Code`、`Cursor`、`Windsurf`、`Zed`、`JetBrains` 全系、`Sublime Text`）及无 Shell `execFile` 本地安全桥接（`__agOpenInBrowser` / `__agOpenInEditor`）。
+- **新增 Cloudflare R2 与 GitHub Release 多镜像字体自动回退下载与配额熔断（`install.mjs`）**：
+  - 优先走 Cloudflare R2 直链镜像，遇 Google Drive 配额超限 HTML 页立即熔断切源并强制校验字体二进制魔数与 SHA-256。
+
+---
+
 ## [v6.0.3] - 2026-11-25
 
 > **适用版本**：Antigravity `2.35.1+` / `2.35.0` / `2.34.0+`（macOS `2.35.1` `CL=1029194470` × Windows 11 `2.35.1.0`，向下完全兼容 `2.33.x` / `2.32.x` / `2.31.x` / `2.30.0`）  

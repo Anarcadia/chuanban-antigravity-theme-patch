@@ -1,6 +1,6 @@
-# 船板的 Antigravity 主题、字体与汉化补丁 (v6.0.3)
+# 船板的 Antigravity 主题、字体与汉化补丁 (v6.0.4)
 
-[![Version](https://img.shields.io/badge/version-6.0.3-3D6470.svg)](https://github.com/Anarcadia/chuanban-antigravity-theme-patch)
+[![Version](https://img.shields.io/badge/version-6.0.4-3D6470.svg)](https://github.com/Anarcadia/chuanban-antigravity-theme-patch)
 [![Antigravity](https://img.shields.io/badge/Antigravity-2.35.1%2B-3F6E7A.svg)](https://github.com/Anarcadia/chuanban-antigravity-theme-patch)
 [![Node](https://img.shields.io/badge/node-%3E%3D22.0.0%20(22.13%2B%20Full)-339933.svg)](https://nodejs.org/)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey.svg)](https://github.com/Anarcadia/chuanban-antigravity-theme-patch)

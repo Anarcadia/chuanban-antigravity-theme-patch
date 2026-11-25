@@ -488,7 +488,7 @@ function resolveActiveChannelEndpoints(channelMode = 'auto', userCfg = {}) {
 // ============================================================================
 // 2. 动态构建注入载荷（支持 core/ + user/ 实时合并与热更新签名）
 // ============================================================================
-const BASE_VERSION = '20261125-v6.0.3';
+const BASE_VERSION = '20261125-v6.0.4';
 let cachedBundleSig = '';
 let cachedInjectScript = '';
 let cachedIframeInjectScript = '';
