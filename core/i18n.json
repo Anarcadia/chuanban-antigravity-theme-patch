@@ -2208,5 +2208,18 @@
   "Pull request creation": "创建拉取请求",
   "Hide token": "隐藏令牌",
   "Show token": "显示令牌",
-  "No access": "无权限"
+  "No access": "无权限",
+  "Workspace Name": "工作区名称",
+  "Worktree Name": "Worktree 名称",
+  "Move to Project": "移至项目",
+  "New Project...": "新建项目...",
+  "Remove from Project": "从项目移除",
+  "Pin Entire Project": "置顶整个项目",
+  "Unpin Project": "取消置顶项目",
+  "Pin Entire Workspace": "置顶整个工作区",
+  "Unpin Workspace": "取消置顶工作区",
+  "Find References": "查找引用",
+  "Cut": "剪切",
+  "Paste": "粘贴",
+  "Share": "分享"
 }

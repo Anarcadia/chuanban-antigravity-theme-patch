@@ -243,7 +243,7 @@
   }
 
   const DEFAULT_EXCLUDE_I18N =
-    'code, pre, kbd, samp, textarea, input, style, script, noscript, [contenteditable="true"], [data-markdown-root], [data-testid="user-message-content"], .agy-user-bubble, .monaco-editor, .monaco-diff-editor, .xterm, [class*="onyx-key"], .prose, .markdown, [class*="chat-message"], [class*="group/file-title"], [data-uri^="file:"], [data-uri^="vscode-"], a.inline-pill[href^="file:"], a.inline-pill[href^="vscode-"], [data-testid="conversation-row-sidebar"] a[href^="/c/"], [data-testid="conversation-row-sidebar"] span.truncate, [data-testid="conversation-row-history"] a[href^="/c/"], [data-testid="conversation-row-history"] span.truncate, [data-testid^="sidebar-agent-row-"] span.truncate, [data-testid="sidebar-agent-hover-card-title"], [data-testid="coordinator-hover-card-title"], [data-testid="doc-row-title"], [data-testid="conversation-navigator-turn"], [data-testid="side-question-followup-user"], [data-testid="comment-card-text"], [data-testid="automation-name"], [data-testid="automation-instructions-text"], [data-testid="step-plan-item"], [data-testid="live-transcript"], [data-testid="voice-transcript-summary-lead"], [data-testid="voice-transcript-summary-point"], [data-testid="project-header"] span.truncate, .msg-body, #raw, [data-testid="swarm-raw"], #swarm-title, #ag-live-metrics-pill, .ag-live-metrics-pill, [data-ag-metrics-pill], #ag-live-metrics-tooltip, #ag-token-nav-section, #ag-token-analytics-panel, #ag-ta-tooltip, [data-ag-token-ui], [data-ag-lang-row="1"], [data-ag-sys-follow-row="1"]';
+    'code, pre, kbd, samp, textarea, input, style, script, noscript, [contenteditable="true"], [data-markdown-root], [data-testid="user-message-content"], .agy-user-bubble, .monaco-editor, .monaco-diff-editor, .xterm, [class*="onyx-key"], .prose, .markdown, [class*="chat-message"], [class*="group/file-title"], [data-uri^="file:"], [data-uri^="vscode-"], a.inline-pill[href^="file:"], a.inline-pill[href^="vscode-"], [data-testid="conversation-row-sidebar"] a[href^="/c/"], [data-testid="conversation-row-sidebar"] span.truncate, [data-testid="conversation-row-history"] a[href^="/c/"], [data-testid="conversation-row-history"] span.truncate, [data-testid^="conversation-group-"], [data-testid^="conversation-project-"], [data-testid^="sidebar-agent-row-"] span.truncate, [data-testid="sidebar-agent-hover-card-title"], [data-testid="coordinator-hover-card-title"], [data-testid="doc-row-title"], [data-testid="conversation-navigator-turn"], [data-testid="side-question-followup-user"], [data-testid="comment-card-text"], [data-testid="automation-name"], [data-testid="automation-instructions-text"], [data-testid="step-plan-item"], [data-testid="live-transcript"], [data-testid="voice-transcript-summary-lead"], [data-testid="voice-transcript-summary-point"], [data-testid="project-header"] span.truncate, .msg-body, #raw, [data-testid="swarm-raw"], #swarm-title, #ag-live-metrics-pill, .ag-live-metrics-pill, [data-ag-metrics-pill], #ag-live-metrics-tooltip, #ag-token-nav-section, #ag-token-analytics-panel, #ag-ta-tooltip, [data-ag-token-ui], [data-ag-lang-row="1"], [data-ag-sys-follow-row="1"]';
 
   function cleanupTokenAnalyticsDom() {
     try {
@@ -781,7 +781,19 @@
     try {
       document.querySelectorAll('[data-ag-sys-follow-row="1"]').forEach((el) => el.remove());
       document.querySelectorAll('[data-ag-lang-row="1"]').forEach((el) => el.remove());
-      if (document.documentElement) document.documentElement.removeAttribute('data-ag-lang');
+      if (window.__ag_cm_translate_listener) {
+        try {
+          document.removeEventListener('__ag_cm_req', window.__ag_cm_translate_listener);
+          document.removeEventListener('__ag_translate_context_menu', window.__ag_cm_translate_listener);
+        } catch (e) {}
+        window.__ag_cm_translate_listener = null;
+      }
+      window.__ag_translate_context_menu_items = null;
+      if (document.documentElement) {
+        document.documentElement.removeAttribute('data-ag-lang');
+        document.documentElement.removeAttribute('data-ag-cm-req');
+        document.documentElement.removeAttribute('data-ag-cm-res');
+      }
       document.querySelectorAll('button[data-ag-warm-night-btn], button[data-ag-morandi-btn]').forEach((el) => el.remove());
       document.querySelectorAll('svg[data-ag-agy-logo="1"], svg[data-ag-claude-spark="1"]').forEach((el) => el.remove());
       document.querySelectorAll('button[data-ag-native-theme-slot="system"]').forEach((btn) => {
@@ -6752,6 +6764,206 @@
       }
     });
 
+    function installNativeContextMenuTranslator() {
+      if (IS_SWARM_PLUGIN_FRAME || typeof document === 'undefined') return;
+      if (window.__ag_cm_translate_listener) {
+        try {
+          document.removeEventListener('__ag_cm_req', window.__ag_cm_translate_listener);
+          document.removeEventListener('__ag_translate_context_menu', window.__ag_cm_translate_listener);
+        } catch (e) {}
+        window.__ag_cm_translate_listener = null;
+      }
+
+      const cmDummyBtn = document.createElement('button');
+      cmDummyBtn.type = 'button';
+      cmDummyBtn.setAttribute('role', 'menuitem');
+
+      // 用户自定义词条键集（user/i18n.override.json 优先级高于 CM_SCOPED_DICT）
+      const userOverrideExact = new Set();
+      const userOverrideCi = new Set();
+      if (Array.isArray(boot.i18nOverrideKeys)) {
+        for (let i = 0; i < boot.i18nOverrideKeys.length; i++) {
+          const ok = String(boot.i18nOverrideKeys[i] || '');
+          if (!ok) continue;
+          userOverrideExact.add(ok);
+          userOverrideCi.add(ok.replace(RE_CURLY_APOS, "'").toLowerCase());
+        }
+      }
+      function hasUserOverrideKey(s) {
+        if (userOverrideExact.size === 0 || !s) return false;
+        if (userOverrideExact.has(s)) return true;
+        const norm = s.replace(RE_CURLY_APOS, "'");
+        if (userOverrideExact.has(norm)) return true;
+        const c0 = norm.charCodeAt(0);
+        return c0 >= 65 && c0 <= 90 && userOverrideCi.has(norm.toLowerCase());
+      }
+
+      // 仅作用于原生上下文菜单的限定词表（避免 Forward/Hide/Open In/Quote/Comment 污染主界面非菜单区域，并将菜单 Back 校准为“后退”）
+      const CM_SCOPED_DICT = Object.assign(Object.create(null), {
+        Back: '后退',
+        Forward: '前进',
+        Quote: '引用',
+        Comment: '评论',
+        Hide: '隐藏',
+        'Open In': '打开方式',
+        'Open in': '打开方式'
+      });
+
+      const FIXED_SUBMENU_ACTION_IDS = new Set([
+        'group-new',
+        'group-remove',
+        'project-new',
+        'project-remove'
+      ]);
+
+      const RE_CM_DEFAULT_SUFFIX = /^(.+?)\s*\(Default\)$/i;
+      const RE_CM_PIN_ENTIRE = /^(Pin Entire|Unpin)\s+(Project|Workspace|Repository|Repo)$/i;
+      const RE_CM_ENTITY_OP = /^(New|Move to|Remove from)\s+(Project|Workspace|Group|Repository|Repo)(\.\.\.|\u2026)?$/i;
+      const CM_ENTITY_NOUN_ZH = {
+        project: '项目',
+        workspace: '工作区',
+        group: '分组',
+        repository: '仓库',
+        repo: '仓库'
+      };
+
+      function isUserNamedContextMenuItem(item, parentId) {
+        const id = typeof item.id === 'string' ? item.id : '';
+        if (
+          (parentId === 'move-to-group' || parentId === 'move-to-project') &&
+          !FIXED_SUBMENU_ACTION_IDS.has(id)
+        ) {
+          return true;
+        }
+        if (
+          item.type === 'checkbox' &&
+          id &&
+          /^(?:group|project)-(?!new$|remove$|outside)/i.test(id)
+        ) {
+          return true;
+        }
+        return false;
+      }
+
+      function translateSingleContextMenuLabel(rawLabel) {
+        if (typeof rawLabel !== 'string' || !rawLabel) return rawLabel;
+        const trimmed = rawLabel.trim();
+        if (!trimmed) return rawLabel;
+
+        if (hasUserOverrideKey(trimmed)) {
+          const userHit = dictLookup(trimmed);
+          if (typeof userHit === 'string') {
+            return rawLabel.replace(trimmed, () => userHit);
+          }
+        }
+
+        const scopedHit = CM_SCOPED_DICT[trimmed];
+        if (typeof scopedHit === 'string') {
+          return rawLabel.replace(trimmed, () => scopedHit);
+        }
+
+        const direct = computeTextTranslation(rawLabel, cmDummyBtn);
+        if (typeof direct === 'string' && direct !== rawLabel) return direct;
+
+        const mDef = trimmed.match(RE_CM_DEFAULT_SUFFIX);
+        if (mDef) {
+          const baseRaw = mDef[1].trim();
+          const baseZh =
+            (hasUserOverrideKey(baseRaw) && dictLookup(baseRaw)) ||
+            CM_SCOPED_DICT[baseRaw] ||
+            dictLookup(baseRaw) ||
+            computeTextTranslation(baseRaw, cmDummyBtn) ||
+            baseRaw;
+          return rawLabel.replace(trimmed, () => baseZh + '（默认）');
+        }
+
+        const mPin = trimmed.match(RE_CM_PIN_ENTIRE);
+        if (mPin) {
+          const nounZh = CM_ENTITY_NOUN_ZH[mPin[2].toLowerCase()] || mPin[2];
+          const verbZh = /^pin/i.test(mPin[1]) ? '置顶整个' : '取消置顶';
+          return rawLabel.replace(trimmed, () => verbZh + nounZh);
+        }
+
+        const mOp = trimmed.match(RE_CM_ENTITY_OP);
+        if (mOp) {
+          const nounZh = CM_ENTITY_NOUN_ZH[mOp[2].toLowerCase()] || mOp[2];
+          const actLower = mOp[1].toLowerCase();
+          const dots = mOp[3] || '';
+          const outZh =
+            actLower === 'new'
+              ? '新建' + nounZh + dots
+              : actLower === 'move to'
+                ? '移至' + nounZh + dots
+                : '从' + nounZh + '移除' + dots;
+          return rawLabel.replace(trimmed, () => outZh);
+        }
+
+        return rawLabel;
+      }
+
+      function translateContextMenuItems(items, parentId = '') {
+        if (!Array.isArray(items) || items.length === 0) return items;
+        let anyChanged = false;
+        const out = new Array(items.length);
+        for (let i = 0; i < items.length; i++) {
+          const it = items[i];
+          if (!it || typeof it !== 'object' || it.type === 'separator') {
+            out[i] = it;
+            continue;
+          }
+          const curId = typeof it.id === 'string' ? it.id : '';
+          let nextLabel = it.label;
+          if (typeof it.label === 'string' && it.label && !isUserNamedContextMenuItem(it, parentId)) {
+            nextLabel = translateSingleContextMenuLabel(it.label);
+          }
+          let nextSub = it.submenu;
+          if (Array.isArray(it.submenu) && it.submenu.length > 0) {
+            nextSub = translateContextMenuItems(it.submenu, curId);
+          }
+          if (nextLabel !== it.label || nextSub !== it.submenu) {
+            anyChanged = true;
+            const copy = Object.assign({}, it, { label: nextLabel });
+            if (Array.isArray(it.submenu)) copy.submenu = nextSub;
+            out[i] = copy;
+          } else {
+            out[i] = it;
+          }
+        }
+        return anyChanged ? out : items;
+      }
+
+      const onTranslateContextMenuReq = (ev) => {
+        if (!ENABLED || MODULES.i18n === false || isUiEnglish()) return;
+        const rawReq = ev && typeof ev.detail === 'string' ? ev.detail : '';
+        if (!rawReq) return;
+        try {
+          const parsed = JSON.parse(rawReq);
+          if (!Array.isArray(parsed) || parsed.length === 0) return;
+          const translated = translateContextMenuItems(parsed, '');
+          if (translated !== parsed) {
+            document.dispatchEvent(new CustomEvent('__ag_cm_res', { detail: JSON.stringify(translated) }));
+          }
+        } catch (e) {}
+      };
+
+      document.addEventListener('__ag_cm_req', onTranslateContextMenuReq);
+      window.__ag_cm_translate_listener = onTranslateContextMenuReq;
+      window.__ag_translate_context_menu_items = translateContextMenuItems;
+      window.__ag_cleanup_fns.push(() => {
+        if (window.__ag_cm_translate_listener === onTranslateContextMenuReq) {
+          try {
+            document.removeEventListener('__ag_cm_req', onTranslateContextMenuReq);
+          } catch (e) {}
+          window.__ag_cm_translate_listener = null;
+        }
+        if (window.__ag_translate_context_menu_items === translateContextMenuItems) {
+          window.__ag_translate_context_menu_items = null;
+        }
+      });
+    }
+
+    installNativeContextMenuTranslator();
+
     function applyI18nDomState() {
       if (!document.body) return;
       if (isUiEnglish()) {
@@ -6815,6 +7027,14 @@
       applyI18nDomState();
     }
   } else {
+    if (window.__ag_cm_translate_listener) {
+      try {
+        document.removeEventListener('__ag_cm_req', window.__ag_cm_translate_listener);
+        document.removeEventListener('__ag_translate_context_menu', window.__ag_cm_translate_listener);
+      } catch (e) {}
+      window.__ag_cm_translate_listener = null;
+    }
+    window.__ag_translate_context_menu_items = null;
     if (IS_SWARM_PLUGIN_FRAME && typeof window.__ag_cleanup_swarm_dom_shields === 'function') {
       try {
         window.__ag_cleanup_swarm_dom_shields(true);

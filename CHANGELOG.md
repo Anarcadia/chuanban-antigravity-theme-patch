@@ -7,9 +7,12 @@
 ## [v6.0.4] - 2026-11-25
 
 > **适用版本**：Antigravity `2.35.1+` / `2.35.0` / `2.34.0+`  
-> **社区致谢**：特别感谢 [@shixiaogaoya](https://github.com/shixiaogaoya)（[PR #46](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/pull/46) 仿 Claude 紧凑右键浮窗卡片、全场景汉化与安全浏览器/外部 IDE 桥接）！
+> **社区致谢**：特别感谢 [@shixiaogaoya](https://github.com/shixiaogaoya)（[PR #46](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/pull/46) 仿 Claude 紧凑右键浮窗卡片、全场景汉化与安全浏览器/外部 IDE 桥接）与 [@Oct1AtJoe](https://github.com/Oct1AtJoe)（[Issue #44](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/issues/44) 左侧会话栏原生右键菜单 IPC 未汉化排查）！
 
 ### Added & Fixed
+- **新增 Electron 原生右键菜单（`showContextMenu`）跨隔离世界三级免 GC 汉化（`core/daemon.mjs` / `core/runtime.js` / `core/i18n.json`，修复 [#44](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/issues/44)，`2,223` 条词典）**：
+  - 针对左侧会话栏、Monaco 编辑器等走 `window.electronNative.showContextMenu` 原生系统菜单的场景，在 `Electron Isolated Context` 通过 `0.3ms` 符号缓存 → `5.9ms` 免 GC `[[Scopes]]` 闭包定位 → 带指数退避熔断的 SSH 兜底包裹 `IpcRenderer.prototype.invoke`；
+  - 采用零 DOM 变更的双同步 `CustomEvent`（`__ag_cm_req` / `__ag_cm_res`）握手 + `mergeLabelsOnly` 结构防篡改校验 + `CM_SCOPED_DICT` 菜单专属词表（保留 `user/i18n.override.json` 最高优先级并豁免用户分组/项目名），与下方 PR #46 自绘浮窗卡片实现全区域右键菜单 100% 汉化闭环。
 - **新增仿 Claude 紧凑右键浮窗卡片、全场景汉化与安全浏览器/外部 IDE 桥接（`core/runtime.js` / `core/theme.css` / `core/daemon.mjs`，合入 [#46](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/pull/46)）**：
   - 接管对话正文、代码块、网页外链、对话内图片（复制图片/另存图片）、本地文件胶囊与右侧文件栏、底部输入框右键菜单，全面适配 5 浅 + 3 深配色预设与中英双语实时切换（`Shift + 右键` 随时透传官方原生菜单，支持 `modules.contextMenu: false` 完整剥离载荷）；
   - 守护进程新增带磁盘缓存与异步并发 `HKCR` 查询的实盘外部 IDE 探测（`VS Code`、`Cursor`、`Windsurf`、`Zed`、`JetBrains` 全系、`Sublime Text`）及无 Shell `execFile` 本地安全桥接（`__agOpenInBrowser` / `__agOpenInEditor`）。
