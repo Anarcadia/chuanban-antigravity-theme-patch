@@ -42,6 +42,11 @@ const WINDOWS_SARASA_SPLIT_VIEW_URL = 'https://drive.google.com/file/d/1iVVvZXtw
 const SARASA_GITHUB_RELEASES_URL = 'https://github.com/be5invis/Sarasa-Gothic/releases';
 const NOTION_GUIDE_URL = 'https://chuanban.notion.site/chuanban-antigravity-theme-patch-db7c5846f37546be9481cd791aed0554';
 const GITHUB_REPO_URL = 'https://github.com/Anarcadia/chuanban-antigravity-theme-patch';
+const R2_FONT_MIRROR_BASE_URL = 'https://img.chuanban.cc/fonts/chuanban-suite';
+const GITHUB_FONT_MIRROR_TAG = 'fonts-sarasa-v1.0.43';
+const GITHUB_FONT_MIRROR_BASE_URL = `${GITHUB_REPO_URL}/releases/download/${GITHUB_FONT_MIRROR_TAG}`;
+const R2_SARASA_SPLIT_URL = `${R2_FONT_MIRROR_BASE_URL}/Windows-Sarasa-Split-SC-TTF-v1.0.43.zip`;
+const GITHUB_SARASA_SPLIT_URL = `${GITHUB_FONT_MIRROR_BASE_URL}/Windows-Sarasa-Split-SC-TTF-v1.0.43.zip`;
 
 function buildGoogleDriveDirectUrl(fileId) {
   return `https://drive.usercontent.google.com/download?id=${encodeURIComponent(fileId)}&export=download&confirm=t`;
@@ -53,7 +58,12 @@ const FONT_DOWNLOAD_CATALOG = {
     label: 'Anthropic Serif Regular',
     filename: 'AnthropicSerif-Regular.ttf',
     driveFileId: '1RZ1rMYYFlr5B-slSSZV-DCJtv5AfTMUV',
-    url: buildGoogleDriveDirectUrl('1RZ1rMYYFlr5B-slSSZV-DCJtv5AfTMUV'),
+    sha256: '5806e7fbfebfe6683fdb2c16d8eb91b98ccd6b4ba0d477e8f5167782e0d7b009',
+    mirrors: [
+      { id: 'cloudflare-r2', url: `${R2_FONT_MIRROR_BASE_URL}/AnthropicSerif-Regular.ttf` },
+      { id: 'google-drive', url: buildGoogleDriveDirectUrl('1RZ1rMYYFlr5B-slSSZV-DCJtv5AfTMUV') }
+    ],
+    url: `${R2_FONT_MIRROR_BASE_URL}/AnthropicSerif-Regular.ttf`,
     kind: 'font',
     minBytes: 100 * 1024,
     timeoutSec: 120
@@ -63,7 +73,12 @@ const FONT_DOWNLOAD_CATALOG = {
     label: 'Anthropic Serif Bold',
     filename: 'AnthropicSerif-Bold.ttf',
     driveFileId: '1-LJfTa1wasIqkoCCHI4mfVyh8tzreiAO',
-    url: buildGoogleDriveDirectUrl('1-LJfTa1wasIqkoCCHI4mfVyh8tzreiAO'),
+    sha256: '3e0d9660390f1800f229e2724cf0b09030ec53188cd3d361ca210077ce564426',
+    mirrors: [
+      { id: 'cloudflare-r2', url: `${R2_FONT_MIRROR_BASE_URL}/AnthropicSerif-Bold.ttf` },
+      { id: 'google-drive', url: buildGoogleDriveDirectUrl('1-LJfTa1wasIqkoCCHI4mfVyh8tzreiAO') }
+    ],
+    url: `${R2_FONT_MIRROR_BASE_URL}/AnthropicSerif-Bold.ttf`,
     kind: 'font',
     minBytes: 100 * 1024,
     timeoutSec: 120
@@ -73,7 +88,12 @@ const FONT_DOWNLOAD_CATALOG = {
     label: 'Anthropic Mono Regular',
     filename: 'AnthropicMono-Regular.ttf',
     driveFileId: '1NK_1Q2MBl5yHw94pC_kbzybDgqEFCZVk',
-    url: buildGoogleDriveDirectUrl('1NK_1Q2MBl5yHw94pC_kbzybDgqEFCZVk'),
+    sha256: '0e686e9d651bf3b7448bbc7ec5c5ffd48e3ae9b07710d26ed332170487f60295',
+    mirrors: [
+      { id: 'cloudflare-r2', url: `${R2_FONT_MIRROR_BASE_URL}/AnthropicMono-Regular.ttf` },
+      { id: 'google-drive', url: buildGoogleDriveDirectUrl('1NK_1Q2MBl5yHw94pC_kbzybDgqEFCZVk') }
+    ],
+    url: `${R2_FONT_MIRROR_BASE_URL}/AnthropicMono-Regular.ttf`,
     kind: 'font',
     minBytes: 50 * 1024,
     timeoutSec: 120
@@ -83,8 +103,14 @@ const FONT_DOWNLOAD_CATALOG = {
     label: 'Sarasa Gothic SC Split TTF (14 weights, 170 MB ZIP)',
     filename: 'Windows-Sarasa-Split-SC-TTF-v1.0.43.zip',
     driveFileId: '1iVVvZXtwUcDiHy42tJ25X6N-JlOf3l7A',
-    url: buildGoogleDriveDirectUrl('1iVVvZXtwUcDiHy42tJ25X6N-JlOf3l7A'),
-    viewUrl: WINDOWS_SARASA_SPLIT_VIEW_URL,
+    sha256: '5add515b1bdc35a246e2507f34b3fce45e517e156842e81a948ca91e51dafde3',
+    mirrors: [
+      { id: 'cloudflare-r2', url: R2_SARASA_SPLIT_URL },
+      { id: 'github-release', url: GITHUB_SARASA_SPLIT_URL },
+      { id: 'google-drive', url: buildGoogleDriveDirectUrl('1iVVvZXtwUcDiHy42tJ25X6N-JlOf3l7A') }
+    ],
+    url: R2_SARASA_SPLIT_URL,
+    viewUrl: R2_SARASA_SPLIT_URL,
     kind: 'zip',
     minBytes: 50 * 1024 * 1024,
     timeoutSec: 600
@@ -94,7 +120,12 @@ const FONT_DOWNLOAD_CATALOG = {
     label: 'Sarasa Gothic SuperTTC (791 MB TTC, macOS/Linux optional)',
     filename: 'Sarasa-SuperTTC.ttc',
     driveFileId: '1i7mqpF2UpjCSR9oBPvPAD3CB6TJn9mwu',
-    url: buildGoogleDriveDirectUrl('1i7mqpF2UpjCSR9oBPvPAD3CB6TJn9mwu'),
+    sha256: 'c66ea03101e8615e3205dc383323f7a3c3100ef783f228b3d877d38ce84ff314',
+    mirrors: [
+      { id: 'github-release', url: `${GITHUB_FONT_MIRROR_BASE_URL}/Sarasa-SuperTTC.ttc` },
+      { id: 'google-drive', url: buildGoogleDriveDirectUrl('1i7mqpF2UpjCSR9oBPvPAD3CB6TJn9mwu') }
+    ],
+    url: `${GITHUB_FONT_MIRROR_BASE_URL}/Sarasa-SuperTTC.ttc`,
     kind: 'font',
     minBytes: 200 * 1024 * 1024,
     timeoutSec: 1200
@@ -3424,13 +3455,28 @@ function detectWindowsSystemProxy() {
   return _cachedWinSystemProxy;
 }
 
-function validateDownloadedBinary(filePath, { kind = 'font', minBytes = 1024 } = {}) {
+function sha256FileChunked(filePath) {
+  const hash = crypto.createHash('sha256');
+  const fd = fs.openSync(filePath, 'r');
+  const buf = Buffer.allocUnsafe(256 * 1024);
+  try {
+    let bytesRead = 0;
+    while ((bytesRead = fs.readSync(fd, buf, 0, buf.length, null)) > 0) {
+      hash.update(bytesRead === buf.length ? buf : buf.subarray(0, bytesRead));
+    }
+  } finally {
+    fs.closeSync(fd);
+  }
+  return hash.digest('hex');
+}
+
+function validateDownloadedBinary(filePath, { kind = 'font', minBytes = 1024, sha256 = null } = {}) {
   try {
     if (!fs.existsSync(filePath)) return { ok: false, reason: 'file_missing', bytes: 0 };
     const st = fs.statSync(filePath);
     const bytes = st.size;
     const fd = fs.openSync(filePath, 'r');
-    const head = Buffer.alloc(Math.min(64, Math.max(0, bytes)));
+    const head = Buffer.alloc(Math.min(512, Math.max(0, bytes)));
     try {
       if (head.length > 0) fs.readSync(fd, head, 0, head.length, 0);
     } finally {
@@ -3438,7 +3484,13 @@ function validateDownloadedBinary(filePath, { kind = 'font', minBytes = 1024 } =
     }
     const asciiPrefix = head.toString('utf8').trimStart().toLowerCase();
     if (asciiPrefix.startsWith('<!doctype') || asciiPrefix.startsWith('<html') || asciiPrefix.startsWith('<?xml')) {
-      return { ok: false, reason: 'html_interstitial_or_quota_exceeded', bytes };
+      const isQuotaExceeded = /quota exceeded|too many users have viewed or downloaded/i.test(asciiPrefix);
+      return {
+        ok: false,
+        reason: isQuotaExceeded ? 'quota_exceeded_html' : 'html_interstitial_or_quota_exceeded',
+        bytes,
+        circuitBreakMirror: true
+      };
     }
     if (bytes < minBytes) {
       return { ok: false, reason: 'file_too_small', bytes, minBytes };
@@ -3452,13 +3504,77 @@ function validateDownloadedBinary(filePath, { kind = 'font', minBytes = 1024 } =
       const isValidFont = isTtf || tag === 'OTTO' || tag === 'true' || tag === 'ttcf';
       if (!isValidFont) return { ok: false, reason: 'invalid_font_magic', bytes };
     }
+    if (sha256) {
+      const actualSha = sha256FileChunked(filePath);
+      if (actualSha.toLowerCase() !== String(sha256).toLowerCase()) {
+        return {
+          ok: false,
+          reason: 'sha256_mismatch',
+          bytes,
+          expectedSha256: String(sha256).toLowerCase(),
+          actualSha256: actualSha
+        };
+      }
+      return { ok: true, bytes, sha256: actualSha };
+    }
     return { ok: true, bytes };
   } catch (err) {
     return { ok: false, reason: 'validation_error', error: String(err?.message || err), bytes: 0 };
   }
 }
 
-async function downloadFontAsset(asset, downloadDir, { force = false } = {}) {
+function resolveAssetMirrors(asset, { preferredMirror = null, mirrorOrder = null } = {}) {
+  const baseMirrors =
+    Array.isArray(asset.mirrors) && asset.mirrors.length > 0
+      ? asset.mirrors.map((m) => ({ id: m.id || 'default', url: m.url }))
+      : [{ id: 'default', url: asset.url }];
+
+  if (Array.isArray(mirrorOrder) && mirrorOrder.length > 0) {
+    const ordered = [];
+    const seen = new Set();
+    for (const id of mirrorOrder) {
+      const found = baseMirrors.find((m) => m.id === id);
+      if (found && !seen.has(found.id)) {
+        ordered.push(found);
+        seen.add(found.id);
+      }
+    }
+    for (const m of baseMirrors) {
+      if (!seen.has(m.id)) {
+        ordered.push(m);
+        seen.add(m.id);
+      }
+    }
+    return ordered;
+  }
+
+  if (preferredMirror) {
+    const exact = baseMirrors.filter((m) => m.id === preferredMirror);
+    if (exact.length > 0) {
+      const rest = baseMirrors.filter((m) => m.id !== preferredMirror);
+      return [...exact, ...rest];
+    }
+  }
+  return baseMirrors;
+}
+
+function shouldCircuitBreakMirror(attempt) {
+  if (!attempt) return false;
+  if (attempt.circuitBreakMirror) return true;
+  if (attempt.reason === 'quota_exceeded_html' || attempt.reason === 'html_interstitial_or_quota_exceeded') return true;
+  if (attempt.reason === 'sha256_mismatch') return true;
+  const httpStatus = Number(attempt.httpStatus || 0);
+  if ([401, 403, 404, 410, 429, 451].includes(httpStatus)) return true;
+  const errStr = String(attempt.error || '');
+  if (/\b(403|404|410|429)\b/.test(errStr) && /requested URL returned error|status code/i.test(errStr)) return true;
+  return false;
+}
+
+async function downloadFontAsset(
+  asset,
+  downloadDir,
+  { force = false, preferredMirror = null, mirrorOrder = null } = {}
+) {
   fs.mkdirSync(downloadDir, { recursive: true });
   const finalPath = path.join(downloadDir, asset.filename);
   if (!force && fs.existsSync(finalPath)) {
@@ -3471,6 +3587,7 @@ async function downloadFontAsset(asset, downloadDir, { force = false } = {}) {
         filePath: finalPath,
         cached: true,
         bytes: cachedCheck.bytes,
+        ...(cachedCheck.sha256 ? { sha256: cachedCheck.sha256 } : {}),
         method: 'cache'
       };
     }
@@ -3483,92 +3600,45 @@ async function downloadFontAsset(asset, downloadDir, { force = false } = {}) {
     } catch {}
   };
   const timeoutSec = asset.timeoutSec || 300;
+  const mirrors = resolveAssetMirrors(asset, { preferredMirror, mirrorOrder });
   const attempts = [];
 
-  // Strategy 1: curl / curl.exe（跨平台原生支持 HTTP_PROXY/HTTPS_PROXY，Windows 下自动探测系统注册表代理）
-  try {
-    const curlBin = process.platform === 'win32' ? 'curl.exe' : 'curl';
-    const winProxy = detectWindowsSystemProxy();
-    const curlArgs = [
-      '-fSL',
-      '--retry',
-      '2',
-      '--retry-delay',
-      '2',
-      '--connect-timeout',
-      '15',
-      '--max-time',
-      String(timeoutSec)
-    ];
-    if (winProxy) curlArgs.push('--proxy', winProxy);
-    curlArgs.push('-o', partPath, asset.url);
-    const r = spawnSync(curlBin, curlArgs, {
-      stdio: ['ignore', 'ignore', 'pipe'],
-      encoding: 'utf8',
-      windowsHide: true,
-      timeout: (timeoutSec + 15) * 1000
-    });
-    if (r.status === 0 && !r.error) {
-      const chk = validateDownloadedBinary(partPath, asset);
-      if (chk.ok) {
-        fs.renameSync(partPath, finalPath);
-        return {
-          ok: true,
-          id: asset.id,
-          filename: asset.filename,
-          filePath: finalPath,
-          cached: false,
-          bytes: chk.bytes,
-          method: winProxy ? 'curl(win-system-proxy)' : 'curl'
-        };
+  for (const mirror of mirrors) {
+    let mirrorCircuitBroken = false;
+    const recordAttemptAndCheckBreak = (entry) => {
+      const fullEntry = { mirror: mirror.id, url: mirror.url, ...entry };
+      attempts.push(fullEntry);
+      if (shouldCircuitBreakMirror(fullEntry)) {
+        mirrorCircuitBroken = true;
+        process.stderr.write(
+          `[Fonts] Mirror "${mirror.id}" rejected ${asset.filename} (${fullEntry.reason || fullEntry.httpStatus || fullEntry.error || 'blocked'}), switching to next mirror...\n`
+        );
       }
-      attempts.push({ method: 'curl', ok: false, ...chk });
-    } else {
-      attempts.push({
-        method: 'curl',
-        ok: false,
-        status: r.status,
-        error: String(r.error?.message || r.stderr || '').trim().slice(0, 240)
-      });
-    }
-  } catch (err) {
-    attempts.push({ method: 'curl', ok: false, error: String(err?.message || err).slice(0, 240) });
-  }
-  cleanupPart();
+    };
 
-  // Strategy 2 (Windows): PowerShell .NET HttpClient（原生继承 WinINET/PAC/系统代理与 TLS 1.2+，流式落盘零高内存）
-  if (process.platform === 'win32') {
-    const cfgTmp = path.join(os.tmpdir(), `ag-dl-cfg-${process.pid}-${Date.now()}.json`);
+    // Strategy 1: curl / curl.exe（跨平台原生支持 HTTP_PROXY/HTTPS_PROXY，Windows 下自动探测系统注册表代理）
     try {
-      fs.writeFileSync(cfgTmp, JSON.stringify({ url: asset.url, out: partPath, timeoutSec }), 'utf8');
-      const psScript = [
-        '$ErrorActionPreference = "Stop"',
-        '[Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12',
-        'Add-Type -AssemblyName System.Net.Http',
-        `$cfg = Get-Content -LiteralPath '${cfgTmp.replace(/'/g, "''")}' -Raw -Encoding UTF8 | ConvertFrom-Json`,
-        '$handler = New-Object System.Net.Http.HttpClientHandler',
-        '$handler.AllowAutoRedirect = $true',
-        '$handler.UseProxy = $true',
-        '$client = New-Object System.Net.Http.HttpClient($handler)',
-        '$client.Timeout = [TimeSpan]::FromSeconds([int]$cfg.timeoutSec)',
-        'try {',
-        '  $resp = $client.GetAsync([string]$cfg.url, [System.Net.Http.HttpCompletionOption]::ResponseHeadersRead).GetAwaiter().GetResult()',
-        '  $resp.EnsureSuccessStatusCode() | Out-Null',
-        '  $inStream = $resp.Content.ReadAsStreamAsync().GetAwaiter().GetResult()',
-        '  $outStream = [System.IO.File]::Create([string]$cfg.out)',
-        '  try { $inStream.CopyTo($outStream) } finally { $outStream.Dispose(); $inStream.Dispose() }',
-        '} finally { $client.Dispose(); $handler.Dispose() }'
-      ].join('\n');
-      const r = spawnSync(
-        'powershell',
-        ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', psScript],
-        {
-          stdio: ['ignore', 'ignore', 'pipe'],
-          encoding: 'utf8',
-          windowsHide: true,
-          timeout: (timeoutSec + 20) * 1000
-        }
-      );
+      const curlBin = process.platform === 'win32' ? 'curl.exe' : 'curl';
+      const winProxy = detectWindowsSystemProxy();
+      const curlArgs = [
+        '-fSL',
+        '--retry',
+        '1',
+        '--retry-delay',
+        '2',
+        '--connect-timeout',
+        '15',
+        '--max-time',
+        String(timeoutSec)
+      ];
+      if (winProxy) curlArgs.push('--proxy', winProxy);
+      curlArgs.push('-o', partPath, mirror.url);
+      const r = spawnSync(curlBin, curlArgs, {
+        stdio: ['ignore', 'ignore', 'pipe'],
+        encoding: 'utf8',
+        windowsHide: true,
+        timeout: (timeoutSec + 15) * 1000
+      });
       if (r.status === 0 && !r.error) {
         const chk = validateDownloadedBinary(partPath, asset);
         if (chk.ok) {
@@ -3580,64 +3650,145 @@ async function downloadFontAsset(asset, downloadDir, { force = false } = {}) {
             filePath: finalPath,
             cached: false,
             bytes: chk.bytes,
-            method: 'powershell-httpclient'
+            ...(chk.sha256 ? { sha256: chk.sha256 } : {}),
+            mirror: mirror.id,
+            url: mirror.url,
+            method: winProxy ? 'curl(win-system-proxy)' : 'curl',
+            ...(attempts.length > 0 ? { failoverAttempts: attempts } : {})
           };
         }
-        attempts.push({ method: 'powershell-httpclient', ok: false, ...chk });
+        recordAttemptAndCheckBreak({ method: 'curl', ok: false, ...chk });
       } else {
-        attempts.push({
-          method: 'powershell-httpclient',
+        recordAttemptAndCheckBreak({
+          method: 'curl',
           ok: false,
           status: r.status,
           error: String(r.error?.message || r.stderr || '').trim().slice(0, 240)
         });
       }
     } catch (err) {
-      attempts.push({ method: 'powershell-httpclient', ok: false, error: String(err?.message || err).slice(0, 240) });
-    } finally {
+      recordAttemptAndCheckBreak({ method: 'curl', ok: false, error: String(err?.message || err).slice(0, 240) });
+    }
+    cleanupPart();
+    if (mirrorCircuitBroken) continue;
+
+    // Strategy 2 (Windows): PowerShell .NET HttpClient（原生继承 WinINET/PAC/系统代理与 TLS 1.2+，流式落盘零高内存）
+    if (process.platform === 'win32') {
+      const cfgTmp = path.join(os.tmpdir(), `ag-dl-cfg-${process.pid}-${Date.now()}.json`);
       try {
-        if (fs.existsSync(cfgTmp)) fs.unlinkSync(cfgTmp);
-      } catch {}
+        fs.writeFileSync(cfgTmp, JSON.stringify({ url: mirror.url, out: partPath, timeoutSec }), 'utf8');
+        const psScript = [
+          '$ErrorActionPreference = "Stop"',
+          '[Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12',
+          'Add-Type -AssemblyName System.Net.Http',
+          `$cfg = Get-Content -LiteralPath '${cfgTmp.replace(/'/g, "''")}' -Raw -Encoding UTF8 | ConvertFrom-Json`,
+          '$handler = New-Object System.Net.Http.HttpClientHandler',
+          '$handler.AllowAutoRedirect = $true',
+          '$handler.UseProxy = $true',
+          '$client = New-Object System.Net.Http.HttpClient($handler)',
+          '$client.Timeout = [TimeSpan]::FromSeconds([int]$cfg.timeoutSec)',
+          'try {',
+          '  $resp = $client.GetAsync([string]$cfg.url, [System.Net.Http.HttpCompletionOption]::ResponseHeadersRead).GetAwaiter().GetResult()',
+          '  $resp.EnsureSuccessStatusCode() | Out-Null',
+          '  $inStream = $resp.Content.ReadAsStreamAsync().GetAwaiter().GetResult()',
+          '  $outStream = [System.IO.File]::Create([string]$cfg.out)',
+          '  try { $inStream.CopyTo($outStream) } finally { $outStream.Dispose(); $inStream.Dispose() }',
+          '} finally { $client.Dispose(); $handler.Dispose() }'
+        ].join('\n');
+        const r = spawnSync(
+          'powershell',
+          ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', psScript],
+          {
+            stdio: ['ignore', 'ignore', 'pipe'],
+            encoding: 'utf8',
+            windowsHide: true,
+            timeout: (timeoutSec + 20) * 1000
+          }
+        );
+        if (r.status === 0 && !r.error) {
+          const chk = validateDownloadedBinary(partPath, asset);
+          if (chk.ok) {
+            fs.renameSync(partPath, finalPath);
+            return {
+              ok: true,
+              id: asset.id,
+              filename: asset.filename,
+              filePath: finalPath,
+              cached: false,
+              bytes: chk.bytes,
+              ...(chk.sha256 ? { sha256: chk.sha256 } : {}),
+              mirror: mirror.id,
+              url: mirror.url,
+              method: 'powershell-httpclient',
+              ...(attempts.length > 0 ? { failoverAttempts: attempts } : {})
+            };
+          }
+          recordAttemptAndCheckBreak({ method: 'powershell-httpclient', ok: false, ...chk });
+        } else {
+          recordAttemptAndCheckBreak({
+            method: 'powershell-httpclient',
+            ok: false,
+            status: r.status,
+            error: String(r.error?.message || r.stderr || '').trim().slice(0, 240)
+          });
+        }
+      } catch (err) {
+        recordAttemptAndCheckBreak({
+          method: 'powershell-httpclient',
+          ok: false,
+          error: String(err?.message || err).slice(0, 240)
+        });
+      } finally {
+        try {
+          if (fs.existsSync(cfgTmp)) fs.unlinkSync(cfgTmp);
+        } catch {}
+      }
+      cleanupPart();
+      if (mirrorCircuitBroken) continue;
+    }
+
+    // Strategy 3: Node 22+ 原生 fetch 流式下载兜底
+    try {
+      const res = await fetch(mirror.url, {
+        redirect: 'follow',
+        signal: AbortSignal.timeout(timeoutSec * 1000)
+      });
+      if (!res.ok || !res.body) {
+        recordAttemptAndCheckBreak({ method: 'node-fetch', ok: false, httpStatus: res.status });
+      } else {
+        await pipeline(Readable.fromWeb(res.body), fs.createWriteStream(partPath));
+        const chk = validateDownloadedBinary(partPath, asset);
+        if (chk.ok) {
+          fs.renameSync(partPath, finalPath);
+          return {
+            ok: true,
+            id: asset.id,
+            filename: asset.filename,
+            filePath: finalPath,
+            cached: false,
+            bytes: chk.bytes,
+            ...(chk.sha256 ? { sha256: chk.sha256 } : {}),
+            mirror: mirror.id,
+            url: mirror.url,
+            method: 'node-fetch',
+            ...(attempts.length > 0 ? { failoverAttempts: attempts } : {})
+          };
+        }
+        recordAttemptAndCheckBreak({ method: 'node-fetch', ok: false, ...chk });
+      }
+    } catch (err) {
+      recordAttemptAndCheckBreak({ method: 'node-fetch', ok: false, error: String(err?.message || err).slice(0, 240) });
     }
     cleanupPart();
   }
-
-  // Strategy 3: Node 22+ 原生 fetch 流式下载兜底
-  try {
-    const res = await fetch(asset.url, {
-      redirect: 'follow',
-      signal: AbortSignal.timeout(timeoutSec * 1000)
-    });
-    if (!res.ok || !res.body) {
-      attempts.push({ method: 'node-fetch', ok: false, status: res.status });
-    } else {
-      await pipeline(Readable.fromWeb(res.body), fs.createWriteStream(partPath));
-      const chk = validateDownloadedBinary(partPath, asset);
-      if (chk.ok) {
-        fs.renameSync(partPath, finalPath);
-        return {
-          ok: true,
-          id: asset.id,
-          filename: asset.filename,
-          filePath: finalPath,
-          cached: false,
-          bytes: chk.bytes,
-          method: 'node-fetch'
-        };
-      }
-      attempts.push({ method: 'node-fetch', ok: false, ...chk });
-    }
-  } catch (err) {
-    attempts.push({ method: 'node-fetch', ok: false, error: String(err?.message || err).slice(0, 240) });
-  }
-  cleanupPart();
 
   return {
     ok: false,
     id: asset.id,
     filename: asset.filename,
-    url: asset.url,
-    manualUrl: asset.viewUrl || GOOGLE_DRIVE_URL,
+    url: mirrors[0]?.url || asset.url,
+    mirrors: mirrors.map((m) => ({ id: m.id, url: m.url })),
+    manualUrl: asset.viewUrl || mirrors[0]?.url || GOOGLE_DRIVE_URL,
     attempts
   };
 }
@@ -3708,7 +3859,15 @@ function selectMissingFontAssets(env, { includeAll = false, useSuperTtc = false,
   return assets;
 }
 
-async function downloadFontsBatch({ downloadDir, includeAll = false, force = false, useSuperTtc = false, wantSplitSarasa = false } = {}) {
+async function downloadFontsBatch({
+  downloadDir,
+  includeAll = false,
+  force = false,
+  useSuperTtc = false,
+  wantSplitSarasa = false,
+  preferredMirror = null,
+  mirrorOrder = null
+} = {}) {
   const env = await detectEnvironment('auto');
   const assets = selectMissingFontAssets(env, { includeAll, useSuperTtc, wantSplitSarasa });
   const targetDownloadDir = path.resolve(downloadDir || path.join(os.tmpdir(), 'chuanban-ag-fonts-cache'));
@@ -3716,7 +3875,7 @@ async function downloadFontsBatch({ downloadDir, includeAll = false, force = fal
   const results = [];
   for (const asset of assets) {
     process.stderr.write(`[Fonts] Downloading ${asset.filename} ...\n`);
-    const r = await downloadFontAsset(asset, targetDownloadDir, { force });
+    const r = await downloadFontAsset(asset, targetDownloadDir, { force, preferredMirror, mirrorOrder });
     results.push(r);
   }
   const failed = results.filter((r) => !r.ok);
@@ -3730,9 +3889,19 @@ async function downloadFontsBatch({ downloadDir, includeAll = false, force = fal
     results,
     manualFallbackHint:
       failed.length > 0
-        ? `Automatic download failed for ${failed.map((f) => f.filename).join(', ')} (likely terminal network/proxy restriction or Google Drive temporary quota). Download manually in browser from ${GOOGLE_DRIVE_URL} (Windows Sarasa Split ZIP: ${WINDOWS_SARASA_SPLIT_VIEW_URL}), then run: node install.mjs install-fonts --from "<downloaded-folder-or-zip>"`
+        ? `Automatic download failed for ${failed.map((f) => f.filename).join(', ')} (likely terminal network/proxy restriction). Download manually in browser from Cloudflare R2 (${R2_SARASA_SPLIT_URL}), GitHub Release (${GITHUB_SARASA_SPLIT_URL}), or Google Drive (${GOOGLE_DRIVE_URL}), then run: node install.mjs install-fonts --from "<downloaded-folder-or-zip>"`
         : null
   };
+}
+
+function parseMirrorOrderArg() {
+  const raw = getArg('--mirror-order', null);
+  if (!raw) return null;
+  const list = raw
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  return list.length > 0 ? list : null;
 }
 
 async function runDownloadFontsCmd() {
@@ -3740,7 +3909,16 @@ async function runDownloadFontsCmd() {
   const includeAll = hasFlag('--all');
   const force = hasFlag('--force');
   const useSuperTtc = hasFlag('--super-ttc');
-  const summary = await downloadFontsBatch({ downloadDir, includeAll, force, useSuperTtc });
+  const preferredMirror = getArg('--mirror', null);
+  const mirrorOrder = parseMirrorOrderArg();
+  const summary = await downloadFontsBatch({
+    downloadDir,
+    includeAll,
+    force,
+    useSuperTtc,
+    preferredMirror,
+    mirrorOrder
+  });
   console.log(JSON.stringify(summary, null, 2));
   if (!summary.ok) process.exitCode = 1;
 }
@@ -3771,7 +3949,9 @@ async function runInstallFonts() {
       includeAll: hasFlag('--all'),
       force: hasFlag('--force'),
       useSuperTtc: hasFlag('--super-ttc'),
-      wantSplitSarasa: shouldRetireSuperTtc
+      wantSplitSarasa: shouldRetireSuperTtc,
+      preferredMirror: getArg('--mirror', null),
+      mirrorOrder: parseMirrorOrderArg()
     });
     if (downloadSummary.requestedCount > 0) {
       for (const r of downloadSummary.results) {
