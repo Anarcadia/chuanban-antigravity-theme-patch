@@ -181,7 +181,7 @@ function buildManifest(baseDir = __dirname) {
   }
   const manifest = {
     name: 'chuanban-antigravity-theme-patch',
-    version: '6.0.2',
+    version: '6.0.3',
     minNodeVersion: '22.0.0',
     fullMetricsNodeVersion: '22.13.0',
     distribution: {
@@ -440,7 +440,7 @@ function readHostVersionAndProcesses(channel = 'auto') {
         ) {
           continue;
         }
-        const appMatch = cmd.match(/^(\S.*?\/Antigravity(?:\s-\sInsiders)?\.app)\/Contents\/MacOS\/(Antigravity(?:\s-\sInsiders)?)(?:\s|$)/);
+        const appMatch = cmd.match(/^(\/[^\r\n]*?\/Antigravity(?:\s-\sInsiders)?\.app)\/Contents\/MacOS\/(Antigravity(?:\s-\sInsiders)?)(?:\s|$)/);
         if (!appMatch) continue;
         const ch = /Insiders/i.test(appMatch[2]) ? 'insiders' : 'stable';
         if ((ch === 'stable' && !allowStable) || (ch === 'insiders' && !allowInsiders)) continue;
@@ -1215,9 +1215,9 @@ function ensureCdpLaunchers(channel = 'auto', options = {}) {
           '  <key>CFBundlePackageType</key>',
           '  <string>APPL</string>',
           '  <key>CFBundleShortVersionString</key>',
-          '  <string>6.0.2</string>',
+          '  <string>6.0.3</string>',
           '  <key>CFBundleVersion</key>',
-          '  <string>601</string>',
+          '  <string>603</string>',
           ...(iconBase ? ['  <key>CFBundleIconFile</key>', `  <string>${iconBase}</string>`] : []),
           '  <key>LSMinimumSystemVersion</key>',
           '  <string>12.0</string>',
@@ -1580,6 +1580,85 @@ function buildFontReport(env) {
   };
 }
 
+function extractBaseSemverTuple(verStr) {
+  const m = String(verStr || '').match(/v?(\d+)\.(\d+)\.(\d+)/i);
+  if (!m) return null;
+  return [parseInt(m[1], 10), parseInt(m[2], 10), parseInt(m[3], 10)];
+}
+
+function compareSemverTuples(a, b) {
+  if (!a || !b) return 0;
+  for (let i = 0; i < 3; i++) {
+    if (a[i] !== b[i]) return a[i] > b[i] ? 1 : -1;
+  }
+  return 0;
+}
+
+function inspectSourceSync(sourceDir, targetDir) {
+  if (isSameTargetPath(sourceDir, targetDir)) {
+    return { sameDirectory: true, inSync: true, sourceOlder: false, outdatedFiles: [] };
+  }
+  const srcManifestPath = path.join(sourceDir, 'core', 'manifest.json');
+  const dstManifestPath = path.join(targetDir, 'core', 'manifest.json');
+  if (!fs.existsSync(srcManifestPath)) return null;
+  if (!fs.existsSync(dstManifestPath)) {
+    return {
+      sourceDir,
+      targetDir,
+      inSync: false,
+      sourceOlder: false,
+      reason: 'target_manifest_missing',
+      outdatedFiles: ['core/manifest.json']
+    };
+  }
+  try {
+    const srcManifest = JSON.parse(fs.readFileSync(srcManifestPath, 'utf8'));
+    const dstManifest = JSON.parse(fs.readFileSync(dstManifestPath, 'utf8'));
+    const fileNames = new Set([
+      ...Object.keys(srcManifest.files || {}),
+      ...Object.keys(dstManifest.files || {})
+    ]);
+    const outdatedFiles = [];
+    for (const name of fileNames) {
+      const srcFile = path.join(sourceDir, 'core', name);
+      const dstFile = path.join(targetDir, 'core', name);
+      const srcSha = fs.existsSync(srcFile) ? sha256File(srcFile) : null;
+      const dstSha = fs.existsSync(dstFile) ? sha256File(dstFile) : null;
+      if (srcSha !== dstSha) {
+        outdatedFiles.push(`core/${name}`);
+      }
+    }
+    if (sha256File(srcManifestPath) !== sha256File(dstManifestPath)) {
+      outdatedFiles.push('core/manifest.json');
+    }
+    const srcInstaller = path.join(sourceDir, 'install.mjs');
+    const dstInstaller = path.join(targetDir, 'install.mjs');
+    if (fs.existsSync(srcInstaller) && fs.existsSync(dstInstaller) && sha256File(srcInstaller) !== sha256File(dstInstaller)) {
+      outdatedFiles.push('install.mjs');
+    }
+    const verCmp = compareSemverTuples(
+      extractBaseSemverTuple(srcManifest.version),
+      extractBaseSemverTuple(dstManifest.version)
+    );
+    const sourceOlder = verCmp < 0;
+    return {
+      sourceDir,
+      targetDir,
+      sourceVersion: srcManifest.version || null,
+      targetVersion: dstManifest.version || null,
+      sourceOlder,
+      inSync: outdatedFiles.length === 0,
+      outdatedFiles,
+      syncHint:
+        outdatedFiles.length > 0 && !sourceOlder
+          ? `node ${JSON.stringify(path.join(sourceDir, 'install.mjs'))} install`
+          : null
+    };
+  } catch {
+    return null;
+  }
+}
+
 async function runDoctor() {
   const channel = getArg('--channel', 'auto');
   const defaultTarget = resolveGlobalInstallDir();
@@ -1589,6 +1668,7 @@ async function runDoctor() {
 
   const env = await detectEnvironment(channel);
   const integrity = verifyCoreIntegrity(targetDir);
+  const sourceSync = inspectSourceSync(__dirname, targetDir);
   const live = await inspectLiveWindow(env);
 
   const cdpMissingFlag = !isCustomSandboxTarget && !live.reachable && env.cdpStatus === 'missing_opt_in_flag';
@@ -1629,7 +1709,8 @@ async function runDoctor() {
     coreIntegrity: {
       targetDir,
       clean: integrity.ok,
-      modifiedFiles: integrity.modified
+      modifiedFiles: integrity.modified,
+      ...(sourceSync && !sourceSync.sameDirectory ? { sourceSync } : {})
     },
     keepAliveTask: inspectWindowsKeepAliveTask(targetDir),
     liveWindow: live
@@ -2549,27 +2630,76 @@ function isPidRunning(pid) {
   }
 }
 
-const DEFAULT_RELAUNCH_NO_PROXY = 'localhost,127.0.0.1,::1,[::1]';
-
-function tokenizeRelaunchCmdLine(cmdLine) {
+function tokenizeRelaunchCmdLine(cmdLine, platform = process.platform) {
   const src = String(cmdLine || '');
   const tokens = [];
+  if (platform === 'win32') {
+    // 遵循 Windows CommandLineToArgvW 的 2n / 2n+1 反斜杠 + 双引号规则
+    let cur = '';
+    let inQuotes = false;
+    let hasToken = false;
+    for (let i = 0; i < src.length; i++) {
+      const ch = src[i];
+      if (ch === '\\') {
+        let bsCount = 1;
+        while (i + bsCount < src.length && src[i + bsCount] === '\\') bsCount++;
+        if (i + bsCount < src.length && src[i + bsCount] === '"') {
+          cur += '\\'.repeat(Math.floor(bsCount / 2));
+          hasToken = true;
+          if (bsCount % 2 === 1) {
+            cur += '"';
+          } else {
+            inQuotes = !inQuotes;
+          }
+          i += bsCount;
+          continue;
+        }
+        cur += '\\'.repeat(bsCount);
+        hasToken = true;
+        i += bsCount - 1;
+        continue;
+      }
+      if (ch === '"') {
+        hasToken = true;
+        if (inQuotes && i + 1 < src.length && src[i + 1] === '"') {
+          cur += '"';
+          i++;
+        } else {
+          inQuotes = !inQuotes;
+        }
+        continue;
+      }
+      if (!inQuotes && /\s/.test(ch)) {
+        if (hasToken || cur.length > 0) {
+          tokens.push(cur);
+          cur = '';
+          hasToken = false;
+        }
+        continue;
+      }
+      cur += ch;
+      hasToken = true;
+    }
+    if (hasToken || cur.length > 0) tokens.push(cur);
+    return tokens;
+  }
+
+  // POSIX ps -axo command= 输出无外层 shell 引号，禁用单引号配对以免路径中的撇号（如 John's Repo）吞没后续参数
   let cur = '';
-  let quote = '';
-  const allowSingleQuote = process.platform !== 'win32';
+  let inDoubleQuote = false;
   for (let i = 0; i < src.length; i++) {
     const ch = src[i];
-    if (quote) {
-      if (ch === '\\' && quote === '"' && i + 1 < src.length && src[i + 1] === '"') {
+    if (inDoubleQuote) {
+      if (ch === '\\' && i + 1 < src.length && src[i + 1] === '"') {
         cur += '"';
         i++;
-      } else if (ch === quote) {
-        quote = '';
+      } else if (ch === '"') {
+        inDoubleQuote = false;
       } else {
         cur += ch;
       }
-    } else if (ch === '"' || (allowSingleQuote && ch === "'")) {
-      quote = ch;
+    } else if (ch === '"') {
+      inDoubleQuote = true;
     } else if (/\s/.test(ch)) {
       if (cur.length > 0) {
         tokens.push(cur);
@@ -2583,11 +2713,64 @@ function tokenizeRelaunchCmdLine(cmdLine) {
   return tokens;
 }
 
+function stripLeadingExecutableFromCmdLine(cmdLine, exePath = '', platform = process.platform) {
+  const src = String(cmdLine || '').trimStart();
+  if (!src) return '';
+  const exe = String(exePath || '').trim();
+  if (exe) {
+    const cmpSrc = platform === 'win32' ? src.toLowerCase() : src;
+    const cmpExe = platform === 'win32' ? exe.toLowerCase() : exe;
+    const quotedExe = `"${cmpExe}"`;
+    if (cmpSrc.startsWith(quotedExe)) {
+      const rest = src.slice(quotedExe.length);
+      if (!rest || /^\s/.test(rest)) return rest.trimStart();
+    }
+    if (cmpSrc.startsWith(cmpExe)) {
+      const rest = src.slice(cmpExe.length);
+      if (!rest || /^\s/.test(rest)) return rest.trimStart();
+    }
+  }
+  if (platform === 'darwin') {
+    const macAppMatch = src.match(
+      /^(?:"[^"]+"|\S.*?\/Antigravity(?:\s-\sInsiders)?\.app\/Contents\/MacOS\/Antigravity(?:\s-\sInsiders)?)(?=\s|$)/
+    );
+    if (macAppMatch) return src.slice(macAppMatch[0].length).trimStart();
+  } else if (platform === 'win32') {
+    const winExeMatch = src.match(/^(?:"[^"]+"|[a-zA-Z]:\\[^\r\n]*?\.exe)(?=\s|$)/i);
+    if (winExeMatch) return src.slice(winExeMatch[0].length).trimStart();
+  }
+  if (src.startsWith('"')) {
+    const endQuote = src.indexOf('"', 1);
+    if (endQuote > 0) return src.slice(endQuote + 1).trimStart();
+  }
+  const firstWs = src.search(/\s/);
+  return firstWs < 0 ? '' : src.slice(firstWs + 1).trimStart();
+}
+
+function readLinuxProcCmdlineArgs(pid, platform = process.platform) {
+  if (platform !== 'linux' || !Number.isInteger(pid) || pid <= 0) return null;
+  try {
+    const raw = fs.readFileSync(`/proc/${pid}/cmdline`);
+    if (!raw || raw.length === 0) return null;
+    const parts = raw.toString('utf8').split('\0');
+    if (parts.length > 0 && parts[parts.length - 1] === '') parts.pop();
+    return parts.length > 1 ? parts.slice(1) : [];
+  } catch {
+    return null;
+  }
+}
+
 function normalizeProxyUrl(address, defaultScheme = 'http') {
-  const trimmed = String(address || '').trim();
-  if (!trimmed) return '';
-  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed)) return trimmed;
-  return `${defaultScheme}://${trimmed}`;
+  const raw = String(address || '').trim();
+  if (!raw) return '';
+  // Chromium --proxy-server 允许逗号分隔回退链（如 http://127.0.0.1:7890,direct://），提取首个真实代理节点
+  const firstHop = raw
+    .split(',')
+    .map((s) => s.trim())
+    .find((s) => s && !/^direct:\/\//i.test(s));
+  if (!firstHop) return '';
+  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(firstHop)) return firstHop;
+  return `${defaultScheme}://${firstHop}`;
 }
 
 function parseProxyServerSpec(raw) {
@@ -2608,6 +2791,7 @@ function parseProxyServerSpec(raw) {
   let httpProxy = map.http ? normalizeProxyUrl(map.http, 'http') : '';
   let httpsProxy = map.https ? normalizeProxyUrl(map.https, 'http') : '';
   if (map.socks) {
+    // WinINet 注册表中的 socks= 协议名无版本后缀，现代本地代理客户端普遍提供 SOCKS5 混合监听，Go net/http 亦仅支持 socks5://
     const socks = normalizeProxyUrl(map.socks, 'socks5');
     if (!httpProxy) httpProxy = socks;
     if (!httpsProxy) httpsProxy = socks;
@@ -2625,39 +2809,154 @@ function parseProxyServerSpec(raw) {
   return httpProxy || httpsProxy ? { httpProxy, httpsProxy } : null;
 }
 
-function extractPreservedProxyArgs(cmdLine) {
-  const tokens = tokenizeRelaunchCmdLine(cmdLine);
-  if (tokens.length <= 1) return [];
+function normalizeBypassTokenForNoProxy(rawEntry) {
+  const trimmed = String(rawEntry || '').trim();
+  if (!trimmed) return '';
+  const low = trimmed.toLowerCase();
+  if (low === '<local>' || low === '<-loopback>') return '';
+  if (low === '[::1]') return '::1';
+  if (trimmed === '*.*.*.*') return '*';
+
+  // 分离非 IPv6 末尾端口（如 192.168.1.*:8080 或 *corp.com:8443）
+  let hostPart = trimmed;
+  let portSuffix = '';
+  const firstColon = trimmed.indexOf(':');
+  const lastColon = trimmed.lastIndexOf(':');
+  if (firstColon > 0 && firstColon === lastColon && /^\d{1,5}$/.test(trimmed.slice(firstColon + 1))) {
+    hostPart = trimmed.slice(0, firstColon);
+    portSuffix = trimmed.slice(firstColon);
+  }
+
+  if (/^\d{1,3}(?:\.(?:\d{1,3}|\*)){1,3}$/.test(hostPart) && hostPart.includes('*')) {
+    const parts = hostPart.split('.');
+    const starIdx = parts.indexOf('*');
+    if (starIdx >= 1 && starIdx <= 3 && parts.slice(starIdx).every((p) => p === '*')) {
+      const nums = parts.slice(0, starIdx).map((n) => Number(n));
+      if (nums.every((n) => Number.isInteger(n) && n >= 0 && n <= 255)) {
+        const octets = [...nums, 0, 0, 0].slice(0, 4);
+        // Go httpproxy 对 CIDR 条目不支持附带端口后缀，统一输出标准网段 CIDR
+        return `${octets.join('.')}/${starIdx * 8}`;
+      }
+    }
+    return '';
+  }
+
+  // WinINet 允许 *corp.com（无点号），近似转换为 Go/Node 支持的子域后缀 .corp.com
+  if (/^\*[a-z0-9][a-z0-9.-]*\.[a-z]{2,}$/i.test(hostPart)) {
+    return `.${hostPart.slice(1)}${portSuffix}`;
+  }
+
+  return `${hostPart}${portSuffix}`;
+}
+
+function parseBypassListEntries(raw) {
+  const out = [];
+  for (const part of String(raw || '').split(/[;,\s]+/)) {
+    const norm = normalizeBypassTokenForNoProxy(part);
+    if (norm) out.push(norm);
+  }
+  return out;
+}
+
+function mergeNoProxyValue(existingRaw, extraEntries = []) {
+  const LOOPBACK_ENTRIES = ['localhost', '127.0.0.1', '::1'];
+  const merged = [];
+  const seen = new Set();
+  const pushItem = (rawItem) => {
+    const norm = normalizeBypassTokenForNoProxy(rawItem);
+    if (!norm) return;
+    const key = norm.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    merged.push(norm);
+  };
+  for (const part of String(existingRaw || '').split(/[,;]+/)) {
+    pushItem(part);
+  }
+  for (const extra of extraEntries) {
+    pushItem(extra);
+  }
+  for (const lb of LOOPBACK_ENTRIES) {
+    pushItem(lb);
+  }
+  return merged.join(',');
+}
+
+function extractRelaunchArgsFromCmdLine(cmdLine, meta = {}) {
+  const platform = meta?.platform || process.platform;
+  const procTokens = Array.isArray(meta?.procArgs)
+    ? meta.procArgs
+    : readLinuxProcCmdlineArgs(meta?.pid, platform);
+  const tokens =
+    procTokens !== null
+      ? procTokens
+      : (() => {
+          const rest = stripLeadingExecutableFromCmdLine(cmdLine, meta?.exePath || '', platform);
+          return rest ? tokenizeRelaunchCmdLine(rest, platform) : [];
+        })();
+  if (tokens.length === 0) return { allArgs: [], preservedProxyArgs: [] };
+
   const VALUE_FLAGS = new Set(['--proxy-server', '--proxy-bypass-list', '--proxy-pac-url']);
   const BOOL_FLAGS = new Set(['--no-proxy-server', '--proxy-auto-detect']);
-  const preserved = [];
-  const seen = new Set();
-  for (let i = 1; i < tokens.length; i++) {
+  const DROP_EXACT_FLAGS = new Set(['--updated', '--remote-debugging-pipe', '--inspect', '--inspect-brk']);
+  const DROP_VALUE_FLAGS = new Set(['--remote-debugging-port', '--type']);
+  const DROP_PREFIXES = ['--squirrel-', '-psn_', '--inspect=', '--inspect-brk='];
+  const allArgs = [];
+  const preservedProxyArgs = [];
+  const seenProxy = new Set();
+  for (let i = 0; i < tokens.length; i++) {
     const tok = tokens[i];
-    if (!tok.startsWith('--')) continue;
-    const eqIdx = tok.indexOf('=');
-    const flag = (eqIdx >= 0 ? tok.slice(0, eqIdx) : tok).toLowerCase();
-    if (BOOL_FLAGS.has(flag)) {
-      if (!seen.has(flag)) {
-        seen.add(flag);
-        preserved.push(flag);
+    if (!tok) continue;
+    if (tok.startsWith('-')) {
+      const lowTok = tok.toLowerCase();
+      if (DROP_PREFIXES.some((pfx) => lowTok.startsWith(pfx))) {
+        continue;
       }
+      const eqIdx = tok.indexOf('=');
+      const flag = (eqIdx >= 0 ? tok.slice(0, eqIdx) : tok).toLowerCase();
+      if (DROP_EXACT_FLAGS.has(flag)) continue;
+      if (DROP_VALUE_FLAGS.has(flag)) {
+        if (eqIdx < 0 && i + 1 < tokens.length && !tokens[i + 1].startsWith('-')) {
+          i++;
+        }
+        continue;
+      }
+      if (BOOL_FLAGS.has(flag)) {
+        if (!seenProxy.has(flag)) {
+          seenProxy.add(flag);
+          preservedProxyArgs.push(flag);
+          allArgs.push(flag);
+        }
+        continue;
+      }
+      if (VALUE_FLAGS.has(flag)) {
+        let val = '';
+        if (eqIdx >= 0) {
+          val = tok.slice(eqIdx + 1).trim();
+        } else if (i + 1 < tokens.length && !tokens[i + 1].startsWith('--')) {
+          val = tokens[++i].trim();
+        }
+        if (val && !seenProxy.has(flag)) {
+          seenProxy.add(flag);
+          const normalized = `${flag}=${val}`;
+          preservedProxyArgs.push(normalized);
+          allArgs.push(normalized);
+        }
+        continue;
+      }
+      if (platform === 'darwin') {
+        if (tok.startsWith('--')) {
+          allArgs.push(tok);
+        }
+        continue;
+      }
+    } else if (platform === 'darwin') {
+      // macOS ps -axo command= 不带引号，丢弃无引号位置路径碎片，交由 Electron 原生会话记忆恢复打开的工作区
       continue;
     }
-    if (VALUE_FLAGS.has(flag)) {
-      let val = '';
-      if (eqIdx >= 0) {
-        val = tok.slice(eqIdx + 1).trim();
-      } else if (i + 1 < tokens.length && !tokens[i + 1].startsWith('--')) {
-        val = tokens[++i].trim();
-      }
-      if (val && !seen.has(flag)) {
-        seen.add(flag);
-        preserved.push(`${flag}=${val}`);
-      }
-    }
+    allArgs.push(tok);
   }
-  return preserved;
+  return { allArgs, preservedProxyArgs };
 }
 
 function readWindowsSystemProxyFresh() {
@@ -2670,11 +2969,19 @@ function readWindowsSystemProxyFresh() {
     });
     if (r.status !== 0 || !r.stdout) return null;
     const out = String(r.stdout);
-    const enabledMatch = out.match(/ProxyEnable\s+REG_DWORD\s+0x([0-9a-f]+)/i);
+    const enabledMatch = out.match(/ProxyEnable[ \t]+REG_DWORD[ \t]+0x([0-9a-f]+)/i);
     if (!enabledMatch || parseInt(enabledMatch[1], 16) !== 1) return null;
-    const serverMatch = out.match(/ProxyServer\s+REG_SZ\s+([^\r\n]+)/i);
-    if (!serverMatch) return null;
-    return parseProxyServerSpec(serverMatch[1]);
+    const serverMatch = out.match(/ProxyServer[ \t]+REG_SZ[ \t]*([^\r\n]*)/i);
+    if (!serverMatch || !serverMatch[1].trim()) return null;
+    const parsed = parseProxyServerSpec(serverMatch[1]);
+    if (!parsed) return null;
+    const overrideMatch = out.match(/ProxyOverride[ \t]+REG_SZ[ \t]*([^\r\n]*)/i);
+    const rawBypassList = overrideMatch ? overrideMatch[1].trim() : '';
+    return {
+      ...parsed,
+      rawBypassList,
+      noProxyEntries: parseBypassListEntries(rawBypassList)
+    };
   } catch {
     return null;
   }
@@ -2684,43 +2991,83 @@ function redactProxyCredentials(text) {
   return String(text || '').replace(/(:\/\/)([^@\s/]+)@/g, '$1<redacted>@');
 }
 
-function buildRelaunchPlan(cmdLine) {
-  const preservedProxyArgs = extractPreservedProxyArgs(cmdLine);
-  const args = ['--remote-debugging-port=0', ...preservedProxyArgs];
-  const env = { ...process.env };
+function readEnvCaseInsensitive(envObj, keyName, joinAll = false) {
+  const target = keyName.toLowerCase();
+  const vals = [];
+  for (const [k, v] of Object.entries(envObj)) {
+    if (k.toLowerCase() === target && v !== undefined && v !== null && String(v).trim() !== '') {
+      if (!joinAll) return String(v);
+      vals.push(String(v));
+    }
+  }
+  return joinAll ? vals.join(',') : '';
+}
+
+function writeProxyEnvPair(envObj, upperKey, val, platform = process.platform) {
+  const lowerKey = upperKey.toLowerCase();
+  if (platform === 'win32') {
+    for (const k of Object.keys(envObj)) {
+      if (k.toLowerCase() === lowerKey && k !== upperKey) {
+        delete envObj[k];
+      }
+    }
+    envObj[upperKey] = val;
+  } else {
+    envObj[upperKey] = val;
+    envObj[lowerKey] = val;
+  }
+}
+
+function buildRelaunchPlan(cmdLine, targetMeta = {}) {
+  const platform = targetMeta?.platform || process.platform;
+  const { allArgs, preservedProxyArgs } = extractRelaunchArgsFromCmdLine(cmdLine, targetMeta);
+  const args = ['--remote-debugging-port=0', ...allArgs];
+  const env = { ...(targetMeta?.baseEnv || process.env) };
   const hasExplicitNoProxyFlag = preservedProxyArgs.includes('--no-proxy-server');
-  const envAlreadyHasProxy = Boolean(
-    env.HTTP_PROXY || env.HTTPS_PROXY || env.ALL_PROXY || env.http_proxy || env.https_proxy || env.all_proxy
-  );
+  const proxyBypassArg = preservedProxyArgs.find((a) => a.startsWith('--proxy-bypass-list='));
+  const cliBypassEntries = proxyBypassArg
+    ? parseBypassListEntries(proxyBypassArg.slice('--proxy-bypass-list='.length))
+    : [];
+  const hasAnyProxyEnv = () =>
+    Boolean(
+      readEnvCaseInsensitive(env, 'HTTP_PROXY') ||
+        readEnvCaseInsensitive(env, 'HTTPS_PROXY') ||
+        readEnvCaseInsensitive(env, 'ALL_PROXY')
+    );
 
   let proxySource = 'none';
+  let extraBypassEntries = [...cliBypassEntries];
   if (hasExplicitNoProxyFlag) {
     proxySource = 'cli-no-proxy';
-  } else if (envAlreadyHasProxy) {
+  } else if (hasAnyProxyEnv()) {
     proxySource = 'inherited-env';
   } else {
     const proxyServerArg = preservedProxyArgs.find((a) => a.startsWith('--proxy-server='));
     let resolved = proxyServerArg ? parseProxyServerSpec(proxyServerArg.slice('--proxy-server='.length)) : null;
     if (resolved) {
       proxySource = 'cli-proxy-flag';
-    } else if (process.platform === 'win32') {
+    } else if (platform === 'win32') {
       resolved = readWindowsSystemProxyFresh();
       if (resolved) proxySource = 'win32-system-proxy';
     }
     if (resolved) {
       if (resolved.httpProxy) {
-        env.HTTP_PROXY = resolved.httpProxy;
-        env.http_proxy = resolved.httpProxy;
+        writeProxyEnvPair(env, 'HTTP_PROXY', resolved.httpProxy, platform);
       }
       if (resolved.httpsProxy) {
-        env.HTTPS_PROXY = resolved.httpsProxy;
-        env.https_proxy = resolved.httpsProxy;
+        writeProxyEnvPair(env, 'HTTPS_PROXY', resolved.httpsProxy, platform);
       }
-      if (!env.NO_PROXY && !env.no_proxy) {
-        env.NO_PROXY = DEFAULT_RELAUNCH_NO_PROXY;
-        env.no_proxy = DEFAULT_RELAUNCH_NO_PROXY;
+      if (Array.isArray(resolved.noProxyEntries)) {
+        extraBypassEntries = [...extraBypassEntries, ...resolved.noProxyEntries];
       }
     }
+  }
+
+  // 只要最终环境携带任意 *_PROXY（包括 --no-proxy-server 下仍从父进程继承 HTTP_PROXY 的场景），一律合并环回与绕行列表以防 Node 侧代理库劫持环回请求
+  if (hasAnyProxyEnv()) {
+    const existingNoProxy = readEnvCaseInsensitive(env, 'NO_PROXY', true);
+    const mergedNoProxy = mergeNoProxyValue(existingNoProxy, extraBypassEntries);
+    writeProxyEnvPair(env, 'NO_PROXY', mergedNoProxy, platform);
   }
 
   return { args, env, preservedProxyArgs, proxySource };
@@ -2809,6 +3156,9 @@ async function runRelaunch() {
     }
   }
 
+  // 在终止旧主进程之前提前构建重启计划（确保 Linux 下 /proc/<pid>/cmdline 存活可读）
+  const relaunchPlan = buildRelaunchPlan(launchTarget.cmd, launchTarget);
+
   for (const p of procsToStop) {
     if (process.platform === 'darwin' && p.appPath) {
       spawnSync('osascript', ['-e', `tell application "${p.appPath}" to quit`], { stdio: 'ignore', timeout: 3000 });
@@ -2838,9 +3188,9 @@ async function runRelaunch() {
   // 确保 Electron SingletonLock 完全释放后再启动带 --remote-debugging-port=0 的新宿主实例
   sleepSync(250);
 
-  const relaunchPlan = buildRelaunchPlan(launchTarget.cmd);
   if (process.platform === 'darwin' && launchTarget.appPath) {
     spawnSync('/usr/bin/open', ['-a', launchTarget.appPath, '--args', ...relaunchPlan.args], {
+      env: relaunchPlan.env,
       stdio: 'ignore',
       timeout: 5000
     });

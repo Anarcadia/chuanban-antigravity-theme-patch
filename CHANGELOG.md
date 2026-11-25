@@ -4,6 +4,33 @@
 
 ---
 
+## [v6.0.3] - 2026-11-25
+
+> **适用版本**：Antigravity `2.35.1+` / `2.35.0` / `2.34.0+`（macOS `2.35.1` `CL=1029194470` × Windows 11 `2.35.1.0`，向下完全兼容 `2.33.x` / `2.32.x` / `2.31.x` / `2.30.0`）  
+> **核验基线**：macOS `2.35.1`（`562` 实机会话库 · `61` 次真实上下文压缩 · `Swarm` 蜂群真机实测） × Windows 11 `2.35.1.0`（PowerShell `5.1` · 系统代理 · `W603-Check 1 ~ 7` 双端真机全绿） × 内部 `Claude Opus 5.5 (High)` 六专题两轮独立对抗审阅  
+> **社区致谢**：特别感谢 [@Sereneoned](https://github.com/Sereneoned)（[PR #39](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/pull/39) Windows 重拉系统代理保留与 `.lnk` 扫描限深）、[@abaca43n](https://github.com/abaca43n)（[PR #40](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/pull/40) Token 统计面板响应式等高布局与底栏胶囊 `260ms` 悬浮意图防误触）、[@ghang](https://github.com/ghang)（[PR #41](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/pull/41) 外观面板独立「跟随系统」日夜配对开关），以及 [@yjz211](https://github.com/yjz211)（[Issue #42](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/issues/42) Windows 标题栏浅色切换与悬停反馈排障）与 [@henrychou0312](https://github.com/henrychou0312)（[Issue #38](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/issues/38) Remote SSH 无本地库胶囊常驻反馈）！
+
+### Added, Fixed & Perf（Antigravity `2.35.1` 全链路漂移对齐 + 外观「跟随系统」开关 + Token 统计与指标胶囊交互升级 + Windows 11 标题栏/代理/参数接力专项修复 + `2,210` 条零冲突词典）
+- **新增外观界面独立「跟随系统 / Follow System」开关，保留浅色/深色预设配对（`core/runtime.js` / `core/theme.css`，合入并加固 [#41](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/pull/41)）**：
+  - 在「系统设置 → 外观界面」顶部新增零配置膨胀的独立「跟随系统」拨动开关（复用客户端自身 `localStorage['antigravity-theme'] = 'system'`，不污染 `user/config.json`）：开启后随系统昼夜自动切换用户各自选定的浅色 `preset`（如 `MO 莫兰迪色` / `✳️ Absolutely！`）与深色 `darkPreset`（如 `📖 暖纸深色` / `🌙 深色`），并将 `A 原版配色` 与跟随系统解耦为纯粹的手动原版直通档；
+  - 开启跟随期间点击同极性预设原地更新对应配对，点击相反极性预设立即切换预览并自动退出跟随模式（开关悬停气泡内建双语交互说明）；补齐 `DEFAULT_EXCLUDE_I18N` 双语免翻守卫与 `Swarm` 子帧 `native` 原版档跟随系统双向极性同步（`F-W603-1`）。
+- **设置弹窗「Token 统计」布局重构、模型/场景归因升级与底栏胶囊 `260ms` 悬浮意图机制（`core/runtime.js` / `core/theme.css` / `core/daemon.mjs`，合入并加固 [#40](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/pull/40)）**：
+  - **底栏指标胶囊 `260ms` 悬浮意图与双胶囊零竞争**：为 `.ag-live-metrics-pill` 引入 `260ms` 悬停意图检测与 `120ms` 移入卡片宽限期，彻底消除光标从消息流滑向输入框时意外闪出大号浮层的打断感，并修复分屏多胶囊快速切换的指针状态机竞争；
+  - **`@container` 响应式 `4:3` 布局与等高翻页舞台**：将弹窗宽度监听升级为纯 CSS `container-type: inline-size` + `@container (max-width: 720px)`，基于 CSS `subgrid` 对齐 KPI 指标卡底边，通过 `ResizeObserver` 锁定会话表翻页最小高度防滚动条跳动，并在关闭设置弹窗或热重载时即时 `disconnect()` 释放监听（`F-W603-2`）；模型配额池徽标精简为 `Claude` 并附 `Claude 与 GPT-OSS 共享配额池` 悬停说明；
+  - **`2.35.0 / 2.35.1` SQLite 模型、Swarm 协作者与上下文口径精准对齐（`TA_CACHE_SCHEMA_REV = 5`）**：扩充模型映射表至 **55 个模型标识**（覆盖 `Gemini 4 Hydrogen / Argon / Carbon / Neon`、`Claude Opus/Sonnet 5.5`、思考预算合并变体与 `GPT-OSS`）；解析 `Swarm` 协作数据库为会话明细赋予 `@worker (Model)` 真实协作者名称，支持零 Token 父级中继会话的 `invoke_subagent` 子轨迹穿透归集；修复后台任务唤醒场景下连续多条 `[Message]` 步骤漏合并问题（精准排除 `/task-` 斜杠命令与 `sender=system` 系统回执，`M-Fix-1`），并经 `562` 库 `61` 次真实压缩实证保留 `last.ctx` 实时末轮上下文占用口径（`M-Fix-2`）。
+- **Windows 11 原生标题栏 `TitleBarOverlay` 零过渡污染修复与 `2.35.0+` 自绘窗口控制键适配（`core/runtime.js` / `core/theme.css` / `install.mjs` / `core/daemon.mjs`，修复 [#42](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/issues/42)）**：
+  - **根治切回 `Absolutely！` 浅色后顶栏按钮灰暗看不清**：修复 `syncWinTitleBarOverlay()` 在 `theme.css` `150ms` 过渡首帧（`2.4%` 插值）读取中间态背景色 `#EEEBDF` 并因缺少过渡结束复核而永久锁死错误 `symbolColor` 的缺陷，改为 CSS 变量直读优先 + 相对亮度对比度兜底守卫 + `transitionend` / `180ms` 双保险重核；
+  - **查明并适配 Windows 11 系统深色模式原生标题栏悬停限制**：定位 Antigravity Electron 主进程未同步设置 `nativeTheme.themeSource` 导致 Win11 系统深色模式下原生 `WindowsCaptionButton` 最小化/最大化悬停半透明白底在浅色顶栏上不可见的宿主限制，完整适配 `2.35.0+` 新增的 `--custom-window-controls` 标志，在三套暖纸浅色预设下提供高对比石青/暖褐悬停块与 `#C42B1C` 关闭红底反馈。
+- **跨平台 `M2` 重拉启动参数保留、Windows 系统代理继承与 `.lnk` 限深扫描（`install.mjs` / `core/daemon.mjs`，合入并加固 [#39](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/pull/39)）**：
+  - **OS 分层无损保留自定义启动参数与工作区路径**：`relaunch` 与守护进程 `M2` 冷启动接力现自动提取并保留原进程命令行参数（如 `--custom-window-controls`、`--profile`、`--proxy-server` 及待打开工作区目录；Windows 走 PowerShell `CommandLineToArgvW` 精准解析含空格参数，Linux 走 `/proc/<pid>/cmdline` NUL 分隔，macOS 剥离 `.app` 路径前缀保留全部 `--flag` 并透传 `env`）；
+  - **Windows 重拉系统代理注入与回环保护**：在 Windows 下重拉客户端时若当前进程未显式设置代理环境变量，自动读取 `HKCU\...\Internet Settings` 注入 `HTTP_PROXY` / `HTTPS_PROXY` / `NO_PROXY`（强制保底 `127.0.0.1,localhost,::1` 防止回环 CDP/本地插件被代理劫持，自动跳过空值注册表项并将 `<local>` 与 CIDR 网段归一化），同时将开始菜单 `.lnk` 递归扫描深度收紧至 `maxDepth = 3` 消除深层目录阻塞；
+  - **`doctor` 源码同步诊断**：新增 `sourceSync` 字段，当在仓库源码目录运行 `node install.mjs doctor` 时自动比对仓库 `core/*` 与已安装目录 SHA-256，防止本地改码漏跑 `install` 造成排障误判。
+- **Remote SSH 指标胶囊静默门禁、`Swarm` `1.5s` 轮询零闪烁翻译护盾与 `2,210` 条零冲突汉化（`core/daemon.mjs` / `core/runtime.js` / `core/i18n.json`，修复 [#38](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/issues/38)）**：
+  - **Remote SSH 无本地库胶囊隐身（[#38](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/issues/38)）**：在 `querySessionMetrics` 区分「本地库已落盘但首轮尚未产出 `gen_metadata`（`dbFound: true`）」与「Remote SSH 会话库位于远端主机（`dbFound: false`）」，远端会话自动隐藏胶囊不再无限常驻显示 `采样中…`；
+  - **`Swarm` 蜂群面板零闪烁护盾与 `2.35.0 / 2.35.1` 全面汉化**：针对 `Swarm` 面板每 `1.5s` 全量重绘 `innerHTML` 引发的英文闪回，在插件子帧内挂载实例级 `Element.prototype.innerHTML` / `Node.prototype.textContent` 写入前同步预翻译护盾（切 `EN` 自动卸载还原），修复 `step-plan-chip` 步骤进度芯片、空闲状态文本、标点后缀剥离回退、`narrator` 播报 `srcdoc` 主题同步及用户消息区免翻隔离，将零冲突基准词典从 `1,965` 条扩充至 **`2,210` 条**（同步补齐 macOS `Cmd` 与 Windows `Ctrl` 快捷键变体）。
+
+---
+
 ## [v6.0.2] - 2026-11-23
 
 > **适用版本**：Antigravity `2.34.0+` / `2.33.x`（向下完全兼容 `2.32.x` / `2.31.x` / `2.30.0`）  
