@@ -19,8 +19,11 @@
 - **新增仿 Claude 紧凑右键浮窗卡片、全场景汉化与安全浏览器/外部 IDE 桥接（`core/runtime.js` / `core/theme.css` / `core/daemon.mjs`，合入 [#46](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/pull/46)）**：
   - 接管对话正文、代码块、网页外链、对话内图片（复制图片/另存图片）、本地文件胶囊与右侧文件栏、底部输入框右键菜单，全面适配 5 浅 + 3 深配色预设与中英双语实时切换（`Shift + 右键` 随时透传官方原生菜单，支持 `modules.contextMenu: false` 完整剥离载荷）；
   - 守护进程新增带磁盘缓存与异步并发 `HKCR` 查询的实盘外部 IDE 探测（`VS Code`、`Cursor`、`Windsurf`、`Zed`、`JetBrains` 全系、`Sublime Text`）及无 Shell `execFile` 本地安全桥接（`__agOpenInBrowser` / `__agOpenInEditor`）。
-- **新增 Cloudflare R2 与 GitHub Release 多镜像字体自动回退下载与配额熔断（`install.mjs`）**：
-  - 优先走 Cloudflare R2 直链镜像，遇 Google Drive 配额超限 HTML 页立即熔断切源并强制校验字体二进制魔数与 SHA-256。
+- **新增 Cloudflare R2 / GitHub Release 下载分流镜像与飞书中国大陆免代理兜底通道（`install.mjs` / `SKILL.md` / `README.md`）**：
+  - 脚本自动下载升级为 **Cloudflare R2 直链主源 → GitHub Release 镜像 (`fonts-sarasa-v1.0.43`) → Google Drive** 三级自动回退，遇 Google Drive 配额超限 HTML 页立即熔断切源并强制校验字体二进制魔数与 SHA-256；
+  - 新增面向中国大陆用户的免登录免代理 **[飞书配套字体高速下载页](https://www.feishu.cn/wiki/V2lbwB8ykiLLXrkzY41cXjQ1nXc)** 与 **[飞书主题图文落地页](https://www.feishu.cn/wiki/EQyqwJEqmi1LH3k11tzcmkMHnYd)**，并在 `SKILL.md` 首屏及 CLI 诊断输出内置境内下载遇阻、过慢与事后重新修复安装的引导 SOP（手动下载至同一目录后由 `install-fonts --from` 自动解压注册）。
+- **新增物理分仓的 Global 纯英文瘦身皮肤仓库 [`Anarcadia/chuanban-antigravity-theme`](https://github.com/Anarcadia/chuanban-antigravity-theme)**：
+  - 独立平行发布纯英文轻量版：物理剥离 CJK 词典、`MutationObserver` 翻译引擎与百兆更纱黑体依赖（整包仅 `~238 KB`，支持 `<1 MB` Anthropic 字体或 `--font-mode native` `0 MB` 零下载瞬装），Token 统计、状态胶囊与右键菜单全量英文化，与中文汉化主仓完全解耦、零交叉污染。
 
 ---
 
