@@ -504,6 +504,7 @@ const tokenAnalyticsSummariesCache = new Map(); // summariesDbPath -> { sig, map
 let lastTokenAnalyticsAccessMs = 0;
 let tokenAnalyticsDiskLoaded = false;
 let tokenAnalyticsPersistTimer = null;
+let tokenAnalyticsWarmupTimer = null;
 let tokenAnalyticsLastJsonCache = { dataRef: null, jsonStr: '' };
 let inFlightTokenAnalyticsPromise = null;
 let inFlightTokenAnalyticsKey = '';
@@ -2373,18 +2374,18 @@ function readUtf8(val) {
   return '';
 }
 
-function getSqliteFileSig(dbPath, { trackUnc = false } = {}) {
+function getSqliteFileSig(dbPath, { trackUnc = false, uncBudgetMs = 400 } = {}) {
   try {
     const unc = trackUnc && isUncPath(dbPath);
     if (unc && Date.now() < wslUncBackoffUntil) return null;
     const t0 = Date.now();
     const st = fs.statSync(dbPath, { throwIfNoEntry: false });
-    markUncSlowIfExceeded(unc, t0);
+    markUncSlowIfExceeded(unc, t0, uncBudgetMs);
     if (!st) return null;
     let wst = null;
     if (!unc || Date.now() >= wslUncBackoffUntil) {
       wst = fs.statSync(`${dbPath}-wal`, { throwIfNoEntry: false });
-      markUncSlowIfExceeded(unc, t0);
+      markUncSlowIfExceeded(unc, t0, uncBudgetMs);
     }
     const baseSig = `${st.mtimeMs}:${st.size}`;
     const walSig = wst ? `${wst.mtimeMs}:${wst.size}` : '0:0';
@@ -4031,7 +4032,7 @@ function taResolvePlanStateLookup(planTimeline) {
 }
 
 function taGetDbFileSig(dbPath) {
-  return getSqliteFileSig(dbPath, { trackUnc: true });
+  return getSqliteFileSig(dbPath, { trackUnc: true, uncBudgetMs: 2000 });
 }
 
 function taNormalizeSlashPath(raw) {
@@ -4808,9 +4809,16 @@ function isPathInIncompleteDirs(filePath, incompletePrefixes) {
 
 async function queryTokenAnalytics(
   endpoint,
-  { maxDays = 365, force = false, nowSec = Math.floor(Date.now() / 1000) } = {}
+  { maxDays = 365, force = false, nowSec = Math.floor(Date.now() / 1000), _bgWarmup = false } = {}
 ) {
-  lastTokenAnalyticsAccessMs = Date.now();
+  const queryStartMs = Date.now();
+  if (!_bgWarmup) {
+    lastTokenAnalyticsAccessMs = queryStartMs;
+    if (tokenAnalyticsWarmupTimer) {
+      clearTimeout(tokenAnalyticsWarmupTimer);
+      tokenAnalyticsWarmupTimer = null;
+    }
+  }
   const t0 = performance.now();
   await Promise.all([loadTokenAnalyticsDiskCacheIfNeeded(force), ensureWin32WslProbesWarmAsync(endpoint)]);
   let sliceStartMs = performance.now();
@@ -4885,8 +4893,12 @@ async function queryTokenAnalytics(
     let entries = [];
     try {
       const tRead = Date.now();
-      entries = fs.readdirSync(convDir).filter((name) => name.endsWith('.db')).sort();
-      if (markUncSlowIfExceeded(uncDir, tRead)) {
+      entries = fs.readdirSync(convDir).filter((name) => name.endsWith('.db')).sort((a, b) => {
+        const tsA = summaries.get(a.slice(0, -3))?.lastModifiedSec || 0;
+        const tsB = summaries.get(b.slice(0, -3))?.lastModifiedSec || 0;
+        return tsB - tsA || a.localeCompare(b);
+      });
+      if (markUncSlowIfExceeded(uncDir, tRead, 2500)) {
         incompleteDirPrefixes.add(normalizeDirPrefix(convDir));
       }
     } catch {
@@ -4894,11 +4906,11 @@ async function queryTokenAnalytics(
       entries = [];
     }
 
-    const dirStatLoopStartMs = Date.now();
+    const statDeadlineMs = queryStartMs + (_bgWarmup ? 4000 : 6000);
     let statIter = 0;
     for (const fileName of entries) {
       if (uncDir) {
-        if (Date.now() < wslUncBackoffUntil || markUncSlowIfExceeded(true, dirStatLoopStartMs)) {
+        if (Date.now() < wslUncBackoffUntil || Date.now() > statDeadlineMs) {
           incompleteDirPrefixes.add(normalizeDirPrefix(convDir));
           break;
         }
@@ -4918,7 +4930,7 @@ async function queryTokenAnalytics(
         dbCandidateById.set(dbId, { dbPath, sigInfo });
       }
       statIter += 1;
-      if (statIter % 80 === 0 && performance.now() - sliceStartMs >= 16) {
+      if (statIter % 40 === 0 && performance.now() - sliceStartMs >= 16) {
         await yieldEventLoop();
         sliceStartMs = performance.now();
       }
@@ -4932,7 +4944,7 @@ async function queryTokenAnalytics(
   let cacheMisses = 0;
   let missesSinceYield = 0;
 
-  // 若 UNC 目录因 400ms 预算中断未扫完，从既有缓存回填尚未 stat 到的会话库，避免 WSL 多库用户统计残缺
+  // 若 UNC 目录因扫描预算中断未扫完，从既有缓存回填尚未 stat 到的会话库，避免 WSL 多库用户统计残缺
   if (incompleteDirPrefixes.size > 0 && force !== 'hard') {
     for (const [cachedPath, cachedItem] of tokenAnalyticsDbCache.entries()) {
       if (!cachedItem?.parsed?.ok || !isPathInIncompleteDirs(cachedPath, incompleteDirPrefixes)) continue;
@@ -4945,10 +4957,12 @@ async function queryTokenAnalytics(
     }
   }
 
-  // 按最新修改时间优先解析，每处理 8 个未命中库或单切片达 16ms 即让出事件循环，保障主窗口胶囊与 BrowserWatcher 零阻塞
+  // 按最新修改时间优先解析，每处理 2 个 UNC / 8 个本地未命中库或单切片达 16ms 即让出事件循环，保障主窗口胶囊与 BrowserWatcher 零阻塞
   const dbEntries = [...dbCandidateById.values()].sort(
     (a, b) => (b.sigInfo.mtimeMs || 0) - (a.sigInfo.mtimeMs || 0) || a.dbPath.localeCompare(b.dbPath)
   );
+  const parseDeadlineMs = queryStartMs + (_bgWarmup ? 6000 : 12000);
+  let uncDeferredCount = 0;
   for (const { dbPath, sigInfo } of dbEntries) {
     activePaths.add(dbPath);
     const cached = force !== 'hard' ? tokenAnalyticsDbCache.get(dbPath) : null;
@@ -4959,7 +4973,9 @@ async function queryTokenAnalytics(
     }
 
     const uncDb = isUncPath(dbPath);
-    if (uncDb && Date.now() < wslUncBackoffUntil) {
+    if (uncDb && (Date.now() < wslUncBackoffUntil || Date.now() > parseDeadlineMs)) {
+      incompleteDirPrefixes.add(normalizeDirPrefix(path.dirname(dbPath)));
+      uncDeferredCount += 1;
       if (cached?.parsed) parsedDbs.push(cached.parsed);
       continue;
     }
@@ -4968,7 +4984,7 @@ async function queryTokenAnalytics(
     missesSinceYield += 1;
     const tDbStart = Date.now();
     const rawResult = taParseConversationDetailDb(dbPath, sigInfo, force !== 'hard' ? cached : null);
-    markUncSlowIfExceeded(uncDb, tDbStart);
+    markUncSlowIfExceeded(uncDb, tDbStart, 5000);
     if (rawResult.ok) {
       const { _inc, ...compactParsed } = rawResult;
       const keepInc = _inc && Date.now() - (sigInfo.mtimeMs || 0) < 86400000 ? _inc : null;
@@ -4980,7 +4996,7 @@ async function queryTokenAnalytics(
       failedDbs.push({ dbId: rawResult.dbId, error: rawResult.error });
     }
 
-    if (missesSinceYield >= 8 || performance.now() - sliceStartMs >= 16) {
+    if (missesSinceYield >= (uncDb ? 2 : 8) || performance.now() - sliceStartMs >= 16) {
       await yieldEventLoop();
       sliceStartMs = performance.now();
       missesSinceYield = 0;
@@ -4997,6 +5013,30 @@ async function queryTokenAnalytics(
 
   if (cacheMisses > 0 || prunedCount > 0 || force === 'hard') {
     scheduleTokenAnalyticsDiskPersist();
+  }
+  if (
+    uncDeferredCount > 0 &&
+    cacheMisses > 0 &&
+    !SAFE_MODE &&
+    !RUN_ONCE &&
+    !daemonExiting &&
+    Date.now() >= wslUncBackoffUntil &&
+    !tokenAnalyticsWarmupTimer
+  ) {
+    tokenAnalyticsWarmupTimer = setTimeout(() => {
+      tokenAnalyticsWarmupTimer = null;
+      if (
+        daemonExiting ||
+        !activeConfig.enabled ||
+        !activeConfig.modules.tokenAnalytics ||
+        inFlightTokenAnalyticsPromise ||
+        Date.now() < wslUncBackoffUntil
+      ) {
+        return;
+      }
+      void runTokenAnalyticsQuery(endpoint, { maxDays, force: false, _bgWarmup: true });
+    }, 1500);
+    if (typeof tokenAnalyticsWarmupTimer.unref === 'function') tokenAnalyticsWarmupTimer.unref();
   }
 
   const cutoffSec = maxDays > 0 ? nowSec - maxDays * 86400 : 0;
@@ -8791,6 +8831,7 @@ async function sync() {
       if (
         !inFlightTokenAnalyticsPromise &&
         !tokenAnalyticsPersistTimer &&
+        !tokenAnalyticsWarmupTimer &&
         (tokenAnalyticsDbCache.size > 0 || tokenAnalyticsSummariesCache.size > 0 || wslSqliteStagingCache.size > 0) &&
         Date.now() - lastTokenAnalyticsAccessMs > 600000
       ) {
