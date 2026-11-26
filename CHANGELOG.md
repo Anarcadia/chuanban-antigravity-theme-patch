@@ -4,6 +4,25 @@
 
 ---
 
+## [v6.0.5] - 2026-11-26
+
+> **适用版本**：Antigravity `2.35.2+` / `2.35.1` / `2.35.0` / `2.34.0+`（macOS `2.35.2` `CL=1029311855` × Windows 11 `2.35.2+`）  
+> **社区致谢**：特别感谢 [@honlam996](https://github.com/honlam996)（[PR #49](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/pull/49) Windows + WSL2 下 Token 统计面板 400ms UNC 退避死锁排查与渐进预热方案）、[@HIJKkds](https://github.com/HIJKkds)（[Issue #48](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/issues/48) 深色模式下直接切回「A 原版配色」残留深色态定位）与 [@pumblus](https://github.com/pumblus)（[PR #47](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/pull/47) 模型选择器 `Leaving Soon` 徽标与下线日期动态提示汉化）！
+
+### Added & Fixed
+- **根治 Windows + WSL2 多会话库下「Token 统计」与实时胶囊触发 `400ms` UNC 连环退避死锁，新增前台可抢占、零活锁后台渐进预热（`core/daemon.mjs` / `core/runtime.js`，合入并深度加固 [#49](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/pull/49)）**：
+  - 解耦多文件协作式切片与单次 9P I/O 真挂起熔断：常驻血缘巡检 `refreshLineageIndex` 引入游标分片（UNC 每拍 `120ms` `stat` + 最多 4 库血缘读取，已建档节点免 `statSync` 跳过），批量 Token 统计采用局部扫描截止预算（前台 `stat <= 4s`、`parse <= 6s`）并按 `conversation_summaries.db` 最新修改时间倒序优先扫描近期会话，彻底消除 WSL2 `>160` 库下的连环 45s `wslUncBackoffUntil` 封禁；
+  - 经内部对抗审阅与 Windows 11 真机压测完成四重收口：1) 后台微批 `_bgWarmup` 与 `4s` 静默收敛轮询免 `statSync` 跳过已入库文件，仅按真实新增入库数（`newlyCachedCount > 0`）续跑并跳过聚合直返；2) 快照前序 Promise 根除自等待死锁，支持 `tokenAnalyticsBgAbort` 与 `tokenAnalyticsFgAbortSeq` 前台即时抢占；3) 批量与血缘查询开启 `bypassStagingLru` 物理隔离，6 槽位 `wslSqliteStagingCache` 仅驻留含活跃 `-wal` 的热会话并按单条目 10 分钟空闲独立回收；4) 统一 `dbCount` 分母口径消除倒挂，预热期自动显示 `· 预热中…` 并静默收敛刷新；同步补齐侧栏右键 `Standalone`（`独立对话`）、`2.35.2` 5 项动态用户内容排除选择器与跨仓切回 `installedLocale` 自愈。
+- **修复深色模式下直接点击「A 原版配色」残留原生深色及关闭「跟随系统」状态机缺口（`core/runtime.js`，修复 [#48](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/issues/48)）**：
+  - 在未开启「跟随系统」时点击第 1 格 `A 原版配色`，自动通过内部标志补触发原生 `light` 按钮切回干净的原版浅色；开启「跟随系统」时则严格保持系统日夜跟随（`原版浅色 · 原版深色`）不误退；同时补齐在夜间原版深色下关闭「跟随系统」开关时的预设回落闭环。
+- **补齐 `2.35.2` 模型选择器 `Leaving Soon` 徽标与下线日期动态后缀汉化（`core/i18n.json` / `core/runtime.js`，`2,228` 条词典，合入 [#47](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/pull/47)）**：
+  - 新增 `Leaving Soon`（`即将下线`）与 `Gemini 3.8 Flash` 换代提示词条，扩展 `formatEnglishDateZh()` 兼容无年份月日（如 `Nov 30` → `11 月 30 日`），并支持任意静态/动态模型说明拼接 `. Leaving on <Date>.` 的自动拆解翻译。
+- **Token 统计面板全界面 `[ EN | 中文 ]` 双语化、`Claude & GPT` 池标注与右键菜单钩子 `REV=3` 加固（`core/runtime.js` / `core/daemon.mjs` / `core/i18n.json`）**：
+  - 补齐「Token 消耗分析」整套面板在英文界面模式下的原生英文文案，模型配额池升级标注为 `Claude & GPT` 并纳入 `gpt-` 系列未单独上报思考 Token 识别；
+  - 原生右键菜单 IPC 钩子升级至 `REV=3`（请求递增序号防并发串包 + 10 分钟 TTL 自动恢复熔断 + 打通 `user/i18n.override.json` 最高优先级覆盖），并修复原生 `<select>` 汉化 `<option>` 时重置选中值的问题。
+
+---
+
 ## [v6.0.4] - 2026-11-26
 
 > **适用版本**：Antigravity `2.35.2+` / `2.35.1` / `2.35.0` / `2.34.0+`（macOS `2.35.2` `CL=1029311855` × Windows 11 `2.35.1+`）  

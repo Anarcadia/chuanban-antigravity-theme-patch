@@ -106,7 +106,7 @@
     }
   }
 
-  const PATCH_VERSION = boot.version || '20261126-v6.0.4';
+  const PATCH_VERSION = boot.version || '20261126-v6.0.5';
   const DETECTED_OS =
     boot.platform || (/Win/i.test(navigator.platform || '') ? 'win32' : /Mac/i.test(navigator.platform || '') ? 'darwin' : 'linux');
   const ENABLED = boot.enabled !== false;
@@ -243,7 +243,7 @@
   }
 
   const DEFAULT_EXCLUDE_I18N =
-    'code, pre, kbd, samp, textarea, input, style, script, noscript, [contenteditable="true"], [data-markdown-root], [data-testid="user-message-content"], .agy-user-bubble, .monaco-editor, .monaco-diff-editor, .xterm, [class*="onyx-key"], .prose, .markdown, [class*="chat-message"], [class*="group/file-title"], [data-uri^="file:"], [data-uri^="vscode-"], a.inline-pill[href^="file:"], a.inline-pill[href^="vscode-"], [data-testid="conversation-row-sidebar"] a[href^="/c/"], [data-testid="conversation-row-sidebar"] span.truncate, [data-testid="conversation-row-history"] a[href^="/c/"], [data-testid="conversation-row-history"] span.truncate, [data-testid^="conversation-group-"], [data-testid^="conversation-project-"], [data-testid^="sidebar-agent-row-"] span.truncate, [data-testid="sidebar-agent-hover-card-title"], [data-testid="coordinator-hover-card-title"], [data-testid="doc-row-title"], [data-testid="conversation-navigator-turn"], [data-testid="side-question-followup-user"], [data-testid="comment-card-text"], [data-testid="automation-name"], [data-testid="automation-instructions-text"], [data-testid="step-plan-item"], [data-testid="live-transcript"], [data-testid="voice-transcript-summary-lead"], [data-testid="voice-transcript-summary-point"], [data-testid="project-header"] span.truncate, .msg-body, #raw, [data-testid="swarm-raw"], #swarm-title, #ag-live-metrics-pill, .ag-live-metrics-pill, [data-ag-metrics-pill], #ag-live-metrics-tooltip, #ag-token-nav-section, #ag-token-analytics-panel, #ag-ta-tooltip, [data-ag-token-ui], [data-ag-lang-row="1"], [data-ag-sys-follow-row="1"]';
+    'code, pre, kbd, samp, textarea, input, style, script, noscript, [contenteditable="true"], [data-markdown-root], [data-testid="user-message-content"], .agy-user-bubble, .monaco-editor, .monaco-diff-editor, .xterm, [class*="onyx-key"], .prose, .markdown, [class*="chat-message"], [class*="group/file-title"], [data-uri^="file:"], [data-uri^="vscode-"], a.inline-pill[href^="file:"], a.inline-pill[href^="vscode-"], [data-testid="conversation-row-sidebar"] a[href^="/c/"], [data-testid="conversation-row-sidebar"] span.truncate, [data-testid="conversation-row-history"] a[href^="/c/"], [data-testid="conversation-row-history"] span.truncate, [data-testid^="conversation-group-"], [data-testid^="conversation-project-"], [data-testid^="sidebar-agent-row-"] span.truncate, [data-testid="sidebar-agent-hover-card-title"], [data-testid="coordinator-hover-card-title"], [data-testid="coordinator-card-title"], [data-testid="coordinator-card-latest-line"], [data-testid="context-provider-hover-card-title"], [data-testid="ask-question-header-text"], [data-testid="ask-question-option-text"], [data-testid="doc-row-title"], [data-testid="conversation-navigator-turn"], [data-testid="side-question-followup-user"], [data-testid="comment-card-text"], [data-testid="automation-name"], [data-testid="automation-instructions-text"], [data-testid="step-plan-item"], [data-testid="live-transcript"], [data-testid="voice-transcript-summary-lead"], [data-testid="voice-transcript-summary-point"], [data-testid="project-header"] span.truncate, .msg-body, #raw, [data-testid="swarm-raw"], #swarm-title, #ag-live-metrics-pill, .ag-live-metrics-pill, [data-ag-metrics-pill], #ag-live-metrics-tooltip, #ag-token-nav-section, #ag-token-analytics-panel, #ag-ta-tooltip, [data-ag-token-ui], [data-ag-lang-row="1"], [data-ag-sys-follow-row="1"]';
 
   function cleanupTokenAnalyticsDom() {
     try {
@@ -784,15 +784,13 @@
       if (window.__ag_cm_translate_listener) {
         try {
           document.removeEventListener('__ag_cm_req', window.__ag_cm_translate_listener);
-          document.removeEventListener('__ag_translate_context_menu', window.__ag_cm_translate_listener);
         } catch (e) {}
         window.__ag_cm_translate_listener = null;
       }
       window.__ag_translate_context_menu_items = null;
+      window.__ag_lookup_user_override = null;
       if (document.documentElement) {
         document.documentElement.removeAttribute('data-ag-lang');
-        document.documentElement.removeAttribute('data-ag-cm-req');
-        document.documentElement.removeAttribute('data-ag-cm-res');
       }
       document.querySelectorAll('button[data-ag-warm-night-btn], button[data-ag-morandi-btn]').forEach((el) => el.remove());
       document.querySelectorAll('svg[data-ag-agy-logo="1"], svg[data-ag-claude-spark="1"]').forEach((el) => el.remove());
@@ -2832,6 +2830,13 @@
           window.__ag_internal_sys_click = false;
         }
       } else if (isCurrentThemeModeDark() && darkBtn) {
+        if (document.documentElement.getAttribute('data-ag-preset') === PRESETS.NATIVE) {
+          setRuntimeLightPreset(window.__ag_last_non_native_light || PRESETS.MORANDI, true);
+          setRuntimeDarkPreset(
+            document.documentElement.getAttribute('data-ag-dark-preset') || DEFAULT_DARK_PRESET,
+            true
+          );
+        }
         window.__ag_internal_moon_click = true;
         try {
           darkBtn.click();
@@ -2888,6 +2893,16 @@
 
       if (slot === 'system') {
         setRuntimeLightPreset(PRESETS.NATIVE, true);
+        const liveLightBtn = group ? group.querySelector('button[data-ag-native-theme-slot="light"]') : null;
+        const sunPressed = isThemeBtnPressed(liveLightBtn);
+        if (liveLightBtn && !isFollowSystem && !sunPressed) {
+          window.__ag_internal_sun_click = true;
+          try {
+            liveLightBtn.click();
+          } finally {
+            window.__ag_internal_sun_click = false;
+          }
+        }
       } else if (slot === 'light') {
         setRuntimeLightPreset(PRESETS.ABSOLUTELY, true);
       } else if (slot === 'dark') {
@@ -3753,7 +3768,8 @@
         const cmd = String(btn.getAttribute('data-ag-copy-cmd') || '').trim();
         if (!cmd) return;
         copyTextWithFallback(cmd).then((ok) => {
-          const label = ok ? '✓ 已复制' : '复制失败';
+          const en = isUiEnglish();
+          const label = ok ? (en ? '✓ Copied' : '✓ 已复制') : en ? 'Copy failed' : '复制失败';
           tt.__ag_copy_feedback_until = Date.now() + 1800;
           tt.__ag_copy_feedback_text = label;
           tt.__ag_copy_feedback_cmd = cmd;
@@ -3765,7 +3781,7 @@
             tt.__ag_copy_feedback_text = '';
             tt.__ag_copy_feedback_cmd = '';
             const curBtn = tt.querySelector && tt.querySelector('.ag-tt-copy-btn');
-            if (curBtn) curBtn.textContent = '复制命令';
+            if (curBtn) curBtn.textContent = isUiEnglish() ? 'Copy' : '复制命令';
           }, 1800);
         });
       });
@@ -4220,7 +4236,7 @@
             newBtn &&
             String(newBtn.getAttribute('data-ag-copy-cmd') || '').trim() === tt.__ag_copy_feedback_cmd
           ) {
-            newBtn.textContent = tt.__ag_copy_feedback_text || '✓ 已复制';
+            newBtn.textContent = tt.__ag_copy_feedback_text || (isUiEnglish() ? '✓ Copied' : '✓ 已复制');
           }
         }
       }
@@ -4944,9 +4960,12 @@
       dec: 12
     };
     // 客户端 main.js ($Q 权限编辑器) 在 onBlur 中硬编码判断 relatedTarget.getAttribute("aria-label") === "Cancel"
-    const SKIP_ARIA_LABEL_VALUES = new Set(['Cancel']);
+    const SKIP_ARIA_LABEL_VALUES = new Set([
+      'Cancel',
+      ...(Array.isArray(SELECTORS.skipAriaLabels) ? SELECTORS.skipAriaLabels.filter((x) => typeof x === 'string' && x) : [])
+    ]);
 
-    const RE_PCT_LEFT = /^(\d+(?:\.\d+)?)%\s*left$/i;
+    const RE_PCT_LEFT = /^(<?\d+(?:\.\d+)?)%\s*left$/i;
     const RE_WINDOW_LIMIT_COMBINED = /^(\d+)\s*([smhd])\s+limit,\s*resets in\s+(.+)$/i;
     const RE_WINDOW_LIMIT = /^(\d+)\s*([smhd])\s+limit$/i;
     const RE_NAMED_LIMIT_RESETS = /^(Weekly|Daily|Monthly)\s+limit,\s*resets in\s+(.+)$/i;
@@ -5192,10 +5211,10 @@
 
     function formatEnglishDateZh(dateStr) {
       const s = String(dateStr || '').trim().replace(/\.$/, '');
-      const m = s.match(/^([A-Za-z]+)\s+(\d{1,2}),\s*(\d{4})$/);
+      const m = s.match(/^([A-Za-z]+)\s+(\d{1,2})(?:,\s*(\d{4}))?$/);
       if (m) {
         const mon = MONTH_FULL_MAP[m[1].toLowerCase()] || MONTH_SHORT_MAP[m[1].slice(0, 3).toLowerCase()];
-        if (mon) return m[3] + ' 年 ' + mon + ' 月 ' + m[2] + ' 日';
+        if (mon) return (m[3] ? m[3] + ' 年 ' : '') + mon + ' 月 ' + m[2] + ' 日';
       }
       return s + ' ';
     }
@@ -5336,7 +5355,10 @@
 
       // 3. 首字符 O(1) 分流动态正则匹配
       const c0 = trimmed.charCodeAt(0);
-      if (c0 >= 48 && c0 <= 57) {
+      if (c0 === 60) {
+        // 以 '<' 开头（如 '<1% left'）
+        if (RE_PCT_LEFT.test(trimmed)) return raw.replace(RE_PCT_LEFT, '$1% 剩余');
+      } else if (c0 >= 48 && c0 <= 57) {
         // 以数字 '0'-'9' 开头
         if (RE_PCT_LEFT.test(trimmed)) return raw.replace(RE_PCT_LEFT, '$1% 剩余');
         const mWinComb = trimmed.match(RE_WINDOW_LIMIT_COMBINED);
@@ -5762,10 +5784,11 @@
           const type = typeMap[mUsed[2].toLowerCase()] || mUsed[2];
           const timeStr = mUsed[3]
             .replace(/\.$/, '')
-            .replace(/(\d+)\s*days?/gi, '$1 天')
-            .replace(/(\d+)\s*hours?/gi, '$1 小时')
-            .replace(/(\d+)\s*minutes?/gi, '$1 分钟')
-            .replace(/(\d+)\s*seconds?/gi, '$1 秒')
+            .replace(/less than a minute/gi, '不到 1 分钟')
+            .replace(/(\d+)\s*(?:days?|d)\b/gi, '$1 天')
+            .replace(/(\d+)\s*(?:hours?|hrs?|h)\b/gi, '$1 小时')
+            .replace(/(\d+)\s*(?:minutes?|mins?|m)\b/gi, '$1 分钟')
+            .replace(/(\d+)\s*(?:seconds?|secs?|s)\b/gi, '$1 秒')
             .replace(/,\s*/g, ' ')
             .trim();
           return '您已消耗' + degree + type + '额度，将在 ' + timeStr + ' 后完全重置。';
@@ -5884,6 +5907,22 @@
             trimmed,
             () => mRemoved[1].trim() + ' 将于 ' + formatEnglishDateZh(mRemoved[2]) + '从 Antigravity 下线。'
           );
+        }
+      }
+      if (trimmed.length < 200 && trimmed.includes('Leaving on ')) {
+        const mLeaving = trimmed.match(/^(.+?)\.\s+Leaving on\s+([A-Za-z]+\s+\d{1,2}(?:,\s*\d{4})?)\.?$/);
+        if (mLeaving && !mLeaving[1].includes('Leaving on ')) {
+          const headRaw = mLeaving[1].trim();
+          const headZh =
+            dictLookup(headRaw) ||
+            dictLookup(headRaw + '.') ||
+            computeTextTranslation(headRaw + '.', contextEl);
+          if (headZh) {
+            return raw.replace(
+              trimmed,
+              () => headZh.replace(/[。.]$/, '') + '，将于 ' + formatEnglishDateZh(mLeaving[2]).trim() + '下线。'
+            );
+          }
         }
       }
       if (trimmed.length < 80 && (firstUpper === 'G' || firstUpper === 'C' || firstUpper === 'O')) {
@@ -6426,6 +6465,7 @@
         for (let i = 0; i < htmlIds.length; i++) {
           const el = document.getElementById(htmlIds[i]);
           if (!el) continue;
+          const isSelectEl = el.tagName === 'SELECT';
           const st = { hasRaw: false, lastRaw: '', lastTranslated: '' };
           const initialOrig = el.getAttribute('data-ag-swarm-raw-html');
           const curHtml = htmlDesc.get.call(el);
@@ -6451,11 +6491,17 @@
               if (!isUiEnglish() && st.hasRaw && raw === st.lastRaw && htmlDesc.get.call(el) === st.lastTranslated) {
                 return;
               }
+              const prevSelectVal = isSelectEl ? el.value : null;
               htmlDesc.set.call(el, raw);
               el.setAttribute('data-ag-swarm-raw-html', raw);
               if (!isUiEnglish() && raw) {
                 try {
                   scanAndTranslate(el);
+                } catch (e) {}
+              }
+              if (prevSelectVal !== null && el.value !== prevSelectVal) {
+                try {
+                  el.value = prevSelectVal;
                 } catch (e) {}
               }
               st.lastRaw = raw;
@@ -6465,21 +6511,33 @@
           });
           swarmShieldRefreshers.push(() => {
             if (!st.hasRaw) return;
+            const prevSelectVal = isSelectEl ? el.value : null;
             htmlDesc.set.call(el, st.lastRaw);
             if (!isUiEnglish() && st.lastRaw) {
               try {
                 scanAndTranslate(el);
               } catch (e) {}
             }
+            if (prevSelectVal !== null && el.value !== prevSelectVal) {
+              try {
+                el.value = prevSelectVal;
+              } catch (e) {}
+            }
             st.lastTranslated = htmlDesc.get.call(el);
           });
           swarmShieldCleanups.push((restoreRaw) => {
+            const prevSelectVal = isSelectEl ? el.value : null;
             try {
               delete el.innerHTML;
             } catch (e) {}
             if (restoreRaw && st.hasRaw) {
               htmlDesc.set.call(el, st.lastRaw);
               el.removeAttribute('data-ag-swarm-raw-html');
+              if (prevSelectVal !== null && el.value !== prevSelectVal) {
+                try {
+                  el.value = prevSelectVal;
+                } catch (e) {}
+              }
             }
           });
         }
@@ -6780,7 +6838,6 @@
       if (window.__ag_cm_translate_listener) {
         try {
           document.removeEventListener('__ag_cm_req', window.__ag_cm_translate_listener);
-          document.removeEventListener('__ag_translate_context_menu', window.__ag_cm_translate_listener);
         } catch (e) {}
         window.__ag_cm_translate_listener = null;
       }
@@ -6789,7 +6846,7 @@
       cmDummyBtn.type = 'button';
       cmDummyBtn.setAttribute('role', 'menuitem');
 
-      // 用户自定义词条键集（user/i18n.override.json 优先级高于 CM_SCOPED_DICT）
+      // 用户自定义词条键集（user/i18n.override.json 优先级高于 CM_SCOPED_DICT 与自绘右键卡片）
       const userOverrideExact = new Set();
       const userOverrideCi = new Set();
       if (Array.isArray(boot.i18nOverrideKeys)) {
@@ -6808,6 +6865,12 @@
         const c0 = norm.charCodeAt(0);
         return c0 >= 65 && c0 <= 90 && userOverrideCi.has(norm.toLowerCase());
       }
+      function lookupUserOverride(s) {
+        if (!hasUserOverrideKey(s)) return null;
+        const hit = dictLookup(s);
+        return typeof hit === 'string' ? hit : null;
+      }
+      window.__ag_lookup_user_override = lookupUserOverride;
 
       // 仅作用于原生上下文菜单的限定词表（避免 Forward/Hide/Open In/Quote/Comment 污染主界面非菜单区域，并将菜单 Back 校准为“后退”）
       const CM_SCOPED_DICT = Object.assign(Object.create(null), {
@@ -6816,6 +6879,7 @@
         Quote: '引用',
         Comment: '评论',
         Hide: '隐藏',
+        Standalone: '独立对话',
         'Open In': '打开方式',
         'Open in': '打开方式'
       });
@@ -6823,8 +6887,12 @@
       const FIXED_SUBMENU_ACTION_IDS = new Set([
         'group-new',
         'group-remove',
+        'group-outside',
+        'group-outside-of-group',
         'project-new',
-        'project-remove'
+        'project-remove',
+        'project-outside',
+        'project-outside-of-project'
       ]);
 
       const RE_CM_DEFAULT_SUFFIX = /^(.+?)\s*\(Default\)$/i;
@@ -6944,15 +7012,34 @@
       }
 
       const onTranslateContextMenuReq = (ev) => {
-        if (!ENABLED || MODULES.i18n === false || isUiEnglish()) return;
+        if (!ENABLED || isUiEnglish()) return;
         const rawReq = ev && typeof ev.detail === 'string' ? ev.detail : '';
         if (!rawReq) return;
         try {
           const parsed = JSON.parse(rawReq);
-          if (!Array.isArray(parsed) || parsed.length === 0) return;
-          const translated = translateContextMenuItems(parsed, '');
-          if (translated !== parsed) {
-            document.dispatchEvent(new CustomEvent('__ag_cm_res', { detail: JSON.stringify(translated) }));
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            const translated = translateContextMenuItems(parsed, '');
+            if (translated !== parsed) {
+              document.dispatchEvent(new CustomEvent('__ag_cm_res', { detail: JSON.stringify(translated) }));
+            }
+            return;
+          }
+          if (
+            parsed &&
+            typeof parsed === 'object' &&
+            typeof parsed.reqId === 'string' &&
+            parsed.reqId &&
+            Array.isArray(parsed.items) &&
+            parsed.items.length > 0
+          ) {
+            const translated = translateContextMenuItems(parsed.items, '');
+            if (translated !== parsed.items) {
+              document.dispatchEvent(
+                new CustomEvent('__ag_cm_res', {
+                  detail: JSON.stringify({ reqId: parsed.reqId, items: translated })
+                })
+              );
+            }
           }
         } catch (e) {}
       };
@@ -6969,6 +7056,9 @@
         }
         if (window.__ag_translate_context_menu_items === translateContextMenuItems) {
           window.__ag_translate_context_menu_items = null;
+        }
+        if (window.__ag_lookup_user_override === lookupUserOverride) {
+          window.__ag_lookup_user_override = null;
         }
       });
     }
@@ -7041,11 +7131,11 @@
     if (window.__ag_cm_translate_listener) {
       try {
         document.removeEventListener('__ag_cm_req', window.__ag_cm_translate_listener);
-        document.removeEventListener('__ag_translate_context_menu', window.__ag_cm_translate_listener);
       } catch (e) {}
       window.__ag_cm_translate_listener = null;
     }
     window.__ag_translate_context_menu_items = null;
+    window.__ag_lookup_user_override = null;
     if (IS_SWARM_PLUGIN_FRAME && typeof window.__ag_cleanup_swarm_dom_shields === 'function') {
       try {
         window.__ag_cleanup_swarm_dom_shields(true);
@@ -7139,13 +7229,59 @@
       /* TOKEN_ANALYTICS_LOGIC_START */
       const TA_SCENARIO_ORDER = ['tools', 'subagent', 'chat', 'planning', 'memory', 'internal'];
       const TA_SCENARIO_META = {
-        tools: { label: '工具执行轮次', desc: '触发读/写/终端/检索工具的推理轮次', color: 'var(--ag-ta-c1)' },
-        subagent: { label: '子 Agent', desc: 'research / self / browser 等独立子轨迹', color: 'var(--ag-ta-c2)' },
-        chat: { label: '纯对话与回复', desc: '无工具调用的直接问答与总结输出', color: 'var(--ag-ta-c3)' },
-        planning: { label: '规划与编排', desc: 'Orchestrator / Plan 架构规划轮次', color: 'var(--ag-ta-c4)' },
-        memory: { label: '记忆与上下文压缩', desc: 'MEMORY.md 读写与上下文压缩检查点', color: 'var(--ag-ta-c5)' },
-        internal: { label: 'CLI / 重试与内部', desc: 'CLI 会话与无步关联重试/中止调用', color: 'var(--ag-ta-c6)' }
+        tools: {
+          label: '工具执行轮次',
+          labelEn: 'Tool Execution',
+          desc: '触发读/写/终端/检索工具的推理轮次',
+          descEn: 'Turns invoking read/write/terminal/search tools',
+          color: 'var(--ag-ta-c1)'
+        },
+        subagent: {
+          label: '子 Agent',
+          labelEn: 'Subagents',
+          desc: 'research / self / browser 等独立子轨迹',
+          descEn: 'Isolated trajectories (research / self / browser, etc.)',
+          color: 'var(--ag-ta-c2)'
+        },
+        chat: {
+          label: '纯对话与回复',
+          labelEn: 'Direct Chat',
+          desc: '无工具调用的直接问答与总结输出',
+          descEn: 'Direct Q&A and synthesis without tool calls',
+          color: 'var(--ag-ta-c3)'
+        },
+        planning: {
+          label: '规划与编排',
+          labelEn: 'Planning & Orchestration',
+          desc: 'Orchestrator / Plan 架构规划轮次',
+          descEn: 'Orchestrator & step-by-step architecture planning',
+          color: 'var(--ag-ta-c4)'
+        },
+        memory: {
+          label: '记忆与上下文压缩',
+          labelEn: 'Memory & Compaction',
+          desc: 'MEMORY.md 读写与上下文压缩检查点',
+          descEn: 'MEMORY.md operations and context compaction checkpoints',
+          color: 'var(--ag-ta-c5)'
+        },
+        internal: {
+          label: 'CLI / 重试与内部',
+          labelEn: 'CLI / Retries & Internal',
+          desc: 'CLI 会话与无步关联重试/中止调用',
+          descEn: 'Headless CLI sessions and unlinked retries/aborts',
+          color: 'var(--ag-ta-c6)'
+        }
       };
+      function taGetScenarioLabel(key) {
+        const m = TA_SCENARIO_META[key];
+        if (!m) return key;
+        return isUiEnglish() ? m.labelEn : m.label;
+      }
+      function taGetScenarioDesc(key) {
+        const m = TA_SCENARIO_META[key];
+        if (!m) return '';
+        return isUiEnglish() ? m.descEn : m.desc;
+      }
 
       function taCreateDefaultState() {
         return {
@@ -7184,7 +7320,7 @@
 
       function taFormatMetricVal(obj, metric = 'weighted') {
         const val = taGetMetricVal(obj, metric);
-        if (metric === 'calls') return `${val.toLocaleString('en-US')} 次`;
+        if (metric === 'calls') return isUiEnglish() ? val.toLocaleString('en-US') : `${val.toLocaleString('en-US')} 次`;
         return taFormatCompact(val);
       }
 
@@ -7653,7 +7789,15 @@
       let cachedBaseVm = { key: '', payloadRef: null, vm: null };
       let tabActive = false;
       let syncRaf = null;
+      let warmupPollTimer = null;
       let disposed = false;
+
+      function clearWarmupPollTimer() {
+        if (warmupPollTimer) {
+          clearTimeout(warmupPollTimer);
+          warmupPollTimer = null;
+        }
+      }
       let hmTooltipVisible = false;
       let hmGlobalListenersBound = false;
       let activeHmCell = null;
@@ -7676,6 +7820,7 @@
 
       function fmtLastActive(tsSec) {
         if (!tsSec) return '--';
+        const en = isUiEnglish();
         const d = new Date(tsSec * 1000);
         const now = new Date();
         const pad2 = (n) => String(n).padStart(2, '0');
@@ -7684,13 +7829,13 @@
           d.getFullYear() === now.getFullYear() &&
           d.getMonth() === now.getMonth() &&
           d.getDate() === now.getDate();
-        if (sameDay) return `今天 ${hm}`;
+        if (sameDay) return en ? `Today ${hm}` : `今天 ${hm}`;
         const yest = new Date(now.getTime() - 86400000);
         const isYest =
           d.getFullYear() === yest.getFullYear() &&
           d.getMonth() === yest.getMonth() &&
           d.getDate() === yest.getDate();
-        if (isYest) return `昨天 ${hm}`;
+        if (isYest) return en ? `Yesterday ${hm}` : `昨天 ${hm}`;
         return `${pad2(d.getMonth() + 1)}-${pad2(d.getDate())} ${hm}`;
       }
 
@@ -7702,35 +7847,44 @@
         if (res && res.ok && res.data) {
           entry.resolve(res.data);
         } else {
-          entry.reject(new Error(res?.error || '本地 Token 统计数据获取失败'));
+          entry.reject(
+            new Error(
+              res?.error || (isUiEnglish() ? 'Failed to fetch local Token Analytics' : '本地 Token 统计数据获取失败')
+            )
+          );
         }
       };
 
-      async function fetchTokenAnalytics(force = false) {
+      async function fetchTokenAnalytics(force = false, silent = false) {
         if (disposed) return;
         const now = Date.now();
         const curMetricsSig = String(window.__ag_last_metrics?.sig || '');
         const sigChanged = Boolean(curMetricsSig && curMetricsSig !== dataState.lastMetricsSig);
         const reopenedStale = Boolean(dataState.modalClosedSinceFetch && now - dataState.fetchedAt > 3000);
-        if (!force && !sigChanged && !reopenedStale && dataState.payload && now - dataState.fetchedAt < CACHE_TTL_MS) {
+        if (!force && !silent && !sigChanged && !reopenedStale && dataState.payload && now - dataState.fetchedAt < CACHE_TTL_MS) {
           return;
         }
         if (typeof window.__agRequestTokenAnalytics !== 'function') {
-          dataState.error = '当前运行环境未启用本地 SQLite Token 统计（需要 Node.js >= 22.13 且启用 modules.tokenAnalytics）';
+          dataState.error = isUiEnglish()
+            ? 'Local SQLite Token Analytics is disabled (requires Node.js >= 22.13 and modules.tokenAnalytics)'
+            : '当前运行环境未启用本地 SQLite Token 统计（需要 Node.js >= 22.13 且启用 modules.tokenAnalytics）';
           dataState.loading = false;
           renderPanel();
           return;
         }
         if (dataState.loading && !force) return;
+        clearWarmupPollTimer();
 
         dataState.loading = true;
         dataState.error = null;
         if (dataState.payload) {
-          const panel = document.getElementById(PANEL_ID);
-          const refreshBtn = panel?.querySelector('#ag-ta-refresh-btn');
-          if (refreshBtn) {
-            refreshBtn.textContent = '刷新中…';
-            refreshBtn.disabled = true;
+          if (!silent) {
+            const panel = document.getElementById(PANEL_ID);
+            const refreshBtn = panel?.querySelector('#ag-ta-refresh-btn');
+            if (refreshBtn) {
+              refreshBtn.textContent = isUiEnglish() ? 'Refreshing…' : '刷新中…';
+              refreshBtn.disabled = true;
+            }
           }
         } else {
           renderPanel();
@@ -7741,11 +7895,11 @@
           const data = await new Promise((resolve, reject) => {
             const timer = setTimeout(() => {
               pendingRequests.delete(reqId);
-              reject(new Error('读取本地 SQLite 统计超时 (25s)'));
+              reject(new Error(isUiEnglish() ? 'Timed out reading local SQLite stats (25s)' : '读取本地 SQLite 统计超时 (25s)'));
             }, REQUEST_TIMEOUT_MS);
             pendingRequests.set(reqId, { resolve, reject, timer });
             try {
-              window.__agRequestTokenAnalytics(JSON.stringify({ reqId, maxDays: 365, force }));
+              window.__agRequestTokenAnalytics(JSON.stringify({ reqId, maxDays: 365, force, silent: Boolean(silent) }));
             } catch (err) {
               clearTimeout(timer);
               pendingRequests.delete(reqId);
@@ -7759,9 +7913,19 @@
           dataState.lastMetricsSig = String(window.__ag_last_metrics?.sig || '');
           dataState.modalClosedSinceFetch = false;
           dataState.error = null;
+          if (data?.stats?.warmupPending && tabActive) {
+            warmupPollTimer = setTimeout(() => {
+              warmupPollTimer = null;
+              if (!disposed && tabActive) {
+                void fetchTokenAnalytics(false, true);
+              }
+            }, 4000);
+          }
         } catch (err) {
           if (disposed) return;
-          dataState.error = String(err?.message || err || '获取 Token 统计失败');
+          dataState.error = String(
+            err?.message || err || (isUiEnglish() ? 'Failed to fetch Token Analytics' : '获取 Token 统计失败')
+          );
         } finally {
           if (!disposed) {
             dataState.loading = false;
@@ -7895,6 +8059,7 @@
         if (!d) return;
         const tip = ensureHmTooltip();
         if (!tip) return;
+        const en = isUiEnglish();
         const cRate = taCalcCacheRate(d);
         const cRateStr = cRate !== null ? `${(cRate * 100).toFixed(1)}%` : '--';
         tip.innerHTML =
@@ -7903,14 +8068,14 @@
           `  <span style="color:var(--ag-ta-primary);">${esc(taFormatMetricVal(d, uiState.metric))}</span>` +
           `</div>` +
           (d.calls > 0
-            ? `<div class="ag-ta-tt-row"><span>加权等效</span><strong class="ag-ta-mono">${taFormatCompact(d.weighted)}</strong></div>` +
-              `<div class="ag-ta-tt-row"><span>总 Tokens</span><strong class="ag-ta-mono">${taFormatCompact(d.total)}</strong></div>` +
-              `<div class="ag-ta-tt-row"><span>新入 / 缓读 / 出</span><strong class="ag-ta-mono">${taFormatCompact(d.inTok)} / ${taFormatCompact(d.cacheRead)} / ${taFormatCompact(d.outTok)}</strong></div>` +
-              `<div class="ag-ta-tt-row"><span>调用 / 缓存命中</span><strong class="ag-ta-mono">${d.calls} 次 · ${cRateStr}</strong></div>` +
+            ? `<div class="ag-ta-tt-row"><span>${en ? 'Weighted' : '加权等效'}</span><strong class="ag-ta-mono">${taFormatCompact(d.weighted)}</strong></div>` +
+              `<div class="ag-ta-tt-row"><span>${en ? 'Total Tokens' : '总 Tokens'}</span><strong class="ag-ta-mono">${taFormatCompact(d.total)}</strong></div>` +
+              `<div class="ag-ta-tt-row"><span>${en ? 'Uncached / Cache / Out' : '新入 / 缓读 / 出'}</span><strong class="ag-ta-mono">${taFormatCompact(d.inTok)} / ${taFormatCompact(d.cacheRead)} / ${taFormatCompact(d.outTok)}</strong></div>` +
+              `<div class="ag-ta-tt-row"><span>${en ? 'Calls / Cache Hit' : '调用 / 缓存命中'}</span><strong class="ag-ta-mono">${en ? d.calls : `${d.calls} 次`} · ${cRateStr}</strong></div>` +
               (d.topProject
-                ? `<div class="ag-ta-tt-row" style="margin-top:4px;padding-top:4px;border-top:1px solid var(--ag-ta-border);"><span>主力项目</span><strong>${esc(d.topProject)}</strong></div>`
+                ? `<div class="ag-ta-tt-row" style="margin-top:4px;padding-top:4px;border-top:1px solid var(--ag-ta-border);"><span>${en ? 'Top Project' : '主力项目'}</span><strong>${esc(d.topProject)}</strong></div>`
                 : '')
-            : `<div style="color:var(--ag-ta-muted);">当日无本地调用记录</div>`);
+            : `<div style="color:var(--ag-ta-muted);">${en ? 'No local usage recorded on this day' : '当日无本地调用记录'}</div>`);
         activeHmCell = cell;
         hmTooltipVisible = true;
         bindHmGlobalListeners();
@@ -7919,42 +8084,57 @@
       }
 
       function ensurePanelSkeleton(panel) {
-        if (panel.dataset.agSkeletonReady === '1') return;
+        const en = isUiEnglish();
+        const wantLang = en ? 'en' : 'zh';
+        if (panel.dataset.agSkeletonReady === '1' && panel.dataset.agSkeletonLang === wantLang) return;
         panel.dataset.agSkeletonReady = '1';
+        panel.dataset.agSkeletonLang = wantLang;
         panel.innerHTML = `
       <div class="ag-ta-wrap">
         <div class="ag-ta-hdr">
           <div>
             <div class="ag-ta-title-row">
-              <h1 class="ag-ta-h1">Token 消耗分析</h1>
-              <span id="ag-ta-header-badge" class="ag-ta-pill-meta ag-ta-mono">待同步</span>
+              <h1 class="ag-ta-h1">${en ? 'Token Usage Analytics' : 'Token 消耗分析'}</h1>
+              <span id="ag-ta-header-badge" class="ag-ta-pill-meta ag-ta-mono">${en ? 'Pending' : '待同步'}</span>
             </div>
-            <p class="ag-ta-sub">基于本机 <span class="ag-ta-mono">conversations/*.db</span> 与 <span class="ag-ta-mono">conversation_summaries.db</span> 增量归因（默认主指标：加权等效）</p>
+            <p class="ag-ta-sub">${
+              en
+                ? 'Incremental attribution from local <span class="ag-ta-mono">conversations/*.db</span> &amp; <span class="ag-ta-mono">conversation_summaries.db</span> (default metric: Weighted)'
+                : '基于本机 <span class="ag-ta-mono">conversations/*.db</span> 与 <span class="ag-ta-mono">conversation_summaries.db</span> 增量归因（默认主指标：加权等效）'
+            }</p>
           </div>
           <div class="ag-ta-controls">
             <div class="ag-ta-seg" id="ag-ta-metric-sw">
-              <button type="button" class="ag-ta-seg-btn active" data-metric="weighted">加权等效</button>
-              <button type="button" class="ag-ta-seg-btn" data-metric="total">总 Tokens</button>
-              <button type="button" class="ag-ta-seg-btn" data-metric="billable">净新消耗</button>
-              <button type="button" class="ag-ta-seg-btn" data-metric="calls">调用次数</button>
+              <button type="button" class="ag-ta-seg-btn active" data-metric="weighted">${en ? 'Weighted' : '加权等效'}</button>
+              <button type="button" class="ag-ta-seg-btn" data-metric="total">${en ? 'Total' : '总 Tokens'}</button>
+              <button type="button" class="ag-ta-seg-btn" data-metric="billable">${en ? 'Net New' : '净新消耗'}</button>
+              <button type="button" class="ag-ta-seg-btn" data-metric="calls">${en ? 'Calls' : '调用次数'}</button>
             </div>
             <div class="ag-ta-seg" id="ag-ta-range-sw">
-              <button type="button" class="ag-ta-seg-btn" data-range="1">今日</button>
-              <button type="button" class="ag-ta-seg-btn" data-range="7">7天</button>
-              <button type="button" class="ag-ta-seg-btn active" data-range="30">30天</button>
-              <button type="button" class="ag-ta-seg-btn" data-range="90">90天</button>
-              <button type="button" class="ag-ta-seg-btn" data-range="365">全部</button>
+              <button type="button" class="ag-ta-seg-btn" data-range="1">${en ? 'Today' : '今日'}</button>
+              <button type="button" class="ag-ta-seg-btn" data-range="7">${en ? '7D' : '7天'}</button>
+              <button type="button" class="ag-ta-seg-btn active" data-range="30">${en ? '30D' : '30天'}</button>
+              <button type="button" class="ag-ta-seg-btn" data-range="90">${en ? '90D' : '90天'}</button>
+              <button type="button" class="ag-ta-seg-btn" data-range="365">${en ? 'All' : '全部'}</button>
             </div>
-            <button type="button" id="ag-ta-refresh-btn" class="ag-ta-refresh" title="点击增量刷新；按住 Shift 点击强制忽略磁盘缓存全量重算">刷新</button>
+            <button type="button" id="ag-ta-refresh-btn" class="ag-ta-refresh" title="${
+              en
+                ? 'Click for incremental refresh; Shift+Click to rebuild full cache'
+                : '点击增量刷新；按住 Shift 点击强制忽略磁盘缓存全量重算'
+            }">${en ? 'Refresh' : '刷新'}</button>
           </div>
         </div>
 
         <div id="ag-ta-filters-bar" class="ag-ta-filters-bar" data-active="0">
-          <span class="ag-ta-filters-lbl">当前联动筛选：</span>
+          <span class="ag-ta-filters-lbl">${en ? 'Active Filters:' : '当前联动筛选：'}</span>
           <div id="ag-ta-filter-pills" class="ag-ta-filter-pills">
-            <span class="ag-ta-filter-placeholder">暂无筛选条件（点击下方日期、模型、场景或项目即可联动过滤）</span>
+            <span class="ag-ta-filter-placeholder">${
+              en
+                ? 'No active filters (click any date, model, scenario, or project below to cross-filter)'
+                : '暂无筛选条件（点击下方日期、模型、场景或项目即可联动过滤）'
+            }</span>
           </div>
-          <button type="button" id="ag-ta-clear-filters" class="ag-ta-clear-btn" disabled tabindex="-1">清除全部</button>
+          <button type="button" id="ag-ta-clear-filters" class="ag-ta-clear-btn" disabled tabindex="-1">${en ? 'Clear All' : '清除全部'}</button>
         </div>
 
         <div id="ag-ta-status-banner" class="ag-ta-banner" hidden></div>
@@ -7964,22 +8144,26 @@
         <section class="ag-ta-card">
           <div class="ag-ta-card-head">
             <div>
-              <h2 class="ag-ta-card-h2">按日消耗记录</h2>
-              <p class="ag-ta-card-desc">悬停查看单日详情，点击任意日期格子可联动过滤下方模型、场景与会话</p>
+              <h2 class="ag-ta-card-h2">${en ? 'Daily Activity' : '按日消耗记录'}</h2>
+              <p class="ag-ta-card-desc">${
+                en
+                  ? 'Hover to inspect daily breakdown; click any day to cross-filter models, scenarios, and sessions'
+                  : '悬停查看单日详情，点击任意日期格子可联动过滤下方模型、场景与会话'
+              }</p>
             </div>
             <div class="ag-ta-controls">
               <div class="ag-ta-seg" id="ag-ta-daily-sw">
-                <button type="button" class="ag-ta-seg-btn active" data-dmode="heatmap">贡献网格</button>
-                <button type="button" class="ag-ta-seg-btn" data-dmode="bars">近14日趋势</button>
+                <button type="button" class="ag-ta-seg-btn active" data-dmode="heatmap">${en ? 'Heatmap' : '贡献网格'}</button>
+                <button type="button" class="ag-ta-seg-btn" data-dmode="bars">${en ? '14D Trend' : '近14日趋势'}</button>
               </div>
               <div id="ag-ta-hm-legend" class="ag-ta-hm-legend" data-hidden="0">
-                <span>少</span>
+                <span>${en ? 'Less' : '少'}</span>
                 <span class="ag-ta-hm-sw" data-lvl="0"></span>
                 <span class="ag-ta-hm-sw" data-lvl="1"></span>
                 <span class="ag-ta-hm-sw" data-lvl="2"></span>
                 <span class="ag-ta-hm-sw" data-lvl="3"></span>
                 <span class="ag-ta-hm-sw" data-lvl="4"></span>
-                <span>多</span>
+                <span>${en ? 'More' : '多'}</span>
               </div>
             </div>
           </div>
@@ -7988,7 +8172,11 @@
               <div class="ag-ta-hm-inner">
                 <div id="ag-ta-hm-months" class="ag-ta-hm-months"></div>
                 <div class="ag-ta-hm-body">
-                  <div class="ag-ta-hm-days"><span>一</span><span>三</span><span>五</span><span>日</span></div>
+                  <div class="ag-ta-hm-days">${
+                    en
+                      ? '<span>Mon</span><span>Wed</span><span>Fri</span><span>Sun</span>'
+                      : '<span>一</span><span>三</span><span>五</span><span>日</span>'
+                  }</div>
                   <div id="ag-ta-hm-grid" class="ag-ta-hm-grid"></div>
                 </div>
               </div>
@@ -7996,9 +8184,9 @@
             <div id="ag-ta-bars-wrap" hidden>
               <div id="ag-ta-bars-chart" class="ag-ta-bars-chart"></div>
               <div class="ag-ta-legend" style="justify-content:flex-end;border-top:none;margin-top:4px;padding-top:4px;">
-                <span class="ag-ta-legend-item"><span class="ag-ta-swatch ag-ta-seg-in"></span>新输入</span>
-                <span class="ag-ta-legend-item"><span class="ag-ta-swatch ag-ta-seg-cache"></span>缓存读取</span>
-                <span class="ag-ta-legend-item"><span class="ag-ta-swatch ag-ta-seg-out"></span>输出（含思考）</span>
+                <span class="ag-ta-legend-item"><span class="ag-ta-swatch ag-ta-seg-in"></span>${en ? 'Uncached In' : '新输入'}</span>
+                <span class="ag-ta-legend-item"><span class="ag-ta-swatch ag-ta-seg-cache"></span>${en ? 'Cache Read' : '缓存读取'}</span>
+                <span class="ag-ta-legend-item"><span class="ag-ta-swatch ag-ta-seg-out"></span>${en ? 'Output (+Think)' : '输出（含思考）'}</span>
               </div>
             </div>
           </div>
@@ -8009,36 +8197,46 @@
           <div class="ag-ta-card ag-ta-card-col">
             <div class="ag-ta-card-head">
               <div>
-                <h2 class="ag-ta-card-h2">按模型统计</h2>
-                <p id="ag-ta-model-desc" class="ag-ta-card-desc">调用次数/缓存命中/消耗量/占比/配额池</p>
+                <h2 class="ag-ta-card-h2">${en ? 'By Model' : '按模型统计'}</h2>
+                <p id="ag-ta-model-desc" class="ag-ta-card-desc">${
+                  en ? 'Calls / Cache Hit / Usage / Share / Quota Pool' : '调用次数/缓存命中/消耗量/占比/配额池'
+                }</p>
               </div>
               <div class="ag-ta-seg" id="ag-ta-model-sw">
-                <button type="button" class="ag-ta-seg-btn active" data-mg="model">具体模型</button>
-                <button type="button" class="ag-ta-seg-btn" data-mg="pool">配额池</button>
+                <button type="button" class="ag-ta-seg-btn active" data-mg="model">${en ? 'Model' : '具体模型'}</button>
+                <button type="button" class="ag-ta-seg-btn" data-mg="pool">${en ? 'Quota Pool' : '配额池'}</button>
               </div>
             </div>
             <div id="ag-ta-model-list" class="ag-ta-list ag-ta-list--model"></div>
             <div class="ag-ta-legend">
-              <span class="ag-ta-legend-item"><span class="ag-ta-swatch ag-ta-seg-in"></span>新输入</span>
-              <span class="ag-ta-legend-item"><span class="ag-ta-swatch ag-ta-seg-cache"></span>缓存命中</span>
-              <span class="ag-ta-legend-item"><span class="ag-ta-swatch ag-ta-seg-think"></span>思考</span>
-              <span class="ag-ta-legend-item"><span class="ag-ta-swatch ag-ta-seg-out"></span>正文回复</span>
+              <span class="ag-ta-legend-item"><span class="ag-ta-swatch ag-ta-seg-in"></span>${en ? 'Uncached In' : '新输入'}</span>
+              <span class="ag-ta-legend-item"><span class="ag-ta-swatch ag-ta-seg-cache"></span>${en ? 'Cache Hit' : '缓存命中'}</span>
+              <span class="ag-ta-legend-item"><span class="ag-ta-swatch ag-ta-seg-think"></span>${en ? 'Thinking' : '思考'}</span>
+              <span class="ag-ta-legend-item"><span class="ag-ta-swatch ag-ta-seg-out"></span>${en ? 'Response' : '正文回复'}</span>
             </div>
           </div>
 
           <div class="ag-ta-card ag-ta-card-col">
             <div class="ag-ta-card-head">
               <div>
-                <h2 class="ag-ta-card-h2">按场景统计</h2>
-                <p class="ag-ta-card-desc">工具执行/子 Agent/对话/规划/压缩</p>
+                <h2 class="ag-ta-card-h2">${en ? 'By Scenario' : '按场景统计'}</h2>
+                <p class="ag-ta-card-desc">${
+                  en ? 'Tools / Subagents / Chat / Planning / Compaction' : '工具执行/子 Agent/对话/规划/压缩'
+                }</p>
               </div>
-              <span class="ag-ta-seg ag-ta-seg--static" title="所有数字来自本机已落盘的 conversations/*.db，不含未落盘的云端静默后台任务">
-                <span class="ag-ta-seg-chip">本地轨迹口径</span>
+              <span class="ag-ta-seg ag-ta-seg--static" title="${
+                en
+                  ? 'Computed purely from local conversations/*.db files; excludes unpersisted cloud background tasks'
+                  : '所有数字来自本机已落盘的 conversations/*.db，不含未落盘的云端静默后台任务'
+              }">
+                <span class="ag-ta-seg-chip">${en ? 'Local DB Scope' : '本地轨迹口径'}</span>
               </span>
             </div>
             <div id="ag-ta-scenario-list" class="ag-ta-list ag-ta-list--scen"></div>
             <div class="ag-ta-foot">
-              <span>仅统计本地已落盘对话轨迹；点击场景行可联动筛选</span>
+              <span>${
+                en ? 'Counts persisted local trajectories only; click any row to filter' : '仅统计本地已落盘对话轨迹；点击场景行可联动筛选'
+              }</span>
             </div>
           </div>
         </section>
@@ -8046,12 +8244,16 @@
         <section class="ag-ta-card">
           <div class="ag-ta-card-head">
             <div>
-              <h2 class="ag-ta-card-h2">按会话与项目统计</h2>
-              <p class="ag-ta-card-desc">同名项目已合并大小写并折叠 <span class="ag-ta-mono">/tmp</span>，支持父会话展开子 Agent 轨迹</p>
+              <h2 class="ag-ta-card-h2">${en ? 'Sessions &amp; Projects' : '按会话与项目统计'}</h2>
+              <p class="ag-ta-card-desc">${
+                en
+                  ? 'Case-normalized project grouping with <span class="ag-ta-mono">/tmp</span> folding and expandable subagent trees'
+                  : '同名项目已合并大小写并折叠 <span class="ag-ta-mono">/tmp</span>，支持父会话展开子 Agent 轨迹'
+              }</p>
             </div>
             <div class="ag-ta-seg" id="ag-ta-explorer-sw">
-              <button type="button" class="ag-ta-seg-btn active" data-emode="sessions">会话明细</button>
-              <button type="button" class="ag-ta-seg-btn" data-emode="projects">项目汇总</button>
+              <button type="button" class="ag-ta-seg-btn active" data-emode="sessions">${en ? 'Sessions' : '会话明细'}</button>
+              <button type="button" class="ag-ta-seg-btn" data-emode="projects">${en ? 'Projects' : '项目汇总'}</button>
             </div>
           </div>
 
@@ -8060,21 +8262,23 @@
           <div class="ag-ta-toolbar">
             <div class="ag-ta-search-wrap">
               <svg class="ag-ta-search-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-              <input id="ag-ta-search-input" class="ag-ta-input" type="text" placeholder="搜索会话标题、项目名或 ID…" />
+              <input id="ag-ta-search-input" class="ag-ta-input" type="text" placeholder="${
+                en ? 'Search session title, project, or ID…' : '搜索会话标题、项目名或 ID…'
+              }" />
             </div>
             <select id="ag-ta-sort-select" class="ag-ta-select">
-              <option value="metric">排序：按当前指标</option>
-              <option value="weighted">排序：加权等效</option>
-              <option value="total">排序：总 Tokens</option>
-              <option value="inTok">排序：未缓存输入</option>
-              <option value="outTok">排序：输出 Tokens</option>
-              <option value="calls">排序：调用次数</option>
-              <option value="lowCache">排序：低缓存命中优先</option>
-              <option value="recent">排序：最近活跃</option>
+              <option value="metric">${en ? 'Sort: Active Metric' : '排序：按当前指标'}</option>
+              <option value="weighted">${en ? 'Sort: Weighted' : '排序：加权等效'}</option>
+              <option value="total">${en ? 'Sort: Total Tokens' : '排序：总 Tokens'}</option>
+              <option value="inTok">${en ? 'Sort: Uncached Input' : '排序：未缓存输入'}</option>
+              <option value="outTok">${en ? 'Sort: Output Tokens' : '排序：输出 Tokens'}</option>
+              <option value="calls">${en ? 'Sort: API Calls' : '排序：调用次数'}</option>
+              <option value="lowCache">${en ? 'Sort: Low Cache Hit' : '排序：低缓存命中优先'}</option>
+              <option value="recent">${en ? 'Sort: Most Recent' : '排序：最近活跃'}</option>
             </select>
             <label class="ag-ta-check-lbl">
               <input id="ag-ta-lowcache-cb" type="checkbox" />
-              <span>仅低缓存预警 (&lt;80%)</span>
+              <span>${en ? 'Low Cache (&lt;80%)' : '仅低缓存预警 (&lt;80%)'}</span>
             </label>
           </div>
 
@@ -8082,12 +8286,12 @@
             <table class="ag-ta-table">
               <thead>
                 <tr>
-                  <th>会话 / 项目</th>
-                  <th>主力模型 &amp; 场景</th>
-                  <th class="ag-ta-num">调用</th>
-                  <th class="ag-ta-num">消耗与构成</th>
-                  <th class="ag-ta-num">缓存命中</th>
-                  <th class="ag-ta-num">最近活跃</th>
+                  <th>${en ? 'Session / Project' : '会话 / 项目'}</th>
+                  <th>${en ? 'Top Model &amp; Scenario' : '主力模型 &amp; 场景'}</th>
+                  <th class="ag-ta-num">${en ? 'Calls' : '调用'}</th>
+                  <th class="ag-ta-num">${en ? 'Usage &amp; Mix' : '消耗与构成'}</th>
+                  <th class="ag-ta-num">${en ? 'Cache Hit' : '缓存命中'}</th>
+                  <th class="ag-ta-num">${en ? 'Last Active' : '最近活跃'}</th>
                 </tr>
               </thead>
               <tbody id="ag-ta-sessions-tbody"></tbody>
@@ -8225,10 +8429,15 @@
         });
         const modelDescEl = panel.querySelector('#ag-ta-model-desc');
         if (modelDescEl) {
+          const en = isUiEnglish();
           modelDescEl.textContent =
             uiState.modelGroup === 'pool'
-              ? '调用次数/缓存命中/消耗量/占比'
-              : '调用次数/缓存命中/消耗量/占比/配额池';
+              ? en
+                ? 'Calls / Cache Hit / Usage / Share'
+                : '调用次数/缓存命中/消耗量/占比'
+              : en
+                ? 'Calls / Cache Hit / Usage / Share / Quota Pool'
+                : '调用次数/缓存命中/消耗量/占比/配额池';
         }
         panel.querySelectorAll('#ag-ta-explorer-sw .ag-ta-seg-btn').forEach((b) => {
           b.classList.toggle('active', b.getAttribute('data-emode') === uiState.explorerMode);
@@ -8254,10 +8463,11 @@
       }
 
       function renderExplorerSections(panel, vm) {
+        const en = isUiEnglish();
         const projects = dataState.payload?.projects || [];
         const chipsEl = panel.querySelector('#ag-ta-project-chips');
         if (chipsEl) {
-          const chipList = [{ key: 'ALL', name: '全部项目' }, ...projects];
+          const chipList = [{ key: 'ALL', name: en ? 'All Projects' : '全部项目' }, ...projects];
           chipsEl.innerHTML = chipList
             .map(
               (p) =>
@@ -8276,7 +8486,13 @@
         if (tbody) {
           if (!vm || vm.sessions.length === 0) {
             tbody.innerHTML = `<tr><td colspan="6" class="ag-ta-empty">${
-              dataState.loading ? '正在扫描本地会话数据库…' : '当前筛选条件下没有匹配的会话记录'
+              dataState.loading
+                ? en
+                  ? 'Scanning local conversation databases…'
+                  : '正在扫描本地会话数据库…'
+                : en
+                  ? 'No matching sessions for current filters'
+                  : '当前筛选条件下没有匹配的会话记录'
             }</td></tr>`;
           } else {
             const rowsHtml = [];
@@ -8288,7 +8504,7 @@
               const cP = (s.cacheRead / tot) * 100;
               const oP = Math.max(0, 100 - inP - cP);
               const rateText = s.cacheRate !== null ? `${(s.cacheRate * 100).toFixed(1)}%` : '--';
-              const scenLabel = TA_SCENARIO_META[s.primaryScenario]?.label || s.primaryScenario;
+              const scenLabel = taGetScenarioLabel(s.primaryScenario);
 
               rowsHtml.push(
                 `<tr>` +
@@ -8301,7 +8517,13 @@
                   `<div class="ag-ta-sess-tags">` +
                   `<span class="ag-ta-badge ag-ta-mono" title="${esc(s.projectName)}">${esc(s.projectName)}</span>` +
                   (s.source === 'cli' ? `<span class="ag-ta-badge ag-ta-mono">CLI</span>` : '') +
-                  (hasKids ? `<span class="ag-ta-sub-badge">含 ${s.children.length} 个子 Agent</span>` : '') +
+                  (hasKids
+                    ? `<span class="ag-ta-sub-badge">${
+                        en
+                          ? `+${s.children.length} subagent${s.children.length > 1 ? 's' : ''}`
+                          : `含 ${s.children.length} 个子 Agent`
+                      }</span>`
+                    : '') +
                   `<span class="ag-ta-mono" style="color:var(--ag-ta-muted);font-size:11px;">${esc(s.id.slice(0, 8))}</span>` +
                   `</div></div></div></td>` +
                   `<td class="ag-ta-model-td">` +
@@ -8311,7 +8533,11 @@
                   `<td class="ag-ta-num ag-ta-mono">${s.calls}</td>` +
                   `<td class="ag-ta-num">` +
                   `<div class="ag-ta-mono" style="font-weight:600;">${esc(taFormatMetricVal(s, uiState.metric))}</div>` +
-                  `<div class="ag-ta-mini-bar" title="新入 ${taFormatCompact(s.inTok)} · 缓读 ${taFormatCompact(s.cacheRead)} · 出 ${taFormatCompact(s.outTok)}">` +
+                  `<div class="ag-ta-mini-bar" title="${
+                    en
+                      ? `In ${taFormatCompact(s.inTok)} · Cache ${taFormatCompact(s.cacheRead)} · Out ${taFormatCompact(s.outTok)}`
+                      : `新入 ${taFormatCompact(s.inTok)} · 缓读 ${taFormatCompact(s.cacheRead)} · 出 ${taFormatCompact(s.outTok)}`
+                  }">` +
                   `<div class="ag-ta-seg-in" style="width:${inP}%"></div>` +
                   `<div class="ag-ta-seg-cache" style="width:${cP}%"></div>` +
                   `<div class="ag-ta-seg-out" style="width:${oP}%"></div>` +
@@ -8337,7 +8563,7 @@
                       `<td class="ag-ta-num ag-ta-mono" style="color:var(--ag-ta-muted);">${c.calls}</td>` +
                       `<td class="ag-ta-num ag-ta-mono" style="color:var(--ag-ta-muted);">${esc(taFormatMetricVal(c, uiState.metric))}</td>` +
                       `<td class="ag-ta-num ag-ta-mono" style="color:var(--ag-ta-muted);">${cRate}</td>` +
-                      `<td class="ag-ta-num ag-ta-mono" style="color:var(--ag-ta-muted);">子轨迹</td>` +
+                      `<td class="ag-ta-num ag-ta-mono" style="color:var(--ag-ta-muted);">${en ? 'Subagent' : '子轨迹'}</td>` +
                       `</tr>`
                   );
                 }
@@ -8359,7 +8585,9 @@
         const projWrap = panel.querySelector('#ag-ta-projects-wrap');
         if (projWrap) {
           if (!vm || vm.projectsSummary.length === 0) {
-            projWrap.innerHTML = `<div class="ag-ta-empty" style="grid-column:1/-1;">当前筛选条件下无项目数据</div>`;
+            projWrap.innerHTML = `<div class="ag-ta-empty" style="grid-column:1/-1;">${
+              en ? 'No project data for current filters' : '当前筛选条件下无项目数据'
+            }</div>`;
           } else {
             const projSum = Math.max(1, vm.projectsSummary.reduce((acc, p) => acc + taGetMetricVal(p, uiState.metric), 0));
             projWrap.innerHTML = vm.projectsSummary
@@ -8374,10 +8602,16 @@
                   `  </div>` +
                   `  <div class="ag-ta-track" style="margin:7px 0;"><div class="ag-ta-track-inner" style="width:${Math.max(4, share)}%;background-color:var(--ag-ta-primary);"></div></div>` +
                   `  <div class="ag-ta-mono" style="display:flex;justify-content:space-between;gap:8px;font-size:11.5px;color:var(--ag-ta-muted);">` +
-                  `    <span>${p.sessionsCount} 会话 · ${p.subagentCount} 个子 Agent · ${p.calls} 次</span>` +
-                  `    <span>缓存 ${rate} · 占 ${share.toFixed(1)}%</span>` +
+                  `    <span>${
+                    en
+                      ? `${p.sessionsCount} sess · ${p.subagentCount} sub · ${p.calls} calls`
+                      : `${p.sessionsCount} 会话 · ${p.subagentCount} 个子 Agent · ${p.calls} 次`
+                  }</span>` +
+                  `    <span>${en ? `Cache ${rate} · ${share.toFixed(1)}%` : `缓存 ${rate} · 占 ${share.toFixed(1)}%`}</span>` +
                   `  </div>` +
-                  `  <div style="margin-top:5px;font-size:11.5px;color:var(--ag-ta-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">主力模型：${esc(p.topModel || '--')}</div>` +
+                  `  <div style="margin-top:5px;font-size:11.5px;color:var(--ag-ta-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${
+                    en ? `Top Model: ${esc(p.topModel || '--')}` : `主力模型：${esc(p.topModel || '--')}`
+                  }</div>` +
                   `</div>`
                 );
               })
@@ -8405,12 +8639,13 @@
       function renderPanel() {
         const panel = document.getElementById(PANEL_ID);
         if (!panel || panel.hidden) return;
+        const en = isUiEnglish();
         ensurePanelSkeleton(panel);
         syncPanelSwitchers(panel);
 
         const refreshBtn = panel.querySelector('#ag-ta-refresh-btn');
         if (refreshBtn) {
-          refreshBtn.textContent = dataState.loading ? '刷新中…' : '刷新';
+          refreshBtn.textContent = dataState.loading ? (en ? 'Refreshing…' : '刷新中…') : en ? 'Refresh' : '刷新';
           refreshBtn.disabled = Boolean(dataState.loading);
         }
 
@@ -8423,7 +8658,9 @@
           } else if (dataState.loading && !dataState.payload) {
             banner.hidden = false;
             banner.removeAttribute('data-kind');
-            banner.textContent = '正在从本地 SQLite 增量统计全部会话消耗…';
+            banner.textContent = en
+              ? 'Scanning all local SQLite conversation trajectories…'
+              : '正在从本地 SQLite 增量统计全部会话消耗…';
           } else {
             banner.hidden = true;
           }
@@ -8432,22 +8669,54 @@
         const badge = panel.querySelector('#ag-ta-header-badge');
         const st = dataState.payload?.stats;
         if (badge && st) {
-          badge.textContent = `${st.scannedDbs}/${st.dbCount} 会话库 · ${st.totalCalls} 次调用 · ${dataState.payload.elapsedMs}ms`;
+          const warmupSuffix = st.warmupPending ? (en ? ' · warming…' : ' · 预热中…') : '';
+          badge.textContent = en
+            ? `${st.scannedDbs}/${st.dbCount} DBs · ${st.totalCalls} calls · ${dataState.payload.elapsedMs}ms${warmupSuffix}`
+            : `${st.scannedDbs}/${st.dbCount} 会话库 · ${st.totalCalls} 次调用 · ${dataState.payload.elapsedMs}ms${warmupSuffix}`;
         }
 
         const filterPills = [];
         if (uiState.selectedDate) {
-          filterPills.push({ label: `日期: ${uiState.selectedDate}`, clear: () => { uiState.selectedDate = null; renderPanel(); } });
+          filterPills.push({
+            label: `${en ? 'Date' : '日期'}: ${uiState.selectedDate}`,
+            clear: () => {
+              uiState.selectedDate = null;
+              renderPanel();
+            }
+          });
         }
         if (uiState.selectedProject !== 'ALL') {
           const pName = dataState.payload?.projects?.find((p) => p.key === uiState.selectedProject)?.name || uiState.selectedProject;
-          filterPills.push({ label: `项目: ${pName}`, clear: () => { uiState.selectedProject = 'ALL'; renderPanel(); } });
+          filterPills.push({
+            label: `${en ? 'Project' : '项目'}: ${pName}`,
+            clear: () => {
+              uiState.selectedProject = 'ALL';
+              renderPanel();
+            }
+          });
         }
         if (uiState.selectedModel) {
-          filterPills.push({ label: `模型: ${uiState.selectedModel}`, clear: () => { uiState.selectedModel = null; renderPanel(); } });
+          const isPoolSel = uiState.modelGroup === 'pool';
+          const dispModelSel =
+            isPoolSel && uiState.selectedModel === 'Claude' ? 'Claude & GPT' : uiState.selectedModel;
+          filterPills.push({
+            label: `${
+              isPoolSel ? (en ? 'Quota Pool' : '配额池') : en ? 'Model' : '模型'
+            }: ${dispModelSel}`,
+            clear: () => {
+              uiState.selectedModel = null;
+              renderPanel();
+            }
+          });
         }
         if (uiState.selectedScenario) {
-          filterPills.push({ label: `场景: ${TA_SCENARIO_META[uiState.selectedScenario]?.label || uiState.selectedScenario}`, clear: () => { uiState.selectedScenario = null; renderPanel(); } });
+          filterPills.push({
+            label: `${en ? 'Scenario' : '场景'}: ${taGetScenarioLabel(uiState.selectedScenario)}`,
+            clear: () => {
+              uiState.selectedScenario = null;
+              renderPanel();
+            }
+          });
         }
 
         const fBar = panel.querySelector('#ag-ta-filters-bar');
@@ -8465,7 +8734,9 @@
           if (!hasFilters) {
             const ph = document.createElement('span');
             ph.className = 'ag-ta-filter-placeholder';
-            ph.textContent = '暂无筛选条件（点击下方日期、模型、场景或项目即可联动过滤）';
+            ph.textContent = en
+              ? 'No active filters (click any date, model, scenario, or project below to cross-filter)'
+              : '暂无筛选条件（点击下方日期、模型、场景或项目即可联动过滤）';
             fWrap.appendChild(ph);
           } else {
             for (const fp of filterPills) {
@@ -8484,12 +8755,19 @@
         const vm = getOrComputeViewModel();
         if (!vm) return;
         const kpi = vm.kpi;
-        const metricLabels = {
-          weighted: '加权等效消耗（主指标）',
-          total: '总消耗 Tokens',
-          billable: '净新消耗（非缓存）',
-          calls: 'LLM 总调用次数'
-        };
+        const metricLabels = en
+          ? {
+              weighted: 'Weighted Equivalent (Primary)',
+              total: 'Total Tokens',
+              billable: 'Net Uncached Tokens',
+              calls: 'Total API Calls'
+            }
+          : {
+              weighted: '加权等效消耗（主指标）',
+              total: '总消耗 Tokens',
+              billable: '净新消耗（非缓存）',
+              calls: 'LLM 总调用次数'
+            };
         const ratePct = kpi.cacheRate !== null ? (kpi.cacheRate * 100).toFixed(1) : '--';
         const rateTone = kpi.cacheRate !== null ? (kpi.cacheRate >= 0.8 ? 'ok' : 'warn') : '';
         const peakText = kpi.peakDay
@@ -8502,22 +8780,38 @@
             `<div class="ag-ta-card">` +
             `  <div class="ag-ta-kpi-lbl">${esc(metricLabels[uiState.metric])}</div>` +
             `  <div class="ag-ta-kpi-val ag-ta-mono">${esc(taFormatMetricVal(kpi, uiState.metric))}</div>` +
-            `  <div class="ag-ta-kpi-sub ag-ta-mono">新入 ${taFormatCompact(kpi.inTok)} · 缓读 ${taFormatCompact(kpi.cacheRead)} · 出 ${taFormatCompact(kpi.outTok)}</div>` +
+            `  <div class="ag-ta-kpi-sub ag-ta-mono">${
+              en
+                ? `In ${taFormatCompact(kpi.inTok)} · Cache ${taFormatCompact(kpi.cacheRead)} · Out ${taFormatCompact(kpi.outTok)}`
+                : `新入 ${taFormatCompact(kpi.inTok)} · 缓读 ${taFormatCompact(kpi.cacheRead)} · 出 ${taFormatCompact(kpi.outTok)}`
+            }</div>` +
             `</div>` +
             `<div class="ag-ta-card">` +
-            `  <div class="ag-ta-kpi-lbl">平均缓存命中率</div>` +
+            `  <div class="ag-ta-kpi-lbl">${en ? 'Avg Cache Hit Rate' : '平均缓存命中率'}</div>` +
             `  <div class="ag-ta-kpi-val ag-ta-mono" data-tone="${rateTone}">${ratePct === '--' ? '--' : `${ratePct}%`}</div>` +
-            `  <div class="ag-ta-kpi-sub">总输入 <span class="ag-ta-mono">${taFormatCompact(kpi.inTok + kpi.cacheRead)}</span> · 思考 <span class="ag-ta-mono">${taFormatCompact(kpi.thinkTok)}</span></div>` +
+            `  <div class="ag-ta-kpi-sub">${
+              en
+                ? `Total In <span class="ag-ta-mono">${taFormatCompact(kpi.inTok + kpi.cacheRead)}</span> · Think <span class="ag-ta-mono">${taFormatCompact(kpi.thinkTok)}</span>`
+                : `总输入 <span class="ag-ta-mono">${taFormatCompact(kpi.inTok + kpi.cacheRead)}</span> · 思考 <span class="ag-ta-mono">${taFormatCompact(kpi.thinkTok)}</span>`
+            }</div>` +
             `</div>` +
             `<div class="ag-ta-card">` +
-            `  <div class="ag-ta-kpi-lbl">活跃天数 &amp; 单日峰值</div>` +
-            `  <div class="ag-ta-kpi-val ag-ta-mono">${kpi.activeDays} <span style="font-size:12px;font-weight:400;color:var(--ag-ta-muted);">/ ${kpi.windowDays} 天</span></div>` +
-            `  <div class="ag-ta-kpi-sub ag-ta-mono">峰值 ${esc(peakText)}</div>` +
+            `  <div class="ag-ta-kpi-lbl">${en ? 'Active Days &amp; Peak' : '活跃天数 &amp; 单日峰值'}</div>` +
+            `  <div class="ag-ta-kpi-val ag-ta-mono">${kpi.activeDays} <span style="font-size:12px;font-weight:400;color:var(--ag-ta-muted);">/ ${
+              en ? `${kpi.windowDays}d` : `${kpi.windowDays} 天`
+            }</span></div>` +
+            `  <div class="ag-ta-kpi-sub ag-ta-mono">${en ? `Peak ${esc(peakText)}` : `峰值 ${esc(peakText)}`}</div>` +
             `</div>` +
             `<div class="ag-ta-card">` +
-            `  <div class="ag-ta-kpi-lbl">归因覆盖范围</div>` +
-            `  <div class="ag-ta-kpi-val ag-ta-mono">${kpi.mainSessions} <span style="font-size:12px;font-weight:400;color:var(--ag-ta-muted);">主会话</span></div>` +
-            `  <div class="ag-ta-kpi-sub">覆盖 <span class="ag-ta-mono">${kpi.projectCount}</span> 个项目 · 含 <span class="ag-ta-mono">${kpi.subagentCount}</span> 个子 Agent</div>` +
+            `  <div class="ag-ta-kpi-lbl">${en ? 'Attribution Scope' : '归因覆盖范围'}</div>` +
+            `  <div class="ag-ta-kpi-val ag-ta-mono">${kpi.mainSessions} <span style="font-size:12px;font-weight:400;color:var(--ag-ta-muted);">${
+              en ? 'sessions' : '主会话'
+            }</span></div>` +
+            `  <div class="ag-ta-kpi-sub">${
+              en
+                ? `<span class="ag-ta-mono">${kpi.projectCount}</span> projects · <span class="ag-ta-mono">${kpi.subagentCount}</span> subagents`
+                : `覆盖 <span class="ag-ta-mono">${kpi.projectCount}</span> 个项目 · 含 <span class="ag-ta-mono">${kpi.subagentCount}</span> 个子 Agent`
+            }</div>` +
             `</div>`;
         }
 
@@ -8534,7 +8828,10 @@
             const mLbl = document.createElement('div');
             mLbl.className = 'ag-ta-hm-mlbl';
             if (firstDay && firstDay.month !== lastMonth) {
-              mLbl.textContent = `${firstDay.month}月`;
+              mLbl.textContent = en
+                ? ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][(firstDay.month - 1) % 12] ||
+                  `M${firstDay.month}`
+                : `${firstDay.month}月`;
               lastMonth = firstDay.month;
             }
             monthsBar.appendChild(mLbl);
@@ -8599,16 +8896,28 @@
         const dailyFoot = panel.querySelector('#ag-ta-daily-footer');
         if (dailyFoot) {
           const avgStr =
-            uiState.metric === 'calls' ? `${Math.round(vm.avgDaily)} 次/日` : `${taFormatCompact(vm.avgDaily)}/日`;
+            uiState.metric === 'calls'
+              ? en
+                ? `${Math.round(vm.avgDaily)} calls/d`
+                : `${Math.round(vm.avgDaily)} 次/日`
+              : en
+                ? `${taFormatCompact(vm.avgDaily)}/d`
+                : `${taFormatCompact(vm.avgDaily)}/日`;
           dailyFoot.innerHTML =
             `<div style="display:flex;flex-wrap:wrap;gap:14px;">` +
-            `  <span>当前连续活跃：<strong class="ag-ta-mono" style="color:var(--ag-ta-fg);">${vm.heatmap.streak} 天</strong></span>` +
-            `  <span>窗口内活跃日均：<strong class="ag-ta-mono" style="color:var(--ag-ta-fg);">${avgStr}</strong></span>` +
+            `  <span>${en ? 'Current streak: ' : '当前连续活跃：'}<strong class="ag-ta-mono" style="color:var(--ag-ta-fg);">${
+              en ? `${vm.heatmap.streak}d` : `${vm.heatmap.streak} 天`
+            }</strong></span>` +
+            `  <span>${en ? 'Active daily avg: ' : '窗口内活跃日均：'}<strong class="ag-ta-mono" style="color:var(--ag-ta-fg);">${avgStr}</strong></span>` +
             `</div>` +
             `<span>${
               uiState.selectedDate
-                ? `已锁定单日：${esc(uiState.selectedDate)}（再次点击取消）`
-                : '展示近 26 周（高亮当前时间窗）'
+                ? en
+                  ? `Pinned date: ${esc(uiState.selectedDate)} (click again to clear)`
+                  : `已锁定单日：${esc(uiState.selectedDate)}（再次点击取消）`
+                : en
+                  ? 'Last 26 weeks (active window highlighted)'
+                  : '展示近 26 周（高亮当前时间窗）'
             }</span>`;
         }
 
@@ -8617,7 +8926,9 @@
           modelListEl.classList.toggle('ag-ta-list--model', uiState.modelGroup === 'model');
           modelListEl.classList.toggle('ag-ta-list--pool', uiState.modelGroup !== 'model');
           if (vm.models.length === 0) {
-            modelListEl.innerHTML = `<div class="ag-ta-empty">当前筛选下无模型记录</div>`;
+            modelListEl.innerHTML = `<div class="ag-ta-empty">${
+              en ? 'No model records for current filters' : '当前筛选下无模型记录'
+            }</div>`;
           } else {
             const modelSum = Math.max(1, vm.models.reduce((acc, m) => acc + taGetMetricVal(m, uiState.metric), 0));
             const modelMax = Math.max(1, ...vm.models.map((m) => taGetMetricVal(m, uiState.metric)));
@@ -8634,23 +8945,26 @@
                 const rateStr = m.cacheRate !== null ? `${Math.round(m.cacheRate * 100)}%` : '--';
                 const isSel = uiState.selectedModel === m.key;
                 const isModelGroup = uiState.modelGroup === 'model';
+                const claudePoolTip = getSelfUiStrings().claudePoolTitle || 'Claude & GPT';
+                const rowTitleText = !isModelGroup && m.key === 'Claude' ? 'Claude & GPT' : m.key;
+                const rowHoverTip = !isModelGroup && m.key === 'Claude' ? claudePoolTip : m.key;
+                const poolBadgeLabel = m.pool === 'Claude' ? 'Claude/GPT' : m.pool;
+                const poolBadgeTip = m.pool === 'Claude' ? claudePoolTip : m.pool;
                 return (
                   `<div class="ag-ta-row-btn ${isSel ? 'active' : ''}" data-model-key="${esc(m.key)}">` +
                   `  <div class="ag-ta-row-top">` +
                   `    <div class="ag-ta-row-lead">` +
                   `      <div class="ag-ta-row-name">` +
-                  `        <span title="${esc(m.key)}">${esc(m.key)}</span>` +
+                  `        <span title="${esc(rowHoverTip)}">${esc(rowTitleText)}</span>` +
                   `      </div>` +
-                  `      <span class="ag-ta-num-cell ag-ta-mono ag-ta-num-muted ag-ta-row-calls">${m.calls}次</span>` +
+                  `      <span class="ag-ta-num-cell ag-ta-mono ag-ta-num-muted ag-ta-row-calls">${en ? m.calls : `${m.calls}次`}</span>` +
                   `    </div>` +
                   `    <div class="ag-ta-row-nums ${isModelGroup ? 'ag-ta-row-nums--model' : 'ag-ta-row-nums--pool'}">` +
                   `      <span class="ag-ta-num-cell ag-ta-mono ag-ta-num-muted">${rateStr}</span>` +
                   `      <span class="ag-ta-num-cell ag-ta-mono ag-ta-num-strong">${esc(taFormatMetricVal(m, uiState.metric))}</span>` +
                   `      <span class="ag-ta-num-cell ag-ta-mono ag-ta-num-muted">${share.toFixed(1)}%</span>` +
                   (isModelGroup
-                    ? `<span class="ag-ta-badge ag-ta-pool-badge" title="${esc(
-                        m.pool === 'Claude' ? getSelfUiStrings().claudePoolTitle || m.pool : m.pool
-                      )}">${esc(m.pool)}</span>`
+                    ? `<span class="ag-ta-badge ag-ta-pool-badge" title="${esc(poolBadgeTip)}">${esc(poolBadgeLabel)}</span>`
                     : '') +
                   `    </div>` +
                   `  </div>` +
@@ -8679,13 +8993,17 @@
         const scenListEl = panel.querySelector('#ag-ta-scenario-list');
         if (scenListEl) {
           if (vm.scenarios.length === 0) {
-            scenListEl.innerHTML = `<div class="ag-ta-empty">当前筛选下无场景记录</div>`;
+            scenListEl.innerHTML = `<div class="ag-ta-empty">${
+              en ? 'No scenario records for current filters' : '当前筛选下无场景记录'
+            }</div>`;
           } else {
             const scenSum = Math.max(1, vm.scenarios.reduce((acc, s) => acc + taGetMetricVal(s, uiState.metric), 0));
             const scenMax = Math.max(1, ...vm.scenarios.map((s) => taGetMetricVal(s, uiState.metric)));
             scenListEl.innerHTML = vm.scenarios
               .map((s) => {
-                const meta = TA_SCENARIO_META[s.key] || { label: s.key, desc: '', color: 'var(--ag-ta-c6)' };
+                const meta = TA_SCENARIO_META[s.key] || { color: 'var(--ag-ta-c6)' };
+                const scenLabel = taGetScenarioLabel(s.key);
+                const scenDesc = taGetScenarioDesc(s.key);
                 const val = taGetMetricVal(s, uiState.metric);
                 const share = (val / scenSum) * 100;
                 const barW = Math.max(4, (val / scenMax) * 100);
@@ -8697,9 +9015,9 @@
                   `    <div class="ag-ta-row-lead">` +
                   `      <div class="ag-ta-row-name">` +
                   `        <span class="ag-ta-swatch" style="background-color:${meta.color};"></span>` +
-                  `        <span class="ag-ta-row-label" title="${esc(meta.label + extra)}">${esc(meta.label + extra)}</span>` +
+                  `        <span class="ag-ta-row-label" title="${esc(scenLabel + extra)}">${esc(scenLabel + extra)}</span>` +
                   `      </div>` +
-                  `      <span class="ag-ta-num-cell ag-ta-mono ag-ta-num-muted ag-ta-row-calls">${s.calls}次</span>` +
+                  `      <span class="ag-ta-num-cell ag-ta-mono ag-ta-num-muted ag-ta-row-calls">${en ? s.calls : `${s.calls}次`}</span>` +
                   `    </div>` +
                   `    <div class="ag-ta-row-nums ag-ta-row-nums--scen">` +
                   `      <span class="ag-ta-num-cell ag-ta-mono ag-ta-num-strong">${esc(taFormatMetricVal(s, uiState.metric))}</span>` +
@@ -8707,7 +9025,7 @@
                   `    </div>` +
                   `  </div>` +
                   `  <div class="ag-ta-track"><div class="ag-ta-track-inner" style="width:${barW}%;background-color:${meta.color};"></div></div>` +
-                  `  <div class="ag-ta-row-desc">${esc(meta.desc)}</div>` +
+                  `  <div class="ag-ta-row-desc">${esc(scenDesc)}</div>` +
                   `</div>`
                 );
               })
@@ -8733,6 +9051,7 @@
           modal.setAttribute('data-ag-token-tab-active', '1');
         } else {
           modal.removeAttribute('data-ag-token-tab-active');
+          clearWarmupPollTimer();
           hideHmTooltip();
         }
         const navBtn = document.getElementById(NAV_BTN_ID);
@@ -8751,6 +9070,7 @@
         if (disposed || !document.body) return;
         const modal = findActiveSettingsModal();
         if (!modal) {
+          clearWarmupPollTimer();
           if (hmTooltipVisible) hideHmTooltip();
           if (dataState.fetchedAt > 0) dataState.modalClosedSinceFetch = true;
           if (tabActive) {
@@ -8815,15 +9135,26 @@
           if (hEl && hEl.textContent !== uiStr.extHeading) hEl.textContent = uiStr.extHeading;
           if (bEl && bEl.textContent !== uiStr.tokenTab) bEl.textContent = uiStr.tokenTab;
         }
-        // 第一阶段双语切换仅同步设置侧栏分类标题与入口按钮名；Token 统计面板内部报表文案留待第二阶段多语言解耦统一抽离
         window.__ag_rerender_token_analytics_lang = () => {
           const sec = document.getElementById(NAV_SECTION_ID);
-          if (!sec) return;
-          const uiStr = getSelfUiStrings();
-          const hEl = sec.querySelector('[data-ag-ta-nav-heading="1"], .ag-ta-nav-heading');
-          const bEl = sec.querySelector('[data-ag-ta-nav-btn-label="1"], #ag-token-nav-btn span');
-          if (hEl && hEl.textContent !== uiStr.extHeading) hEl.textContent = uiStr.extHeading;
-          if (bEl && bEl.textContent !== uiStr.tokenTab) bEl.textContent = uiStr.tokenTab;
+          if (sec) {
+            const uiStr = getSelfUiStrings();
+            const hEl = sec.querySelector('[data-ag-ta-nav-heading="1"], .ag-ta-nav-heading');
+            const bEl = sec.querySelector('[data-ag-ta-nav-btn-label="1"], #ag-token-nav-btn span');
+            if (hEl && hEl.textContent !== uiStr.extHeading) hEl.textContent = uiStr.extHeading;
+            if (bEl && bEl.textContent !== uiStr.tokenTab) bEl.textContent = uiStr.tokenTab;
+          }
+          const curPanel = document.getElementById(PANEL_ID);
+          if (curPanel && curPanel.dataset.agSkeletonReady === '1') {
+            const wantLang = isUiEnglish() ? 'en' : 'zh';
+            if (curPanel.dataset.agSkeletonLang !== wantLang) {
+              if (!curPanel.hidden) {
+                renderPanel();
+              } else {
+                delete curPanel.dataset.agSkeletonReady;
+              }
+            }
+          }
         };
         if (navSection.parentElement !== navContainer) {
           navContainer.appendChild(navSection);
@@ -9023,6 +9354,7 @@
 
       window.__ag_cleanup_fns.push(() => {
         disposed = true;
+        clearWarmupPollTimer();
         unbindHmGlobalListeners();
         hmDayByDate.clear();
         activeHmCell = null;
@@ -9492,64 +9824,40 @@
 
       function contextStrings() {
         const en = isUiEnglish();
-        if (!en && INSTALLED_LOCALE === 'ja') {
-          const revealInOsJa = IS_MAC
-            ? 'Finder で表示'
-            : IS_WIN
-            ? 'エクスプローラーで表示'
-            : 'ファイルマネージャーで表示';
-          return {
-            openInEditor: 'エディターで開く',
-            openPreview: 'プレビューで開く',
-            openIn: '外部アプリで開く',
-            openInSingle: (label) => `${label} で開く`,
-            revealInOs: revealInOsJa,
-            copyPath: 'パスをコピー',
-            copyFileName: 'ファイル名をコピー',
-            copyBrowserUrl: 'ブラウザー URL をコピー',
-            openInBrowser: 'ブラウザーで開く',
-            copyLink: 'リンクをコピー',
-            copySelection: '選択範囲をコピー',
-            copyLinkText: 'リンクテキストをコピー',
-            copy: 'コピー',
-            copyCodeBlock: 'コードブロックをコピー',
-            copyImage: '画像をコピー',
-            saveImage: '画像を保存',
-            openImageInBrowser: 'ブラウザーで画像を開く',
-            copyImageUrl: '画像の URL をコピー',
-            cut: '切り取り',
-            paste: '貼り付け',
-            selectAll: 'すべて選択'
-          };
-        }
+        const tr = (enStr, zhStr) => {
+          if (en) return enStr;
+          const ov =
+            typeof window.__ag_lookup_user_override === 'function' ? window.__ag_lookup_user_override(enStr) : null;
+          return typeof ov === 'string' && ov ? ov : zhStr;
+        };
         const revealInOs = IS_MAC
-          ? en ? 'Reveal in Finder' : '在访达中显示'
+          ? tr('Reveal in Finder', '在访达中显示')
           : IS_WIN
-          ? en ? 'Show in File Explorer' : '在文件资源管理器中显示'
-          : en ? 'Show in File Manager' : '在文件管理器中显示';
+          ? tr('Show in File Explorer', '在文件资源管理器中显示')
+          : tr('Show in File Manager', '在文件管理器中显示');
 
         return {
-          openInEditor: en ? 'Open in Editor' : '在编辑器中打开',
-          openPreview: en ? 'Open Preview' : '在预览面板中打开',
-          openIn: en ? 'Open In' : '打开方式',
+          openInEditor: tr('Open in Editor', '在编辑器中打开'),
+          openPreview: tr('Open Preview', '在预览面板中打开'),
+          openIn: tr('Open In', '打开方式'),
           openInSingle: (label) => (en ? `Open in ${label}` : `在 ${label} 中打开`),
           revealInOs,
-          copyPath: en ? 'Copy Path' : '复制路径',
-          copyFileName: en ? 'Copy File Name' : '复制文件名',
-          copyBrowserUrl: en ? 'Copy Browser URL' : '复制浏览器地址',
-          openInBrowser: en ? 'Open in Browser' : '在浏览器中打开',
-          copyLink: en ? 'Copy Link' : '复制链接',
-          copySelection: en ? 'Copy Selection' : '复制选中文本',
-          copyLinkText: en ? 'Copy Link Text' : '复制链接文字',
-          copy: en ? 'Copy' : '复制',
-          copyCodeBlock: en ? 'Copy Code Block' : '复制代码块',
-          copyImage: en ? 'Copy Image' : '复制图片',
-          saveImage: en ? 'Save Image' : '另存图片',
-          openImageInBrowser: en ? 'Open Image in Browser' : '在浏览器中打开图片',
-          copyImageUrl: en ? 'Copy Image Address' : '复制图片地址',
-          cut: en ? 'Cut' : '剪切',
-          paste: en ? 'Paste' : '粘贴',
-          selectAll: en ? 'Select All' : '全选'
+          copyPath: tr('Copy Path', '复制路径'),
+          copyFileName: tr('Copy File Name', '复制文件名'),
+          copyBrowserUrl: tr('Copy Browser URL', '复制浏览器地址'),
+          openInBrowser: tr('Open in Browser', '在浏览器中打开'),
+          copyLink: tr('Copy Link', '复制链接'),
+          copySelection: tr('Copy Selection', '复制选中文本'),
+          copyLinkText: tr('Copy Link Text', '复制链接文字'),
+          copy: tr('Copy', '复制'),
+          copyCodeBlock: tr('Copy Code Block', '复制代码块'),
+          copyImage: tr('Copy Image', '复制图片'),
+          saveImage: tr('Save Image', '另存图片'),
+          openImageInBrowser: tr('Open Image in Browser', '在浏览器中打开图片'),
+          copyImageUrl: tr('Copy Image Address', '复制图片地址'),
+          cut: tr('Cut', '剪切'),
+          paste: tr('Paste', '粘贴'),
+          selectAll: tr('Select All', '全选')
         };
       }
 

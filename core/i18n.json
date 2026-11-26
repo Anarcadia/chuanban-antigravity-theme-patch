@@ -302,7 +302,7 @@
   "When toggled on, Antigravity collects usage data to help Google enhance performance and features.": "开启后，Antigravity 将收集匿名使用数据以帮助 Google 改进性能与功能。",
   "Marketing emails": "产品推广邮件",
   "Receive product updates, tips, and promotions from Google Antigravity via email.": "通过电子邮件接收 Google Antigravity 的产品更新、使用技巧和优惠信息。",
-  "Your Plan:": "当前方案：",
+  "Your Plan:": "当前套餐：",
   "You can upgrade to a Google AI Ultra plan to receive higher rate limits.": "您可以升级到 Google AI Ultra 方案以获得更高的配额速率限制。",
   "Upgrade": "升级方案",
   "Ask anything, @ to mention, / for actions": "向 Agent 提问，键入 @ 引用上下文，键入 / 调出快捷操作",
@@ -2224,5 +2224,7 @@
   "Share": "分享",
   "Applies to messages sent after this turn": "对本轮之后发送的消息生效",
   "Applies to /btw and messages sent after this turn": "对支线提问 (/btw) 及本轮之后发送的消息生效",
-  "Customizations views": "自定义视图"
+  "Customizations views": "自定义视图",
+  "Leaving Soon": "即将下线",
+  "Use Hydrogen for better quality with lower quota usage.": "建议改用 Hydrogen，效果更好且配额消耗更低。"
 }
