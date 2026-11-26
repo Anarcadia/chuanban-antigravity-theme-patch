@@ -16,17 +16,26 @@ description: 船板的 Antigravity 2.0 主题、字体与汉化补丁（v6.0.4 �
 > - **两条执行红线**：
 >   1. **严禁从头手写或篡改 `core/` 内核**：全部样式、词典、DOM 引擎与守护进程已预封装在 `core/`（受 `core/manifest.json` SHA-256 校验保护），直接通过 `node install.mjs` 部署；
 >   2. **所有个性化定制仅在 `user/` 层修改**：`user/` 目录升级时永不覆盖，保存后守护进程在 `2.5s` 内自动检测 `mtimeMs` 热重载生效。
+> - **🇨🇳 中国大陆境内网络与字体下载兜底铁律（Agent 启动即载入 · 必读）**：
+>   - **常驻预知国内免代理双链接**：
+>     - **飞书配套字体国内免代理下载页（核心兜底）**：<https://www.feishu.cn/wiki/V2lbwB8ykiLLXrkzY41cXjQ1nXc>（内嵌 `AnthropicMono-Regular.ttf`、`AnthropicSerif-Regular.ttf`、`AnthropicSerif-Bold.ttf`、`SarasaUiSC-TTF-v1.0.43.zip`、`SarasaMonoSlabSC-TTF-v1.0.43.zip` 共 5 张免登录直下卡片）
+>     - **飞书主题图文整体落地页**：<https://www.feishu.cn/wiki/EQyqwJEqmi1LH3k11tzcmkMHnYd>
+>   - **能力边界与主动推荐规则**：飞书知识库附件仅支持人类真实浏览器免登录满速点击下载（无 Cookie 终端 `curl/fetch` 无法直拉）。一旦遇到**① 中国大陆境内终端未配代理导致 `--auto-download` 连接报错/超时**、**② 跨境拉取 `170 MB` 更纱字体包速度过慢/长时间卡住**、或 **③ 用户安装后发现缺字体 / 事后重新修复安装字体**，Agent **切勿盲目循环重试慢速终端下载**，应第一时间主动向用户推荐打开上方**飞书配套字体国内下载页**将文件手动下载至本地同一文件夹（无需手动解压 `.zip`），再执行 `node install.mjs install-fonts --from "<下载目录>"` 一键自动解压并完成注册！
 
 ---
 
 ## 一、核心资源链接与示例基准
 
-1. **多源字体镜像与资源包（已接入 Cloudflare R2 主源 + GitHub Release 备源 + Google Drive 兜底）**：
+1. **多源字体镜像与国内飞书免代理兜底（Cloudflare R2 主源 + GitHub Release 备源 + Google Drive + 飞书国内浏览器分流）**：
    - 必备字体：`AnthropicSerif-Regular.ttf`、`AnthropicSerif-Bold.ttf`、`AnthropicMono-Regular.ttf`，以及更纱黑体中文包（`v5.5.0` UI 西文直连官方 `Google Sans Flex`，**不再依赖 `AnthropicSans-*.ttf`**）。
-   - **全平台首选一键自动下载与安装**：`install.mjs` 内置多镜像自动回退下载器（优先走 **Cloudflare R2** `https://img.chuanban.cc/fonts/chuanban-suite/`，更纱黑体自动按 **Cloudflare R2 → GitHub Release (`fonts-sarasa-v1.0.43`) → Google Drive** 顺序切换；遇到 Google Drive 配额超限 HTML 页立即熔断切源并强制校验二进制魔数与 SHA-256，Windows 自动探测系统代理并自动解压 `.zip`），直接运行 **`node install.mjs install-fonts --auto-download`**（Windows 退订旧 `SuperTTC` 加 `--retire-super-ttc`；如需指定优先源可加 `--mirror cloudflare-r2|github-release|google-drive`）即可补齐全部缺失字体。
-   - **手动下载兜底（Windows 强烈推荐拆分版 SC TTF）**：若终端网络受限需走浏览器手动下载，优先从 **[Cloudflare R2 直链 (`Windows-Sarasa-Split-SC-TTF-v1.0.43.zip`)](https://img.chuanban.cc/fonts/chuanban-suite/Windows-Sarasa-Split-SC-TTF-v1.0.43.zip)** 或 **[GitHub Release 镜像 (`fonts-sarasa-v1.0.43`)](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/releases/tag/fonts-sarasa-v1.0.43)** 下载 170 MB 拆分版更纱黑体（含 `SarasaUiSC` + `SarasaMonoSlabSC` 共 14 个 SC 字重 `.ttf`，避免 791 MB `Sarasa-SuperTTC.ttc` 在 DirectWrite/Chromium 引起卡顿与 >2GB 虚存占用，见 #19），3 个 `Anthropic*.ttf` 可从 `https://img.chuanban.cc/fonts/chuanban-suite/` 或 [Google Drive 共享目录](https://drive.google.com/drive/folders/1NX92SgVUqtSjWg6bt6sIJXy-cn7J_boC) 获取；无需手动解压即可运行 `node install.mjs install-fonts --from "<下载目录或.zip路径>" --retire-super-ttc`（macOS 更纱黑体亦可用 `brew install --cask font-sarasa-gothic`）。
+   - **🇨🇳 中国大陆浏览器手动下载首选兜底（免代理、免登录满速）**：
+     - **飞书配套字体国内下载页**：<https://www.feishu.cn/wiki/V2lbwB8ykiLLXrkzY41cXjQ1nXc>（页面内含 3 个 `Anthropic*.ttf` 与拆分为 `SarasaUiSC-TTF-v1.0.43.zip` + `SarasaMonoSlabSC-TTF-v1.0.43.zip` 的 14 字重更纱包；全部下载到同一目录后无需解压，`install-fonts --from "<下载目录>"` 会自动识别并解压两个 `.zip` 及全部 `.ttf`）
+     - **飞书端主题整体落地页（图文介绍与指引）**：<https://www.feishu.cn/wiki/EQyqwJEqmi1LH3k11tzcmkMHnYd>
+   - **全平台首选脚本一键自动下载与安装**：`install.mjs` 内置多镜像自动回退下载器（优先走 **Cloudflare R2** `https://img.chuanban.cc/fonts/chuanban-suite/`，更纱黑体自动按 **Cloudflare R2 → GitHub Release (`fonts-sarasa-v1.0.43`) → Google Drive** 顺序切换；遇到 Google Drive 配额超限 HTML 页立即熔断切源并强制校验二进制魔数与 SHA-256，Windows 自动探测系统代理并自动解压 `.zip`），直接运行 **`node install.mjs install-fonts --auto-download`**（Windows 退订旧 `SuperTTC` 加 `--retire-super-ttc`；如需指定优先源可加 `--mirror cloudflare-r2|github-release|google-drive`）即可补齐全部缺失字体。
+   - **海外及其他手动下载镜像（Windows 强烈推荐拆分版 SC TTF）**：若需从海外镜像浏览器下载，可从 **[Cloudflare R2 直链 (`Windows-Sarasa-Split-SC-TTF-v1.0.43.zip`)](https://img.chuanban.cc/fonts/chuanban-suite/Windows-Sarasa-Split-SC-TTF-v1.0.43.zip)**、**[GitHub Release 镜像 (`fonts-sarasa-v1.0.43`)](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/releases/tag/fonts-sarasa-v1.0.43)** 或 [Google Drive 共享目录](https://drive.google.com/drive/folders/1NX92SgVUqtSjWg6bt6sIJXy-cn7J_boC) 获取（避免 791 MB `Sarasa-SuperTTC.ttc` 在 DirectWrite/Chromium 引起卡顿与 >2GB 虚存占用，见 #19）；无需手动解压即可运行 `node install.mjs install-fonts --from "<下载目录或.zip路径>" --retire-super-ttc`（macOS 更纱黑体亦可用 `brew install --cask font-sarasa-gothic`）。
 2. **GitHub 代码仓库**：<https://github.com/Anarcadia/chuanban-antigravity-theme-patch>
-3. **Notion 引导页**：<https://chuanban.notion.site/chuanban-antigravity-theme-patch-db7c5846f37546be9481cd791aed0554>
+3. **飞书主题整体落地页（国内免代理）**：<https://www.feishu.cn/wiki/EQyqwJEqmi1LH3k11tzcmkMHnYd>（嵌套字体下载子页：<https://www.feishu.cn/wiki/V2lbwB8ykiLLXrkzY41cXjQ1nXc>）
+4. **Notion 引导页**：<https://chuanban.notion.site/chuanban-antigravity-theme-patch-db7c5846f37546be9481cd791aed0554>
 
 ### 实机样式基准参考
 - **默认莫兰迪浅色主界面视图（暖宣纸画布 + 烟岚石青单线输入框 + 实时遥测悬停详情卡）**：[`assets/preview-morandi-workbench.png`](assets/preview-morandi-workbench.png)
@@ -96,7 +105,24 @@ node install.mjs doctor
      node install.mjs install-fonts --auto-download --retire-super-ttc
      ```
      *（内部采用 **Cloudflare R2 → GitHub Release (`fonts-sarasa-v1.0.43`) → Google Drive** 多源自动回退，遇到 Google Drive 配额超限 HTML 页会立即熔断切换下一个镜像源；Windows 下自动探测系统代理并支持 `curl.exe` → `.NET HttpClient` → `fetch` 三级传输回退，且强制校验二进制魔数与 SHA-256。若仅需先下载不安装，可运行 `node install.mjs download-fonts [--mirror cloudflare-r2|github-release|google-drive]`。）*
-  3. **仅当终端网络/代理完全受限导致 `--auto-download` 所有镜像源均返回 `ok: false` 时**：引导用户在浏览器中优先从 **[Cloudflare R2 直链 (`Windows-Sarasa-Split-SC-TTF-v1.0.43.zip`)](https://img.chuanban.cc/fonts/chuanban-suite/Windows-Sarasa-Split-SC-TTF-v1.0.43.zip)** 或 **[GitHub Release 镜像 (`fonts-sarasa-v1.0.43`)](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/releases/tag/fonts-sarasa-v1.0.43)** 下载 170 MB 更纱拆分包，3 个 `Anthropic*.ttf` 可从 `https://img.chuanban.cc/fonts/chuanban-suite/` 或 [Google Drive 资源包](https://drive.google.com/drive/folders/1NX92SgVUqtSjWg6bt6sIJXy-cn7J_boC) 下载（macOS 缺少更纱亦可 `brew install --cask font-sarasa-gothic`），下载后无需手动解压直接交给 `node install.mjs install-fonts --from "<下载目录或.zip>"` 即可。
+  3. **🇨🇳 中国大陆境内下载遇阻、下载过慢或事后重新修复安装的模拟处置SOP（高频实战必读）**：
+     - **典型触发信号（模拟现场）**：
+       - **信号 A（下载遇阻/报错）**：用户位于中国大陆境内且终端未挂载代理，`node install.mjs install-fonts --auto-download` 连接 Cloudflare R2 / GitHub Release / Google Drive 连续超时或返回 `ok: false`；
+       - **信号 B（跨境过慢卡顿）**：`--auto-download` 在拉取 `170 MB` 更纱字体包时长时间停滞、速率极低（如超过 `45~60s` 仍未完成），继续硬等会严重拖慢安装体验；
+       - **信号 C（事后修复/补装）**：用户此前先装了主题但跳过了字体，或换机后发现正文字体回退系统默认宋黑体、Windows 手动拷字体漏写注册表，事后要求“修复/重装主题字体”。
+     - **Agent 标准应对动作（禁止死磕重试，主动分流引导）**：
+       1. **切勿在终端反复死磕跨境重试或试图用 `curl` 抓取飞书页面**（飞书附件依赖真实浏览器游客 Session，命令行无 Cookie 无法直下）；
+       2. 若当前处于首次安装流程，**可先继续执行 Step 2（`node install.mjs install`）将主题配色、汉化与后台守护先行部署就绪**，不因字体下载阻塞主流程；
+       3. **立即向用户发送飞书国内免代理下载指引（可直接参考以下标准话术）**：
+          > 检测到当前终端跨境拉取字体包受阻/较慢。你可以直接用浏览器（无需代理、无需登录）打开**飞书国内免代理字体镜像下载页**：  
+          > 👉 **<https://www.feishu.cn/wiki/V2lbwB8ykiLLXrkzY41cXjQ1nXc>**（主题整体图文落地页：<https://www.feishu.cn/wiki/EQyqwJEqmi1LH3k11tzcmkMHnYd>）  
+          > 将页面内的 5 个文件（`AnthropicMono-Regular.ttf`、`AnthropicSerif-Regular.ttf`、`AnthropicSerif-Bold.ttf` 以及 `SarasaUiSC-TTF-v1.0.43.zip`、`SarasaMonoSlabSC-TTF-v1.0.43.zip`）全部点击下载到同一个文件夹（如系统的「下载 / `Downloads`」目录，**无需手动解压 `.zip`**），下载完成后告诉我就行，我帮你一键解压并写入系统字体库！
+       4. 用户确认下载完毕后，直接运行（`install-fonts` 会自动并发识别并解压目录内全部 `.zip` 与 `.ttf`，Windows 自动完成 UTF-16 注册表写入）：
+          ```bash
+          # 首次安装目录内执行（或事后修复时替换为 ~/.gemini/antigravity/theme-patch/install.mjs）
+          node install.mjs install-fonts --from "<用户下载目录路径>"
+          # 若在海外网络需手动下载，仍可回退 Cloudflare R2 / GitHub Release (fonts-sarasa-v1.0.43) / Google Drive；macOS 亦可用 brew install --cask font-sarasa-gothic
+          ```
   4. **Windows 重启生效提示**：若 `install-fonts` 返回 `restartAntigravityRequired: true`，说明 Antigravity 正在运行且 DirectWrite 已缓存旧字体列表，需在 Step 2 完成后重启一次客户端（`relaunch` 或手动重开）使新字体立即生效。
 - **若老用户此前使用早期 `v1 ~ v4` 单文件版 `~/.gemini/antigravity/scripts/antigravity-font-daemon.mjs`**：先读取旧文件检查是否有用户手改过的字号或配色值，安装完成后将其迁入 `~/.gemini/antigravity/theme-patch/user/config.json` 或 `user/custom.css`。
 
@@ -185,6 +211,9 @@ node install.mjs verify --safe-mode
 
 # 检查环境、字体完整性、进程参数、core/* SHA-256 与窗口实时状态
 node install.mjs doctor
+
+# 事后修复/补装字体（推荐国内用户在浏览器打开 https://www.feishu.cn/wiki/V2lbwB8ykiLLXrkzY41cXjQ1nXc 下载全部文件至同一目录后执行）：
+node ~/.gemini/antigravity/theme-patch/install.mjs install-fonts --from "<下载目录路径>"
 
 # 一键回滚至上一次自动备份的快照版本并立即重注
 node install.mjs rollback

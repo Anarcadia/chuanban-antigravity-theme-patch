@@ -7,6 +7,8 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 > **Language Editions / 语言平行版**：**简体中文完整汉化版（当前仓库）** · **[Global English Lightweight Edition (`chuanban-antigravity-theme` · 0 CJK Dict / `<1 MB` Fonts)](https://github.com/Anarcadia/chuanban-antigravity-theme)**
+>
+> **🇨🇳 中国大陆免代理直连镜像（飞书公开知识库 · 免登录）**：**[主题图文整体落地页](https://www.feishu.cn/wiki/EQyqwJEqmi1LH3k11tzcmkMHnYd)** · **[配套字体国内高速下载页](https://www.feishu.cn/wiki/V2lbwB8ykiLLXrkzY41cXjQ1nXc)**（若终端自动拉取字体过慢、遇阻或需事后补装修复，直接用浏览器打开下载后交给脚本安装即可）
 
 面向 Google Antigravity（支持 `2.35.2+` / `2.35.1` / `2.35.0` / `2.34.0+`）的轻量级外观、排版、汉化与本地只读统计增强补丁。专注于纯粹的界面审美与信息可读性优化，由 AI Agent 一键部署，支持热重载个性化定制与随时无损还原。
 
@@ -62,16 +64,16 @@
 ## 🚀 安装、升级与日常定制
 
 ### 一、新用户首次安装
-1. **环境准备**：安装 **Node.js `>= 22.0.0`**（推荐 **`>= 22.13.0`** 以启用信息胶囊与 Token 统计）。必备字体支持 Agent 通过脚本**一键自动下载并注册**（默认优先从 **Cloudflare R2** 镜像高速拉取，更纱黑体支持 **Cloudflare R2 → GitHub Release 镜像 → Google Drive** 多源自动回退与 SHA-256 校验，规避 Google Drive 公开文件配额超限）；仅当终端网络完全受限时，再经浏览器手动下载。
+1. **环境准备**：安装 **Node.js `>= 22.0.0`**（推荐 **`>= 22.13.0`** 以启用信息胶囊与 Token 统计）。必备字体支持 Agent 通过脚本**一键自动下载并注册**（默认优先从 **Cloudflare R2** 镜像高速拉取，更纱黑体支持 **Cloudflare R2 → GitHub Release 镜像 → Google Drive** 多源自动回退与 SHA-256 校验，规避 Google Drive 公开文件配额超限）；**若身处中国大陆境内且终端下载遇阻、速度过慢或需事后补装修复字体**，可直接用浏览器免代理打开 **[飞书国内高速字体下载页](https://www.feishu.cn/wiki/V2lbwB8ykiLLXrkzY41cXjQ1nXc)**（图文说明见 **[飞书主题整体落地页](https://www.feishu.cn/wiki/EQyqwJEqmi1LH3k11tzcmkMHnYd)**）手动下载。
 2. **复制以下引导词发给你的 AI Agent（Antigravity / Claude Code / Codex / Cursor 等）**：
 
 > **💬 复制发给 Agent（新用户一键安装）**：  
 > 请帮我克隆 `https://github.com/Anarcadia/chuanban-antigravity-theme-patch.git`（或读取我已下载解压的补丁目录），先完整阅读仓库内的 `SKILL.md`，再按以下顺序部署并处理边缘情况：  
 > 1. 若本机有 `nvm` / `fnm` / `volta`，优先切换至 `Node >= 22.13.0` 执行命令；运行 `node install.mjs doctor` 检查 `fonts.allRequiredInstalled` 与 `fonts.unregisteredWarning`。  
 > 2. 若缺少字体（或 Windows 提示有未写注册表的用户字体）：
->    - 若我本地已下载好字体目录或 `.zip`，直接执行 `node install.mjs install-fonts --from "<字体目录或.zip路径>"`（支持自动解压 `.zip`，Windows 下自动用 UTF-16 注册表写入并广播，勿仅手动复制文件）；
+>    - 若我本地已下载好字体目录或 `.zip`，直接执行 `node install.mjs install-fonts --from "<字体目录或.zip路径>"`（支持自动解压目录内多个 `.zip`，Windows 下自动用 UTF-16 注册表写入并广播，勿仅手动复制文件）；
 >    - 若本地尚未下载，**直接执行 `node install.mjs install-fonts --auto-download`**（若 Windows 检出旧版 `SuperTTC` 请追加 `--retire-super-ttc`），脚本会自动下载缺失的 `Anthropic Serif/Mono` 与 `170 MB` 精简拆分版更纱黑体 `.zip` 并完成注册；
->    - 仅当终端网络/代理受限导致 `--auto-download` 失败时，才提示我用浏览器从 [Cloudflare R2 直链 (`Windows-Sarasa-Split-SC-TTF-v1.0.43.zip`)](https://img.chuanban.cc/fonts/chuanban-suite/Windows-Sarasa-Split-SC-TTF-v1.0.43.zip)、[GitHub Release 镜像 (`fonts-sarasa-v1.0.43`)](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/releases/tag/fonts-sarasa-v1.0.43) 或 Google Drive 共享目录下载 `AnthropicSerif-Regular/Bold.ttf`、`AnthropicMono-Regular.ttf` 及 `Windows-Sarasa-Split-SC-TTF-v1.0.43.zip`，下载后交由 `install-fonts --from` 安装（macOS 缺少更纱也可用 `brew install --cask font-sarasa-gothic`）。
+>    - **若我在中国大陆境内导致终端下载遇阻、超时或速度过慢**，请勿反复卡死重试，直接推荐我在浏览器免代理打开 **[飞书国内免代理字体下载页 (`feishu.cn`)](https://www.feishu.cn/wiki/V2lbwB8ykiLLXrkzY41cXjQ1nXc)**（海外网络亦可用 [Cloudflare R2 直链](https://img.chuanban.cc/fonts/chuanban-suite/Windows-Sarasa-Split-SC-TTF-v1.0.43.zip)、[GitHub Release 镜像 (`fonts-sarasa-v1.0.43`)](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/releases/tag/fonts-sarasa-v1.0.43) 或 Google Drive）将页面内全部字体与 `.zip` 下载到同一文件夹（无需手动解压），再交由 `install-fonts --from "<下载目录>"` 一键安装（macOS 缺少更纱也可用 `brew install --cask font-sarasa-gothic`）。
 > 3. 运行 `node install.mjs install` 完成安装（默认启用 `"morandi"` 莫兰迪风格；macOS 默认单图标模式 `launcherInstalled: false` 属正常设计）。
 > 4. 检查输出中的 `cdpStatus`（以及 Windows 新装字体后的 `restartAntigravityRequired`）：若为 `"missing_opt_in_flag"` 或 Windows 刚新装完字体，**如果你当前正在 Antigravity 内部对话中运行，请勿执行 `--force` 强行重启自断会话**，只需把空闲时执行的命令 `node ~/.gemini/antigravity/theme-patch/install.mjs relaunch`（Windows 为 `node "$HOME\.gemini\antigravity\theme-patch\install.mjs" relaunch`，或提示我手动退出重开一次客户端）发给我；如果你在外部独立终端运行且客户端空闲，请直接执行 `node install.mjs relaunch`。
 > 5. 在端口就绪后运行 `node install.mjs verify`，确认 `"ok": true`、`"hasStyle": true` 且 `fonts.allRequiredInstalled: true` 即完成验收。
@@ -85,6 +87,7 @@
 ### 三、日常定制与排障话术
 - **🎨 切换风格、语言或微调字号**：日常切换主题与中英文可直接在「系统设置 → 外观界面」点击对应按钮；如需修改扩展预设或字号，可让 Agent 按 `SKILL.md` 修改 `user/config.json`（如调大 `"--ag-chat-font-size"`）。
 - **🇨🇳 自定义词条覆盖**：在 `~/.gemini/antigravity/theme-patch/user/i18n.override.json` 中写入 `"英文原词": "自定义中文"`，保存后自动热生效。
+- **🔤 字体缺失或事后重新修复安装**：若首次安装跳过了字体、更换新电脑或 Windows 提示字体未注册，可在浏览器打开 **[飞书国内免代理字体下载页](https://www.feishu.cn/wiki/V2lbwB8ykiLLXrkzY41cXjQ1nXc)** 将全部字体文件下载到同一目录（无需解压），再让 Agent 运行 `node ~/.gemini/antigravity/theme-patch/install.mjs install-fonts --from "<下载目录>"` 一键补装注册。
 - **🔍 故障定界、回滚与卸载**：可让 Agent 依次运行 `node install.mjs doctor` 与 `node install.mjs verify --safe-mode` 排查配置冲突；退回上一版本运行 `node install.mjs rollback`，彻底卸载还原运行 `node install.mjs uninstall`。
 
 ---
@@ -135,10 +138,11 @@
 
 | 入口 | 地址 | 说明 |
 | :--- | :--- | :--- |
-| **1. 字体多源镜像（首选，防配额超限）** | [**Cloudflare R2 更纱拆分包**](https://img.chuanban.cc/fonts/chuanban-suite/Windows-Sarasa-Split-SC-TTF-v1.0.43.zip) · [**GitHub Release 镜像**](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/releases/tag/fonts-sarasa-v1.0.43) | `install.mjs --auto-download` 默认走 **Cloudflare R2 → GitHub Release → Google Drive** 多源自动回退并做 SHA-256 校验，规避 Google Drive 公开大文件 24 小时下载配额超限（macOS 更纱黑体亦可直接 `brew install --cask font-sarasa-gothic`）。 |
-| **2. Google Drive 资源包（备用源）** | [**Google Drive 共享文件夹**](https://drive.google.com/drive/folders/1NX92SgVUqtSjWg6bt6sIJXy-cn7J_boC) | 含历史成品包与全套字体备用文件：`AnthropicSerif-Regular/Bold.ttf`、`AnthropicMono-Regular.ttf`、[`Windows-Sarasa-Split-SC-TTF-v1.0.43.zip`](https://drive.google.com/file/d/1iVVvZXtwUcDiHy42tJ25X6N-JlOf3l7A/view?usp=sharing) 及 `Sarasa-SuperTTC.ttc`。 |
-| **3. GitHub 代码仓库** | [**Anarcadia/chuanban-antigravity-theme-patch**](https://github.com/Anarcadia/chuanban-antigravity-theme-patch) | 预封装内核 `core/`、个人改装层 `user/`、生命周期 CLI `install.mjs`、[`SKILL.md`](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/blob/main/SKILL.md) 与 [`CHANGELOG.md`](CHANGELOG.md)。 |
-| **4. Notion 引导页** | [**chuanban-antigravity-theme-patch**](https://chuanban.notion.site/chuanban-antigravity-theme-patch-db7c5846f37546be9481cd791aed0554) | 图文说明与安装引导镜像页。 |
+| **1. 飞书国内免代理镜像（中国大陆推荐）** | [**飞书主题图文落地页**](https://www.feishu.cn/wiki/EQyqwJEqmi1LH3k11tzcmkMHnYd) · [**配套字体国内高速下载页**](https://www.feishu.cn/wiki/V2lbwB8ykiLLXrkzY41cXjQ1nXc) | 面向中国大陆用户的免登录、免代理直连通道：落地页提供完整图文预览与部署指引；字体下载页内嵌 `Anthropic Serif/Mono` 与更纱黑体拆分包共 5 张直下卡片，浏览器满速下载至同一目录后交由 `install-fonts --from` 即可自动解压注册。 |
+| **2. 脚本自动多源镜像（防配额超限）** | [**Cloudflare R2 更纱拆分包**](https://img.chuanban.cc/fonts/chuanban-suite/Windows-Sarasa-Split-SC-TTF-v1.0.43.zip) · [**GitHub Release 镜像**](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/releases/tag/fonts-sarasa-v1.0.43) | `install.mjs --auto-download` 默认走 **Cloudflare R2 → GitHub Release → Google Drive** 多源自动回退并做 SHA-256 校验，规避 Google Drive 公开大文件 24 小时下载配额超限（macOS 更纱黑体亦可直接 `brew install --cask font-sarasa-gothic`）。 |
+| **3. Google Drive 资源包（海外备用源）** | [**Google Drive 共享文件夹**](https://drive.google.com/drive/folders/1NX92SgVUqtSjWg6bt6sIJXy-cn7J_boC) | 含最新正式包与全套字体备用文件：`AnthropicSerif-Regular/Bold.ttf`、`AnthropicMono-Regular.ttf`、[`Windows-Sarasa-Split-SC-TTF-v1.0.43.zip`](https://drive.google.com/file/d/1iVVvZXtwUcDiHy42tJ25X6N-JlOf3l7A/view?usp=sharing) 及 `Sarasa-SuperTTC.ttc`。 |
+| **4. GitHub 代码仓库（双语平行版）** | [**中文主仓 (`theme-patch`)**](https://github.com/Anarcadia/chuanban-antigravity-theme-patch) · [**Global 英文轻仓 (`theme`)**](https://github.com/Anarcadia/chuanban-antigravity-theme) | 预封装内核 `core/`、个人改装层 `user/`、生命周期 CLI `install.mjs`、[`SKILL.md`](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/blob/main/SKILL.md) 与 [`CHANGELOG.md`](CHANGELOG.md)。 |
+| **5. Notion 引导页** | [**chuanban-antigravity-theme-patch**](https://chuanban.notion.site/chuanban-antigravity-theme-patch-db7c5846f37546be9481cd791aed0554) | 图文说明与安装引导海外镜像页。 |
 
 ---
 

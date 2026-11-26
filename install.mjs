@@ -41,6 +41,8 @@ const GOOGLE_DRIVE_URL = 'https://drive.google.com/drive/folders/1NX92SgVUqtSjWg
 const WINDOWS_SARASA_SPLIT_VIEW_URL = 'https://drive.google.com/file/d/1iVVvZXtwUcDiHy42tJ25X6N-JlOf3l7A/view?usp=sharing';
 const SARASA_GITHUB_RELEASES_URL = 'https://github.com/be5invis/Sarasa-Gothic/releases';
 const NOTION_GUIDE_URL = 'https://chuanban.notion.site/chuanban-antigravity-theme-patch-db7c5846f37546be9481cd791aed0554';
+const FEISHU_LANDING_URL = 'https://www.feishu.cn/wiki/EQyqwJEqmi1LH3k11tzcmkMHnYd';
+const FEISHU_FONT_MIRROR_URL = 'https://www.feishu.cn/wiki/V2lbwB8ykiLLXrkzY41cXjQ1nXc';
 const GITHUB_REPO_URL = 'https://github.com/Anarcadia/chuanban-antigravity-theme-patch';
 const R2_FONT_MIRROR_BASE_URL = 'https://img.chuanban.cc/fonts/chuanban-suite';
 const GITHUB_FONT_MIRROR_TAG = 'fonts-sarasa-v1.0.43';
@@ -1597,15 +1599,18 @@ function buildFontReport(env) {
     unregisteredWarning,
     missing: missingFonts,
     autoDownloadCommand,
-    downloadUrl: !allRequiredFontsInstalled ? GOOGLE_DRIVE_URL : null,
+    downloadUrl: !allRequiredFontsInstalled ? FEISHU_FONT_MIRROR_URL : null,
     directDownloadUrls: !allRequiredFontsInstalled
       ? {
+          feishuCnMirrorPage: FEISHU_FONT_MIRROR_URL,
+          feishuCnLandingPage: FEISHU_LANDING_URL,
           anthropicSerifRegular: FONT_DOWNLOAD_CATALOG.anthropicSerifRegular.url,
           anthropicSerifBold: FONT_DOWNLOAD_CATALOG.anthropicSerifBold.url,
           anthropicMonoRegular: FONT_DOWNLOAD_CATALOG.anthropicMonoRegular.url,
           sarasaSplitScZip: FONT_DOWNLOAD_CATALOG.sarasaSplitScZip.url,
           sarasaSplitScView: WINDOWS_SARASA_SPLIT_VIEW_URL,
-          sarasaGithubReleases: SARASA_GITHUB_RELEASES_URL
+          sarasaGithubReleases: SARASA_GITHUB_RELEASES_URL,
+          googleDriveFolder: GOOGLE_DRIVE_URL
         }
       : null
   };
@@ -3890,7 +3895,7 @@ async function downloadFontsBatch({
     results,
     manualFallbackHint:
       failed.length > 0
-        ? `Automatic download failed for ${failed.map((f) => f.filename).join(', ')} (likely terminal network/proxy restriction). Download manually in browser from Cloudflare R2 (${R2_SARASA_SPLIT_URL}), GitHub Release (${GITHUB_SARASA_SPLIT_URL}), or Google Drive (${GOOGLE_DRIVE_URL}), then run: node install.mjs install-fonts --from "<downloaded-folder-or-zip>"`
+        ? `Automatic download failed for ${failed.map((f) => f.filename).join(', ')} (likely terminal network/proxy restriction). In Mainland China (no proxy / slow download), open the Feishu domestic mirror page in browser: ${FEISHU_FONT_MIRROR_URL} (landing page: ${FEISHU_LANDING_URL}) and download the font files to one folder; or use Cloudflare R2 (${R2_SARASA_SPLIT_URL}), GitHub Release (${GITHUB_SARASA_SPLIT_URL}), or Google Drive (${GOOGLE_DRIVE_URL}). Then run: node install.mjs install-fonts --from "<downloaded-folder-or-zip>"`
         : null
   };
 }
