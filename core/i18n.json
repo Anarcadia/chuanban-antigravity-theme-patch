@@ -2224,5 +2224,7 @@
   "Share": "分享",
   "Applies to messages sent after this turn": "对本轮之后发送的消息生效",
   "Applies to /btw and messages sent after this turn": "对支线提问 (/btw) 及本轮之后发送的消息生效",
-  "Customizations views": "自定义视图"
+  "Customizations views": "自定义视图",
+  "Leaving Soon": "即将下线",
+  "Use Hydrogen for better quality with lower quota usage.": "建议改用 Hydrogen，效果更好且配额消耗更低。"
 }

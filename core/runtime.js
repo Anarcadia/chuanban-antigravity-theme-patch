@@ -5192,10 +5192,10 @@
 
     function formatEnglishDateZh(dateStr) {
       const s = String(dateStr || '').trim().replace(/\.$/, '');
-      const m = s.match(/^([A-Za-z]+)\s+(\d{1,2}),\s*(\d{4})$/);
+      const m = s.match(/^([A-Za-z]+)\s+(\d{1,2})(?:,\s*(\d{4}))?$/);
       if (m) {
         const mon = MONTH_FULL_MAP[m[1].toLowerCase()] || MONTH_SHORT_MAP[m[1].slice(0, 3).toLowerCase()];
-        if (mon) return m[3] + ' 年 ' + mon + ' 月 ' + m[2] + ' 日';
+        if (mon) return (m[3] ? m[3] + ' 年 ' : '') + mon + ' 月 ' + m[2] + ' 日';
       }
       return s + ' ';
     }
@@ -5884,6 +5884,19 @@
             trimmed,
             () => mRemoved[1].trim() + ' 将于 ' + formatEnglishDateZh(mRemoved[2]) + '从 Antigravity 下线。'
           );
+        }
+      }
+      if (trimmed.length < 200 && trimmed.includes('Leaving on ')) {
+        const mLeaving = trimmed.match(/^(.+?)\.\s+Leaving on\s+([A-Za-z]+\s+\d{1,2}(?:,\s*\d{4})?)\.?$/);
+        if (mLeaving) {
+          const headRaw = mLeaving[1].trim();
+          const headZh = dictLookup(headRaw) || dictLookup(headRaw + '.');
+          if (headZh) {
+            return raw.replace(
+              trimmed,
+              () => headZh.replace(/[。.]$/, '') + '，将于 ' + formatEnglishDateZh(mLeaving[2]).trim() + '下线。'
+            );
+          }
         }
       }
       if (trimmed.length < 80 && (firstUpper === 'G' || firstUpper === 'C' || firstUpper === 'O')) {
