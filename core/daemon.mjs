@@ -536,7 +536,23 @@ function isAllowedOfficialUpdateUrl(urlStr) {
     ) {
       return true;
     }
-    if (u.hostname === 'objects.githubusercontent.com' || u.hostname === 'release-assets.githubusercontent.com') return true;
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+function isAllowedOfficialReleasePageUrl(urlStr) {
+  try {
+    const u = new URL(String(urlStr || '').trim());
+    if (u.protocol !== 'https:' || u.hostname !== 'github.com') return false;
+    if (u.pathname === '/Anarcadia/chuanban-antigravity-theme-patch/releases') return true;
+    if (
+      u.pathname.startsWith('/Anarcadia/chuanban-antigravity-theme-patch/releases/') &&
+      !u.pathname.startsWith('/Anarcadia/chuanban-antigravity-theme-patch/releases/download/')
+    ) {
+      return true;
+    }
     return false;
   } catch {
     return false;
@@ -563,6 +579,12 @@ function isPatchUpdateNewer(currentVer, candidateVer) {
   return compareUpdateSemverTuples(cand, cur) > 0;
 }
 
+let lastObservedUpdateDiskSig = '';
+
+function computeUpdateDiskSig() {
+  return `${getFileMtimeSig(UPDATE_CACHE_FILE)}|${getFileMtimeSig(path.join(CORE_DIR, 'manifest.json'))}`;
+}
+
 function readUpdateCacheFromDisk() {
   const parsed = readJsonSafe(UPDATE_CACHE_FILE, null);
   if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
@@ -575,13 +597,14 @@ function readUpdateCacheFromDisk() {
       changelog: Array.isArray(parsed.changelog) ? parsed.changelog.filter((s) => typeof s === 'string').slice(0, 6) : [],
       bundleBytes: Number.isFinite(Number(parsed.bundleBytes)) && Number(parsed.bundleBytes) > 0 ? Number(parsed.bundleBytes) : null,
       releaseUrl:
-        typeof parsed.releaseUrl === 'string' && isAllowedOfficialUpdateUrl(parsed.releaseUrl)
+        typeof parsed.releaseUrl === 'string' && isAllowedOfficialReleasePageUrl(parsed.releaseUrl)
           ? parsed.releaseUrl
           : UPDATE_OFFICIAL_GH_LATEST_URL
     };
   } else {
     updateCheckState.loaded = true;
   }
+  lastObservedUpdateDiskSig = computeUpdateDiskSig();
   return updateCheckState;
 }
 
@@ -590,11 +613,28 @@ function writeUpdateCacheAtomic(nextObj) {
   try {
     fs.mkdirSync(CACHE_DIR, { recursive: true });
     atomicWriteTextFileSync(tmpPath, UPDATE_CACHE_FILE, `${JSON.stringify(nextObj, null, 2)}\n`);
+    lastObservedUpdateDiskSig = computeUpdateDiskSig();
   } catch {
     try {
       if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath);
     } catch {}
   }
+}
+
+function syncUpdateDiskStateIfChanged() {
+  if (SAFE_MODE || RUN_ONCE || daemonExiting) return false;
+  if (!updateCheckState.loaded) {
+    readUpdateCacheFromDisk();
+    return false;
+  }
+  if (updateCheckInFlight || updateUpgradeInFlight) return false;
+  const curSig = computeUpdateDiskSig();
+  if (curSig === lastObservedUpdateDiskSig) return false;
+  readUpdateCacheFromDisk();
+  if (activeConfig?.enabled && activeConfig?.modules?.updateCheck !== false && attachedTargets.size > 0) {
+    broadcastUpdateStatusToTargets(getPublicUpdateStatus());
+  }
+  return true;
 }
 
 function getInstalledCurrentVersion() {
@@ -653,38 +693,121 @@ function broadcastUpdateStatusToTargets(statusPayload) {
   if (tasks.length > 0) void Promise.allSettled(tasks);
 }
 
-function execFileAsync(bin, cmdArgs, timeoutMs = 8000) {
+function execFileAsync(bin, cmdArgs, timeoutMs = 8000, signal = null) {
   return new Promise((resolve) => {
-    execFile(bin, cmdArgs, { encoding: 'utf8', windowsHide: true, maxBuffer: 512 * 1024, timeout: timeoutMs }, (err, stdout) => {
+    const opts = { encoding: 'utf8', windowsHide: true, maxBuffer: 512 * 1024, timeout: timeoutMs };
+    if (signal) opts.signal = signal;
+    execFile(bin, cmdArgs, opts, (err, stdout) => {
+      const aborted = Boolean(
+        signal?.aborted || (err && (err.name === 'AbortError' || err.code === 'ABORT_ERR'))
+      );
       const code = err ? (typeof err.code === 'number' ? err.code : String(err.code || 'ERR')) : 0;
-      if (err) resolve({ ok: false, code, stdout: String(stdout || '') });
-      else resolve({ ok: true, code: 0, stdout: String(stdout || '') });
+      if (err) resolve({ ok: false, aborted, code, stdout: String(stdout || '') });
+      else resolve({ ok: true, aborted: false, code: 0, stdout: String(stdout || '') });
     });
   });
 }
 
-function getDaemonCurlProxyUrl() {
-  const envProxy = process.env.HTTPS_PROXY || process.env.https_proxy || process.env.HTTP_PROXY || process.env.http_proxy || '';
-  if (envProxy) return '';
-  const winProxy = typeof readWindowsSystemProxyFresh === 'function' ? readWindowsSystemProxyFresh() : null;
-  return winProxy?.httpsProxy || winProxy?.httpProxy || '';
+function hasDaemonProxyEnv() {
+  return Boolean(
+    process.env.HTTPS_PROXY ||
+      process.env.https_proxy ||
+      process.env.HTTP_PROXY ||
+      process.env.http_proxy ||
+      process.env.ALL_PROXY ||
+      process.env.all_proxy
+  );
 }
 
-async function fetchUpdateTextAsync(urlStr, timeoutMs = 6000) {
-  if (!isAllowedOfficialUpdateUrl(urlStr)) return null;
+async function resolveDaemonUpdateProxyAsync() {
+  const hasEnvProxy = hasDaemonProxyEnv();
+  if (hasEnvProxy) {
+    return { proxyUrl: '', hasEnvProxy: true, hasEffectiveProxy: true };
+  }
+  if (process.platform !== 'win32') {
+    return { proxyUrl: '', hasEnvProxy: false, hasEffectiveProxy: false };
+  }
+  try {
+    const r = await execFileAsync(
+      'reg',
+      ['query', 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings'],
+      2500
+    );
+    if (!r.ok || !r.stdout) {
+      return { proxyUrl: '', hasEnvProxy: false, hasEffectiveProxy: false };
+    }
+    const out = String(r.stdout);
+    const enabledMatch = out.match(/ProxyEnable[ \t]+REG_DWORD[ \t]+0x([0-9a-f]+)/i);
+    if (!enabledMatch || parseInt(enabledMatch[1], 16) !== 1) {
+      return { proxyUrl: '', hasEnvProxy: false, hasEffectiveProxy: false };
+    }
+    const serverMatch = out.match(/ProxyServer[ \t]+REG_SZ[ \t]*([^\r\n]*)/i);
+    if (!serverMatch || !serverMatch[1].trim()) {
+      return { proxyUrl: '', hasEnvProxy: false, hasEffectiveProxy: false };
+    }
+    const parsed = parseProxyServerSpec(serverMatch[1]);
+    const proxyUrl = parsed?.httpsProxy || parsed?.httpProxy || '';
+    return { proxyUrl, hasEnvProxy: false, hasEffectiveProxy: Boolean(proxyUrl) };
+  } catch {
+    return { proxyUrl: '', hasEnvProxy: false, hasEffectiveProxy: false };
+  }
+}
+
+function combineAbortSignals(timeoutMs, externalSignal = null) {
+  const timeoutSignal = AbortSignal.timeout(timeoutMs);
+  return externalSignal ? AbortSignal.any([timeoutSignal, externalSignal]) : timeoutSignal;
+}
+
+function firstTruthyAsync(promises) {
+  if (!Array.isArray(promises) || promises.length === 0) return Promise.resolve(null);
+  return new Promise((resolve) => {
+    let remaining = promises.length;
+    let settled = false;
+    for (const p of promises) {
+      Promise.resolve(p).then(
+        (val) => {
+          if (settled) return;
+          if (val) {
+            settled = true;
+            resolve(val);
+            return;
+          }
+          remaining -= 1;
+          if (remaining <= 0) {
+            settled = true;
+            resolve(null);
+          }
+        },
+        () => {
+          if (settled) return;
+          remaining -= 1;
+          if (remaining <= 0) {
+            settled = true;
+            resolve(null);
+          }
+        }
+      );
+    }
+  });
+}
+
+async function fetchUpdateTextAsync(urlStr, timeoutMs = 6000, signal = null, proxyInfo = null) {
+  if (!isAllowedOfficialUpdateUrl(urlStr) || signal?.aborted) return null;
+  const resolvedProxy = proxyInfo || (await resolveDaemonUpdateProxyAsync());
+  if (signal?.aborted) return null;
   const curlBin = process.platform === 'win32' ? 'curl.exe' : 'curl';
-  const proxyUrl = getDaemonCurlProxyUrl();
   const curlArgs = ['-fsSL', '--connect-timeout', '4', '--max-time', String(Math.ceil(timeoutMs / 1000)), '--max-filesize', '262144'];
-  if (proxyUrl) curlArgs.push('--proxy', proxyUrl);
+  if (resolvedProxy.proxyUrl) curlArgs.push('--proxy', resolvedProxy.proxyUrl);
   curlArgs.push(urlStr);
-  const cr = await execFileAsync(curlBin, curlArgs, timeoutMs + 1500);
+  const cr = await execFileAsync(curlBin, curlArgs, timeoutMs + 1500, signal);
   if (cr.ok && cr.stdout.trim()) return cr.stdout;
-  // curl 返回 22 表示远端明确返回 HTTP 4xx/5xx，或已配置系统代理时 curl 正常失败：不再回退无代理 fetch 死等超时
-  if (cr.code === 22 || (proxyUrl && cr.code !== 'ENOENT')) {
+  if (cr.aborted || signal?.aborted) return null;
+  // curl 返回 22（远端 HTTP 4xx/5xx）或已配置系统/环境变量代理且非 ENOENT 时，不再回退无代理 fetch 死等超时
+  if (cr.code === 22 || (resolvedProxy.hasEffectiveProxy && cr.code !== 'ENOENT')) {
     return null;
   }
   try {
-    const res = await fetch(urlStr, { redirect: 'follow', signal: AbortSignal.timeout(timeoutMs) });
+    const res = await fetch(urlStr, { redirect: 'follow', signal: combineAbortSignals(timeoutMs, signal) });
     if (!res.ok) return null;
     const text = await res.text();
     if (Buffer.byteLength(text, 'utf8') > 262144) return null;
@@ -694,9 +817,11 @@ async function fetchUpdateTextAsync(urlStr, timeoutMs = 6000) {
   }
 }
 
-async function resolveGithubLatestTagAsync(timeoutMs = 6000) {
+async function resolveGithubLatestTagAsync(timeoutMs = 6000, signal = null, proxyInfo = null) {
+  if (signal?.aborted) return null;
+  const resolvedProxy = proxyInfo || (await resolveDaemonUpdateProxyAsync());
+  if (signal?.aborted) return null;
   const curlBin = process.platform === 'win32' ? 'curl.exe' : 'curl';
-  const proxyUrl = getDaemonCurlProxyUrl();
   const curlArgs = [
     '-sSI',
     '--connect-timeout',
@@ -704,14 +829,19 @@ async function resolveGithubLatestTagAsync(timeoutMs = 6000) {
     '--max-time',
     String(Math.ceil(timeoutMs / 1000))
   ];
-  if (proxyUrl) curlArgs.push('--proxy', proxyUrl);
+  if (resolvedProxy.proxyUrl) curlArgs.push('--proxy', resolvedProxy.proxyUrl);
   curlArgs.push(UPDATE_OFFICIAL_GH_LATEST_URL);
-  const cr = await execFileAsync(curlBin, curlArgs, timeoutMs + 1500);
+  const cr = await execFileAsync(curlBin, curlArgs, timeoutMs + 1500, signal);
+  if (cr.aborted || signal?.aborted) return null;
   let headerTarget = cr.ok ? cr.stdout : '';
   let match = String(headerTarget).match(/\/releases\/tag\/(v?\d+\.\d+\.\d+)/i);
-  if (!match && (!proxyUrl || cr.code === 'ENOENT')) {
+  if (!match && (!resolvedProxy.hasEffectiveProxy || cr.code === 'ENOENT')) {
     try {
-      const res = await fetch(UPDATE_OFFICIAL_GH_LATEST_URL, { method: 'GET', redirect: 'manual', signal: AbortSignal.timeout(timeoutMs) });
+      const res = await fetch(UPDATE_OFFICIAL_GH_LATEST_URL, {
+        method: 'GET',
+        redirect: 'manual',
+        signal: combineAbortSignals(timeoutMs, signal)
+      });
       headerTarget = res.headers?.get?.('location') || res.url || '';
       match = String(headerTarget).match(/\/releases\/tag\/(v?\d+\.\d+\.\d+)/i);
     } catch {}
@@ -749,16 +879,18 @@ async function checkForPatchUpdateAsync({ force = false } = {}) {
   if (force) {
     broadcastUpdateStatusToTargets(getPublicUpdateStatus());
   }
+  const ac = new AbortController();
   try {
+    const proxyInfo = await resolveDaemonUpdateProxyAsync();
     const fetchManifestCandidate = async (candidate) => {
-      const txt = await fetchUpdateTextAsync(candidate.url, 6000);
+      const txt = await fetchUpdateTextAsync(candidate.url, 6000, ac.signal, proxyInfo);
       if (!txt) return null;
       try {
         const parsed = JSON.parse(txt.replace(/^\uFEFF/, ''));
-        if (parsed && typeof parsed.version === 'string') {
+        if (parsed && typeof parsed === 'object' && typeof parsed.version === 'string' && parsed.coreUpdateBundle) {
           const cleanVer = parsed.version.trim().replace(/^v/i, '');
           const releaseUrl =
-            typeof parsed.fullReleaseUrl === 'string' && isAllowedOfficialUpdateUrl(parsed.fullReleaseUrl)
+            typeof parsed.fullReleaseUrl === 'string' && isAllowedOfficialReleasePageUrl(parsed.fullReleaseUrl)
               ? parsed.fullReleaseUrl
               : `${UPDATE_REPO_URL}/releases/tag/v${cleanVer}`;
           return {
@@ -773,12 +905,16 @@ async function checkForPatchUpdateAsync({ force = false } = {}) {
       return null;
     };
 
-    const [r2Res, ghManifestRes, ghRedirectRes] = await Promise.all([
-      fetchManifestCandidate({ id: 'cloudflare-r2', url: UPDATE_OFFICIAL_R2_URL }),
-      fetchManifestCandidate({ id: 'github-release', url: UPDATE_OFFICIAL_GH_URL }),
-      resolveGithubLatestTagAsync(6000)
-    ]);
-    const resolved = r2Res || ghManifestRes || ghRedirectRes;
+    const r2Promise = fetchManifestCandidate({ id: 'cloudflare-r2', url: UPDATE_OFFICIAL_R2_URL });
+    const ghManifestPromise = fetchManifestCandidate({ id: 'github-release', url: UPDATE_OFFICIAL_GH_URL });
+    const ghRedirectPromise = resolveGithubLatestTagAsync(6000, ac.signal, proxyInfo).catch(() => null);
+
+    let resolved = await firstTruthyAsync([r2Promise, ghManifestPromise]);
+    if (resolved) {
+      ac.abort();
+    } else {
+      resolved = await ghRedirectPromise;
+    }
 
     if (!resolved) {
       lastUpdateErrorAt = Date.now();
@@ -805,13 +941,14 @@ async function checkForPatchUpdateAsync({ force = false } = {}) {
     lastUpdateErrorAt = 0;
     return true;
   } finally {
+    ac.abort();
     updateCheckInFlight = false;
     broadcastUpdateStatusToTargets(getPublicUpdateStatus());
   }
 }
 
 function launchSafeHttpsReleaseUrlInDefaultBrowser(rawUrl) {
-  if (!isAllowedOfficialUpdateUrl(rawUrl)) return false;
+  if (!isAllowedOfficialReleasePageUrl(rawUrl)) return false;
   const safeUrl = String(rawUrl).trim();
   if (/[\0\r\n]/.test(safeUrl)) return false;
   if (process.platform === 'win32') {
@@ -8273,7 +8410,9 @@ function attachTarget(target, endpoint) {
               const now = Date.now();
               if (now - lastOpenExternalActionAt < 500) return;
               lastOpenExternalActionAt = now;
-              const fallbackUrl = updateCheckState.releaseUrl || UPDATE_OFFICIAL_GH_LATEST_URL;
+              const fallbackUrl = isAllowedOfficialReleasePageUrl(updateCheckState.releaseUrl)
+                ? updateCheckState.releaseUrl
+                : UPDATE_OFFICIAL_GH_LATEST_URL;
               if (!launchSafeHttpsReleaseUrlInDefaultBrowser(req?.url)) {
                 launchSafeHttpsReleaseUrlInDefaultBrowser(fallbackUrl);
               }
@@ -9679,6 +9818,7 @@ async function sync() {
     ) {
       await refreshInstalledExternalEditorsAsync({ force: true });
     }
+    syncUpdateDiskStateIfChanged();
     const bundleChanged = rebuildBundleIfNeeded();
     if (!activeConfig.enabled) {
       targetThemeModes.clear();

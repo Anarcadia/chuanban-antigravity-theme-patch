@@ -24,7 +24,7 @@ import http from 'node:http';
 import crypto from 'node:crypto';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
-import { execSync, spawn, spawnSync } from 'node:child_process';
+import { execFile, execSync, spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -84,9 +84,6 @@ function isAllowedUpdateUrl(urlStr, { allowLoopbackOrigin = null } = {}) {
       (u.pathname === '/Anarcadia/chuanban-antigravity-theme-patch/releases' ||
         u.pathname.startsWith('/Anarcadia/chuanban-antigravity-theme-patch/releases/'))
     ) {
-      return true;
-    }
-    if (u.hostname === 'objects.githubusercontent.com' || u.hostname === 'release-assets.githubusercontent.com') {
       return true;
     }
     return false;
@@ -2170,6 +2167,8 @@ function registerSystemService(targetDir, wrapperDaemon) {
     <true/>
     <key>KeepAlive</key>
     <true/>
+    <key>AbandonProcessGroup</key>
+    <true/>
     <key>StandardOutPath</key>
     <string>/tmp/antigravity-font-daemon.log</string>
     <key>StandardErrorPath</key>
@@ -2245,6 +2244,7 @@ After=default.target
 ExecStart="${serviceNodeExec}" --disable-warning=ExperimentalWarning "${wrapperDaemon}"
 Restart=always
 RestartSec=3
+KillMode=process
 
 [Install]
 WantedBy=default.target
@@ -3636,45 +3636,174 @@ function buildDoctorUpdateSection(targetDir) {
   };
 }
 
-async function fetchTextWithProxyFallback(urlStr, { timeoutSec = 8, maxBytes = 256 * 1024 } = {}) {
-  let curlError = null;
-  let winProxy = null;
+function hasProcessProxyEnv() {
+  return Boolean(
+    process.env.HTTPS_PROXY ||
+      process.env.https_proxy ||
+      process.env.HTTP_PROXY ||
+      process.env.http_proxy ||
+      process.env.ALL_PROXY ||
+      process.env.all_proxy
+  );
+}
+
+function parseWindowsProxyFromRegStdout(out) {
+  const text = String(out || '');
+  if (!text) return null;
+  const enabledMatch = text.match(/ProxyEnable\s+REG_DWORD\s+0x([0-9a-f]+)/i);
+  if (!enabledMatch || parseInt(enabledMatch[1], 16) !== 1) return null;
+  const serverMatch = text.match(/ProxyServer\s+REG_SZ\s+([^\r\n]+)/i);
+  if (!serverMatch) return null;
+  const raw = serverMatch[1].trim();
+  if (!raw) return null;
+  let picked = raw;
+  if (raw.includes('=')) {
+    const pairs = raw.split(';').map((s) => s.trim()).filter(Boolean);
+    const map = Object.create(null);
+    for (const p of pairs) {
+      const idx = p.indexOf('=');
+      if (idx > 0) map[p.slice(0, idx).trim().toLowerCase()] = p.slice(idx + 1).trim();
+    }
+    if (map.https) picked = map.https;
+    else if (map.http) picked = map.http;
+    else if (map.socks) picked = map.socks.includes('://') ? map.socks : `socks5h://${map.socks}`;
+    else picked = pairs[0].slice(pairs[0].indexOf('=') + 1).trim();
+  }
+  if (picked && !/^[a-z0-9+.-]+:\/\//i.test(picked)) {
+    picked = `http://${picked}`;
+  }
+  return picked || null;
+}
+
+function execFileAsync(bin, cmdArgs, { timeoutMs = 8000, maxBuffer = 512 * 1024, signal = null } = {}) {
+  return new Promise((resolve) => {
+    const opts = { encoding: 'utf8', windowsHide: true, maxBuffer, timeout: timeoutMs };
+    if (signal) opts.signal = signal;
+    execFile(bin, cmdArgs, opts, (err, stdout) => {
+      const aborted = Boolean(
+        signal?.aborted || (err && (err.name === 'AbortError' || err.code === 'ABORT_ERR'))
+      );
+      const code = err ? (typeof err.code === 'number' ? err.code : String(err.code || 'ERR')) : 0;
+      if (err) resolve({ ok: false, aborted, code, error: err.message || String(err), stdout: String(stdout || '') });
+      else resolve({ ok: true, aborted: false, code: 0, error: '', stdout: String(stdout || '') });
+    });
+  });
+}
+
+async function detectWindowsSystemProxyAsync() {
+  if (process.platform !== 'win32') return null;
+  if (_cachedWinSystemProxy !== undefined) return _cachedWinSystemProxy;
+  if (hasProcessProxyEnv()) return null;
+  _cachedWinSystemProxy = null;
+  try {
+    const r = await execFileAsync(
+      'reg',
+      ['query', 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings'],
+      { timeoutMs: 3000 }
+    );
+    if (r.ok && r.stdout) {
+      _cachedWinSystemProxy = parseWindowsProxyFromRegStdout(r.stdout);
+    }
+  } catch {
+    _cachedWinSystemProxy = null;
+  }
+  return _cachedWinSystemProxy;
+}
+
+async function resolveUpdateCurlProxyAsync() {
+  const hasEnvProxy = hasProcessProxyEnv();
+  const winProxy = hasEnvProxy ? null : await detectWindowsSystemProxyAsync();
+  return {
+    proxyUrl: winProxy || '',
+    hasEnvProxy,
+    hasEffectiveProxy: Boolean(hasEnvProxy || winProxy)
+  };
+}
+
+function combineAbortSignals(timeoutMs, externalSignal = null) {
+  const timeoutSignal = AbortSignal.timeout(timeoutMs);
+  return externalSignal ? AbortSignal.any([timeoutSignal, externalSignal]) : timeoutSignal;
+}
+
+function firstTruthyAsync(promises) {
+  if (!Array.isArray(promises) || promises.length === 0) return Promise.resolve(null);
+  return new Promise((resolve) => {
+    let remaining = promises.length;
+    let settled = false;
+    for (const p of promises) {
+      Promise.resolve(p).then(
+        (val) => {
+          if (settled) return;
+          if (val) {
+            settled = true;
+            resolve(val);
+            return;
+          }
+          remaining -= 1;
+          if (remaining <= 0) {
+            settled = true;
+            resolve(null);
+          }
+        },
+        () => {
+          if (settled) return;
+          remaining -= 1;
+          if (remaining <= 0) {
+            settled = true;
+            resolve(null);
+          }
+        }
+      );
+    }
+  });
+}
+
+async function fetchTextWithProxyFallback(
+  urlStr,
+  { timeoutSec = 8, maxBytes = 256 * 1024, signal = null, proxyInfo = null } = {}
+) {
+  if (signal?.aborted) return { ok: false, aborted: true, error: 'aborted' };
+  const isLoopback = isLoopbackHttpUrl(urlStr);
+  const resolvedProxy = isLoopback ? { proxyUrl: '', hasEnvProxy: false, hasEffectiveProxy: false } : proxyInfo || (await resolveUpdateCurlProxyAsync());
+  if (signal?.aborted) return { ok: false, aborted: true, error: 'aborted' };
+
+  let curlCode = null;
+  let curlErrorMsg = '';
   try {
     const curlBin = process.platform === 'win32' ? 'curl.exe' : 'curl';
-    const isLoopback = isLoopbackHttpUrl(urlStr);
-    winProxy = isLoopback ? null : detectWindowsSystemProxy();
     const curlArgs = ['-fsSL', '--connect-timeout', '5', '--max-time', String(timeoutSec), '--max-filesize', String(maxBytes)];
     if (isLoopback) curlArgs.push('--noproxy', '*');
-    else if (winProxy) curlArgs.push('--proxy', winProxy);
+    else if (resolvedProxy.proxyUrl) curlArgs.push('--proxy', resolvedProxy.proxyUrl);
     curlArgs.push(urlStr);
-    const r = spawnSync(curlBin, curlArgs, {
-      encoding: 'utf8',
-      windowsHide: true,
+    const cr = await execFileAsync(curlBin, curlArgs, {
+      timeoutMs: (timeoutSec + 3) * 1000,
       maxBuffer: maxBytes + 64 * 1024,
-      timeout: (timeoutSec + 3) * 1000
+      signal
     });
-    if (r.status === 0 && !r.error && typeof r.stdout === 'string' && r.stdout.trim()) {
-      return { ok: true, text: r.stdout, method: winProxy ? 'curl(win-system-proxy)' : 'curl' };
+    if (cr.ok && typeof cr.stdout === 'string' && cr.stdout.trim()) {
+      return { ok: true, text: cr.stdout, method: resolvedProxy.proxyUrl ? 'curl(win-system-proxy)' : 'curl' };
     }
-    if (r.status === 22) {
-      return { ok: false, httpStatus: 404, error: `HTTP error (curl status 22)` };
+    if (cr.aborted || signal?.aborted) {
+      return { ok: false, aborted: true, error: 'aborted' };
     }
-    if (!r.error && winProxy) {
-      return { ok: false, error: `curl failed with exit code ${r.status}` };
+    if (cr.code === 22) {
+      return { ok: false, curlExitCode: 22, error: 'HTTP error (curl status 22)' };
     }
-    curlError = r.error || null;
+    curlCode = cr.code;
+    curlErrorMsg = cr.error || (typeof cr.code === 'number' ? `curl failed with exit code ${cr.code}` : String(cr.code));
   } catch (e) {
-    curlError = e;
+    curlCode = e?.code || 'ERR';
+    curlErrorMsg = String(e?.message || e);
   }
 
-  if (winProxy && curlError && curlError.code !== 'ENOENT') {
-    return { ok: false, error: String(curlError?.message || curlError) };
+  if (!isLoopback && resolvedProxy.hasEffectiveProxy && curlCode !== 'ENOENT') {
+    return { ok: false, error: curlErrorMsg || `curl failed with exit code ${curlCode}` };
   }
 
   try {
     const res = await fetch(urlStr, {
       redirect: 'follow',
-      signal: AbortSignal.timeout(timeoutSec * 1000),
+      signal: combineAbortSignals(timeoutSec * 1000, signal),
       headers: { Accept: 'application/json, text/plain;q=0.9, */*;q=0.8' }
     });
     if (!res.ok) {
@@ -3686,40 +3815,45 @@ async function fetchTextWithProxyFallback(urlStr, { timeoutSec = 8, maxBytes = 2
     }
     return { ok: true, text, method: 'node-fetch' };
   } catch (err) {
-    return { ok: false, error: String(err?.message || err) };
+    const aborted = Boolean(signal?.aborted || err?.name === 'AbortError');
+    return { ok: false, ...(aborted ? { aborted: true } : {}), error: String(err?.message || err) };
   }
 }
 
-async function resolveGithubLatestTagFallback({ timeoutSec = 8 } = {}) {
+async function resolveGithubLatestTagFallback({ timeoutSec = 8, signal = null, proxyInfo = null } = {}) {
+  if (signal?.aborted) return { ok: false, aborted: true, error: 'aborted' };
+  const resolvedProxy = proxyInfo || (await resolveUpdateCurlProxyAsync());
+  if (signal?.aborted) return { ok: false, aborted: true, error: 'aborted' };
+
   let headerTarget = '';
-  let winProxy = null;
-  let curlError = null;
+  let curlCode = null;
   try {
     const curlBin = process.platform === 'win32' ? 'curl.exe' : 'curl';
-    winProxy = detectWindowsSystemProxy();
     const curlArgs = ['-sSI', '--connect-timeout', '5', '--max-time', String(timeoutSec)];
-    if (winProxy) curlArgs.push('--proxy', winProxy);
+    if (resolvedProxy.proxyUrl) curlArgs.push('--proxy', resolvedProxy.proxyUrl);
     curlArgs.push(GITHUB_RELEASES_LATEST_URL);
-    const r = spawnSync(curlBin, curlArgs, {
-      encoding: 'utf8',
-      windowsHide: true,
-      timeout: (timeoutSec + 3) * 1000
+    const cr = await execFileAsync(curlBin, curlArgs, {
+      timeoutMs: (timeoutSec + 3) * 1000,
+      signal
     });
-    if (r.status === 0 && r.stdout) {
-      headerTarget = String(r.stdout);
+    if (cr.aborted || signal?.aborted) {
+      return { ok: false, aborted: true, error: 'aborted' };
     }
-    curlError = r.error || null;
+    if (cr.ok && cr.stdout) {
+      headerTarget = String(cr.stdout);
+    }
+    curlCode = cr.code;
   } catch (e) {
-    curlError = e;
+    curlCode = e?.code || 'ERR';
   }
 
   let match = String(headerTarget).match(/\/releases\/tag\/(v?\d+\.\d+\.\d+)/i);
-  if (!match && (!winProxy || curlError?.code === 'ENOENT')) {
+  if (!match && (!resolvedProxy.hasEffectiveProxy || curlCode === 'ENOENT')) {
     try {
       const res = await fetch(GITHUB_RELEASES_LATEST_URL, {
         method: 'GET',
         redirect: 'manual',
-        signal: AbortSignal.timeout(timeoutSec * 1000)
+        signal: combineAbortSignals(timeoutSec * 1000, signal)
       });
       headerTarget = res.headers?.get?.('location') || res.url || '';
       match = String(headerTarget).match(/\/releases\/tag\/(v?\d+\.\d+\.\d+)/i);
@@ -3798,15 +3932,16 @@ async function fetchRemoteUpdateMetadata({ manifestUrlOverride = null, requested
     : resolveAssetMirrors({ mirrors: UPDATE_MANIFEST_MIRRORS, url: UPDATE_MANIFEST_MIRRORS[0].url }, { preferredMirror });
 
   const errors = [];
-  for (const m of candidateMirrors) {
+  if (manifestUrlOverride) {
+    const m = candidateMirrors[0];
     if (!isAllowedUpdateUrl(m.url, { allowLoopbackOrigin })) {
       errors.push({ mirror: m.id, url: m.url, error: 'blocked_untrusted_manifest_url' });
-      continue;
+      return { ok: false, errors, error: 'Failed to fetch update manifest from custom URL' };
     }
     const res = await fetchTextWithProxyFallback(m.url, { timeoutSec: 6, maxBytes: 256 * 1024 });
     if (!res.ok) {
       errors.push({ mirror: m.id, url: m.url, error: res.error || `HTTP ${res.httpStatus || 0}` });
-      continue;
+      return { ok: false, errors, error: 'Failed to fetch update manifest from custom URL' };
     }
     try {
       const parsed = JSON.parse(String(res.text).replace(/^\uFEFF/, ''));
@@ -3817,17 +3952,71 @@ async function fetchRemoteUpdateMetadata({ manifestUrlOverride = null, requested
     } catch (parseErr) {
       errors.push({ mirror: m.id, url: m.url, error: `invalid_json: ${parseErr?.message || parseErr}` });
     }
+    return { ok: false, errors, error: 'Failed to parse custom update manifest' };
   }
 
-  if (!manifestUrlOverride) {
-    const ghFallback = await resolveGithubLatestTagFallback({ timeoutSec: 6 });
-    if (ghFallback.ok) {
-      return { ok: true, allowLoopbackOrigin: null, source: ghFallback.source, manifest: ghFallback.manifest, errors };
+  const proxyInfo = await resolveUpdateCurlProxyAsync();
+  const ac = new AbortController();
+  const probeManifestMirror = async (m) => {
+    if (!isAllowedUpdateUrl(m.url, { allowLoopbackOrigin })) {
+      errors.push({ mirror: m.id, url: m.url, error: 'blocked_untrusted_manifest_url' });
+      return null;
     }
-    errors.push({ mirror: 'github-releases-redirect', error: ghFallback.error });
-  }
+    const res = await fetchTextWithProxyFallback(m.url, {
+      timeoutSec: 6,
+      maxBytes: 256 * 1024,
+      signal: ac.signal,
+      proxyInfo
+    });
+    if (!res.ok) {
+      if (!res.aborted) {
+        errors.push({ mirror: m.id, url: m.url, error: res.error || `HTTP ${res.httpStatus || 0}` });
+      }
+      return null;
+    }
+    try {
+      const parsed = JSON.parse(String(res.text).replace(/^\uFEFF/, ''));
+      if (parsed && typeof parsed === 'object' && typeof parsed.version === 'string' && parsed.coreUpdateBundle) {
+        return { ok: true, allowLoopbackOrigin, source: m.id, manifest: parsed };
+      }
+      errors.push({ mirror: m.id, url: m.url, error: 'invalid_manifest_schema' });
+    } catch (parseErr) {
+      errors.push({ mirror: m.id, url: m.url, error: `invalid_json: ${parseErr?.message || parseErr}` });
+    }
+    return null;
+  };
 
-  return { ok: false, errors, error: 'Failed to fetch update manifest from all official sources' };
+  try {
+    const manifestPromises = candidateMirrors.map((m) => probeManifestMirror(m));
+    const ghRedirectPromise = resolveGithubLatestTagFallback({
+      timeoutSec: 6,
+      signal: ac.signal,
+      proxyInfo
+    }).catch(() => null);
+
+    const winner = await firstTruthyAsync(manifestPromises);
+    if (winner) {
+      ac.abort();
+      return { ...winner, errors };
+    }
+
+    const ghFallback = await ghRedirectPromise;
+    if (ghFallback && ghFallback.ok) {
+      return {
+        ok: true,
+        allowLoopbackOrigin: null,
+        source: ghFallback.source,
+        manifest: ghFallback.manifest,
+        errors
+      };
+    }
+    if (ghFallback && ghFallback.error && !ghFallback.aborted) {
+      errors.push({ mirror: 'github-releases-redirect', error: ghFallback.error });
+    }
+    return { ok: false, errors, error: 'Failed to fetch update manifest from all official sources' };
+  } finally {
+    ac.abort();
+  }
 }
 
 function inspectZipEntriesSafe(zipPath) {
@@ -3887,6 +4076,29 @@ function inspectZipEntriesSafe(zipPath) {
   return { ok: true, count: entries.length };
 }
 
+function inspectExtractedTreeSafe(rootDir) {
+  const walk = (dir) => {
+    for (const name of fs.readdirSync(dir)) {
+      const full = path.join(dir, name);
+      const st = fs.lstatSync(full);
+      if (st.isSymbolicLink()) {
+        return { ok: false, reason: 'symlink_detected_in_archive', entry: path.relative(rootDir, full) };
+      }
+      if (st.isDirectory()) {
+        const sub = walk(full);
+        if (!sub.ok) return sub;
+      }
+    }
+    return { ok: true };
+  };
+  try {
+    if (!fs.existsSync(rootDir)) return { ok: false, reason: 'extracted_dir_missing' };
+    return walk(rootDir);
+  } catch (err) {
+    return { ok: false, reason: 'extracted_tree_scan_error', error: String(err?.message || err) };
+  }
+}
+
 function locateStagedBundleRoot(unpackedDir) {
   const isRoot = (dir) =>
     fs.existsSync(path.join(dir, 'install.mjs')) &&
@@ -3925,6 +4137,8 @@ async function runUpgrade() {
     process.exit(1);
   }
   const fromVersion = String(currentManifest.version);
+  const preUpgradeManifestPath = path.join(targetDir, 'core', 'manifest.json');
+  const preUpgradeManifestSha = fs.existsSync(preUpgradeManifestPath) ? sha256File(preUpgradeManifestPath) : null;
   const existingCache = readUpdateCheckCache(targetDir) || {};
 
   const remote = await fetchRemoteUpdateMetadata({ manifestUrlOverride, requestedVersion, preferredMirror });
@@ -3936,19 +4150,23 @@ async function runUpgrade() {
   const remoteManifest = remote.manifest;
   const toVersion = String(remoteManifest.version || '').replace(/^v/i, '');
   const updateAvailable = isUpdateAvailableVersion(fromVersion, toVersion);
-  const releaseUrl = remoteManifest.fullReleaseUrl || `${GITHUB_REPO_URL}/releases/tag/v${toVersion}`;
+  const candidateReleaseUrl = remoteManifest.fullReleaseUrl || `${GITHUB_REPO_URL}/releases/tag/v${toVersion}`;
+  const releaseUrl = isAllowedUpdateUrl(candidateReleaseUrl, { allowLoopbackOrigin: remote.allowLoopbackOrigin })
+    ? candidateReleaseUrl
+    : `${GITHUB_REPO_URL}/releases/tag/v${toVersion}`;
 
-  writeUpdateCheckCache(targetDir, {
+  const preUpgradeCacheSnapshot = {
     checkedAt: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'),
     source: remote.source,
     currentVersion: fromVersion,
     latestVersion: toVersion,
     updateAvailable,
-    dismissedVersion: existingCache.dismissedVersion || null,
+    dismissedVersion: checkOnly || !updateAvailable ? null : existingCache.dismissedVersion || null,
     changelog: Array.isArray(remoteManifest.changelog) ? remoteManifest.changelog : [],
     bundleBytes: Number(remoteManifest.coreUpdateBundle?.bytes || 0) || null,
     releaseUrl
-  });
+  };
+  writeUpdateCheckCache(targetDir, preUpgradeCacheSnapshot);
 
   if (checkOnly || (!updateAvailable && !force && !requestedVersion)) {
     console.log(
@@ -4013,6 +4231,7 @@ async function runUpgrade() {
     }
   };
 
+  let wrotePostUpgradeCache = false;
   try {
     fs.mkdirSync(stagingRoot, { recursive: true });
     const downloadAssetSpec = {
@@ -4047,6 +4266,13 @@ async function runUpgrade() {
     if (!extractRes.ok) {
       cleanupStaging();
       console.error(JSON.stringify({ ok: false, step: 'extract', ...extractRes }, null, 2));
+      process.exit(1);
+    }
+
+    const treeCheck = inspectExtractedTreeSafe(unpackedDir);
+    if (!treeCheck.ok) {
+      cleanupStaging();
+      console.error(JSON.stringify({ ok: false, step: 'extracted_tree_security_check', ...treeCheck }, null, 2));
       process.exit(1);
     }
 
@@ -4122,10 +4348,26 @@ async function runUpgrade() {
       fs.copyFileSync(currentInstallScript, backupInstallScriptPath);
     }
 
-    // 停掉旧守护进程释放 Windows 文件锁，但绝不关闭或重启 Antigravity 客户端
-    if (!isCustomSandboxTarget) {
+    // 仅 Windows 提前停守护进程释放 NTFS 文件锁；macOS(launchd)/Linux(systemd) 由 handoff 落盘后的服务重启原子接管，避免 cgroup/KeepAlive 自杀或并发抢占
+    if (!isCustomSandboxTarget && process.platform === 'win32') {
       stopRunningDaemonProcesses();
     }
+
+    // 先写入升级完成态缓存，使 handoff 内的 --once 与新启动守护进程首帧即读到最新状态（失败时自动恢复）
+    const upgradedIso = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
+    writeUpdateCheckCache(targetDir, {
+      checkedAt: upgradedIso,
+      upgradedAt: upgradedIso,
+      source: dlRes.mirror || remote.source,
+      currentVersion: toVersion,
+      latestVersion: toVersion,
+      updateAvailable: false,
+      dismissedVersion: null,
+      changelog: Array.isArray(remoteManifest.changelog) ? remoteManifest.changelog : [],
+      bundleBytes: dlRes.bytes,
+      releaseUrl
+    });
+    wrotePostUpgradeCache = true;
 
     // Bootstrap Handoff：由暂存区的新版 install.mjs 接管安装事务
     const handoffArgs = [path.join(stagedRoot, 'install.mjs'), 'install', '--target-dir', targetDir];
@@ -4149,10 +4391,16 @@ async function runUpgrade() {
     }
 
     if (handoffRes.status !== 0 || !postIntegrity.ok || !postLiveOk) {
+      writeUpdateCheckCache(targetDir, preUpgradeCacheSnapshot);
+      wrotePostUpgradeCache = false;
       restoreInstallScriptBackup();
       let rollbackOk = false;
       const installedAfterFail = readInstalledCoreManifest(targetDir)?.version || null;
-      const coreWasModified = !postIntegrity.ok || installedAfterFail !== fromVersion;
+      const postFailManifestSha = fs.existsSync(preUpgradeManifestPath) ? sha256File(preUpgradeManifestPath) : null;
+      const coreWasModified =
+        !postIntegrity.ok ||
+        installedAfterFail !== fromVersion ||
+        (preUpgradeManifestSha && postFailManifestSha !== preUpgradeManifestSha);
       if (coreWasModified) {
         try {
           const rbTarget = path.join(targetDir, 'install.mjs');
@@ -4186,19 +4434,6 @@ async function runUpgrade() {
       process.exit(1);
     }
 
-    writeUpdateCheckCache(targetDir, {
-      checkedAt: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'),
-      upgradedAt: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'),
-      source: dlRes.mirror || remote.source,
-      currentVersion: toVersion,
-      latestVersion: toVersion,
-      updateAvailable: false,
-      dismissedVersion: null,
-      changelog: Array.isArray(remoteManifest.changelog) ? remoteManifest.changelog : [],
-      bundleBytes: dlRes.bytes,
-      releaseUrl
-    });
-
     cleanupStaging();
     console.log(
       JSON.stringify(
@@ -4220,6 +4455,9 @@ async function runUpgrade() {
       )
     );
   } catch (err) {
+    if (wrotePostUpgradeCache) {
+      writeUpdateCheckCache(targetDir, preUpgradeCacheSnapshot);
+    }
     cleanupStaging();
     console.error(JSON.stringify({ ok: false, error: err?.message || String(err) }, null, 2));
     process.exit(1);
@@ -4231,15 +4469,7 @@ function detectWindowsSystemProxy() {
   if (process.platform !== 'win32') return null;
   if (_cachedWinSystemProxy !== undefined) return _cachedWinSystemProxy;
   _cachedWinSystemProxy = null;
-  const envHasProxy = Boolean(
-    process.env.HTTPS_PROXY ||
-      process.env.https_proxy ||
-      process.env.HTTP_PROXY ||
-      process.env.http_proxy ||
-      process.env.ALL_PROXY ||
-      process.env.all_proxy
-  );
-  if (envHasProxy) return null;
+  if (hasProcessProxyEnv()) return null;
   try {
     const r = spawnSync(
       'reg',
@@ -4247,30 +4477,7 @@ function detectWindowsSystemProxy() {
       { encoding: 'utf8', windowsHide: true, timeout: 4000 }
     );
     if (r.status !== 0 || !r.stdout) return null;
-    const out = String(r.stdout);
-    const enabledMatch = out.match(/ProxyEnable\s+REG_DWORD\s+0x([0-9a-f]+)/i);
-    if (!enabledMatch || parseInt(enabledMatch[1], 16) !== 1) return null;
-    const serverMatch = out.match(/ProxyServer\s+REG_SZ\s+([^\r\n]+)/i);
-    if (!serverMatch) return null;
-    const raw = serverMatch[1].trim();
-    if (!raw) return null;
-    let picked = raw;
-    if (raw.includes('=')) {
-      const pairs = raw.split(';').map((s) => s.trim()).filter(Boolean);
-      const map = Object.create(null);
-      for (const p of pairs) {
-        const idx = p.indexOf('=');
-        if (idx > 0) map[p.slice(0, idx).trim().toLowerCase()] = p.slice(idx + 1).trim();
-      }
-      if (map.https) picked = map.https;
-      else if (map.http) picked = map.http;
-      else if (map.socks) picked = map.socks.includes('://') ? map.socks : `socks5h://${map.socks}`;
-      else picked = pairs[0].slice(pairs[0].indexOf('=') + 1).trim();
-    }
-    if (picked && !/^[a-z0-9+.-]+:\/\//i.test(picked)) {
-      picked = `http://${picked}`;
-    }
-    _cachedWinSystemProxy = picked || null;
+    _cachedWinSystemProxy = parseWindowsProxyFromRegStdout(r.stdout);
   } catch {
     _cachedWinSystemProxy = null;
   }

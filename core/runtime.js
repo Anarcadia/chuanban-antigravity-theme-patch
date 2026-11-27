@@ -3336,9 +3336,11 @@
 
         sysFollowRow.appendChild(leftCol);
         sysFollowRow.appendChild(rightCol);
-        const existingLangRow = card.querySelector('[data-ag-lang-row="1"]');
-        if (existingLangRow && existingLangRow.parentElement === card) {
-          card.insertBefore(sysFollowRow, existingLangRow);
+        const sysFollowAnchor = card.querySelector(
+          '[data-ag-lang-row="1"], [data-ag-patch-update-row="1"], [data-ag-patch-update-drawer="1"]'
+        );
+        if (sysFollowAnchor && sysFollowAnchor.parentElement === card) {
+          card.insertBefore(sysFollowRow, sysFollowAnchor);
         } else {
           card.appendChild(sysFollowRow);
         }
@@ -3404,7 +3406,12 @@
           rightCol.appendChild(langGroup);
           langRow.appendChild(leftCol);
           langRow.appendChild(rightCol);
-          card.appendChild(langRow);
+          const langAnchor = card.querySelector('[data-ag-patch-update-row="1"], [data-ag-patch-update-drawer="1"]');
+          if (langAnchor && langAnchor.parentElement === card) {
+            card.insertBefore(langRow, langAnchor);
+          } else {
+            card.appendChild(langRow);
+          }
         }
       }
 
@@ -3460,6 +3467,16 @@
       if (!Number.isFinite(n) || n <= 0) return '';
       if (n >= 1024 * 1024) return `${(n / (1024 * 1024)).toFixed(1)} MB`;
       return `${Math.max(1, Math.round(n / 1024))} KB`;
+    }
+
+    function formatUpdateSourceLabel(source) {
+      const s = String(source || '').trim();
+      if (!s) return '';
+      if (s === 'cloudflare-r2') return 'Cloudflare R2';
+      if (s === 'github-release' || s === 'github-releases-redirect' || s === 'github-release-full') {
+        return 'GitHub Release';
+      }
+      return s;
     }
 
     function syncSettingsAppearanceUpdateDot() {
@@ -3533,15 +3550,19 @@
       if (!drawer) {
         drawer = document.createElement('div');
         drawer.setAttribute('data-ag-patch-update-drawer', '1');
-        card.appendChild(drawer);
+        card.insertBefore(drawer, row.nextSibling);
+      } else if (drawer.parentElement !== card || row.nextSibling !== drawer) {
+        card.insertBefore(drawer, row.nextSibling);
       }
       if (row.getAttribute('data-ag-update-sig') === sig) return;
       row.setAttribute('data-ag-update-sig', sig);
 
+      const clItems = Array.isArray(st.changelog) ? st.changelog : [];
+      const hasChangelog = clItems.length > 0;
       row.className = hasActiveUpdate ? `${baseRowClass} ag-patch-update-row--stacked` : baseRowClass;
       row.innerHTML = '';
       drawer.innerHTML = '';
-      drawer.hidden = !(hasActiveUpdate && updateChangelogOpen);
+      drawer.hidden = !(hasActiveUpdate && hasChangelog && updateChangelogOpen);
 
       const curVer = st.currentVersion || '6.0.6';
       const latVer = st.latestVersion || curVer;
@@ -3582,7 +3603,8 @@
         desc.className = 'ag-patch-update-desc';
         const parts = [];
         if (sizeText) parts.push(`${sizeText}`);
-        if (st.source) parts.push(st.source);
+        const srcLabel = formatUpdateSourceLabel(st.source);
+        if (srcLabel) parts.push(srcLabel);
         parts.push(uiStr.updateNoRestartNote);
         desc.textContent = parts.join(' · ');
 
@@ -3601,18 +3623,20 @@
         });
         actions.appendChild(upgradeBtn);
 
-        const clBtn = document.createElement('button');
-        clBtn.type = 'button';
-        clBtn.className = 'ag-patch-update-btn';
-        clBtn.textContent = updateChangelogOpen ? uiStr.updateHideChangelogBtn : uiStr.updateChangelogBtn;
-        clBtn.addEventListener('click', (ev) => {
-          ev.preventDefault();
-          ev.stopPropagation();
-          updateChangelogOpen = !updateChangelogOpen;
-          row.removeAttribute('data-ag-update-sig');
-          syncAppearanceUpdateRowOnCard(card, baseThemeRow);
-        });
-        actions.appendChild(clBtn);
+        if (hasChangelog) {
+          const clBtn = document.createElement('button');
+          clBtn.type = 'button';
+          clBtn.className = 'ag-patch-update-btn';
+          clBtn.textContent = updateChangelogOpen ? uiStr.updateHideChangelogBtn : uiStr.updateChangelogBtn;
+          clBtn.addEventListener('click', (ev) => {
+            ev.preventDefault();
+            ev.stopPropagation();
+            updateChangelogOpen = !updateChangelogOpen;
+            row.removeAttribute('data-ag-update-sig');
+            syncAppearanceUpdateRowOnCard(card, baseThemeRow);
+          });
+          actions.appendChild(clBtn);
+        }
 
         const copyBtn = document.createElement('button');
         copyBtn.type = 'button';
@@ -3671,19 +3695,16 @@
           row.appendChild(errLine);
         }
 
-        if (updateChangelogOpen) {
+        if (hasChangelog && updateChangelogOpen) {
           drawer.hidden = false;
-          const clItems = Array.isArray(st.changelog) ? st.changelog : [];
-          if (clItems.length > 0) {
-            const ul = document.createElement('ul');
-            ul.className = 'ag-patch-update-cl-list';
-            for (const item of clItems) {
-              const li = document.createElement('li');
-              li.textContent = item;
-              ul.appendChild(li);
-            }
-            drawer.appendChild(ul);
+          const ul = document.createElement('ul');
+          ul.className = 'ag-patch-update-cl-list';
+          for (const item of clItems) {
+            const li = document.createElement('li');
+            li.textContent = item;
+            ul.appendChild(li);
           }
+          drawer.appendChild(ul);
           const cmdBox = document.createElement('div');
           cmdBox.className = 'ag-patch-update-cmd-box';
           cmdBox.textContent = st.upgradeCommand || 'node ~/.gemini/antigravity/theme-patch/install.mjs upgrade';
