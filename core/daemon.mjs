@@ -498,7 +498,7 @@ const UPDATE_CACHE_FILE = path.join(CACHE_DIR, 'update-check.json');
 const UPDATE_UPGRADE_LOG_FILE = path.join(CACHE_DIR, 'last-upgrade.log');
 const UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
 const UPDATE_CHECK_ERROR_BACKOFF_MS = 60 * 60 * 1000;
-const UPDATE_MANUAL_COOLDOWN_MS = 5000;
+const UPDATE_MANUAL_COOLDOWN_MS = 2000;
 const UPDATE_UPGRADE_COOLDOWN_MS = 10000;
 const UPDATE_UPGRADE_TIMEOUT_MS = 120000;
 const UPDATE_INITIAL_DELAY_MS = 30 * 1000;
@@ -653,11 +653,12 @@ function broadcastUpdateStatusToTargets(statusPayload) {
   if (tasks.length > 0) void Promise.allSettled(tasks);
 }
 
-function execFileAsync(bin, cmdArgs, timeoutMs = 12000) {
+function execFileAsync(bin, cmdArgs, timeoutMs = 8000) {
   return new Promise((resolve) => {
     execFile(bin, cmdArgs, { encoding: 'utf8', windowsHide: true, maxBuffer: 512 * 1024, timeout: timeoutMs }, (err, stdout) => {
-      if (err) resolve({ ok: false, stdout: '' });
-      else resolve({ ok: true, stdout: String(stdout || '') });
+      const code = err ? (typeof err.code === 'number' ? err.code : String(err.code || 'ERR')) : 0;
+      if (err) resolve({ ok: false, code, stdout: String(stdout || '') });
+      else resolve({ ok: true, code: 0, stdout: String(stdout || '') });
     });
   });
 }
@@ -669,15 +670,19 @@ function getDaemonCurlProxyUrl() {
   return winProxy?.httpsProxy || winProxy?.httpProxy || '';
 }
 
-async function fetchUpdateTextAsync(urlStr, timeoutMs = 12000) {
+async function fetchUpdateTextAsync(urlStr, timeoutMs = 6000) {
   if (!isAllowedOfficialUpdateUrl(urlStr)) return null;
   const curlBin = process.platform === 'win32' ? 'curl.exe' : 'curl';
   const proxyUrl = getDaemonCurlProxyUrl();
-  const curlArgs = ['-fsSL', '--connect-timeout', '8', '--max-time', String(Math.ceil(timeoutMs / 1000)), '--max-filesize', '262144'];
+  const curlArgs = ['-fsSL', '--connect-timeout', '4', '--max-time', String(Math.ceil(timeoutMs / 1000)), '--max-filesize', '262144'];
   if (proxyUrl) curlArgs.push('--proxy', proxyUrl);
   curlArgs.push(urlStr);
-  const cr = await execFileAsync(curlBin, curlArgs, timeoutMs + 2000);
+  const cr = await execFileAsync(curlBin, curlArgs, timeoutMs + 1500);
   if (cr.ok && cr.stdout.trim()) return cr.stdout;
+  // curl 返回 22 表示远端明确返回 HTTP 4xx/5xx，或已配置系统代理时 curl 正常失败：不再回退无代理 fetch 死等超时
+  if (cr.code === 22 || (proxyUrl && cr.code !== 'ENOENT')) {
+    return null;
+  }
   try {
     const res = await fetch(urlStr, { redirect: 'follow', signal: AbortSignal.timeout(timeoutMs) });
     if (!res.ok) return null;
@@ -689,34 +694,30 @@ async function fetchUpdateTextAsync(urlStr, timeoutMs = 12000) {
   }
 }
 
-async function resolveGithubLatestTagAsync(timeoutMs = 12000) {
+async function resolveGithubLatestTagAsync(timeoutMs = 6000) {
   const curlBin = process.platform === 'win32' ? 'curl.exe' : 'curl';
   const proxyUrl = getDaemonCurlProxyUrl();
   const curlArgs = [
     '-sSI',
-    '-L',
-    '-o',
-    process.platform === 'win32' ? 'NUL' : '/dev/null',
-    '-w',
-    '%{url_effective}',
     '--connect-timeout',
-    '8',
+    '4',
     '--max-time',
     String(Math.ceil(timeoutMs / 1000))
   ];
   if (proxyUrl) curlArgs.push('--proxy', proxyUrl);
   curlArgs.push(UPDATE_OFFICIAL_GH_LATEST_URL);
-  const cr = await execFileAsync(curlBin, curlArgs, timeoutMs + 2000);
-  let effectiveUrl = cr.ok ? cr.stdout.trim() : '';
-  if (!effectiveUrl) {
+  const cr = await execFileAsync(curlBin, curlArgs, timeoutMs + 1500);
+  let headerTarget = cr.ok ? cr.stdout : '';
+  let match = String(headerTarget).match(/\/releases\/tag\/(v?\d+\.\d+\.\d+)/i);
+  if (!match && (!proxyUrl || cr.code === 'ENOENT')) {
     try {
       const res = await fetch(UPDATE_OFFICIAL_GH_LATEST_URL, { method: 'GET', redirect: 'manual', signal: AbortSignal.timeout(timeoutMs) });
-      effectiveUrl = res.headers?.get?.('location') || res.url || '';
+      headerTarget = res.headers?.get?.('location') || res.url || '';
+      match = String(headerTarget).match(/\/releases\/tag\/(v?\d+\.\d+\.\d+)/i);
     } catch {}
   }
-  const m = String(effectiveUrl).match(/\/releases\/tag\/(v?\d+\.\d+\.\d+)/i);
-  if (!m) return null;
-  const cleanVer = m[1].replace(/^v/i, '');
+  if (!match) return null;
+  const cleanVer = match[1].replace(/^v/i, '');
   return {
     source: 'github-releases-redirect',
     latestVersion: cleanVer,
@@ -749,13 +750,9 @@ async function checkForPatchUpdateAsync({ force = false } = {}) {
     broadcastUpdateStatusToTargets(getPublicUpdateStatus());
   }
   try {
-    let resolved = null;
-    for (const candidate of [
-      { id: 'cloudflare-r2', url: UPDATE_OFFICIAL_R2_URL },
-      { id: 'github-release', url: UPDATE_OFFICIAL_GH_URL }
-    ]) {
-      const txt = await fetchUpdateTextAsync(candidate.url, 12000);
-      if (!txt) continue;
+    const fetchManifestCandidate = async (candidate) => {
+      const txt = await fetchUpdateTextAsync(candidate.url, 6000);
+      if (!txt) return null;
       try {
         const parsed = JSON.parse(txt.replace(/^\uFEFF/, ''));
         if (parsed && typeof parsed.version === 'string') {
@@ -764,21 +761,24 @@ async function checkForPatchUpdateAsync({ force = false } = {}) {
             typeof parsed.fullReleaseUrl === 'string' && isAllowedOfficialUpdateUrl(parsed.fullReleaseUrl)
               ? parsed.fullReleaseUrl
               : `${UPDATE_REPO_URL}/releases/tag/v${cleanVer}`;
-          resolved = {
+          return {
             source: candidate.id,
             latestVersion: cleanVer,
             changelog: Array.isArray(parsed.changelog) ? parsed.changelog.filter((s) => typeof s === 'string').slice(0, 6) : [],
             bundleBytes: Number.isFinite(Number(parsed.coreUpdateBundle?.bytes)) ? Number(parsed.coreUpdateBundle.bytes) : null,
             releaseUrl
           };
-          break;
         }
       } catch {}
-    }
+      return null;
+    };
 
-    if (!resolved) {
-      resolved = await resolveGithubLatestTagAsync(12000);
-    }
+    const [r2Res, ghManifestRes, ghRedirectRes] = await Promise.all([
+      fetchManifestCandidate({ id: 'cloudflare-r2', url: UPDATE_OFFICIAL_R2_URL }),
+      fetchManifestCandidate({ id: 'github-release', url: UPDATE_OFFICIAL_GH_URL }),
+      resolveGithubLatestTagAsync(6000)
+    ]);
+    const resolved = r2Res || ghManifestRes || ghRedirectRes;
 
     if (!resolved) {
       lastUpdateErrorAt = Date.now();

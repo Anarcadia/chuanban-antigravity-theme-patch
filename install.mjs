@@ -3636,12 +3636,14 @@ function buildDoctorUpdateSection(targetDir) {
   };
 }
 
-async function fetchTextWithProxyFallback(urlStr, { timeoutSec = 15, maxBytes = 256 * 1024 } = {}) {
+async function fetchTextWithProxyFallback(urlStr, { timeoutSec = 8, maxBytes = 256 * 1024 } = {}) {
+  let curlError = null;
+  let winProxy = null;
   try {
     const curlBin = process.platform === 'win32' ? 'curl.exe' : 'curl';
     const isLoopback = isLoopbackHttpUrl(urlStr);
-    const winProxy = isLoopback ? null : detectWindowsSystemProxy();
-    const curlArgs = ['-fsSL', '--connect-timeout', '10', '--max-time', String(timeoutSec), '--max-filesize', String(maxBytes)];
+    winProxy = isLoopback ? null : detectWindowsSystemProxy();
+    const curlArgs = ['-fsSL', '--connect-timeout', '5', '--max-time', String(timeoutSec), '--max-filesize', String(maxBytes)];
     if (isLoopback) curlArgs.push('--noproxy', '*');
     else if (winProxy) curlArgs.push('--proxy', winProxy);
     curlArgs.push(urlStr);
@@ -3649,12 +3651,25 @@ async function fetchTextWithProxyFallback(urlStr, { timeoutSec = 15, maxBytes = 
       encoding: 'utf8',
       windowsHide: true,
       maxBuffer: maxBytes + 64 * 1024,
-      timeout: (timeoutSec + 5) * 1000
+      timeout: (timeoutSec + 3) * 1000
     });
     if (r.status === 0 && !r.error && typeof r.stdout === 'string' && r.stdout.trim()) {
       return { ok: true, text: r.stdout, method: winProxy ? 'curl(win-system-proxy)' : 'curl' };
     }
-  } catch {}
+    if (r.status === 22) {
+      return { ok: false, httpStatus: 404, error: `HTTP error (curl status 22)` };
+    }
+    if (!r.error && winProxy) {
+      return { ok: false, error: `curl failed with exit code ${r.status}` };
+    }
+    curlError = r.error || null;
+  } catch (e) {
+    curlError = e;
+  }
+
+  if (winProxy && curlError && curlError.code !== 'ENOENT') {
+    return { ok: false, error: String(curlError?.message || curlError) };
+  }
 
   try {
     const res = await fetch(urlStr, {
@@ -3675,40 +3690,46 @@ async function fetchTextWithProxyFallback(urlStr, { timeoutSec = 15, maxBytes = 
   }
 }
 
-async function resolveGithubLatestTagFallback({ timeoutSec = 15 } = {}) {
-  let finalLocation = '';
+async function resolveGithubLatestTagFallback({ timeoutSec = 8 } = {}) {
+  let headerTarget = '';
+  let winProxy = null;
+  let curlError = null;
   try {
     const curlBin = process.platform === 'win32' ? 'curl.exe' : 'curl';
-    const winProxy = detectWindowsSystemProxy();
-    const curlArgs = ['-sSI', '-L', '-o', process.platform === 'win32' ? 'NUL' : '/dev/null', '-w', '%{url_effective}', '--connect-timeout', '10', '--max-time', String(timeoutSec)];
+    winProxy = detectWindowsSystemProxy();
+    const curlArgs = ['-sSI', '--connect-timeout', '5', '--max-time', String(timeoutSec)];
     if (winProxy) curlArgs.push('--proxy', winProxy);
     curlArgs.push(GITHUB_RELEASES_LATEST_URL);
     const r = spawnSync(curlBin, curlArgs, {
       encoding: 'utf8',
       windowsHide: true,
-      timeout: (timeoutSec + 5) * 1000
+      timeout: (timeoutSec + 3) * 1000
     });
     if (r.status === 0 && r.stdout) {
-      finalLocation = String(r.stdout).trim();
+      headerTarget = String(r.stdout);
     }
-  } catch {}
+    curlError = r.error || null;
+  } catch (e) {
+    curlError = e;
+  }
 
-  if (!finalLocation) {
+  let match = String(headerTarget).match(/\/releases\/tag\/(v?\d+\.\d+\.\d+)/i);
+  if (!match && (!winProxy || curlError?.code === 'ENOENT')) {
     try {
       const res = await fetch(GITHUB_RELEASES_LATEST_URL, {
         method: 'GET',
         redirect: 'manual',
         signal: AbortSignal.timeout(timeoutSec * 1000)
       });
-      finalLocation = res.headers?.get?.('location') || res.url || '';
+      headerTarget = res.headers?.get?.('location') || res.url || '';
+      match = String(headerTarget).match(/\/releases\/tag\/(v?\d+\.\d+\.\d+)/i);
     } catch {}
   }
 
-  const m = String(finalLocation).match(/\/releases\/tag\/(v?\d+\.\d+\.\d+)/i);
-  if (!m) {
-    return { ok: false, error: `Unable to resolve GitHub latest tag from ${finalLocation || GITHUB_RELEASES_LATEST_URL}` };
+  if (!match) {
+    return { ok: false, error: `Unable to resolve GitHub latest tag from ${GITHUB_RELEASES_LATEST_URL}` };
   }
-  const tag = m[1].startsWith('v') ? m[1] : `v${m[1]}`;
+  const tag = match[1].startsWith('v') ? match[1] : `v${match[1]}`;
   const cleanVer = tag.replace(/^v/i, '');
   return {
     ok: true,
@@ -3782,7 +3803,7 @@ async function fetchRemoteUpdateMetadata({ manifestUrlOverride = null, requested
       errors.push({ mirror: m.id, url: m.url, error: 'blocked_untrusted_manifest_url' });
       continue;
     }
-    const res = await fetchTextWithProxyFallback(m.url, { timeoutSec: 15, maxBytes: 256 * 1024 });
+    const res = await fetchTextWithProxyFallback(m.url, { timeoutSec: 6, maxBytes: 256 * 1024 });
     if (!res.ok) {
       errors.push({ mirror: m.id, url: m.url, error: res.error || `HTTP ${res.httpStatus || 0}` });
       continue;
@@ -3799,7 +3820,7 @@ async function fetchRemoteUpdateMetadata({ manifestUrlOverride = null, requested
   }
 
   if (!manifestUrlOverride) {
-    const ghFallback = await resolveGithubLatestTagFallback({ timeoutSec: 15 });
+    const ghFallback = await resolveGithubLatestTagFallback({ timeoutSec: 6 });
     if (ghFallback.ok) {
       return { ok: true, allowLoopbackOrigin: null, source: ghFallback.source, manifest: ghFallback.manifest, errors };
     }
