@@ -493,6 +493,847 @@ let cachedBundleSig = '';
 let cachedInjectScript = '';
 let cachedIframeInjectScript = '';
 let cachedPatchVersion = '';
+
+const UPDATE_CACHE_FILE = path.join(CACHE_DIR, 'update-check.json');
+const UPDATE_UPGRADE_LOG_FILE = path.join(CACHE_DIR, 'last-upgrade.log');
+const UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
+const UPDATE_CHECK_ERROR_BACKOFF_MS = 60 * 60 * 1000;
+const UPDATE_MANUAL_COOLDOWN_MS = 2000;
+const UPDATE_UPGRADE_COOLDOWN_MS = 10000;
+const UPDATE_UPGRADE_TIMEOUT_MS = 360000;
+const UPDATE_HOST_VERSION_TTL_MS = 10 * 60 * 1000;
+const UPDATE_INITIAL_DELAY_MS = 30 * 1000;
+const UPDATE_REPO_URL = 'https://github.com/Anarcadia/chuanban-antigravity-theme-patch';
+const UPDATE_OFFICIAL_R2_URL = 'https://img.chuanban.cc/themes/chuanban-antigravity/latest.json';
+const UPDATE_OFFICIAL_GH_URL = `${UPDATE_REPO_URL}/releases/latest/download/latest.json`;
+const UPDATE_OFFICIAL_GH_LATEST_URL = `${UPDATE_REPO_URL}/releases/latest`;
+let updateCheckInFlight = false;
+let updateUpgradeInFlight = false;
+let lastManualUpdateCheckAt = 0;
+let lastUpgradeTriggerAt = 0;
+let lastUpdateErrorAt = 0;
+let lastUpgradeError = '';
+let updateUpgradeWatchdog = null;
+let cachedHostAppVersion = { version: null, probedAt: 0, promise: null };
+let updateCheckState = {
+  loaded: false,
+  checkedAt: null,
+  source: null,
+  latestVersion: null,
+  minAntigravityVersion: null,
+  minNodeVersion: null,
+  hostAppVersion: null,
+  dismissedVersion: null,
+  changelog: [],
+  bundleBytes: null,
+  releaseUrl: UPDATE_OFFICIAL_GH_LATEST_URL
+};
+
+function isAllowedOfficialUpdateUrl(urlStr) {
+  try {
+    const u = new URL(String(urlStr || '').trim());
+    if (u.protocol !== 'https:') return false;
+    if (u.hostname === 'img.chuanban.cc' && u.pathname.startsWith('/themes/chuanban-antigravity/')) return true;
+    if (
+      u.hostname === 'github.com' &&
+      (u.pathname === '/Anarcadia/chuanban-antigravity-theme-patch/releases' ||
+        u.pathname.startsWith('/Anarcadia/chuanban-antigravity-theme-patch/releases/'))
+    ) {
+      return true;
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+function isAllowedOfficialReleasePageUrl(urlStr) {
+  try {
+    const u = new URL(String(urlStr || '').trim());
+    if (u.protocol !== 'https:' || u.hostname !== 'github.com') return false;
+    if (u.pathname === '/Anarcadia/chuanban-antigravity-theme-patch/releases') return true;
+    if (
+      u.pathname.startsWith('/Anarcadia/chuanban-antigravity-theme-patch/releases/') &&
+      !u.pathname.startsWith('/Anarcadia/chuanban-antigravity-theme-patch/releases/download/')
+    ) {
+      return true;
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+function extractUpdateSemverTuple(verStr) {
+  const m = String(verStr || '').trim().match(/(\d+)\.(\d+)\.(\d+)/);
+  if (!m) return null;
+  return [Number(m[1]), Number(m[2]), Number(m[3])];
+}
+
+function compareUpdateSemverTuples(a, b) {
+  for (let i = 0; i < 3; i++) {
+    if (a[i] !== b[i]) return a[i] - b[i];
+  }
+  return 0;
+}
+
+function isPatchUpdateNewer(currentVer, candidateVer) {
+  const cur = extractUpdateSemverTuple(currentVer);
+  const cand = extractUpdateSemverTuple(candidateVer);
+  if (!cur || !cand) return false;
+  return compareUpdateSemverTuples(cand, cur) > 0;
+}
+
+function isPatchMinVersionSatisfied(currentVer, minVer) {
+  if (!minVer || !currentVer) return true;
+  const cur = extractUpdateSemverTuple(currentVer);
+  const min = extractUpdateSemverTuple(minVer);
+  if (!cur || !min) return true;
+  return compareUpdateSemverTuples(cur, min) >= 0;
+}
+
+async function resolveHostAppVersionAsync({ force = false } = {}) {
+  const now = Date.now();
+  if (!force && cachedHostAppVersion.probedAt > 0 && now - cachedHostAppVersion.probedAt < UPDATE_HOST_VERSION_TTL_MS) {
+    return cachedHostAppVersion.version;
+  }
+  if (cachedHostAppVersion.promise) return cachedHostAppVersion.promise;
+
+  const p = (async () => {
+    const home = os.homedir();
+    let detected = null;
+    try {
+      if (process.platform === 'darwin') {
+        const candidates = [
+          '/Applications/Antigravity.app/Contents/Info.plist',
+          path.join(home, 'Applications', 'Antigravity.app', 'Contents', 'Info.plist'),
+          '/Applications/Antigravity - Insiders.app/Contents/Info.plist',
+          path.join(home, 'Applications', 'Antigravity - Insiders.app', 'Contents', 'Info.plist')
+        ];
+        for (const plist of candidates) {
+          if (!fs.existsSync(plist)) continue;
+          const xml = fs.readFileSync(plist, 'utf8');
+          const m = xml.match(/<key>CFBundleShortVersionString<\/key>\s*<string>([^<]+)<\/string>/);
+          if (m && m[1]) {
+            detected = m[1].trim();
+            break;
+          }
+        }
+      } else if (process.platform === 'linux') {
+        const candidates = [
+          '/usr/share/antigravity/resources/app/package.json',
+          '/opt/Antigravity/resources/app/package.json',
+          '/usr/share/antigravity-insiders/resources/app/package.json'
+        ];
+        for (const pkgPath of candidates) {
+          if (!fs.existsSync(pkgPath)) continue;
+          const pkg = readJsonSafe(pkgPath, null);
+          if (pkg && typeof pkg.version === 'string' && pkg.version.trim()) {
+            detected = pkg.version.trim();
+            break;
+          }
+        }
+      } else if (process.platform === 'win32') {
+        const localAppData = process.env.LOCALAPPDATA || path.join(home, 'AppData', 'Local');
+        const progFiles = process.env.ProgramFiles || 'C:\\Program Files';
+        const exeCandidates = [
+          path.join(localAppData, 'Programs', 'Antigravity', 'Antigravity.exe'),
+          path.join(progFiles, 'Antigravity', 'Antigravity.exe'),
+          path.join(localAppData, 'Programs', 'Antigravity - Insiders', 'Antigravity - Insiders.exe')
+        ];
+        const existingExe = exeCandidates.find((exe) => fs.existsSync(exe)) || '';
+        if (existingExe) {
+          const ps = `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; (Get-Item -LiteralPath '${existingExe.replace(/'/g, "''")}').VersionInfo.ProductVersion`;
+          const r = await execFileAsync(
+            'powershell',
+            ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', ps],
+            3000
+          );
+          if (r.ok && r.stdout.trim()) {
+            detected = r.stdout.trim();
+          }
+        }
+      }
+    } catch {}
+    cachedHostAppVersion = { version: detected, probedAt: Date.now(), promise: null };
+    return detected;
+  })();
+
+  cachedHostAppVersion.promise = p;
+  return p;
+}
+
+let lastObservedUpdateDiskSig = '';
+
+function computeUpdateDiskSig() {
+  return `${getFileMtimeSig(UPDATE_CACHE_FILE)}|${getFileMtimeSig(path.join(CORE_DIR, 'manifest.json'))}`;
+}
+
+function readUpdateCacheFromDisk() {
+  const parsed = readJsonSafe(UPDATE_CACHE_FILE, null);
+  if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+    updateCheckState = {
+      loaded: true,
+      checkedAt: typeof parsed.checkedAt === 'string' ? parsed.checkedAt : null,
+      source: typeof parsed.source === 'string' ? parsed.source : null,
+      latestVersion: typeof parsed.latestVersion === 'string' ? parsed.latestVersion.replace(/^v/i, '') : null,
+      minAntigravityVersion:
+        typeof parsed.minAntigravityVersion === 'string' && parsed.minAntigravityVersion.trim()
+          ? parsed.minAntigravityVersion.trim()
+          : null,
+      minNodeVersion:
+        typeof parsed.minNodeVersion === 'string' && parsed.minNodeVersion.trim() ? parsed.minNodeVersion.trim() : null,
+      hostAppVersion:
+        typeof parsed.hostAppVersion === 'string' && parsed.hostAppVersion.trim() ? parsed.hostAppVersion.trim() : null,
+      dismissedVersion: typeof parsed.dismissedVersion === 'string' ? parsed.dismissedVersion.replace(/^v/i, '') : null,
+      changelog: Array.isArray(parsed.changelog) ? parsed.changelog.filter((s) => typeof s === 'string').slice(0, 6) : [],
+      bundleBytes: Number.isFinite(Number(parsed.bundleBytes)) && Number(parsed.bundleBytes) > 0 ? Number(parsed.bundleBytes) : null,
+      releaseUrl:
+        typeof parsed.releaseUrl === 'string' && isAllowedOfficialReleasePageUrl(parsed.releaseUrl)
+          ? parsed.releaseUrl
+          : UPDATE_OFFICIAL_GH_LATEST_URL
+    };
+  } else {
+    updateCheckState.loaded = true;
+  }
+  lastObservedUpdateDiskSig = computeUpdateDiskSig();
+  return updateCheckState;
+}
+
+function writeUpdateCacheAtomic(nextObj) {
+  const tmpPath = `${UPDATE_CACHE_FILE}.tmp-${process.pid}-${Date.now()}`;
+  try {
+    fs.mkdirSync(CACHE_DIR, { recursive: true });
+    atomicWriteTextFileSync(tmpPath, UPDATE_CACHE_FILE, `${JSON.stringify(nextObj, null, 2)}\n`);
+    lastObservedUpdateDiskSig = computeUpdateDiskSig();
+  } catch {
+    try {
+      if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath);
+    } catch {}
+  }
+}
+
+function syncUpdateDiskStateIfChanged() {
+  if (SAFE_MODE || RUN_ONCE || daemonExiting) return false;
+  if (!updateCheckState.loaded) {
+    readUpdateCacheFromDisk();
+    return false;
+  }
+  if (updateCheckInFlight || updateUpgradeInFlight) return false;
+  const curSig = computeUpdateDiskSig();
+  if (curSig === lastObservedUpdateDiskSig) return false;
+  readUpdateCacheFromDisk();
+  if (activeConfig?.enabled && activeConfig?.modules?.updateCheck !== false && attachedTargets.size > 0) {
+    broadcastUpdateStatusToTargets(getPublicUpdateStatus());
+  }
+  return true;
+}
+
+function getInstalledCurrentVersion() {
+  const manifest = readJsonSafe(path.join(CORE_DIR, 'manifest.json'), null);
+  if (manifest && typeof manifest.version === 'string' && manifest.version.trim()) {
+    return manifest.version.trim().replace(/^v/i, '');
+  }
+  const m = String(BASE_VERSION || '').match(/(\d+\.\d+\.\d+)/);
+  return m ? m[1] : '6.0.6';
+}
+
+function getPublicUpdateStatus() {
+  if (!updateCheckState.loaded) {
+    readUpdateCacheFromDisk();
+  }
+  const currentVersion = getInstalledCurrentVersion();
+  const latestVersion = updateCheckState.latestVersion || null;
+  const hostAppVersion = cachedHostAppVersion.version || updateCheckState.hostAppVersion || null;
+  const minAntigravityVersion = updateCheckState.minAntigravityVersion || null;
+  const minNodeVersion = updateCheckState.minNodeVersion || null;
+  const semverNewer = Boolean(latestVersion && isPatchUpdateNewer(currentVersion, latestVersion));
+  const hostCompatible = isPatchMinVersionSatisfied(hostAppVersion, minAntigravityVersion);
+  const nodeCompatible = isPatchMinVersionSatisfied(process.versions.node, minNodeVersion);
+  const incompatibleHost = Boolean(semverNewer && !hostCompatible);
+  const incompatibleNode = Boolean(semverNewer && !nodeCompatible);
+  const updateAvailable = Boolean(semverNewer && hostCompatible && nodeCompatible);
+  const dismissedVersion = updateCheckState.dismissedVersion || null;
+  const dismissed = Boolean(updateAvailable && dismissedVersion && dismissedVersion === latestVersion);
+  const enabled = Boolean(activeConfig?.modules?.updateCheck !== false);
+  if (
+    !SAFE_MODE &&
+    !RUN_ONCE &&
+    enabled &&
+    minAntigravityVersion &&
+    cachedHostAppVersion.probedAt === 0 &&
+    !cachedHostAppVersion.promise
+  ) {
+    void resolveHostAppVersionAsync().then((ver) => {
+      if (ver && ver !== updateCheckState.hostAppVersion) {
+        updateCheckState.hostAppVersion = ver;
+        if (!daemonExiting && attachedTargets.size > 0) {
+          broadcastUpdateStatusToTargets(getPublicUpdateStatus());
+        }
+      }
+    });
+  }
+  return {
+    enabled,
+    currentVersion,
+    latestVersion,
+    updateAvailable,
+    incompatibleHost,
+    incompatibleNode,
+    hostAppVersion,
+    minAntigravityVersion,
+    minNodeVersion,
+    dismissed,
+    dismissedVersion,
+    checkedAt: updateCheckState.checkedAt,
+    source: updateCheckState.source,
+    changelog: updateCheckState.changelog,
+    bundleBytes: updateCheckState.bundleBytes,
+    releaseUrl: updateCheckState.releaseUrl || UPDATE_OFFICIAL_GH_LATEST_URL,
+    upgradeCommand: `node ${JSON.stringify(path.join(ROOT_DIR, 'install.mjs'))} upgrade`,
+    checking: updateCheckInFlight,
+    upgrading: updateUpgradeInFlight,
+    upgradeError: lastUpgradeError || null
+  };
+}
+
+function getUpdateStatusPreloadSig() {
+  if (SAFE_MODE || activeConfig?.modules?.updateCheck === false) return 'off';
+  const st = getPublicUpdateStatus();
+  return `${st.currentVersion || ''}|${st.latestVersion || ''}|${st.updateAvailable ? 1 : 0}|${st.dismissed ? 1 : 0}|${st.incompatibleHost ? 1 : 0}|${st.incompatibleNode ? 1 : 0}|${st.checkedAt || ''}|${st.checking ? 1 : 0}|${st.upgrading ? 1 : 0}|${st.upgradeError || ''}`;
+}
+
+function broadcastUpdateStatusToTargets(statusPayload) {
+  if (!activeConfig?.enabled) return;
+  cachedBundleSig = '';
+  rebuildBundleIfNeeded({ fromUiPersist: true });
+  const expr = `window.__ag_on_update_status && window.__ag_on_update_status(${JSON.stringify(statusPayload)})`;
+  const tasks = [];
+  for (const [, entry] of attachedTargets.entries()) {
+    if (!entry?.hostConfirmed || entry.type !== 'page') continue;
+    if (entry.updateNewDocScript) {
+      tasks.push(entry.updateNewDocScript(true).catch(() => {}));
+    }
+    if (entry.send) {
+      tasks.push(entry.send('Runtime.evaluate', { expression: expr, returnByValue: false }).catch(() => {}));
+    }
+  }
+  if (tasks.length > 0) void Promise.allSettled(tasks);
+}
+
+function execFileAsync(bin, cmdArgs, timeoutMs = 8000, signal = null) {
+  return new Promise((resolve) => {
+    const opts = { encoding: 'utf8', windowsHide: true, maxBuffer: 512 * 1024, timeout: timeoutMs };
+    if (signal) opts.signal = signal;
+    execFile(bin, cmdArgs, opts, (err, stdout) => {
+      const aborted = Boolean(
+        signal?.aborted || (err && (err.name === 'AbortError' || err.code === 'ABORT_ERR'))
+      );
+      const code = err ? (typeof err.code === 'number' ? err.code : String(err.code || 'ERR')) : 0;
+      if (err) resolve({ ok: false, aborted, code, stdout: String(stdout || '') });
+      else resolve({ ok: true, aborted: false, code: 0, stdout: String(stdout || '') });
+    });
+  });
+}
+
+function hasDaemonProxyEnv() {
+  return Boolean(
+    process.env.HTTPS_PROXY ||
+      process.env.https_proxy ||
+      process.env.HTTP_PROXY ||
+      process.env.http_proxy ||
+      process.env.ALL_PROXY ||
+      process.env.all_proxy
+  );
+}
+
+async function resolveDaemonUpdateProxyAsync() {
+  const hasEnvProxy = hasDaemonProxyEnv();
+  if (hasEnvProxy) {
+    return { proxyUrl: '', hasEnvProxy: true, hasEffectiveProxy: true };
+  }
+  if (process.platform !== 'win32') {
+    return { proxyUrl: '', hasEnvProxy: false, hasEffectiveProxy: false };
+  }
+  try {
+    const r = await execFileAsync(
+      'reg',
+      ['query', 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings'],
+      2500
+    );
+    if (!r.ok || !r.stdout) {
+      return { proxyUrl: '', hasEnvProxy: false, hasEffectiveProxy: false };
+    }
+    const out = String(r.stdout);
+    const enabledMatch = out.match(/ProxyEnable[ \t]+REG_DWORD[ \t]+0x([0-9a-f]+)/i);
+    if (!enabledMatch || parseInt(enabledMatch[1], 16) !== 1) {
+      return { proxyUrl: '', hasEnvProxy: false, hasEffectiveProxy: false };
+    }
+    const serverMatch = out.match(/ProxyServer[ \t]+REG_SZ[ \t]*([^\r\n]*)/i);
+    if (!serverMatch || !serverMatch[1].trim()) {
+      return { proxyUrl: '', hasEnvProxy: false, hasEffectiveProxy: false };
+    }
+    const parsed = parseProxyServerSpec(serverMatch[1]);
+    const proxyUrl = parsed?.httpsProxy || parsed?.httpProxy || '';
+    return { proxyUrl, hasEnvProxy: false, hasEffectiveProxy: Boolean(proxyUrl) };
+  } catch {
+    return { proxyUrl: '', hasEnvProxy: false, hasEffectiveProxy: false };
+  }
+}
+
+function combineAbortSignals(timeoutMs, externalSignal = null) {
+  const timeoutSignal = AbortSignal.timeout(timeoutMs);
+  return externalSignal ? AbortSignal.any([timeoutSignal, externalSignal]) : timeoutSignal;
+}
+
+function firstTruthyAsync(promises) {
+  if (!Array.isArray(promises) || promises.length === 0) return Promise.resolve(null);
+  return new Promise((resolve) => {
+    let remaining = promises.length;
+    let settled = false;
+    for (const p of promises) {
+      Promise.resolve(p).then(
+        (val) => {
+          if (settled) return;
+          if (val) {
+            settled = true;
+            resolve(val);
+            return;
+          }
+          remaining -= 1;
+          if (remaining <= 0) {
+            settled = true;
+            resolve(null);
+          }
+        },
+        () => {
+          if (settled) return;
+          remaining -= 1;
+          if (remaining <= 0) {
+            settled = true;
+            resolve(null);
+          }
+        }
+      );
+    }
+  });
+}
+
+async function fetchUpdateTextAsync(urlStr, timeoutMs = 6000, signal = null, proxyInfo = null) {
+  if (!isAllowedOfficialUpdateUrl(urlStr) || signal?.aborted) return null;
+  const resolvedProxy = proxyInfo || (await resolveDaemonUpdateProxyAsync());
+  if (signal?.aborted) return null;
+  const curlBin = process.platform === 'win32' ? 'curl.exe' : 'curl';
+  const curlArgs = ['-fsSL', '--connect-timeout', '4', '--max-time', String(Math.ceil(timeoutMs / 1000)), '--max-filesize', '262144'];
+  if (resolvedProxy.proxyUrl) curlArgs.push('--proxy', resolvedProxy.proxyUrl);
+  curlArgs.push(urlStr);
+  const cr = await execFileAsync(curlBin, curlArgs, timeoutMs + 1500, signal);
+  if (cr.ok && cr.stdout.trim()) return cr.stdout;
+  if (cr.aborted || signal?.aborted) return null;
+  // curl 返回 22（远端 HTTP 4xx/5xx）或已配置系统/环境变量代理且非 ENOENT 时，不再回退无代理 fetch 死等超时
+  if (cr.code === 22 || (resolvedProxy.hasEffectiveProxy && cr.code !== 'ENOENT')) {
+    return null;
+  }
+  try {
+    const res = await fetch(urlStr, { redirect: 'follow', signal: combineAbortSignals(timeoutMs, signal) });
+    if (!res.ok) return null;
+    const text = await res.text();
+    if (Buffer.byteLength(text, 'utf8') > 262144) return null;
+    return text;
+  } catch {
+    return null;
+  }
+}
+
+async function resolveGithubLatestTagAsync(timeoutMs = 6000, signal = null, proxyInfo = null) {
+  if (signal?.aborted) return null;
+  const resolvedProxy = proxyInfo || (await resolveDaemonUpdateProxyAsync());
+  if (signal?.aborted) return null;
+  const curlBin = process.platform === 'win32' ? 'curl.exe' : 'curl';
+  const curlArgs = [
+    '-sSI',
+    '--connect-timeout',
+    '4',
+    '--max-time',
+    String(Math.ceil(timeoutMs / 1000))
+  ];
+  if (resolvedProxy.proxyUrl) curlArgs.push('--proxy', resolvedProxy.proxyUrl);
+  curlArgs.push(UPDATE_OFFICIAL_GH_LATEST_URL);
+  const cr = await execFileAsync(curlBin, curlArgs, timeoutMs + 1500, signal);
+  if (cr.aborted || signal?.aborted) return null;
+  let headerTarget = cr.ok ? cr.stdout : '';
+  let match = String(headerTarget).match(/\/releases\/tag\/(v?\d+\.\d+\.\d+)/i);
+  if (!match && (!resolvedProxy.hasEffectiveProxy || cr.code === 'ENOENT')) {
+    try {
+      const res = await fetch(UPDATE_OFFICIAL_GH_LATEST_URL, {
+        method: 'GET',
+        redirect: 'manual',
+        signal: combineAbortSignals(timeoutMs, signal)
+      });
+      headerTarget = res.headers?.get?.('location') || res.url || '';
+      match = String(headerTarget).match(/\/releases\/tag\/(v?\d+\.\d+\.\d+)/i);
+    } catch {}
+  }
+  if (!match) return null;
+  const cleanVer = match[1].replace(/^v/i, '');
+  return {
+    source: 'github-releases-redirect',
+    latestVersion: cleanVer,
+    changelog: [],
+    bundleBytes: null,
+    releaseUrl: `${UPDATE_REPO_URL}/releases/tag/v${cleanVer}`
+  };
+}
+
+async function checkForPatchUpdateAsync({ force = false } = {}) {
+  if (SAFE_MODE || RUN_ONCE || daemonExiting) return false;
+  if (activeConfig?.modules?.updateCheck === false) return false;
+  if (updateCheckInFlight) return false;
+
+  const now = Date.now();
+  if (force) {
+    if (now - lastManualUpdateCheckAt < UPDATE_MANUAL_COOLDOWN_MS) return false;
+    lastManualUpdateCheckAt = now;
+  } else {
+    if (!updateCheckState.loaded) readUpdateCacheFromDisk();
+    if (lastUpdateErrorAt && now - lastUpdateErrorAt < UPDATE_CHECK_ERROR_BACKOFF_MS) return false;
+    const lastCheckedMs = updateCheckState.checkedAt ? Date.parse(updateCheckState.checkedAt) : 0;
+    if (Number.isFinite(lastCheckedMs) && lastCheckedMs > 0 && now - lastCheckedMs < UPDATE_CHECK_INTERVAL_MS) {
+      return false;
+    }
+  }
+
+  updateCheckInFlight = true;
+  if (force) {
+    broadcastUpdateStatusToTargets(getPublicUpdateStatus());
+  }
+  const ac = new AbortController();
+  try {
+    const proxyInfo = await resolveDaemonUpdateProxyAsync();
+    const fetchManifestCandidate = async (candidate) => {
+      const txt = await fetchUpdateTextAsync(candidate.url, 6000, ac.signal, proxyInfo);
+      if (!txt) return null;
+      try {
+        const parsed = JSON.parse(txt.replace(/^\uFEFF/, ''));
+        if (parsed && typeof parsed === 'object' && typeof parsed.version === 'string' && parsed.coreUpdateBundle) {
+          const cleanVer = parsed.version.trim().replace(/^v/i, '');
+          const releaseUrl =
+            typeof parsed.fullReleaseUrl === 'string' && isAllowedOfficialReleasePageUrl(parsed.fullReleaseUrl)
+              ? parsed.fullReleaseUrl
+              : `${UPDATE_REPO_URL}/releases/tag/v${cleanVer}`;
+          return {
+            source: candidate.id,
+            latestVersion: cleanVer,
+            minAntigravityVersion:
+              typeof parsed.minAntigravityVersion === 'string' && parsed.minAntigravityVersion.trim()
+                ? parsed.minAntigravityVersion.trim()
+                : null,
+            minNodeVersion:
+              typeof parsed.minNodeVersion === 'string' && parsed.minNodeVersion.trim()
+                ? parsed.minNodeVersion.trim()
+                : null,
+            changelog: Array.isArray(parsed.changelog) ? parsed.changelog.filter((s) => typeof s === 'string').slice(0, 6) : [],
+            bundleBytes: Number.isFinite(Number(parsed.coreUpdateBundle?.bytes)) ? Number(parsed.coreUpdateBundle.bytes) : null,
+            releaseUrl
+          };
+        }
+      } catch {}
+      return null;
+    };
+
+    const r2Promise = fetchManifestCandidate({ id: 'cloudflare-r2', url: UPDATE_OFFICIAL_R2_URL });
+    const ghManifestPromise = fetchManifestCandidate({ id: 'github-release', url: UPDATE_OFFICIAL_GH_URL });
+    const ghRedirectPromise = resolveGithubLatestTagAsync(6000, ac.signal, proxyInfo).catch(() => null);
+    const hostVersionPromise = resolveHostAppVersionAsync().catch(() => null);
+
+    let resolved = await firstTruthyAsync([r2Promise, ghManifestPromise]);
+    if (resolved) {
+      ac.abort();
+    } else {
+      resolved = await ghRedirectPromise;
+    }
+
+    if (!resolved) {
+      lastUpdateErrorAt = Date.now();
+      return false;
+    }
+
+    const hostAppVersion = await hostVersionPromise;
+    const currentVersion = getInstalledCurrentVersion();
+    const checkedAt = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
+    const prevDismissed = updateCheckState.dismissedVersion || null;
+    const minAntigravityVersion = resolved.minAntigravityVersion || null;
+    const minNodeVersion = resolved.minNodeVersion || null;
+    const semverNewer = isPatchUpdateNewer(currentVersion, resolved.latestVersion);
+    const hostCompatible = isPatchMinVersionSatisfied(hostAppVersion, minAntigravityVersion);
+    const nodeCompatible = isPatchMinVersionSatisfied(process.versions.node, minNodeVersion);
+    const incompatibleHost = Boolean(semverNewer && !hostCompatible);
+    const incompatibleNode = Boolean(semverNewer && !nodeCompatible);
+    const updateAvailable = Boolean(semverNewer && hostCompatible && nodeCompatible);
+    const nextCache = {
+      checkedAt,
+      source: resolved.source,
+      currentVersion,
+      latestVersion: resolved.latestVersion,
+      updateAvailable,
+      minAntigravityVersion,
+      minNodeVersion,
+      hostAppVersion,
+      incompatibleHost,
+      incompatibleNode,
+      dismissedVersion: force || !updateAvailable ? null : prevDismissed,
+      changelog: resolved.changelog,
+      bundleBytes: resolved.bundleBytes,
+      releaseUrl: resolved.releaseUrl
+    };
+    updateCheckState = { loaded: true, ...nextCache };
+    writeUpdateCacheAtomic(nextCache);
+    lastUpdateErrorAt = 0;
+    return true;
+  } finally {
+    ac.abort();
+    updateCheckInFlight = false;
+    broadcastUpdateStatusToTargets(getPublicUpdateStatus());
+  }
+}
+
+function launchSafeHttpsReleaseUrlInDefaultBrowser(rawUrl) {
+  if (!isAllowedOfficialReleasePageUrl(rawUrl)) return false;
+  const safeUrl = String(rawUrl).trim();
+  if (/[\0\r\n]/.test(safeUrl)) return false;
+  if (process.platform === 'win32') {
+    execFile('rundll32.exe', ['url.dll,FileProtocolHandler', safeUrl], { windowsHide: true }, () => {});
+  } else if (process.platform === 'darwin') {
+    execFile('open', [safeUrl], () => {});
+  } else {
+    execFile('xdg-open', [safeUrl], () => {});
+  }
+  return true;
+}
+
+function parseTrailingTopLevelJsonObject(text) {
+  const lastClose = text.lastIndexOf('}');
+  if (lastClose < 0) return null;
+
+  // 1) 优先从末尾向上匹配顶层行首 `{`（命中 JSON.stringify(..., null, 2) 输出的完整外层对象，不被嵌套子对象干扰）
+  const col0Starts = [];
+  const col0Re = /(?:^|\r?\n)\{/g;
+  let m;
+  while ((m = col0Re.exec(text)) !== null) {
+    const bracePos = m.index + m[0].length - 1;
+    if (bracePos < lastClose) col0Starts.push(bracePos);
+  }
+  for (let i = col0Starts.length - 1; i >= 0; i--) {
+    try {
+      const parsed = JSON.parse(text.slice(col0Starts[i], lastClose + 1));
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed;
+    } catch {}
+  }
+
+  // 2) 兼容单行带前缀的嵌套 JSON（如 "[ERR] {\"ok\":false,...}"）：从该行最左侧 `{` 向右尝试找到最外层合法对象
+  const lineStart = text.lastIndexOf('\n', lastClose) + 1;
+  let pos = text.indexOf('{', lineStart);
+  while (pos >= 0 && pos < lastClose) {
+    try {
+      const parsed = JSON.parse(text.slice(pos, lastClose + 1));
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed;
+    } catch {}
+    pos = text.indexOf('{', pos + 1);
+  }
+  return null;
+}
+
+function readUpgradeLogTailSummary(logPath) {
+  try {
+    if (!fs.existsSync(logPath)) return '';
+    const st = fs.statSync(logPath);
+    const readSize = Math.min(8192, Math.max(0, Number(st.size) || 0));
+    if (readSize === 0) return '';
+    const fd = fs.openSync(logPath, 'r');
+    let text = '';
+    try {
+      const buf = Buffer.alloc(readSize);
+      fs.readSync(fd, buf, 0, readSize, Math.max(0, st.size - readSize));
+      text = buf.toString('utf8');
+    } finally {
+      fs.closeSync(fd);
+    }
+    const parsed = parseTrailingTopLevelJsonObject(text);
+    if (parsed) {
+      const msg =
+        (typeof parsed.error === 'string' && parsed.error.trim()) ||
+        (typeof parsed.reason === 'string' && parsed.reason.trim()) ||
+        (typeof parsed.stderr === 'string' && parsed.stderr.trim()) ||
+        '';
+      if (msg) return msg.slice(0, 140);
+    }
+    const lines = text
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .filter((l) => l && !/^[{}[\],]+$/.test(l));
+    const lastLine = lines.length > 0 ? lines[lines.length - 1] : '';
+    return lastLine.slice(0, 140);
+  } catch {
+    return '';
+  }
+}
+
+function triggerInPlaceHotUpgradeAsync() {
+  if (SAFE_MODE || RUN_ONCE || daemonExiting) return false;
+  if (activeConfig?.modules?.updateCheck === false) return false;
+  if (updateUpgradeInFlight) return false;
+
+  const now = Date.now();
+  if (now - lastUpgradeTriggerAt < UPDATE_UPGRADE_COOLDOWN_MS) return false;
+
+  const statusNow = getPublicUpdateStatus();
+  if (statusNow.incompatibleHost && statusNow.minAntigravityVersion) {
+    lastUpgradeError = `Antigravity >= ${statusNow.minAntigravityVersion} required (current: ${statusNow.hostAppVersion || 'unknown'})`;
+    broadcastUpdateStatusToTargets(getPublicUpdateStatus());
+    return false;
+  }
+  if (statusNow.incompatibleNode && statusNow.minNodeVersion) {
+    lastUpgradeError = `Node.js >= ${statusNow.minNodeVersion} required (current: ${process.versions.node})`;
+    broadcastUpdateStatusToTargets(getPublicUpdateStatus());
+    return false;
+  }
+
+  const installScript = path.join(ROOT_DIR, 'install.mjs');
+  if (!fs.existsSync(installScript)) {
+    lastUpgradeError = 'Missing install.mjs';
+    broadcastUpdateStatusToTargets(getPublicUpdateStatus());
+    return false;
+  }
+
+  lastUpgradeTriggerAt = now;
+  updateUpgradeInFlight = true;
+  lastUpgradeError = '';
+  broadcastUpdateStatusToTargets(getPublicUpdateStatus());
+
+  let logFd = null;
+  try {
+    fs.mkdirSync(CACHE_DIR, { recursive: true });
+    logFd = fs.openSync(UPDATE_UPGRADE_LOG_FILE, 'w');
+  } catch {
+    logFd = null;
+  }
+
+  let child = null;
+  try {
+    child = spawn(process.execPath, [installScript, 'upgrade'], {
+      cwd: ROOT_DIR,
+      detached: true,
+      windowsHide: true,
+      stdio: logFd !== null ? ['ignore', logFd, logFd] : 'ignore'
+    });
+    if (logFd !== null) {
+      try {
+        fs.closeSync(logFd);
+      } catch {}
+      logFd = null;
+    }
+    child.unref();
+  } catch (err) {
+    if (logFd !== null) {
+      try {
+        fs.closeSync(logFd);
+      } catch {}
+    }
+    updateUpgradeInFlight = false;
+    lastUpgradeError = String(err?.message || err || 'Failed to spawn upgrader').slice(0, 140);
+    broadcastUpdateStatusToTargets(getPublicUpdateStatus());
+    return false;
+  }
+
+  if (updateUpgradeWatchdog) {
+    try {
+      clearTimeout(updateUpgradeWatchdog);
+    } catch {}
+    updateUpgradeWatchdog = null;
+  }
+
+  let settled = false;
+  let timedOut = false;
+  let forceKillFallbackTimer = null;
+  const clearUpgradeTimers = () => {
+    if (updateUpgradeWatchdog) {
+      try {
+        clearTimeout(updateUpgradeWatchdog);
+      } catch {}
+      updateUpgradeWatchdog = null;
+    }
+    if (forceKillFallbackTimer) {
+      try {
+        clearTimeout(forceKillFallbackTimer);
+      } catch {}
+      forceKillFallbackTimer = null;
+    }
+  };
+  const finishUpgrade = (code, errMsg = '') => {
+    if (settled) return;
+    settled = true;
+    clearUpgradeTimers();
+    updateUpgradeInFlight = false;
+    if (code === 0 && !errMsg) {
+      lastUpgradeError = '';
+      readUpdateCacheFromDisk();
+    } else {
+      const detail = errMsg || readUpgradeLogTailSummary(UPDATE_UPGRADE_LOG_FILE) || `Exit code ${code}`;
+      lastUpgradeError = String(detail).slice(0, 140);
+    }
+    if (!daemonExiting) {
+      broadcastUpdateStatusToTargets(getPublicUpdateStatus());
+    }
+  };
+
+  updateUpgradeWatchdog = setTimeout(() => {
+    updateUpgradeWatchdog = null;
+    if (settled || !updateUpgradeInFlight) return;
+    timedOut = true;
+    // 超时后显式终止仍在运行的升级子进程树，避免释放状态后与下一次重试并发改写 core/
+    try {
+      if (process.platform === 'win32' && child.pid) {
+        execFile('taskkill', ['/PID', String(child.pid), '/T', '/F'], { windowsHide: true }, () => {});
+      } else if (child.pid) {
+        try {
+          process.kill(-child.pid, 'SIGTERM');
+        } catch {
+          try {
+            child.kill('SIGTERM');
+          } catch {}
+        }
+      }
+    } catch {}
+    forceKillFallbackTimer = setTimeout(() => {
+      forceKillFallbackTimer = null;
+      if (settled) return;
+      if (process.platform !== 'win32' && child.pid) {
+        try {
+          process.kill(-child.pid, 'SIGKILL');
+        } catch {
+          try {
+            child.kill('SIGKILL');
+          } catch {}
+        }
+      }
+      finishUpgrade(1, 'Timed out waiting for hot upgrade');
+    }, 4000);
+    if (typeof forceKillFallbackTimer.unref === 'function') {
+      forceKillFallbackTimer.unref();
+    }
+  }, UPDATE_UPGRADE_TIMEOUT_MS);
+  if (typeof updateUpgradeWatchdog.unref === 'function') {
+    updateUpgradeWatchdog.unref();
+  }
+
+  child.once('error', (err) => {
+    finishUpgrade(1, err?.message || String(err));
+  });
+  child.once('close', (code) => {
+    finishUpgrade(timedOut ? 1 : typeof code === 'number' ? code : 1, timedOut ? 'Timed out waiting for hot upgrade' : '');
+  });
+  return true;
+}
 let metricsConfigEpoch = 0;
 const metricsCache = new Map(); // dbPath -> { sig, payload }
 // Must be declared before the top-level rebuildBundleIfNeeded() call: it clears this cache
@@ -549,6 +1390,7 @@ let activeConfig = {
     tokenAnalytics: true,
     composerWaxSeal: true,
     contextMenu: true,
+    updateCheck: true,
     deadlockHealer: true,
     coldBootHealer: true,
     zoomShortcuts: true,
@@ -1617,6 +2459,7 @@ function rebuildBundleIfNeeded(opts = {}) {
       tokenAnalytics: true,
       composerWaxSeal: true,
       contextMenu: true,
+      updateCheck: true,
       deadlockHealer: true,
       coldBootHealer: true,
       zoomShortcuts: true,
@@ -1705,6 +2548,14 @@ function rebuildBundleIfNeeded(opts = {}) {
     !normalizedSelectors.excludeI18n.includes('.code-line .line-content')
   ) {
     normalizedSelectors.excludeI18n += ', .view-lines, .code-line .line-content, .code-line .token';
+  }
+  if (
+    typeof normalizedSelectors.excludeI18n === 'string' &&
+    normalizedSelectors.excludeI18n.trim() &&
+    !normalizedSelectors.excludeI18n.includes('data-ag-patch-update-row')
+  ) {
+    normalizedSelectors.excludeI18n +=
+      ', [data-ag-patch-update-row="1"], [data-ag-patch-update-drawer="1"], [data-ag-update-nav-dot="1"]';
   }
 
   const DEFAULT_ALLOWED_ORIGINS = [
@@ -1823,6 +2674,7 @@ function rebuildBundleIfNeeded(opts = {}) {
     i18nOverrideKeys,
     modules,
     installedEditors,
+    updateStatus: modules.updateCheck !== false && !SAFE_MODE ? getPublicUpdateStatus() : null,
     selectors: activeConfig.selectors,
     config: {
       enabled,
@@ -1844,10 +2696,11 @@ function rebuildBundleIfNeeded(opts = {}) {
   // Swarm 等跨进程子 iframe 永不承载设置弹窗或顶层右键菜单，固定裁剪对应 CSS+JS 载荷并保持同一 version 哈希
   const iframeCss = baseCss.replace(RE_STRIP_TA_CSS, '').replace(RE_STRIP_CM_CSS, '');
   const iframeRuntime = runtimeTemplate.replace(RE_STRIP_TA_JS, '').replace(RE_STRIP_CM_JS, '');
-  const iframeModules = Object.assign({}, modules, { tokenAnalytics: false, contextMenu: false });
+  const iframeModules = Object.assign({}, modules, { tokenAnalytics: false, contextMenu: false, updateCheck: false });
   const iframePayload = Object.assign({}, bootPayload, {
     cssText: iframeCss,
     installedEditors: [],
+    updateStatus: null,
     modules: iframeModules,
     config: Object.assign({}, bootPayload.config, { modules: iframeModules })
   });
@@ -6879,7 +7732,8 @@ function attachTarget(target, endpoint) {
         newDocQueue = newDocQueue
           .then(async () => {
             const { script, parentMode, parentDarkPreset, parentLightPreset, uiLangVal } = buildTargetInjectScript();
-            const nextSig = `${activeConfig.enabled}|${cachedPatchVersion}|${activeConfig.preset || ''}|${activeConfig.darkPreset || ''}|${uiLangVal || ''}|${parentMode}|${parentDarkPreset || ''}|${parentLightPreset || ''}`;
+            const updSig = target.type === 'page' ? getUpdateStatusPreloadSig() : '';
+            const nextSig = `${activeConfig.enabled}|${cachedPatchVersion}|${activeConfig.preset || ''}|${activeConfig.darkPreset || ''}|${uiLangVal || ''}|${parentMode}|${parentDarkPreset || ''}|${parentLightPreset || ''}|${updSig}`;
             if (!force && evalScriptId && nextSig === lastNewDocSig) return;
             if (evalScriptId) {
               await send('Page.removeScriptToEvaluateOnNewDocument', { identifier: evalScriptId });
@@ -7380,6 +8234,7 @@ function attachTarget(target, endpoint) {
             await send('Runtime.addBinding', { name: '__agRequestTokenAnalytics' });
             await send('Runtime.addBinding', { name: '__agOpenInBrowser' });
             await send('Runtime.addBinding', { name: '__agOpenInEditor' });
+            await send('Runtime.addBinding', { name: '__agUpdateAction' });
           }
         }
         if (ws.readyState !== WebSocket.OPEN || nonHostSettled) {
@@ -7719,6 +8574,90 @@ function attachTarget(target, endpoint) {
               }
             } else {
               launchSafeFileInDetectedEditor(msg.params.payload, endpoint);
+            }
+            return;
+          }
+          if (msg.method === 'Runtime.bindingCalled' && msg.params?.name === '__agUpdateAction') {
+            if (
+              RUN_ONCE ||
+              SAFE_MODE ||
+              !hostConfirmed ||
+              target.type !== 'page' ||
+              !activeConfig.enabled ||
+              activeConfig.modules.updateCheck === false
+            ) {
+              return;
+            }
+            let req = {};
+            try {
+              req = msg.params.payload ? JSON.parse(String(msg.params.payload)) : {};
+            } catch {
+              return;
+            }
+            const act = String(req?.action || '').trim();
+            if (act === 'check') {
+              lastUpgradeError = '';
+              void checkForPatchUpdateAsync({ force: true });
+            } else if (act === 'upgrade') {
+              triggerInPlaceHotUpgradeAsync();
+            } else if (act === 'dismiss') {
+              lastUpgradeError = '';
+              const rawVer = String(req?.version || '').trim().replace(/^v/i, '');
+              if (/^\d+\.\d+\.\d+$/.test(rawVer)) {
+                if (!updateCheckState.loaded) readUpdateCacheFromDisk();
+                const statusBefore = getPublicUpdateStatus();
+                const nextCache = {
+                  checkedAt: updateCheckState.checkedAt,
+                  source: updateCheckState.source,
+                  currentVersion: statusBefore.currentVersion,
+                  latestVersion: updateCheckState.latestVersion,
+                  updateAvailable: statusBefore.updateAvailable,
+                  minAntigravityVersion: updateCheckState.minAntigravityVersion,
+                  minNodeVersion: updateCheckState.minNodeVersion,
+                  hostAppVersion: statusBefore.hostAppVersion,
+                  incompatibleHost: statusBefore.incompatibleHost,
+                  incompatibleNode: statusBefore.incompatibleNode,
+                  dismissedVersion: rawVer,
+                  changelog: updateCheckState.changelog,
+                  bundleBytes: updateCheckState.bundleBytes,
+                  releaseUrl: updateCheckState.releaseUrl || UPDATE_OFFICIAL_GH_LATEST_URL
+                };
+                updateCheckState = { loaded: true, ...nextCache };
+                writeUpdateCacheAtomic(nextCache);
+                broadcastUpdateStatusToTargets(getPublicUpdateStatus());
+              }
+            } else if (act === 'clearDismiss') {
+              if (!updateCheckState.loaded) readUpdateCacheFromDisk();
+              const statusBefore = getPublicUpdateStatus();
+              const nextCache = {
+                checkedAt: updateCheckState.checkedAt,
+                source: updateCheckState.source,
+                currentVersion: statusBefore.currentVersion,
+                latestVersion: updateCheckState.latestVersion,
+                updateAvailable: statusBefore.updateAvailable,
+                minAntigravityVersion: updateCheckState.minAntigravityVersion,
+                minNodeVersion: updateCheckState.minNodeVersion,
+                hostAppVersion: statusBefore.hostAppVersion,
+                incompatibleHost: statusBefore.incompatibleHost,
+                incompatibleNode: statusBefore.incompatibleNode,
+                dismissedVersion: null,
+                changelog: updateCheckState.changelog,
+                bundleBytes: updateCheckState.bundleBytes,
+                releaseUrl: updateCheckState.releaseUrl || UPDATE_OFFICIAL_GH_LATEST_URL
+              };
+              updateCheckState = { loaded: true, ...nextCache };
+              writeUpdateCacheAtomic(nextCache);
+              broadcastUpdateStatusToTargets(getPublicUpdateStatus());
+            } else if (act === 'openRelease') {
+              const now = Date.now();
+              if (now - lastOpenExternalActionAt < 500) return;
+              lastOpenExternalActionAt = now;
+              const fallbackUrl = isAllowedOfficialReleasePageUrl(updateCheckState.releaseUrl)
+                ? updateCheckState.releaseUrl
+                : UPDATE_OFFICIAL_GH_LATEST_URL;
+              if (!launchSafeHttpsReleaseUrlInDefaultBrowser(req?.url)) {
+                launchSafeHttpsReleaseUrlInDefaultBrowser(fallbackUrl);
+              }
             }
             return;
           }
@@ -9121,6 +10060,7 @@ async function sync() {
     ) {
       await refreshInstalledExternalEditorsAsync({ force: true });
     }
+    syncUpdateDiskStateIfChanged();
     const bundleChanged = rebuildBundleIfNeeded();
     if (!activeConfig.enabled) {
       targetThemeModes.clear();
@@ -9348,4 +10288,12 @@ if (RUN_ONCE) {
   process.exit(0);
 } else {
   setInterval(sync, 2500);
+  if (!SAFE_MODE) {
+    setTimeout(() => {
+      void checkForPatchUpdateAsync({ force: false });
+    }, UPDATE_INITIAL_DELAY_MS).unref();
+    setInterval(() => {
+      void checkForPatchUpdateAsync({ force: false });
+    }, 6 * 60 * 60 * 1000).unref();
+  }
 }

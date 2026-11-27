@@ -1813,6 +1813,274 @@ html[data-ag-preset="native"] body.dark [role="switch"][data-ag-sys-follow-switc
   transform: translateX(15px);
 }
 
+/* 外观卡片「主题补丁版本 / Patch Version」轻量提示行与侧栏指示小点（位于 #ag-ui-widgets，全预设统一协调） */
+[data-testid="settings-nav-item-Appearance"] [data-ag-update-nav-dot="1"] {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  margin-left: auto;
+  flex-shrink: 0;
+  background: #3F6E7A;
+  box-shadow: 0 0 0 2.5px rgba(63, 110, 122, 0.16);
+}
+
+html[data-ag-preset="absolutely"] [data-testid="settings-nav-item-Appearance"] [data-ag-update-nav-dot="1"] {
+  background: #D97757;
+  box-shadow: 0 0 0 2.5px rgba(217, 119, 87, 0.18);
+}
+
+html[data-ag-preset="native"] [data-testid="settings-nav-item-Appearance"] [data-ag-update-nav-dot="1"] {
+  background: var(--primary, #2F71E3);
+  box-shadow: 0 0 0 2.5px rgba(47, 113, 227, 0.18);
+}
+
+:is(html[data-ag-theme-mode="dark"] body, body.dark) [data-testid="settings-nav-item-Appearance"] [data-ag-update-nav-dot="1"] {
+  background: #7FAAB6;
+  box-shadow: 0 0 0 2.5px rgba(127, 170, 182, 0.2);
+}
+
+html[data-ag-dark-preset="claude-warm"]:not([data-ag-preset="native"])[data-ag-theme-mode="dark"] [data-testid="settings-nav-item-Appearance"] [data-ag-update-nav-dot="1"],
+html[data-ag-dark-preset="claude-warm"]:not([data-ag-preset="native"]) body.dark [data-testid="settings-nav-item-Appearance"] [data-ag-update-nav-dot="1"] {
+  background: #D97757;
+  box-shadow: 0 0 0 2.5px rgba(217, 119, 87, 0.22);
+}
+
+[data-ag-patch-update-row="1"] {
+  flex-wrap: wrap;
+  row-gap: 8px;
+}
+
+[data-ag-patch-update-row="1"][data-ag-update-state="available"] {
+  background: linear-gradient(90deg, rgba(63, 110, 122, 0.065), transparent 72%);
+}
+
+html[data-ag-preset="absolutely"] [data-ag-patch-update-row="1"][data-ag-update-state="available"] {
+  background: linear-gradient(90deg, rgba(217, 119, 87, 0.075), transparent 72%);
+}
+
+[data-ag-patch-update-row="1"].ag-patch-update-row--stacked {
+  flex-direction: column !important;
+  align-items: stretch !important;
+  justify-content: flex-start !important;
+  gap: 7px !important;
+}
+
+.ag-patch-update-left {
+  flex: 1 1 200px;
+  min-width: 0;
+}
+
+.ag-patch-update-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.ag-patch-update-title-wrap {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+  min-width: 0;
+}
+
+.ag-patch-update-desc {
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: var(--muted-foreground, var(--secondary-foreground, #686259));
+}
+
+.ag-patch-ver-badge {
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+  flex-shrink: 0;
+  font-family: var(--ag-font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.35;
+  padding: 1.5px 7px;
+  border-radius: 999px;
+  border: 1px solid rgba(63, 110, 122, 0.28);
+  background: rgba(63, 110, 122, 0.095);
+  color: #2B525D;
+}
+
+.ag-patch-ver-badge.is-ok {
+  border-color: rgba(45, 106, 79, 0.26);
+  background: rgba(45, 106, 79, 0.085);
+  color: #2D6A4F;
+}
+
+.ag-patch-ver-badge.is-ignored {
+  border-color: rgba(120, 113, 103, 0.26);
+  background: rgba(120, 113, 103, 0.09);
+  color: var(--muted-foreground, #686259);
+}
+
+html[data-ag-preset="absolutely"] .ag-patch-ver-badge.is-available {
+  border-color: rgba(217, 119, 87, 0.32);
+  background: rgba(217, 119, 87, 0.11);
+  color: #A64229;
+}
+
+html[data-ag-preset="native"] .ag-patch-ver-badge.is-available {
+  border-color: rgba(47, 113, 227, 0.30);
+  background: rgba(47, 113, 227, 0.09);
+  color: var(--primary, #2F71E3);
+}
+
+:is(html[data-ag-theme-mode="dark"] body, body.dark) .ag-patch-ver-badge {
+  border-color: rgba(134, 176, 188, 0.30);
+  background: rgba(134, 176, 188, 0.13);
+  color: #B4D2DC;
+}
+
+:is(html[data-ag-theme-mode="dark"] body, body.dark) .ag-patch-ver-badge.is-ok {
+  border-color: rgba(116, 198, 157, 0.28);
+  background: rgba(116, 198, 157, 0.11);
+  color: #8CD4AF;
+}
+
+html[data-ag-dark-preset="claude-warm"]:not([data-ag-preset="native"])[data-ag-theme-mode="dark"] .ag-patch-ver-badge.is-available,
+html[data-ag-dark-preset="claude-warm"]:not([data-ag-preset="native"]) body.dark .ag-patch-ver-badge.is-available {
+  border-color: rgba(217, 119, 87, 0.35);
+  background: rgba(217, 119, 87, 0.16);
+  color: #F2A88B;
+}
+
+.ag-patch-update-actions,
+.ag-patch-update-right {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.ag-patch-update-btn {
+  appearance: none;
+  border: 1px solid var(--border, rgba(31, 30, 29, 0.15));
+  background: var(--onyx-raised, var(--background, rgba(255, 255, 255, 0.72)));
+  color: var(--foreground, #22201D);
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 500;
+  line-height: 1.35;
+  padding: 4px 9px;
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease;
+}
+
+.ag-patch-update-btn:hover:not(:disabled) {
+  background: var(--onyx-well, rgba(31, 30, 29, 0.06));
+}
+
+.ag-patch-update-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.ag-patch-update-btn--primary {
+  background: #3D6470;
+  border-color: transparent;
+  color: #FAF8F3;
+}
+
+.ag-patch-update-btn--primary:hover:not(:disabled) {
+  background: #335560;
+}
+
+html[data-ag-preset="absolutely"] .ag-patch-update-btn--primary {
+  background: #D97757;
+  color: #FFFFFF;
+}
+
+html[data-ag-preset="absolutely"] .ag-patch-update-btn--primary:hover:not(:disabled) {
+  background: #C46546;
+}
+
+html[data-ag-preset="native"] .ag-patch-update-btn--primary {
+  background: var(--primary, #2F71E3);
+  color: var(--primary-foreground, #FFFFFF);
+}
+
+:is(html[data-ag-theme-mode="dark"] body, body.dark) .ag-patch-update-btn--primary {
+  background: #5E95A4;
+  color: #0E1316;
+}
+
+html[data-ag-dark-preset="claude-warm"]:not([data-ag-preset="native"])[data-ag-theme-mode="dark"] .ag-patch-update-btn--primary,
+html[data-ag-dark-preset="claude-warm"]:not([data-ag-preset="native"]) body.dark .ag-patch-update-btn--primary {
+  background: #D97757;
+  color: #FFFFFF;
+}
+
+.ag-patch-update-btn--ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--muted-foreground, var(--secondary-foreground, #686259));
+}
+
+.ag-patch-update-btn--ghost:hover:not(:disabled) {
+  background: var(--onyx-well, rgba(31, 30, 29, 0.06));
+  color: var(--foreground, #22201D);
+}
+
+[data-ag-patch-update-drawer="1"] {
+  padding: 9px 12px 11px;
+  border-top: 1px dashed var(--border, rgba(31, 30, 29, 0.14));
+  background: var(--onyx-well, rgba(31, 30, 29, 0.035));
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--foreground, #22201D);
+}
+
+[data-ag-patch-update-drawer="1"][hidden] {
+  display: none !important;
+}
+
+.ag-patch-update-cl-list {
+  margin: 0 0 8px;
+  padding-left: 16px;
+}
+
+.ag-patch-update-cl-list li {
+  margin-bottom: 2px;
+}
+
+.ag-patch-update-cmd-box {
+  font-family: var(--ag-font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+  font-size: 11px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border, rgba(31, 30, 29, 0.14));
+  background: var(--onyx-raised, var(--background, rgba(255, 255, 255, 0.68)));
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+.ag-patch-update-error {
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: #B42318;
+  background: rgba(180, 35, 24, 0.08);
+  border: 1px solid rgba(180, 35, 24, 0.22);
+  border-radius: 6px;
+  padding: 5px 8px;
+  word-break: break-word;
+}
+
+:is(html[data-ag-theme-mode="dark"] body, body.dark) .ag-patch-update-error {
+  color: #FCA5A5;
+  background: rgba(248, 113, 113, 0.12);
+  border-color: rgba(248, 113, 113, 0.28);
+}
+
 /* 2.35.0+ 自绘窗口控制按钮（Windows / Linux Insiders 默认及 --custom-window-controls 模式，解决 OS 暗色下浅色主题无悬停反馈 Issue #42） */
 html:not([data-ag-preset="native"]):not([data-ag-theme-mode="dark"]) body:not(.dark) [data-testid="custom-window-controls"] :is([data-testid="window-control-minimize"], [data-testid="window-control-maximize"]),
 html:not([data-ag-preset="native"]):not([data-ag-theme-mode="dark"]) body:not(.dark) [data-testid="custom-window-controls"] [data-testid="window-control-close"] > span {

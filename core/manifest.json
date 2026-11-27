@@ -2,6 +2,7 @@
   "name": "chuanban-antigravity-theme-patch",
   "version": "6.0.6",
   "minNodeVersion": "22.0.0",
+  "minAntigravityVersion": "2.34.0",
   "fullMetricsNodeVersion": "22.13.0",
   "distribution": {
     "notionGuide": "https://chuanban.notion.site/chuanban-antigravity-theme-patch-db7c5846f37546be9481cd791aed0554",
@@ -10,16 +11,16 @@
   },
   "files": {
     "daemon.mjs": {
-      "sha256": "ca362ca36bf60364c2a91e416ffd0f9253117fee4270934abd5971e90daf5cd4",
-      "bytes": 352314
+      "sha256": "25aeea1faf9e874036c7f073647bc75cee2859d4ec86563ae93f7d34ea726e6f",
+      "bytes": 389540
     },
     "runtime.js": {
-      "sha256": "5c78941dfe89739698b39b23e6188862df5ce571e4e3675fd1fff1c0d243ebc5",
-      "bytes": 467720
+      "sha256": "719ed47dfa18db6122cc40d7a9364cfeba0694470aef05a5d7aae5517cd93945",
+      "bytes": 489642
     },
     "theme.css": {
-      "sha256": "90ab56cad69bfee1204b305052a81c50fe89b31b9d3e00b9e126591a9e38552e",
-      "bytes": 168932
+      "sha256": "b5fd1668e5ef19a58cbd10095d06c20a889cf24a5805bc3e86071297ef655828",
+      "bytes": 176510
     },
     "i18n.json": {
       "sha256": "88b49d529dd4205cd768b2340be8028e3b416893e816fe8d0e4cd09a751aaab3",
