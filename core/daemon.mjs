@@ -1699,6 +1699,13 @@ function rebuildBundleIfNeeded(opts = {}) {
     normalizedSelectors.excludeI18n +=
       ', #ag-token-nav-section, #ag-token-analytics-panel, #ag-ta-tooltip, [data-ag-token-ui]';
   }
+  if (
+    typeof normalizedSelectors.excludeI18n === 'string' &&
+    normalizedSelectors.excludeI18n.trim() &&
+    !normalizedSelectors.excludeI18n.includes('.code-line .line-content')
+  ) {
+    normalizedSelectors.excludeI18n += ', .code-line .line-content, .code-line .token';
+  }
 
   const DEFAULT_ALLOWED_ORIGINS = [
     'http://127.0.0.1',
