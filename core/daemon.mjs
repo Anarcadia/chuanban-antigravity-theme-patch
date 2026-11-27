@@ -788,13 +788,14 @@ async function checkForPatchUpdateAsync({ force = false } = {}) {
     const currentVersion = getInstalledCurrentVersion();
     const checkedAt = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
     const prevDismissed = updateCheckState.dismissedVersion || null;
+    const updateAvailable = isPatchUpdateNewer(currentVersion, resolved.latestVersion);
     const nextCache = {
       checkedAt,
       source: resolved.source,
       currentVersion,
       latestVersion: resolved.latestVersion,
-      updateAvailable: isPatchUpdateNewer(currentVersion, resolved.latestVersion),
-      dismissedVersion: prevDismissed,
+      updateAvailable,
+      dismissedVersion: force || !updateAvailable ? null : prevDismissed,
       changelog: resolved.changelog,
       bundleBytes: resolved.bundleBytes,
       releaseUrl: resolved.releaseUrl

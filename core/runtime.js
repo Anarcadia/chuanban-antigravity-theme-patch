@@ -3568,7 +3568,7 @@
         const dismissBtn = document.createElement('button');
         dismissBtn.type = 'button';
         dismissBtn.className = 'ag-patch-update-btn ag-patch-update-btn--ghost';
-        dismissBtn.disabled = Boolean(st.upgrading);
+        dismissBtn.disabled = Boolean(st.upgrading || st.checking);
         dismissBtn.textContent = uiStr.updateDismissBtn;
         dismissBtn.addEventListener('click', (ev) => {
           ev.preventDefault();
