@@ -175,6 +175,11 @@
       updateRowLabel: '主题补丁版本',
       updateUpToDate: '已是最新',
       updateDismissedSuffix: '（已忽略）',
+      updateNeedHostSuffix: '（需升级客户端）',
+      updateNeedNodeSuffix: '（需升级 Node）',
+      updateIncompatHostDesc: '新版 v{lat} 需 Antigravity >= {min}（当前 {cur}），请先升级客户端',
+      updateIncompatHostNoCurDesc: '新版 v{lat} 需 Antigravity >= {min}，请先升级客户端',
+      updateIncompatNodeDesc: '新版 v{lat} 需 Node.js >= {min}，请先升级 Node 运行时',
       updateAvailableBadge: '有新版',
       updateNoRestartNote: '支持一键原地热升级或 CLI 升级，无需重启客户端',
       updateCheckedPrefix: '上次检查：',
@@ -218,6 +223,11 @@
       updateRowLabel: 'パッチバージョン',
       updateUpToDate: '最新',
       updateDismissedSuffix: '（非表示中）',
+      updateNeedHostSuffix: '（クライアント更新必要）',
+      updateNeedNodeSuffix: '（Node 更新必要）',
+      updateIncompatHostDesc: 'v{lat} には Antigravity >= {min} が必要です（現在 {cur}）',
+      updateIncompatHostNoCurDesc: 'v{lat} には Antigravity >= {min} が必要です',
+      updateIncompatNodeDesc: 'v{lat} には Node.js >= {min} が必要です',
       updateAvailableBadge: '更新あり',
       updateNoRestartNote: 'ボタンまたは CLI でホット更新可能（再起動不要）',
       updateCheckedPrefix: '最終確認: ',
@@ -260,6 +270,11 @@
     updateRowLabel: 'Patch Version',
     updateUpToDate: 'Up to date',
     updateDismissedSuffix: ' (Ignored)',
+    updateNeedHostSuffix: ' (Host update required)',
+    updateNeedNodeSuffix: ' (Node update required)',
+    updateIncompatHostDesc: 'v{lat} requires Antigravity >= {min} (current {cur})',
+    updateIncompatHostNoCurDesc: 'v{lat} requires Antigravity >= {min}',
+    updateIncompatNodeDesc: 'v{lat} requires Node.js >= {min}',
     updateAvailableBadge: 'Update',
     updateNoRestartNote: 'Hot-upgrades in place via button or CLI without restarting Antigravity',
     updateCheckedPrefix: 'Last checked: ',
@@ -3531,6 +3546,11 @@
         cur: st.currentVersion || '',
         lat: st.latestVersion || '',
         avail: Boolean(st.updateAvailable),
+        incompatHost: Boolean(st.incompatibleHost),
+        incompatNode: Boolean(st.incompatibleNode),
+        minAg: st.minAntigravityVersion || '',
+        minNode: st.minNodeVersion || '',
+        hostVer: st.hostAppVersion || '',
         dis: Boolean(st.dismissed),
         chk: Boolean(st.checking),
         upg: Boolean(st.upgrading),
@@ -3711,7 +3731,11 @@
           drawer.appendChild(cmdBox);
         }
       } else {
-        row.setAttribute('data-ag-update-state', st.updateAvailable && st.dismissed ? 'dismissed' : 'latest');
+        const isIncompatible = Boolean((st.incompatibleHost || st.incompatibleNode) && st.latestVersion);
+        row.setAttribute(
+          'data-ag-update-state',
+          isIncompatible ? 'incompatible' : st.updateAvailable && st.dismissed ? 'dismissed' : 'latest'
+        );
         const leftCol = document.createElement('div');
         leftCol.className = 'ag-patch-update-left flex-1 flex flex-col gap-0.5';
 
@@ -3721,24 +3745,56 @@
         lbl.className = 'ag-patch-update-label';
         lbl.textContent = uiStr.updateRowLabel;
         const badge = document.createElement('span');
-        badge.className = st.updateAvailable && st.dismissed ? 'ag-patch-ver-badge is-ignored' : 'ag-patch-ver-badge is-ok';
-        badge.textContent =
-          st.updateAvailable && st.dismissed
-            ? `v${curVer} → v${latVer}${uiStr.updateDismissedSuffix}`
-            : `v${curVer} · ${uiStr.updateUpToDate}`;
+        badge.className =
+          isIncompatible || (st.updateAvailable && st.dismissed)
+            ? 'ag-patch-ver-badge is-ignored'
+            : 'ag-patch-ver-badge is-ok';
+        if (isIncompatible) {
+          const suffix = st.incompatibleHost ? uiStr.updateNeedHostSuffix : uiStr.updateNeedNodeSuffix;
+          badge.textContent = `v${curVer} → v${latVer}${suffix}`;
+        } else if (st.updateAvailable && st.dismissed) {
+          badge.textContent = `v${curVer} → v${latVer}${uiStr.updateDismissedSuffix}`;
+        } else {
+          badge.textContent = `v${curVer} · ${uiStr.updateUpToDate}`;
+        }
         titleWrap.appendChild(lbl);
         titleWrap.appendChild(badge);
         leftCol.appendChild(titleWrap);
 
         const desc = document.createElement('div');
         desc.className = 'ag-patch-update-desc';
-        desc.textContent = checkedTime ? `${uiStr.updateCheckedPrefix}${checkedTime}` : uiStr.updateNotChecked;
+        if (isIncompatible) {
+          if (st.incompatibleHost) {
+            const tpl = st.hostAppVersion ? uiStr.updateIncompatHostDesc : uiStr.updateIncompatHostNoCurDesc;
+            desc.textContent = tpl
+              .replace('{lat}', latVer)
+              .replace('{min}', st.minAntigravityVersion || '2.34.0')
+              .replace('{cur}', st.hostAppVersion || '');
+          } else {
+            desc.textContent = uiStr.updateIncompatNodeDesc
+              .replace('{lat}', latVer)
+              .replace('{min}', st.minNodeVersion || '22.0.0');
+          }
+        } else {
+          desc.textContent = checkedTime ? `${uiStr.updateCheckedPrefix}${checkedTime}` : uiStr.updateNotChecked;
+        }
         leftCol.appendChild(desc);
 
         const rightCol = document.createElement('div');
         rightCol.className = 'ag-patch-update-right shrink-0 flex items-center gap-1.5';
 
-        if (st.updateAvailable && st.dismissed) {
+        if (isIncompatible) {
+          const relBtn = document.createElement('button');
+          relBtn.type = 'button';
+          relBtn.className = 'ag-patch-update-btn';
+          relBtn.textContent = uiStr.updateReleaseBtn;
+          relBtn.addEventListener('click', (ev) => {
+            ev.preventDefault();
+            ev.stopPropagation();
+            sendUpdateAction('openRelease', { url: st.releaseUrl });
+          });
+          rightCol.appendChild(relBtn);
+        } else if (st.updateAvailable && st.dismissed) {
           const showBtn = document.createElement('button');
           showBtn.type = 'button';
           showBtn.className = 'ag-patch-update-btn';

@@ -797,6 +797,12 @@ function getPublicUpdateStatus() {
   };
 }
 
+function getUpdateStatusPreloadSig() {
+  if (SAFE_MODE || activeConfig?.modules?.updateCheck === false) return 'off';
+  const st = getPublicUpdateStatus();
+  return `${st.currentVersion || ''}|${st.latestVersion || ''}|${st.updateAvailable ? 1 : 0}|${st.dismissed ? 1 : 0}|${st.incompatibleHost ? 1 : 0}|${st.incompatibleNode ? 1 : 0}|${st.checkedAt || ''}|${st.checking ? 1 : 0}|${st.upgrading ? 1 : 0}|${st.upgradeError || ''}`;
+}
+
 function broadcastUpdateStatusToTargets(statusPayload) {
   if (!activeConfig?.enabled) return;
   cachedBundleSig = '';
@@ -806,7 +812,7 @@ function broadcastUpdateStatusToTargets(statusPayload) {
   for (const [, entry] of attachedTargets.entries()) {
     if (!entry?.hostConfirmed || entry.type !== 'page') continue;
     if (entry.updateNewDocScript) {
-      tasks.push(entry.updateNewDocScript().catch(() => {}));
+      tasks.push(entry.updateNewDocScript(true).catch(() => {}));
     }
     if (entry.send) {
       tasks.push(entry.send('Runtime.evaluate', { expression: expr, returnByValue: false }).catch(() => {}));
@@ -1105,6 +1111,38 @@ function launchSafeHttpsReleaseUrlInDefaultBrowser(rawUrl) {
   return true;
 }
 
+function parseTrailingTopLevelJsonObject(text) {
+  const lastClose = text.lastIndexOf('}');
+  if (lastClose < 0) return null;
+
+  // 1) 优先从末尾向上匹配顶层行首 `{`（命中 JSON.stringify(..., null, 2) 输出的完整外层对象，不被嵌套子对象干扰）
+  const col0Starts = [];
+  const col0Re = /(?:^|\r?\n)\{/g;
+  let m;
+  while ((m = col0Re.exec(text)) !== null) {
+    const bracePos = m.index + m[0].length - 1;
+    if (bracePos < lastClose) col0Starts.push(bracePos);
+  }
+  for (let i = col0Starts.length - 1; i >= 0; i--) {
+    try {
+      const parsed = JSON.parse(text.slice(col0Starts[i], lastClose + 1));
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed;
+    } catch {}
+  }
+
+  // 2) 兼容单行带前缀的嵌套 JSON（如 "[ERR] {\"ok\":false,...}"）：从该行最左侧 `{` 向右尝试找到最外层合法对象
+  const lineStart = text.lastIndexOf('\n', lastClose) + 1;
+  let pos = text.indexOf('{', lineStart);
+  while (pos >= 0 && pos < lastClose) {
+    try {
+      const parsed = JSON.parse(text.slice(pos, lastClose + 1));
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed;
+    } catch {}
+    pos = text.indexOf('{', pos + 1);
+  }
+  return null;
+}
+
 function readUpgradeLogTailSummary(logPath) {
   try {
     if (!fs.existsSync(logPath)) return '';
@@ -1120,19 +1158,19 @@ function readUpgradeLogTailSummary(logPath) {
     } finally {
       fs.closeSync(fd);
     }
-    const objStart = text.lastIndexOf('{');
-    if (objStart >= 0) {
-      try {
-        const parsed = JSON.parse(text.slice(objStart));
-        if (parsed && typeof parsed.error === 'string' && parsed.error.trim()) {
-          return parsed.error.trim().slice(0, 140);
-        }
-      } catch {}
+    const parsed = parseTrailingTopLevelJsonObject(text);
+    if (parsed) {
+      const msg =
+        (typeof parsed.error === 'string' && parsed.error.trim()) ||
+        (typeof parsed.reason === 'string' && parsed.reason.trim()) ||
+        (typeof parsed.stderr === 'string' && parsed.stderr.trim()) ||
+        '';
+      if (msg) return msg.slice(0, 140);
     }
     const lines = text
       .split(/\r?\n/)
       .map((l) => l.trim())
-      .filter(Boolean);
+      .filter((l) => l && !/^[{}[\],]+$/.test(l));
     const lastLine = lines.length > 0 ? lines[lines.length - 1] : '';
     return lastLine.slice(0, 140);
   } catch {
@@ -7694,7 +7732,8 @@ function attachTarget(target, endpoint) {
         newDocQueue = newDocQueue
           .then(async () => {
             const { script, parentMode, parentDarkPreset, parentLightPreset, uiLangVal } = buildTargetInjectScript();
-            const nextSig = `${activeConfig.enabled}|${cachedPatchVersion}|${activeConfig.preset || ''}|${activeConfig.darkPreset || ''}|${uiLangVal || ''}|${parentMode}|${parentDarkPreset || ''}|${parentLightPreset || ''}`;
+            const updSig = target.type === 'page' ? getUpdateStatusPreloadSig() : '';
+            const nextSig = `${activeConfig.enabled}|${cachedPatchVersion}|${activeConfig.preset || ''}|${activeConfig.darkPreset || ''}|${uiLangVal || ''}|${parentMode}|${parentDarkPreset || ''}|${parentLightPreset || ''}|${updSig}`;
             if (!force && evalScriptId && nextSig === lastNewDocSig) return;
             if (evalScriptId) {
               await send('Page.removeScriptToEvaluateOnNewDocument', { identifier: evalScriptId });
