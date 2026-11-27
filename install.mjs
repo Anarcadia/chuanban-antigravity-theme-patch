@@ -258,6 +258,7 @@ function buildManifest(baseDir = __dirname) {
     name: 'chuanban-antigravity-theme-patch',
     version: '6.0.6',
     minNodeVersion: '22.0.0',
+    minAntigravityVersion: '2.34.0',
     fullMetricsNodeVersion: '22.13.0',
     distribution: {
       notionGuide: NOTION_GUIDE_URL,
@@ -466,7 +467,7 @@ function buildDistZip(baseDir = __dirname, { updateBundleOnly = false } = {}) {
     version: manifest.version,
     releasedAt: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'),
     minNodeVersion: manifest.minNodeVersion || '22.0.0',
-    minAntigravityVersion: '2.34.0',
+    minAntigravityVersion: manifest.minAntigravityVersion || '2.34.0',
     changelog: extractChangelogHighlights(baseDir, manifest.version),
     coreUpdateBundle: {
       filename: updateInfo.filename,
@@ -1882,7 +1883,7 @@ async function runDoctor() {
       ...(sourceSync && !sourceSync.sameDirectory ? { sourceSync } : {})
     },
     keepAliveTask: inspectWindowsKeepAliveTask(targetDir),
-    update: buildDoctorUpdateSection(targetDir),
+    update: buildDoctorUpdateSection(targetDir, env),
     liveWindow: live
   };
 
@@ -2251,7 +2252,9 @@ WantedBy=default.target
 `;
     fs.writeFileSync(serviceFile, unitContent, 'utf8');
     try {
-      execSync('systemctl --user daemon-reload && systemctl --user enable --now antigravity-theme.service 2>/dev/null || true');
+      execSync(
+        'systemctl --user daemon-reload && (systemctl --user enable antigravity-theme.service 2>/dev/null || true) && systemctl --user restart antigravity-theme.service 2>/dev/null || true'
+      );
     } catch {}
     return { platform: 'linux', serviceFile, runningNow: true };
   }
@@ -3605,7 +3608,7 @@ function isUpdateAvailableVersion(currentVer, candidateVer) {
   return compareSemverTuples(candTuple, curTuple) > 0;
 }
 
-function buildDoctorUpdateSection(targetDir) {
+function buildDoctorUpdateSection(targetDir, env = null) {
   const manifest = readInstalledCoreManifest(targetDir);
   const current = manifest?.version ? String(manifest.version) : null;
   let updateCheckEnabled = true;
@@ -3621,13 +3624,28 @@ function buildDoctorUpdateSection(targetDir) {
   const cache = readUpdateCheckCache(targetDir);
   const latest = cache?.latestVersion ? String(cache.latestVersion) : null;
   const dismissedVersion = cache?.dismissedVersion ? String(cache.dismissedVersion) : null;
-  const available = Boolean(latest && current && isUpdateAvailableVersion(current, latest));
+  const minAntigravityVersion =
+    typeof cache?.minAntigravityVersion === 'string' && cache.minAntigravityVersion.trim()
+      ? cache.minAntigravityVersion.trim()
+      : null;
+  const minNodeVersion =
+    typeof cache?.minNodeVersion === 'string' && cache.minNodeVersion.trim() ? cache.minNodeVersion.trim() : null;
+  const hostAppVersion = env?.appVersion || cache?.hostAppVersion || null;
+  const newer = Boolean(latest && current && isUpdateAvailableVersion(current, latest));
+  const hostCompatible = !minAntigravityVersion || !hostAppVersion || semverSatisfiesMin(hostAppVersion, minAntigravityVersion);
+  const nodeCompatible = !minNodeVersion || semverSatisfiesMin(process.versions.node, minNodeVersion);
+  const available = Boolean(newer && hostCompatible && nodeCompatible);
   const dismissed = Boolean(available && dismissedVersion && dismissedVersion === latest);
   return {
     enabled: updateCheckEnabled,
     current,
     latest,
     available,
+    incompatibleHost: Boolean(newer && !hostCompatible),
+    incompatibleNode: Boolean(newer && !nodeCompatible),
+    minAntigravityVersion,
+    minNodeVersion,
+    hostAppVersion,
     dismissed,
     checkedAt: cache?.checkedAt || null,
     source: cache?.source || null,
@@ -4120,6 +4138,103 @@ function semverSatisfiesMin(currentVer, minVer) {
   return compareSemverTuples(cur, min) >= 0;
 }
 
+function isUpgradeLockPidAlive(pid) {
+  if (!Number.isInteger(pid) || pid <= 0 || pid === process.pid) return false;
+  let exists = false;
+  try {
+    process.kill(pid, 0);
+    exists = true;
+  } catch (err) {
+    if (err && err.code === 'EPERM') exists = true;
+  }
+  if (!exists) return false;
+  if (process.platform === 'win32') {
+    try {
+      const r = spawnSync('tasklist', ['/FI', `PID eq ${pid}`, '/FO', 'CSV', '/NH'], {
+        encoding: 'utf8',
+        windowsHide: true,
+        timeout: 4000
+      });
+      if (r.status === 0) {
+        return String(r.stdout || '').toLowerCase().includes('node.exe');
+      }
+    } catch {}
+  }
+  return true;
+}
+
+function acquireUpgradeLock(targetDir) {
+  const cacheDir = path.join(targetDir, '.cache');
+  const lockPath = path.join(cacheDir, 'upgrade.lock');
+  fs.mkdirSync(cacheDir, { recursive: true });
+  const payload = `${JSON.stringify({ pid: process.pid, startedAt: new Date().toISOString() })}\n`;
+
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const fd = fs.openSync(lockPath, 'wx');
+      try {
+        fs.writeFileSync(fd, payload, 'utf8');
+      } finally {
+        fs.closeSync(fd);
+      }
+      let released = false;
+      const release = () => {
+        if (released) return;
+        released = true;
+        try {
+          if (!fs.existsSync(lockPath)) return;
+          const raw = fs.readFileSync(lockPath, 'utf8');
+          const parsed = JSON.parse(raw);
+          if (Number(parsed?.pid) === process.pid) {
+            fs.unlinkSync(lockPath);
+          }
+        } catch {}
+      };
+      return { ok: true, lockPath, release };
+    } catch (err) {
+      if (!err || err.code !== 'EEXIST') {
+        return { ok: false, error: `Failed to acquire upgrade lock: ${err?.message || err}` };
+      }
+      let holderPid = 0;
+      let holderStartedAt = null;
+      let stale = false;
+      try {
+        const st = fs.statSync(lockPath);
+        const ageMs = Date.now() - st.mtimeMs;
+        try {
+          const parsed = JSON.parse(fs.readFileSync(lockPath, 'utf8'));
+          holderPid = Number(parsed?.pid) || 0;
+          holderStartedAt = typeof parsed?.startedAt === 'string' ? parsed.startedAt : null;
+        } catch {
+          holderPid = 0;
+        }
+        if (holderPid > 0) {
+          const alive = isUpgradeLockPidAlive(holderPid);
+          stale = !alive || ageMs > 15 * 60 * 1000;
+        } else {
+          stale = ageMs > 10000;
+        }
+      } catch {
+        stale = true;
+      }
+      if (!stale || attempt > 0) {
+        return {
+          ok: false,
+          pid: holderPid || null,
+          startedAt: holderStartedAt,
+          error: holderPid
+            ? `Another upgrade process is already running (PID ${holderPid})`
+            : 'Another upgrade process is already running'
+        };
+      }
+      try {
+        fs.unlinkSync(lockPath);
+      } catch {}
+    }
+  }
+  return { ok: false, error: 'Another upgrade process is already running' };
+}
+
 async function runUpgrade() {
   const checkOnly = hasFlag('--check') || hasFlag('--dry-run');
   const force = hasFlag('--force');
@@ -4149,7 +4264,25 @@ async function runUpgrade() {
 
   const remoteManifest = remote.manifest;
   const toVersion = String(remoteManifest.version || '').replace(/^v/i, '');
-  const updateAvailable = isUpdateAvailableVersion(fromVersion, toVersion);
+  const semverNewer = isUpdateAvailableVersion(fromVersion, toVersion);
+  const requiredMinAgVersion =
+    typeof remoteManifest.minAntigravityVersion === 'string' && remoteManifest.minAntigravityVersion.trim()
+      ? remoteManifest.minAntigravityVersion.trim()
+      : null;
+  const requiredMinNodeVersion =
+    typeof remoteManifest.minNodeVersion === 'string' && remoteManifest.minNodeVersion.trim()
+      ? remoteManifest.minNodeVersion.trim()
+      : '22.0.0';
+
+  const hostEnv = requiredMinAgVersion || !checkOnly ? await detectEnvironment('auto') : null;
+  const hostAppVersion = hostEnv?.appVersion || null;
+  const hostVersionCompatible =
+    !requiredMinAgVersion || !hostAppVersion || semverSatisfiesMin(hostAppVersion, requiredMinAgVersion);
+  const nodeVersionCompatible = semverSatisfiesMin(process.versions.node, requiredMinNodeVersion);
+  const incompatibleHost = Boolean(semverNewer && !hostVersionCompatible);
+  const incompatibleNode = Boolean(semverNewer && !nodeVersionCompatible);
+  const updateAvailable = Boolean(semverNewer && hostVersionCompatible && nodeVersionCompatible);
+
   const candidateReleaseUrl = remoteManifest.fullReleaseUrl || `${GITHUB_REPO_URL}/releases/tag/v${toVersion}`;
   const releaseUrl = isAllowedUpdateUrl(candidateReleaseUrl, { allowLoopbackOrigin: remote.allowLoopbackOrigin })
     ? candidateReleaseUrl
@@ -4161,6 +4294,11 @@ async function runUpgrade() {
     currentVersion: fromVersion,
     latestVersion: toVersion,
     updateAvailable,
+    minAntigravityVersion: requiredMinAgVersion,
+    minNodeVersion: requiredMinNodeVersion,
+    hostAppVersion,
+    incompatibleHost,
+    incompatibleNode,
     dismissedVersion: checkOnly || !updateAvailable ? null : existingCache.dismissedVersion || null,
     changelog: Array.isArray(remoteManifest.changelog) ? remoteManifest.changelog : [],
     bundleBytes: Number(remoteManifest.coreUpdateBundle?.bytes || 0) || null,
@@ -4168,16 +4306,82 @@ async function runUpgrade() {
   };
   writeUpdateCheckCache(targetDir, preUpgradeCacheSnapshot);
 
-  if (checkOnly || (!updateAvailable && !force && !requestedVersion)) {
+  if (checkOnly) {
     console.log(
       JSON.stringify(
         {
           ok: true,
-          checkOnly,
+          checkOnly: true,
           targetDir,
           currentVersion: fromVersion,
           latestVersion: toVersion,
           updateAvailable,
+          incompatibleHost,
+          incompatibleNode,
+          hostAppVersion,
+          minAntigravityVersion: requiredMinAgVersion,
+          minNodeVersion: requiredMinNodeVersion,
+          upgraded: false,
+          source: remote.source,
+          changelog: remoteManifest.changelog || [],
+          releaseUrl
+        },
+        null,
+        2
+      )
+    );
+    return;
+  }
+
+  if ((semverNewer || requestedVersion || force) && !hostVersionCompatible && !force) {
+    console.error(
+      JSON.stringify(
+        {
+          ok: false,
+          step: 'antigravity_version',
+          currentVersion: fromVersion,
+          latestVersion: toVersion,
+          hostAppVersion,
+          minAntigravityVersion: requiredMinAgVersion,
+          error: `Antigravity >= ${requiredMinAgVersion} required for v${toVersion} (current: ${hostAppVersion})`
+        },
+        null,
+        2
+      )
+    );
+    process.exit(1);
+  }
+
+  if ((semverNewer || requestedVersion || force) && !nodeVersionCompatible && !force) {
+    console.error(
+      JSON.stringify(
+        {
+          ok: false,
+          step: 'node_version',
+          currentVersion: fromVersion,
+          latestVersion: toVersion,
+          minNodeVersion: requiredMinNodeVersion,
+          error: `Node.js >= ${requiredMinNodeVersion} required for v${toVersion} (current: ${process.versions.node})`
+        },
+        null,
+        2
+      )
+    );
+    process.exit(1);
+  }
+
+  if (!updateAvailable && !force && !requestedVersion) {
+    console.log(
+      JSON.stringify(
+        {
+          ok: true,
+          checkOnly: false,
+          targetDir,
+          currentVersion: fromVersion,
+          latestVersion: toVersion,
+          updateAvailable: false,
+          hostAppVersion,
+          minAntigravityVersion: requiredMinAgVersion,
           upgraded: false,
           source: remote.source,
           changelog: remoteManifest.changelog || [],
@@ -4214,6 +4418,28 @@ async function runUpgrade() {
     process.exit(1);
   }
 
+  const lock = acquireUpgradeLock(targetDir);
+  if (!lock.ok) {
+    console.error(
+      JSON.stringify(
+        {
+          ok: false,
+          step: 'lock',
+          error: lock.error,
+          ...(lock.pid ? { holderPid: lock.pid } : {}),
+          ...(lock.startedAt ? { holderStartedAt: lock.startedAt } : {})
+        },
+        null,
+        2
+      )
+    );
+    process.exit(1);
+  }
+  const releaseLockOnce = () => {
+    lock.release();
+  };
+  process.once('exit', releaseLockOnce);
+
   const stagingRoot = path.join(targetDir, '.cache', 'staging', `upgrade-v${toVersion}-${process.pid}-${Date.now()}`);
   const unpackedDir = path.join(stagingRoot, 'unpacked');
   const cleanupStaging = () => {
@@ -4242,7 +4468,7 @@ async function runUpgrade() {
       kind: 'zip',
       minBytes: 32 * 1024,
       sha256: bundleSpec.sha256 || null,
-      timeoutSec: 180
+      timeoutSec: 45
     };
 
     const dlRes = await downloadFontAsset(downloadAssetSpec, stagingRoot, {
@@ -4317,7 +4543,7 @@ async function runUpgrade() {
       );
       process.exit(1);
     }
-    if (!semverSatisfiesMin(process.versions.node, stagedManifest.minNodeVersion || '22.0.0')) {
+    if (!semverSatisfiesMin(process.versions.node, stagedManifest.minNodeVersion || '22.0.0') && !force) {
       cleanupStaging();
       console.error(
         JSON.stringify(
@@ -4333,9 +4559,31 @@ async function runUpgrade() {
       process.exit(1);
     }
 
+    const stagedMinAgVersion =
+      typeof stagedManifest.minAntigravityVersion === 'string' && stagedManifest.minAntigravityVersion.trim()
+        ? stagedManifest.minAntigravityVersion.trim()
+        : requiredMinAgVersion;
+    if (stagedMinAgVersion && hostAppVersion && !semverSatisfiesMin(hostAppVersion, stagedMinAgVersion) && !force) {
+      cleanupStaging();
+      console.error(
+        JSON.stringify(
+          {
+            ok: false,
+            step: 'antigravity_version',
+            hostAppVersion,
+            minAntigravityVersion: stagedMinAgVersion,
+            error: `Antigravity >= ${stagedMinAgVersion} required for v${toVersion} (current: ${hostAppVersion})`
+          },
+          null,
+          2
+        )
+      );
+      process.exit(1);
+    }
+
     let preUpgradeLiveReachable = false;
     if (!isCustomSandboxTarget) {
-      const preEnv = await detectEnvironment('auto');
+      const preEnv = hostEnv || (await detectEnvironment('auto'));
       const preLive = await inspectLiveWindow(preEnv);
       preUpgradeLiveReachable = Boolean(preLive.reachable);
     }
@@ -4362,6 +4610,11 @@ async function runUpgrade() {
       currentVersion: toVersion,
       latestVersion: toVersion,
       updateAvailable: false,
+      minAntigravityVersion: stagedMinAgVersion || null,
+      minNodeVersion: stagedManifest.minNodeVersion || requiredMinNodeVersion || null,
+      hostAppVersion,
+      incompatibleHost: false,
+      incompatibleNode: false,
       dismissedVersion: null,
       changelog: Array.isArray(remoteManifest.changelog) ? remoteManifest.changelog : [],
       bundleBytes: dlRes.bytes,
@@ -4435,6 +4688,7 @@ async function runUpgrade() {
     }
 
     cleanupStaging();
+    releaseLockOnce();
     console.log(
       JSON.stringify(
         {
@@ -4459,6 +4713,7 @@ async function runUpgrade() {
       writeUpdateCheckCache(targetDir, preUpgradeCacheSnapshot);
     }
     cleanupStaging();
+    releaseLockOnce();
     console.error(JSON.stringify({ ok: false, error: err?.message || String(err) }, null, 2));
     process.exit(1);
   }

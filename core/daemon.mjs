@@ -500,7 +500,8 @@ const UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
 const UPDATE_CHECK_ERROR_BACKOFF_MS = 60 * 60 * 1000;
 const UPDATE_MANUAL_COOLDOWN_MS = 2000;
 const UPDATE_UPGRADE_COOLDOWN_MS = 10000;
-const UPDATE_UPGRADE_TIMEOUT_MS = 120000;
+const UPDATE_UPGRADE_TIMEOUT_MS = 360000;
+const UPDATE_HOST_VERSION_TTL_MS = 10 * 60 * 1000;
 const UPDATE_INITIAL_DELAY_MS = 30 * 1000;
 const UPDATE_REPO_URL = 'https://github.com/Anarcadia/chuanban-antigravity-theme-patch';
 const UPDATE_OFFICIAL_R2_URL = 'https://img.chuanban.cc/themes/chuanban-antigravity/latest.json';
@@ -513,11 +514,15 @@ let lastUpgradeTriggerAt = 0;
 let lastUpdateErrorAt = 0;
 let lastUpgradeError = '';
 let updateUpgradeWatchdog = null;
+let cachedHostAppVersion = { version: null, probedAt: 0, promise: null };
 let updateCheckState = {
   loaded: false,
   checkedAt: null,
   source: null,
   latestVersion: null,
+  minAntigravityVersion: null,
+  minNodeVersion: null,
+  hostAppVersion: null,
   dismissedVersion: null,
   changelog: [],
   bundleBytes: null,
@@ -579,6 +584,85 @@ function isPatchUpdateNewer(currentVer, candidateVer) {
   return compareUpdateSemverTuples(cand, cur) > 0;
 }
 
+function isPatchMinVersionSatisfied(currentVer, minVer) {
+  if (!minVer || !currentVer) return true;
+  const cur = extractUpdateSemverTuple(currentVer);
+  const min = extractUpdateSemverTuple(minVer);
+  if (!cur || !min) return true;
+  return compareUpdateSemverTuples(cur, min) >= 0;
+}
+
+async function resolveHostAppVersionAsync({ force = false } = {}) {
+  const now = Date.now();
+  if (!force && cachedHostAppVersion.probedAt > 0 && now - cachedHostAppVersion.probedAt < UPDATE_HOST_VERSION_TTL_MS) {
+    return cachedHostAppVersion.version;
+  }
+  if (cachedHostAppVersion.promise) return cachedHostAppVersion.promise;
+
+  const p = (async () => {
+    const home = os.homedir();
+    let detected = null;
+    try {
+      if (process.platform === 'darwin') {
+        const candidates = [
+          '/Applications/Antigravity.app/Contents/Info.plist',
+          path.join(home, 'Applications', 'Antigravity.app', 'Contents', 'Info.plist'),
+          '/Applications/Antigravity - Insiders.app/Contents/Info.plist',
+          path.join(home, 'Applications', 'Antigravity - Insiders.app', 'Contents', 'Info.plist')
+        ];
+        for (const plist of candidates) {
+          if (!fs.existsSync(plist)) continue;
+          const xml = fs.readFileSync(plist, 'utf8');
+          const m = xml.match(/<key>CFBundleShortVersionString<\/key>\s*<string>([^<]+)<\/string>/);
+          if (m && m[1]) {
+            detected = m[1].trim();
+            break;
+          }
+        }
+      } else if (process.platform === 'linux') {
+        const candidates = [
+          '/usr/share/antigravity/resources/app/package.json',
+          '/opt/Antigravity/resources/app/package.json',
+          '/usr/share/antigravity-insiders/resources/app/package.json'
+        ];
+        for (const pkgPath of candidates) {
+          if (!fs.existsSync(pkgPath)) continue;
+          const pkg = readJsonSafe(pkgPath, null);
+          if (pkg && typeof pkg.version === 'string' && pkg.version.trim()) {
+            detected = pkg.version.trim();
+            break;
+          }
+        }
+      } else if (process.platform === 'win32') {
+        const localAppData = process.env.LOCALAPPDATA || path.join(home, 'AppData', 'Local');
+        const progFiles = process.env.ProgramFiles || 'C:\\Program Files';
+        const exeCandidates = [
+          path.join(localAppData, 'Programs', 'Antigravity', 'Antigravity.exe'),
+          path.join(progFiles, 'Antigravity', 'Antigravity.exe'),
+          path.join(localAppData, 'Programs', 'Antigravity - Insiders', 'Antigravity - Insiders.exe')
+        ];
+        const existingExe = exeCandidates.find((exe) => fs.existsSync(exe)) || '';
+        if (existingExe) {
+          const ps = `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; (Get-Item -LiteralPath '${existingExe.replace(/'/g, "''")}').VersionInfo.ProductVersion`;
+          const r = await execFileAsync(
+            'powershell',
+            ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', ps],
+            3000
+          );
+          if (r.ok && r.stdout.trim()) {
+            detected = r.stdout.trim();
+          }
+        }
+      }
+    } catch {}
+    cachedHostAppVersion = { version: detected, probedAt: Date.now(), promise: null };
+    return detected;
+  })();
+
+  cachedHostAppVersion.promise = p;
+  return p;
+}
+
 let lastObservedUpdateDiskSig = '';
 
 function computeUpdateDiskSig() {
@@ -593,6 +677,14 @@ function readUpdateCacheFromDisk() {
       checkedAt: typeof parsed.checkedAt === 'string' ? parsed.checkedAt : null,
       source: typeof parsed.source === 'string' ? parsed.source : null,
       latestVersion: typeof parsed.latestVersion === 'string' ? parsed.latestVersion.replace(/^v/i, '') : null,
+      minAntigravityVersion:
+        typeof parsed.minAntigravityVersion === 'string' && parsed.minAntigravityVersion.trim()
+          ? parsed.minAntigravityVersion.trim()
+          : null,
+      minNodeVersion:
+        typeof parsed.minNodeVersion === 'string' && parsed.minNodeVersion.trim() ? parsed.minNodeVersion.trim() : null,
+      hostAppVersion:
+        typeof parsed.hostAppVersion === 'string' && parsed.hostAppVersion.trim() ? parsed.hostAppVersion.trim() : null,
       dismissedVersion: typeof parsed.dismissedVersion === 'string' ? parsed.dismissedVersion.replace(/^v/i, '') : null,
       changelog: Array.isArray(parsed.changelog) ? parsed.changelog.filter((s) => typeof s === 'string').slice(0, 6) : [],
       bundleBytes: Number.isFinite(Number(parsed.bundleBytes)) && Number(parsed.bundleBytes) > 0 ? Number(parsed.bundleBytes) : null,
@@ -652,15 +744,45 @@ function getPublicUpdateStatus() {
   }
   const currentVersion = getInstalledCurrentVersion();
   const latestVersion = updateCheckState.latestVersion || null;
-  const updateAvailable = Boolean(latestVersion && isPatchUpdateNewer(currentVersion, latestVersion));
+  const hostAppVersion = cachedHostAppVersion.version || updateCheckState.hostAppVersion || null;
+  const minAntigravityVersion = updateCheckState.minAntigravityVersion || null;
+  const minNodeVersion = updateCheckState.minNodeVersion || null;
+  const semverNewer = Boolean(latestVersion && isPatchUpdateNewer(currentVersion, latestVersion));
+  const hostCompatible = isPatchMinVersionSatisfied(hostAppVersion, minAntigravityVersion);
+  const nodeCompatible = isPatchMinVersionSatisfied(process.versions.node, minNodeVersion);
+  const incompatibleHost = Boolean(semverNewer && !hostCompatible);
+  const incompatibleNode = Boolean(semverNewer && !nodeCompatible);
+  const updateAvailable = Boolean(semverNewer && hostCompatible && nodeCompatible);
   const dismissedVersion = updateCheckState.dismissedVersion || null;
   const dismissed = Boolean(updateAvailable && dismissedVersion && dismissedVersion === latestVersion);
   const enabled = Boolean(activeConfig?.modules?.updateCheck !== false);
+  if (
+    !SAFE_MODE &&
+    !RUN_ONCE &&
+    enabled &&
+    minAntigravityVersion &&
+    cachedHostAppVersion.probedAt === 0 &&
+    !cachedHostAppVersion.promise
+  ) {
+    void resolveHostAppVersionAsync().then((ver) => {
+      if (ver && ver !== updateCheckState.hostAppVersion) {
+        updateCheckState.hostAppVersion = ver;
+        if (!daemonExiting && attachedTargets.size > 0) {
+          broadcastUpdateStatusToTargets(getPublicUpdateStatus());
+        }
+      }
+    });
+  }
   return {
     enabled,
     currentVersion,
     latestVersion,
     updateAvailable,
+    incompatibleHost,
+    incompatibleNode,
+    hostAppVersion,
+    minAntigravityVersion,
+    minNodeVersion,
     dismissed,
     dismissedVersion,
     checkedAt: updateCheckState.checkedAt,
@@ -896,6 +1018,14 @@ async function checkForPatchUpdateAsync({ force = false } = {}) {
           return {
             source: candidate.id,
             latestVersion: cleanVer,
+            minAntigravityVersion:
+              typeof parsed.minAntigravityVersion === 'string' && parsed.minAntigravityVersion.trim()
+                ? parsed.minAntigravityVersion.trim()
+                : null,
+            minNodeVersion:
+              typeof parsed.minNodeVersion === 'string' && parsed.minNodeVersion.trim()
+                ? parsed.minNodeVersion.trim()
+                : null,
             changelog: Array.isArray(parsed.changelog) ? parsed.changelog.filter((s) => typeof s === 'string').slice(0, 6) : [],
             bundleBytes: Number.isFinite(Number(parsed.coreUpdateBundle?.bytes)) ? Number(parsed.coreUpdateBundle.bytes) : null,
             releaseUrl
@@ -908,6 +1038,7 @@ async function checkForPatchUpdateAsync({ force = false } = {}) {
     const r2Promise = fetchManifestCandidate({ id: 'cloudflare-r2', url: UPDATE_OFFICIAL_R2_URL });
     const ghManifestPromise = fetchManifestCandidate({ id: 'github-release', url: UPDATE_OFFICIAL_GH_URL });
     const ghRedirectPromise = resolveGithubLatestTagAsync(6000, ac.signal, proxyInfo).catch(() => null);
+    const hostVersionPromise = resolveHostAppVersionAsync().catch(() => null);
 
     let resolved = await firstTruthyAsync([r2Promise, ghManifestPromise]);
     if (resolved) {
@@ -921,16 +1052,29 @@ async function checkForPatchUpdateAsync({ force = false } = {}) {
       return false;
     }
 
+    const hostAppVersion = await hostVersionPromise;
     const currentVersion = getInstalledCurrentVersion();
     const checkedAt = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
     const prevDismissed = updateCheckState.dismissedVersion || null;
-    const updateAvailable = isPatchUpdateNewer(currentVersion, resolved.latestVersion);
+    const minAntigravityVersion = resolved.minAntigravityVersion || null;
+    const minNodeVersion = resolved.minNodeVersion || null;
+    const semverNewer = isPatchUpdateNewer(currentVersion, resolved.latestVersion);
+    const hostCompatible = isPatchMinVersionSatisfied(hostAppVersion, minAntigravityVersion);
+    const nodeCompatible = isPatchMinVersionSatisfied(process.versions.node, minNodeVersion);
+    const incompatibleHost = Boolean(semverNewer && !hostCompatible);
+    const incompatibleNode = Boolean(semverNewer && !nodeCompatible);
+    const updateAvailable = Boolean(semverNewer && hostCompatible && nodeCompatible);
     const nextCache = {
       checkedAt,
       source: resolved.source,
       currentVersion,
       latestVersion: resolved.latestVersion,
       updateAvailable,
+      minAntigravityVersion,
+      minNodeVersion,
+      hostAppVersion,
+      incompatibleHost,
+      incompatibleNode,
       dismissedVersion: force || !updateAvailable ? null : prevDismissed,
       changelog: resolved.changelog,
       bundleBytes: resolved.bundleBytes,
@@ -1003,6 +1147,19 @@ function triggerInPlaceHotUpgradeAsync() {
 
   const now = Date.now();
   if (now - lastUpgradeTriggerAt < UPDATE_UPGRADE_COOLDOWN_MS) return false;
+
+  const statusNow = getPublicUpdateStatus();
+  if (statusNow.incompatibleHost && statusNow.minAntigravityVersion) {
+    lastUpgradeError = `Antigravity >= ${statusNow.minAntigravityVersion} required (current: ${statusNow.hostAppVersion || 'unknown'})`;
+    broadcastUpdateStatusToTargets(getPublicUpdateStatus());
+    return false;
+  }
+  if (statusNow.incompatibleNode && statusNow.minNodeVersion) {
+    lastUpgradeError = `Node.js >= ${statusNow.minNodeVersion} required (current: ${process.versions.node})`;
+    broadcastUpdateStatusToTargets(getPublicUpdateStatus());
+    return false;
+  }
+
   const installScript = path.join(ROOT_DIR, 'install.mjs');
   if (!fs.existsSync(installScript)) {
     lastUpgradeError = 'Missing install.mjs';
@@ -1056,32 +1213,28 @@ function triggerInPlaceHotUpgradeAsync() {
     } catch {}
     updateUpgradeWatchdog = null;
   }
-  updateUpgradeWatchdog = setTimeout(() => {
-    updateUpgradeWatchdog = null;
-    if (updateUpgradeInFlight) {
-      updateUpgradeInFlight = false;
-      if (!lastUpgradeError) {
-        lastUpgradeError = 'Timed out waiting for hot upgrade';
-      }
-      if (!daemonExiting) {
-        broadcastUpdateStatusToTargets(getPublicUpdateStatus());
-      }
-    }
-  }, UPDATE_UPGRADE_TIMEOUT_MS);
-  if (typeof updateUpgradeWatchdog.unref === 'function') {
-    updateUpgradeWatchdog.unref();
-  }
 
   let settled = false;
-  const finishUpgrade = (code, errMsg = '') => {
-    if (settled) return;
-    settled = true;
+  let timedOut = false;
+  let forceKillFallbackTimer = null;
+  const clearUpgradeTimers = () => {
     if (updateUpgradeWatchdog) {
       try {
         clearTimeout(updateUpgradeWatchdog);
       } catch {}
       updateUpgradeWatchdog = null;
     }
+    if (forceKillFallbackTimer) {
+      try {
+        clearTimeout(forceKillFallbackTimer);
+      } catch {}
+      forceKillFallbackTimer = null;
+    }
+  };
+  const finishUpgrade = (code, errMsg = '') => {
+    if (settled) return;
+    settled = true;
+    clearUpgradeTimers();
     updateUpgradeInFlight = false;
     if (code === 0 && !errMsg) {
       lastUpgradeError = '';
@@ -1095,11 +1248,51 @@ function triggerInPlaceHotUpgradeAsync() {
     }
   };
 
+  updateUpgradeWatchdog = setTimeout(() => {
+    updateUpgradeWatchdog = null;
+    if (settled || !updateUpgradeInFlight) return;
+    timedOut = true;
+    // 超时后显式终止仍在运行的升级子进程树，避免释放状态后与下一次重试并发改写 core/
+    try {
+      if (process.platform === 'win32' && child.pid) {
+        execFile('taskkill', ['/PID', String(child.pid), '/T', '/F'], { windowsHide: true }, () => {});
+      } else if (child.pid) {
+        try {
+          process.kill(-child.pid, 'SIGTERM');
+        } catch {
+          try {
+            child.kill('SIGTERM');
+          } catch {}
+        }
+      }
+    } catch {}
+    forceKillFallbackTimer = setTimeout(() => {
+      forceKillFallbackTimer = null;
+      if (settled) return;
+      if (process.platform !== 'win32' && child.pid) {
+        try {
+          process.kill(-child.pid, 'SIGKILL');
+        } catch {
+          try {
+            child.kill('SIGKILL');
+          } catch {}
+        }
+      }
+      finishUpgrade(1, 'Timed out waiting for hot upgrade');
+    }, 4000);
+    if (typeof forceKillFallbackTimer.unref === 'function') {
+      forceKillFallbackTimer.unref();
+    }
+  }, UPDATE_UPGRADE_TIMEOUT_MS);
+  if (typeof updateUpgradeWatchdog.unref === 'function') {
+    updateUpgradeWatchdog.unref();
+  }
+
   child.once('error', (err) => {
     finishUpgrade(1, err?.message || String(err));
   });
   child.once('close', (code) => {
-    finishUpgrade(typeof code === 'number' ? code : 1);
+    finishUpgrade(timedOut ? 1 : typeof code === 'number' ? code : 1, timedOut ? 'Timed out waiting for hot upgrade' : '');
   });
   return true;
 }
@@ -8373,13 +8566,18 @@ function attachTarget(target, endpoint) {
               const rawVer = String(req?.version || '').trim().replace(/^v/i, '');
               if (/^\d+\.\d+\.\d+$/.test(rawVer)) {
                 if (!updateCheckState.loaded) readUpdateCacheFromDisk();
-                const currentVersion = getInstalledCurrentVersion();
+                const statusBefore = getPublicUpdateStatus();
                 const nextCache = {
                   checkedAt: updateCheckState.checkedAt,
                   source: updateCheckState.source,
-                  currentVersion,
+                  currentVersion: statusBefore.currentVersion,
                   latestVersion: updateCheckState.latestVersion,
-                  updateAvailable: Boolean(updateCheckState.latestVersion && isPatchUpdateNewer(currentVersion, updateCheckState.latestVersion)),
+                  updateAvailable: statusBefore.updateAvailable,
+                  minAntigravityVersion: updateCheckState.minAntigravityVersion,
+                  minNodeVersion: updateCheckState.minNodeVersion,
+                  hostAppVersion: statusBefore.hostAppVersion,
+                  incompatibleHost: statusBefore.incompatibleHost,
+                  incompatibleNode: statusBefore.incompatibleNode,
                   dismissedVersion: rawVer,
                   changelog: updateCheckState.changelog,
                   bundleBytes: updateCheckState.bundleBytes,
@@ -8391,13 +8589,18 @@ function attachTarget(target, endpoint) {
               }
             } else if (act === 'clearDismiss') {
               if (!updateCheckState.loaded) readUpdateCacheFromDisk();
-              const currentVersion = getInstalledCurrentVersion();
+              const statusBefore = getPublicUpdateStatus();
               const nextCache = {
                 checkedAt: updateCheckState.checkedAt,
                 source: updateCheckState.source,
-                currentVersion,
+                currentVersion: statusBefore.currentVersion,
                 latestVersion: updateCheckState.latestVersion,
-                updateAvailable: Boolean(updateCheckState.latestVersion && isPatchUpdateNewer(currentVersion, updateCheckState.latestVersion)),
+                updateAvailable: statusBefore.updateAvailable,
+                minAntigravityVersion: updateCheckState.minAntigravityVersion,
+                minNodeVersion: updateCheckState.minNodeVersion,
+                hostAppVersion: statusBefore.hostAppVersion,
+                incompatibleHost: statusBefore.incompatibleHost,
+                incompatibleNode: statusBefore.incompatibleNode,
                 dismissedVersion: null,
                 changelog: updateCheckState.changelog,
                 bundleBytes: updateCheckState.bundleBytes,
