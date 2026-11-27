@@ -88,7 +88,7 @@
 - **🎨 切换风格、语言或微调字号**：日常切换主题与中英文可直接在「系统设置 → 外观界面」点击对应按钮；如需修改扩展预设或字号，可让 Agent 按 `SKILL.md` 修改 `user/config.json`（如调大 `"--ag-chat-font-size"`）。
 - **🇨🇳 自定义词条覆盖**：在 `~/.gemini/antigravity/theme-patch/user/i18n.override.json` 中写入 `"英文原词": "自定义中文"`，保存后自动热生效。
 - **🔤 字体缺失或事后重新修复安装**：若首次安装跳过了字体、更换新电脑或 Windows 提示字体未注册，可在浏览器打开 **[飞书国内免代理字体下载页](https://www.feishu.cn/wiki/V2lbwB8ykiLLXrkzY41cXjQ1nXc)** 将全部字体文件下载到同一目录（无需解压），再让 Agent 运行 `node ~/.gemini/antigravity/theme-patch/install.mjs install-fonts --from "<下载目录>"` 一键补装注册。
-- **🔍 故障定界、一键更新、回滚与卸载**：可让 Agent 运行 `node install.mjs upgrade --check` / `upgrade` 检查并事务性升级补丁（也可在「系统设置 → 外观界面」底部版本行随时查看或关闭 `modules.updateCheck`）；运行 `node install.mjs doctor` 与 `node install.mjs verify --safe-mode` 排查配置冲突；退回上一版本运行 `node install.mjs rollback`，彻底卸载还原运行 `node install.mjs uninstall`。
+- **🔍 故障定界、一键更新、回滚与卸载**：可在「系统设置 → 外观界面」底部版本行直接点击 **「立即热升级」**（或让 Agent 运行 `node install.mjs upgrade --check` / `upgrade`）事务性原地升级，亦可随时关闭 `modules.updateCheck`；运行 `node install.mjs doctor` 与 `node install.mjs verify --safe-mode` 排查配置冲突；退回上一版本运行 `node install.mjs rollback`，彻底卸载还原运行 `node install.mjs uninstall`。
 
 ---
 

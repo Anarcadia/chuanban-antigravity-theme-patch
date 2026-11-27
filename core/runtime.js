@@ -176,11 +176,14 @@
       updateUpToDate: '已是最新',
       updateDismissedSuffix: '（已忽略）',
       updateAvailableBadge: '有新版',
-      updateNoRestartNote: '通过 CLI 原地热更新，无需重启客户端',
+      updateNoRestartNote: '支持一键原地热升级或 CLI 升级，无需重启客户端',
       updateCheckedPrefix: '上次检查：',
       updateNotChecked: '尚未检查（后台启动 30s 后低频检测一次，每 24 小时最多一次）',
       updateCheckBtn: '检查更新',
       updateCheckingBtn: '检查中…',
+      updateUpgradeNowBtn: '立即热升级',
+      updateUpgradingBtn: '正在热升级…',
+      updateErrorPrefix: '升级未完成：',
       updateShowNewBtn: '查看新版',
       updateCopyCmdBtn: '复制升级命令',
       updateCopiedBtn: '已复制 ✓',
@@ -216,11 +219,14 @@
       updateUpToDate: '最新',
       updateDismissedSuffix: '（非表示中）',
       updateAvailableBadge: '更新あり',
-      updateNoRestartNote: 'CLI でホット更新可能（クライアント再起動不要）',
+      updateNoRestartNote: 'ボタンまたは CLI でホット更新可能（再起動不要）',
       updateCheckedPrefix: '最終確認: ',
       updateNotChecked: '未確認（24時間ごとに低頻度チェック）',
       updateCheckBtn: '更新を確認',
       updateCheckingBtn: '確認中…',
+      updateUpgradeNowBtn: '今すぐ更新',
+      updateUpgradingBtn: '更新中…',
+      updateErrorPrefix: '更新失敗：',
       updateShowNewBtn: '詳細を見る',
       updateCopyCmdBtn: '更新コマンドをコピー',
       updateCopiedBtn: 'コピー済み ✓',
@@ -255,11 +261,14 @@
     updateUpToDate: 'Up to date',
     updateDismissedSuffix: ' (Ignored)',
     updateAvailableBadge: 'Update',
-    updateNoRestartNote: 'Hot-upgrades in place via CLI without restarting Antigravity',
+    updateNoRestartNote: 'Hot-upgrades in place via button or CLI without restarting Antigravity',
     updateCheckedPrefix: 'Last checked: ',
     updateNotChecked: 'Not checked yet (passive check runs at most once per 24h)',
     updateCheckBtn: 'Check Updates',
     updateCheckingBtn: 'Checking…',
+    updateUpgradeNowBtn: 'Upgrade Now',
+    updateUpgradingBtn: 'Upgrading…',
+    updateErrorPrefix: 'Upgrade failed: ',
     updateShowNewBtn: 'View Update',
     updateCopyCmdBtn: 'Copy Upgrade Cmd',
     updateCopiedBtn: 'Copied ✓',
@@ -3507,6 +3516,8 @@
         avail: Boolean(st.updateAvailable),
         dis: Boolean(st.dismissed),
         chk: Boolean(st.checking),
+        upg: Boolean(st.upgrading),
+        err: st.upgradeError || '',
         cat: st.checkedAt || '',
         bytes: st.bundleBytes || 0,
         clLen: Array.isArray(st.changelog) ? st.changelog.length : 0,
@@ -3557,6 +3568,7 @@
         const dismissBtn = document.createElement('button');
         dismissBtn.type = 'button';
         dismissBtn.className = 'ag-patch-update-btn ag-patch-update-btn--ghost';
+        dismissBtn.disabled = Boolean(st.upgrading);
         dismissBtn.textContent = uiStr.updateDismissBtn;
         dismissBtn.addEventListener('click', (ev) => {
           ev.preventDefault();
@@ -3577,9 +3589,34 @@
         const actions = document.createElement('div');
         actions.className = 'ag-patch-update-actions';
 
+        const upgradeBtn = document.createElement('button');
+        upgradeBtn.type = 'button';
+        upgradeBtn.className = 'ag-patch-update-btn ag-patch-update-btn--primary';
+        upgradeBtn.disabled = Boolean(st.upgrading || st.checking);
+        upgradeBtn.textContent = st.upgrading ? uiStr.updateUpgradingBtn : uiStr.updateUpgradeNowBtn;
+        upgradeBtn.addEventListener('click', (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          sendUpdateAction('upgrade');
+        });
+        actions.appendChild(upgradeBtn);
+
+        const clBtn = document.createElement('button');
+        clBtn.type = 'button';
+        clBtn.className = 'ag-patch-update-btn';
+        clBtn.textContent = updateChangelogOpen ? uiStr.updateHideChangelogBtn : uiStr.updateChangelogBtn;
+        clBtn.addEventListener('click', (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          updateChangelogOpen = !updateChangelogOpen;
+          row.removeAttribute('data-ag-update-sig');
+          syncAppearanceUpdateRowOnCard(card, baseThemeRow);
+        });
+        actions.appendChild(clBtn);
+
         const copyBtn = document.createElement('button');
         copyBtn.type = 'button';
-        copyBtn.className = 'ag-patch-update-btn ag-patch-update-btn--primary';
+        copyBtn.className = 'ag-patch-update-btn';
         copyBtn.textContent = updateCopyDone ? uiStr.updateCopiedBtn : uiStr.updateCopyCmdBtn;
         copyBtn.addEventListener('click', (ev) => {
           ev.preventDefault();
@@ -3600,19 +3637,6 @@
         });
         actions.appendChild(copyBtn);
 
-        const clBtn = document.createElement('button');
-        clBtn.type = 'button';
-        clBtn.className = 'ag-patch-update-btn';
-        clBtn.textContent = updateChangelogOpen ? uiStr.updateHideChangelogBtn : uiStr.updateChangelogBtn;
-        clBtn.addEventListener('click', (ev) => {
-          ev.preventDefault();
-          ev.stopPropagation();
-          updateChangelogOpen = !updateChangelogOpen;
-          row.removeAttribute('data-ag-update-sig');
-          syncAppearanceUpdateRowOnCard(card, baseThemeRow);
-        });
-        actions.appendChild(clBtn);
-
         const relBtn = document.createElement('button');
         relBtn.type = 'button';
         relBtn.className = 'ag-patch-update-btn';
@@ -3627,7 +3651,7 @@
         const recheckBtn = document.createElement('button');
         recheckBtn.type = 'button';
         recheckBtn.className = 'ag-patch-update-btn ag-patch-update-btn--ghost';
-        recheckBtn.disabled = Boolean(st.checking);
+        recheckBtn.disabled = Boolean(st.checking || st.upgrading);
         recheckBtn.textContent = st.checking ? uiStr.updateCheckingBtn : uiStr.updateCheckBtn;
         recheckBtn.addEventListener('click', (ev) => {
           ev.preventDefault();
@@ -3639,6 +3663,13 @@
         row.appendChild(head);
         row.appendChild(desc);
         row.appendChild(actions);
+
+        if (st.upgradeError) {
+          const errLine = document.createElement('div');
+          errLine.className = 'ag-patch-update-error';
+          errLine.textContent = `${uiStr.updateErrorPrefix}${st.upgradeError}`;
+          row.appendChild(errLine);
+        }
 
         if (updateChangelogOpen) {
           drawer.hidden = false;

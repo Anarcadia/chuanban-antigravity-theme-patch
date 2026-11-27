@@ -2064,6 +2064,23 @@ html[data-ag-dark-preset="claude-warm"]:not([data-ag-preset="native"]) body.dark
   white-space: nowrap;
 }
 
+.ag-patch-update-error {
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: #B42318;
+  background: rgba(180, 35, 24, 0.08);
+  border: 1px solid rgba(180, 35, 24, 0.22);
+  border-radius: 6px;
+  padding: 5px 8px;
+  word-break: break-word;
+}
+
+:is(html[data-ag-theme-mode="dark"] body, body.dark) .ag-patch-update-error {
+  color: #FCA5A5;
+  background: rgba(248, 113, 113, 0.12);
+  border-color: rgba(248, 113, 113, 0.28);
+}
+
 /* 2.35.0+ 自绘窗口控制按钮（Windows / Linux Insiders 默认及 --custom-window-controls 模式，解决 OS 暗色下浅色主题无悬停反馈 Issue #42） */
 html:not([data-ag-preset="native"]):not([data-ag-theme-mode="dark"]) body:not(.dark) [data-testid="custom-window-controls"] :is([data-testid="window-control-minimize"], [data-testid="window-control-maximize"]),
 html:not([data-ag-preset="native"]):not([data-ag-theme-mode="dark"]) body:not(.dark) [data-testid="custom-window-controls"] [data-testid="window-control-close"] > span {

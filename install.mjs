@@ -79,7 +79,11 @@ function isAllowedUpdateUrl(urlStr, { allowLoopbackOrigin = null } = {}) {
     if (u.hostname === 'img.chuanban.cc' && u.pathname.startsWith('/themes/chuanban-antigravity/')) {
       return true;
     }
-    if (u.hostname === 'github.com' && u.pathname.startsWith('/Anarcadia/chuanban-antigravity-theme-patch/releases/')) {
+    if (
+      u.hostname === 'github.com' &&
+      (u.pathname === '/Anarcadia/chuanban-antigravity-theme-patch/releases' ||
+        u.pathname.startsWith('/Anarcadia/chuanban-antigravity-theme-patch/releases/'))
+    ) {
       return true;
     }
     if (u.hostname === 'objects.githubusercontent.com' || u.hostname === 'release-assets.githubusercontent.com') {

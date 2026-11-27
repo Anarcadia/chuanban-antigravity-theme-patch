@@ -495,17 +495,24 @@ let cachedIframeInjectScript = '';
 let cachedPatchVersion = '';
 
 const UPDATE_CACHE_FILE = path.join(CACHE_DIR, 'update-check.json');
+const UPDATE_UPGRADE_LOG_FILE = path.join(CACHE_DIR, 'last-upgrade.log');
 const UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
 const UPDATE_CHECK_ERROR_BACKOFF_MS = 60 * 60 * 1000;
 const UPDATE_MANUAL_COOLDOWN_MS = 5000;
+const UPDATE_UPGRADE_COOLDOWN_MS = 10000;
+const UPDATE_UPGRADE_TIMEOUT_MS = 120000;
 const UPDATE_INITIAL_DELAY_MS = 30 * 1000;
 const UPDATE_REPO_URL = 'https://github.com/Anarcadia/chuanban-antigravity-theme-patch';
 const UPDATE_OFFICIAL_R2_URL = 'https://img.chuanban.cc/themes/chuanban-antigravity/latest.json';
 const UPDATE_OFFICIAL_GH_URL = `${UPDATE_REPO_URL}/releases/latest/download/latest.json`;
 const UPDATE_OFFICIAL_GH_LATEST_URL = `${UPDATE_REPO_URL}/releases/latest`;
 let updateCheckInFlight = false;
+let updateUpgradeInFlight = false;
 let lastManualUpdateCheckAt = 0;
+let lastUpgradeTriggerAt = 0;
 let lastUpdateErrorAt = 0;
+let lastUpgradeError = '';
+let updateUpgradeWatchdog = null;
 let updateCheckState = {
   loaded: false,
   checkedAt: null,
@@ -522,7 +529,13 @@ function isAllowedOfficialUpdateUrl(urlStr) {
     const u = new URL(String(urlStr || '').trim());
     if (u.protocol !== 'https:') return false;
     if (u.hostname === 'img.chuanban.cc' && u.pathname.startsWith('/themes/chuanban-antigravity/')) return true;
-    if (u.hostname === 'github.com' && u.pathname.startsWith('/Anarcadia/chuanban-antigravity-theme-patch/releases/')) return true;
+    if (
+      u.hostname === 'github.com' &&
+      (u.pathname === '/Anarcadia/chuanban-antigravity-theme-patch/releases' ||
+        u.pathname.startsWith('/Anarcadia/chuanban-antigravity-theme-patch/releases/'))
+    ) {
+      return true;
+    }
     if (u.hostname === 'objects.githubusercontent.com' || u.hostname === 'release-assets.githubusercontent.com') return true;
     return false;
   } catch {
@@ -616,7 +629,9 @@ function getPublicUpdateStatus() {
     bundleBytes: updateCheckState.bundleBytes,
     releaseUrl: updateCheckState.releaseUrl || UPDATE_OFFICIAL_GH_LATEST_URL,
     upgradeCommand: `node ${JSON.stringify(path.join(ROOT_DIR, 'install.mjs'))} upgrade`,
-    checking: updateCheckInFlight
+    checking: updateCheckInFlight,
+    upgrading: updateUpgradeInFlight,
+    upgradeError: lastUpgradeError || null
   };
 }
 
@@ -805,6 +820,149 @@ function launchSafeHttpsReleaseUrlInDefaultBrowser(rawUrl) {
   } else {
     execFile('xdg-open', [safeUrl], () => {});
   }
+  return true;
+}
+
+function readUpgradeLogTailSummary(logPath) {
+  try {
+    if (!fs.existsSync(logPath)) return '';
+    const st = fs.statSync(logPath);
+    const readSize = Math.min(8192, Math.max(0, Number(st.size) || 0));
+    if (readSize === 0) return '';
+    const fd = fs.openSync(logPath, 'r');
+    let text = '';
+    try {
+      const buf = Buffer.alloc(readSize);
+      fs.readSync(fd, buf, 0, readSize, Math.max(0, st.size - readSize));
+      text = buf.toString('utf8');
+    } finally {
+      fs.closeSync(fd);
+    }
+    const objStart = text.lastIndexOf('{');
+    if (objStart >= 0) {
+      try {
+        const parsed = JSON.parse(text.slice(objStart));
+        if (parsed && typeof parsed.error === 'string' && parsed.error.trim()) {
+          return parsed.error.trim().slice(0, 140);
+        }
+      } catch {}
+    }
+    const lines = text
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .filter(Boolean);
+    const lastLine = lines.length > 0 ? lines[lines.length - 1] : '';
+    return lastLine.slice(0, 140);
+  } catch {
+    return '';
+  }
+}
+
+function triggerInPlaceHotUpgradeAsync() {
+  if (SAFE_MODE || RUN_ONCE || daemonExiting) return false;
+  if (activeConfig?.modules?.updateCheck === false) return false;
+  if (updateUpgradeInFlight) return false;
+
+  const now = Date.now();
+  if (now - lastUpgradeTriggerAt < UPDATE_UPGRADE_COOLDOWN_MS) return false;
+  const installScript = path.join(ROOT_DIR, 'install.mjs');
+  if (!fs.existsSync(installScript)) {
+    lastUpgradeError = 'Missing install.mjs';
+    broadcastUpdateStatusToTargets(getPublicUpdateStatus());
+    return false;
+  }
+
+  lastUpgradeTriggerAt = now;
+  updateUpgradeInFlight = true;
+  lastUpgradeError = '';
+  broadcastUpdateStatusToTargets(getPublicUpdateStatus());
+
+  let logFd = null;
+  try {
+    fs.mkdirSync(CACHE_DIR, { recursive: true });
+    logFd = fs.openSync(UPDATE_UPGRADE_LOG_FILE, 'w');
+  } catch {
+    logFd = null;
+  }
+
+  let child = null;
+  try {
+    child = spawn(process.execPath, [installScript, 'upgrade'], {
+      cwd: ROOT_DIR,
+      detached: true,
+      windowsHide: true,
+      stdio: logFd !== null ? ['ignore', logFd, logFd] : 'ignore'
+    });
+    if (logFd !== null) {
+      try {
+        fs.closeSync(logFd);
+      } catch {}
+      logFd = null;
+    }
+    child.unref();
+  } catch (err) {
+    if (logFd !== null) {
+      try {
+        fs.closeSync(logFd);
+      } catch {}
+    }
+    updateUpgradeInFlight = false;
+    lastUpgradeError = String(err?.message || err || 'Failed to spawn upgrader').slice(0, 140);
+    broadcastUpdateStatusToTargets(getPublicUpdateStatus());
+    return false;
+  }
+
+  if (updateUpgradeWatchdog) {
+    try {
+      clearTimeout(updateUpgradeWatchdog);
+    } catch {}
+    updateUpgradeWatchdog = null;
+  }
+  updateUpgradeWatchdog = setTimeout(() => {
+    updateUpgradeWatchdog = null;
+    if (updateUpgradeInFlight) {
+      updateUpgradeInFlight = false;
+      if (!lastUpgradeError) {
+        lastUpgradeError = 'Timed out waiting for hot upgrade';
+      }
+      if (!daemonExiting) {
+        broadcastUpdateStatusToTargets(getPublicUpdateStatus());
+      }
+    }
+  }, UPDATE_UPGRADE_TIMEOUT_MS);
+  if (typeof updateUpgradeWatchdog.unref === 'function') {
+    updateUpgradeWatchdog.unref();
+  }
+
+  let settled = false;
+  const finishUpgrade = (code, errMsg = '') => {
+    if (settled) return;
+    settled = true;
+    if (updateUpgradeWatchdog) {
+      try {
+        clearTimeout(updateUpgradeWatchdog);
+      } catch {}
+      updateUpgradeWatchdog = null;
+    }
+    updateUpgradeInFlight = false;
+    if (code === 0 && !errMsg) {
+      lastUpgradeError = '';
+      readUpdateCacheFromDisk();
+    } else {
+      const detail = errMsg || readUpgradeLogTailSummary(UPDATE_UPGRADE_LOG_FILE) || `Exit code ${code}`;
+      lastUpgradeError = String(detail).slice(0, 140);
+    }
+    if (!daemonExiting) {
+      broadcastUpdateStatusToTargets(getPublicUpdateStatus());
+    }
+  };
+
+  child.once('error', (err) => {
+    finishUpgrade(1, err?.message || String(err));
+  });
+  child.once('close', (code) => {
+    finishUpgrade(typeof code === 'number' ? code : 1);
+  });
   return true;
 }
 let metricsConfigEpoch = 0;
@@ -8068,8 +8226,12 @@ function attachTarget(target, endpoint) {
             }
             const act = String(req?.action || '').trim();
             if (act === 'check') {
+              lastUpgradeError = '';
               void checkForPatchUpdateAsync({ force: true });
+            } else if (act === 'upgrade') {
+              triggerInPlaceHotUpgradeAsync();
             } else if (act === 'dismiss') {
+              lastUpgradeError = '';
               const rawVer = String(req?.version || '').trim().replace(/^v/i, '');
               if (/^\d+\.\d+\.\d+$/.test(rawVer)) {
                 if (!updateCheckState.loaded) readUpdateCacheFromDisk();
@@ -8111,7 +8273,9 @@ function attachTarget(target, endpoint) {
               if (now - lastOpenExternalActionAt < 500) return;
               lastOpenExternalActionAt = now;
               const fallbackUrl = updateCheckState.releaseUrl || UPDATE_OFFICIAL_GH_LATEST_URL;
-              launchSafeHttpsReleaseUrlInDefaultBrowser(req?.url || fallbackUrl);
+              if (!launchSafeHttpsReleaseUrlInDefaultBrowser(req?.url)) {
+                launchSafeHttpsReleaseUrlInDefaultBrowser(fallbackUrl);
+              }
             }
             return;
           }

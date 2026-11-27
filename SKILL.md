@@ -193,7 +193,7 @@ node install.mjs verify
 - **`darkPreset`（黑夜配色预设）**：默认 `"onyx"`（深海石青碳黑）；设为 `"claude-warm"`（或在外观面板点击 **📖 书卷按钮**）启用暖纸深色并自动持久化。
 - **`modules.i18n`（界面汉化开关）**：默认 `true`（也可直接在外观界面点击 **`[ EN | 中文 ]`** 一键切换并自动落盘，无需重新编译注入包）。
 - **`contextLimit` / `contextLimitOverride`**：默认从会话元数据动态识别真实模型上下文窗口（`256k` / `512k` / `840k` / `1M+`），缺失时回退 `contextLimit`；如需全局强制锁定固定上限，可设正整数 `"contextLimitOverride": 1000000`。
-- **`modules`**：支持独立开关各模块（如设 `"tokenAnalytics": false` 关闭设置弹窗「Token 统计」Tab 并动态剥离 ~100 KB CSS/JS 注入载荷，设 `"contextMenu": false` 关闭主题化右键菜单并还原原生系统菜单，设 `"updateCheck": false` 关闭每 24 小时一次的后台只读更新检测与外观面板版本提示行，设 `"cdpAutoRelaunch": false` 关闭冷启动自动补参重拉，或将顶层 `"enabled": false` 保存以在 `2.5s` 内无损卸载全部样式并还原英文界面）。
+- **`modules`**：支持独立开关各模块（如设 `"tokenAnalytics": false` 关闭设置弹窗「Token 统计」Tab 并动态剥离 ~100 KB CSS/JS 注入载荷，设 `"contextMenu": false` 关闭主题化右键菜单并还原原生系统菜单，设 `"updateCheck": false` 关闭每 24 小时一次的后台只读更新检测、外观面板版本行与一键「立即热升级」入口，设 `"cdpAutoRelaunch": false` 关闭冷启动自动补参重拉，或将顶层 `"enabled": false` 保存以在 `2.5s` 内无损卸载全部样式并还原英文界面）。
 - **`themeVars` / `darkThemeVars`**：自动注入 `<style id="ag-user-theme-vars">`；普通色彩变量（如 `--sidebar`）仅作用于白天模式，如需微调黑夜模式核心色彩变量请写入可选对象 `"darkThemeVars": { "--background": "#1B1A18" }`。
 
 ### 2. 追加自定义 CSS（`user/custom.css`）
