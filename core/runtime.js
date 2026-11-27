@@ -126,11 +126,17 @@
       coldBootHealer: true,
       zoomShortcuts: true,
       cdpAutoRelaunch: true,
+      updateCheck: true,
       customCss: true,
       customJs: true
     },
     boot.modules || {}
   );
+  let currentUpdateStatus =
+    !IS_SWARM_PLUGIN_FRAME && boot.updateStatus && typeof boot.updateStatus === 'object' ? boot.updateStatus : null;
+  let updateChangelogOpen = false;
+  let updateCopyTimer = null;
+  let updateCopyDone = false;
 
   const DEFAULT_PRESET = boot.preset || 'morandi';
   const DEFAULT_DARK_PRESET = boot.darkPreset || 'onyx';
@@ -165,7 +171,23 @@
       followSystemDarkPrefix: '深色：',
       followSystemPairSep: ' · ',
       followSystemNativeDesc: '原版浅色 · 原版深色',
-      followSystemTooltip: '随操作系统自动切换浅色与深色预设（点击反极性预设将立即切换预览并退出跟随）'
+      followSystemTooltip: '随操作系统自动切换浅色与深色预设（点击反极性预设将立即切换预览并退出跟随）',
+      updateRowLabel: '主题补丁版本',
+      updateUpToDate: '已是最新',
+      updateDismissedSuffix: '（已忽略）',
+      updateAvailableBadge: '有新版',
+      updateNoRestartNote: '通过 CLI 原地热更新，无需重启客户端',
+      updateCheckedPrefix: '上次检查：',
+      updateNotChecked: '尚未检查（后台启动 30s 后低频检测一次，每 24 小时最多一次）',
+      updateCheckBtn: '检查更新',
+      updateCheckingBtn: '检查中…',
+      updateShowNewBtn: '查看新版',
+      updateCopyCmdBtn: '复制升级命令',
+      updateCopiedBtn: '已复制 ✓',
+      updateChangelogBtn: '更新内容',
+      updateHideChangelogBtn: '收起内容',
+      updateReleaseBtn: '发布页',
+      updateDismissBtn: '忽略此版本'
     },
     ja: {
       btnLabel: '日本語',
@@ -189,7 +211,23 @@
       followSystemDarkPrefix: 'ダーク：',
       followSystemPairSep: ' · ',
       followSystemNativeDesc: '純正ライト · 純正ダーク',
-      followSystemTooltip: 'OSの設定に合わせてライト／ダークを自動切替（反対極性のプリセットを選ぶと追従を解除して即時切替）'
+      followSystemTooltip: 'OSの設定に合わせてライト／ダークを自動切替（反対極性のプリセットを選ぶと追従を解除して即時切替）',
+      updateRowLabel: 'パッチバージョン',
+      updateUpToDate: '最新',
+      updateDismissedSuffix: '（非表示中）',
+      updateAvailableBadge: '更新あり',
+      updateNoRestartNote: 'CLI でホット更新可能（クライアント再起動不要）',
+      updateCheckedPrefix: '最終確認: ',
+      updateNotChecked: '未確認（24時間ごとに低頻度チェック）',
+      updateCheckBtn: '更新を確認',
+      updateCheckingBtn: '確認中…',
+      updateShowNewBtn: '詳細を見る',
+      updateCopyCmdBtn: '更新コマンドをコピー',
+      updateCopiedBtn: 'コピー済み ✓',
+      updateChangelogBtn: '変更内容',
+      updateHideChangelogBtn: '閉じる',
+      updateReleaseBtn: 'リリース',
+      updateDismissBtn: 'この版をスキップ'
     }
   };
   const EN_UI_STRINGS = {
@@ -212,7 +250,23 @@
     followSystemDarkPrefix: 'Dark: ',
     followSystemPairSep: ' · ',
     followSystemNativeDesc: 'Original Light · Original Dark',
-    followSystemTooltip: 'Auto-switch light/dark presets with OS (clicking an opposite-polarity preset previews immediately and exits follow mode)'
+    followSystemTooltip: 'Auto-switch light/dark presets with OS (clicking an opposite-polarity preset previews immediately and exits follow mode)',
+    updateRowLabel: 'Patch Version',
+    updateUpToDate: 'Up to date',
+    updateDismissedSuffix: ' (Ignored)',
+    updateAvailableBadge: 'Update',
+    updateNoRestartNote: 'Hot-upgrades in place via CLI without restarting Antigravity',
+    updateCheckedPrefix: 'Last checked: ',
+    updateNotChecked: 'Not checked yet (passive check runs at most once per 24h)',
+    updateCheckBtn: 'Check Updates',
+    updateCheckingBtn: 'Checking…',
+    updateShowNewBtn: 'View Update',
+    updateCopyCmdBtn: 'Copy Upgrade Cmd',
+    updateCopiedBtn: 'Copied ✓',
+    updateChangelogBtn: 'Changelog',
+    updateHideChangelogBtn: 'Hide Details',
+    updateReleaseBtn: 'Release Page',
+    updateDismissBtn: 'Ignore Version'
   };
 
   if (
@@ -243,7 +297,7 @@
   }
 
   const DEFAULT_EXCLUDE_I18N =
-    'code, pre, kbd, samp, textarea, input, style, script, noscript, [contenteditable="true"], [data-markdown-root], [data-testid="user-message-content"], .agy-user-bubble, .monaco-editor, .monaco-diff-editor, .view-lines, .xterm, .code-line .line-content, .code-line .token, [class*="onyx-key"], .prose, .markdown, [class*="chat-message"], [class*="group/file-title"], [data-uri^="file:"], [data-uri^="vscode-"], a.inline-pill[href^="file:"], a.inline-pill[href^="vscode-"], [data-testid="conversation-row-sidebar"] a[href^="/c/"], [data-testid="conversation-row-sidebar"] span.truncate, [data-testid="conversation-row-history"] a[href^="/c/"], [data-testid="conversation-row-history"] span.truncate, [data-testid^="conversation-group-"], [data-testid^="conversation-project-"], [data-testid^="sidebar-agent-row-"] span.truncate, [data-testid="sidebar-agent-hover-card-title"], [data-testid="coordinator-hover-card-title"], [data-testid="coordinator-card-title"], [data-testid="coordinator-card-latest-line"], [data-testid="context-provider-hover-card-title"], [data-testid="ask-question-header-text"], [data-testid="ask-question-option-text"], [data-testid="doc-row-title"], [data-testid="conversation-navigator-turn"], [data-testid="side-question-followup-user"], [data-testid="comment-card-text"], [data-testid="automation-name"], [data-testid="automation-instructions-text"], [data-testid="step-plan-item"], [data-testid="live-transcript"], [data-testid="voice-transcript-summary-lead"], [data-testid="voice-transcript-summary-point"], [data-testid="project-header"] span.truncate, .msg-body, #raw, [data-testid="swarm-raw"], #swarm-title, #ag-live-metrics-pill, .ag-live-metrics-pill, [data-ag-metrics-pill], #ag-live-metrics-tooltip, #ag-token-nav-section, #ag-token-analytics-panel, #ag-ta-tooltip, [data-ag-token-ui], [data-ag-lang-row="1"], [data-ag-sys-follow-row="1"]';
+    'code, pre, kbd, samp, textarea, input, style, script, noscript, [contenteditable="true"], [data-markdown-root], [data-testid="user-message-content"], .agy-user-bubble, .monaco-editor, .monaco-diff-editor, .view-lines, .xterm, .code-line .line-content, .code-line .token, [class*="onyx-key"], .prose, .markdown, [class*="chat-message"], [class*="group/file-title"], [data-uri^="file:"], [data-uri^="vscode-"], a.inline-pill[href^="file:"], a.inline-pill[href^="vscode-"], [data-testid="conversation-row-sidebar"] a[href^="/c/"], [data-testid="conversation-row-sidebar"] span.truncate, [data-testid="conversation-row-history"] a[href^="/c/"], [data-testid="conversation-row-history"] span.truncate, [data-testid^="conversation-group-"], [data-testid^="conversation-project-"], [data-testid^="sidebar-agent-row-"] span.truncate, [data-testid="sidebar-agent-hover-card-title"], [data-testid="coordinator-hover-card-title"], [data-testid="coordinator-card-title"], [data-testid="coordinator-card-latest-line"], [data-testid="context-provider-hover-card-title"], [data-testid="ask-question-header-text"], [data-testid="ask-question-option-text"], [data-testid="doc-row-title"], [data-testid="conversation-navigator-turn"], [data-testid="side-question-followup-user"], [data-testid="comment-card-text"], [data-testid="automation-name"], [data-testid="automation-instructions-text"], [data-testid="step-plan-item"], [data-testid="live-transcript"], [data-testid="voice-transcript-summary-lead"], [data-testid="voice-transcript-summary-point"], [data-testid="project-header"] span.truncate, .msg-body, #raw, [data-testid="swarm-raw"], #swarm-title, #ag-live-metrics-pill, .ag-live-metrics-pill, [data-ag-metrics-pill], #ag-live-metrics-tooltip, #ag-token-nav-section, #ag-token-analytics-panel, #ag-ta-tooltip, [data-ag-token-ui], [data-ag-lang-row="1"], [data-ag-sys-follow-row="1"], [data-ag-patch-update-row="1"], [data-ag-patch-update-drawer="1"], [data-ag-update-nav-dot="1"]';
 
   function cleanupTokenAnalyticsDom() {
     try {
@@ -781,6 +835,8 @@
     try {
       document.querySelectorAll('[data-ag-sys-follow-row="1"]').forEach((el) => el.remove());
       document.querySelectorAll('[data-ag-lang-row="1"]').forEach((el) => el.remove());
+      document.querySelectorAll('[data-ag-patch-update-row="1"], [data-ag-patch-update-drawer="1"], [data-ag-update-nav-dot="1"]').forEach((el) => el.remove());
+      window.__ag_on_update_status = null;
       if (window.__ag_cm_translate_listener) {
         try {
           document.removeEventListener('__ag_cm_req', window.__ag_cm_translate_listener);
@@ -2212,6 +2268,15 @@
       }
     }
   };
+  window.__ag_on_update_status = (nextStatus) => {
+    if (IS_SWARM_PLUGIN_FRAME || !nextStatus || typeof nextStatus !== 'object') return;
+    currentUpdateStatus = nextStatus;
+    try {
+      if (typeof window.__ag_sync_warm_night_btn_fn === 'function') {
+        window.__ag_sync_warm_night_btn_fn();
+      }
+    } catch (e) {}
+  };
 
   if (!window.__ag_preset_hook_installed) {
     window.__ag_preset_hook_installed = true;
@@ -2790,6 +2855,10 @@
           }
         }
       }
+
+      if (typeof syncAllAppearanceUpdateUi === 'function') {
+        syncAllAppearanceUpdateUi();
+      }
     }
 
     window.__ag_handle_native_theme_btn_hover = (btn, slot, entering) => {
@@ -3329,7 +3398,337 @@
           card.appendChild(langRow);
         }
       }
+
+      syncAppearanceUpdateRowOnCard(card, themeRow);
+      syncSettingsAppearanceUpdateDot();
       return true;
+    }
+
+    function sendUpdateAction(action, extra = {}) {
+      try {
+        if (typeof window.__agUpdateAction === 'function') {
+          window.__agUpdateAction(JSON.stringify(Object.assign({ action }, extra)));
+        }
+      } catch (e) {}
+    }
+
+    function copyTextToClipboardSafe(text) {
+      if (!text) return;
+      try {
+        if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+          navigator.clipboard.writeText(text).catch(() => {});
+          return;
+        }
+      } catch (e) {}
+      try {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.setAttribute('readonly', 'true');
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        ta.style.pointerEvents = 'none';
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        ta.remove();
+      } catch (e) {}
+    }
+
+    function formatUpdateCheckedTime(isoStr) {
+      if (!isoStr || typeof isoStr !== 'string') return '';
+      try {
+        const d = new Date(isoStr);
+        if (Number.isNaN(d.getTime())) return isoStr;
+        const pad = (n) => String(n).padStart(2, '0');
+        return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+      } catch (e) {
+        return isoStr;
+      }
+    }
+
+    function formatUpdateBundleBytes(bytes) {
+      const n = Number(bytes);
+      if (!Number.isFinite(n) || n <= 0) return '';
+      if (n >= 1024 * 1024) return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+      return `${Math.max(1, Math.round(n / 1024))} KB`;
+    }
+
+    function syncSettingsAppearanceUpdateDot() {
+      if (IS_SWARM_PLUGIN_FRAME) return;
+      const showDot = Boolean(
+        MODULES.updateCheck !== false &&
+          currentUpdateStatus &&
+          currentUpdateStatus.enabled !== false &&
+          currentUpdateStatus.updateAvailable &&
+          !currentUpdateStatus.dismissed
+      );
+      const navBtns = document.querySelectorAll('[data-testid="settings-nav-item-Appearance"]');
+      for (let i = 0; i < navBtns.length; i++) {
+        const btn = navBtns[i];
+        let dot = btn.querySelector('[data-ag-update-nav-dot="1"]');
+        if (showDot) {
+          if (!dot) {
+            dot = document.createElement('span');
+            dot.setAttribute('data-ag-update-nav-dot', '1');
+            dot.setAttribute('aria-hidden', 'true');
+            btn.appendChild(dot);
+          }
+        } else if (dot) {
+          dot.remove();
+        }
+      }
+    }
+
+    function syncAppearanceUpdateRowOnCard(card, baseThemeRow) {
+      if (!card) return;
+      const shouldShow = Boolean(
+        !IS_SWARM_PLUGIN_FRAME &&
+          MODULES.updateCheck !== false &&
+          currentUpdateStatus &&
+          currentUpdateStatus.enabled !== false
+      );
+      let row = card.querySelector('[data-ag-patch-update-row="1"]');
+      let drawer = card.querySelector('[data-ag-patch-update-drawer="1"]');
+      if (!shouldShow) {
+        if (row) row.remove();
+        if (drawer) drawer.remove();
+        return;
+      }
+
+      const st = currentUpdateStatus;
+      const uiStr = getSelfUiStrings();
+      const baseRowClass =
+        baseThemeRow?.className || 'py-2 px-3 w-full bg-transparent flex justify-between gap-4 items-center';
+      const hasActiveUpdate = Boolean(st.updateAvailable && !st.dismissed && st.latestVersion);
+      const sig = JSON.stringify({
+        lang: isUiEnglish() ? 'en' : 'zh',
+        cur: st.currentVersion || '',
+        lat: st.latestVersion || '',
+        avail: Boolean(st.updateAvailable),
+        dis: Boolean(st.dismissed),
+        chk: Boolean(st.checking),
+        cat: st.checkedAt || '',
+        bytes: st.bundleBytes || 0,
+        clLen: Array.isArray(st.changelog) ? st.changelog.length : 0,
+        open: Boolean(updateChangelogOpen),
+        copied: Boolean(updateCopyDone)
+      });
+
+      if (!row) {
+        row = document.createElement('div');
+        row.setAttribute('data-ag-patch-update-row', '1');
+        card.appendChild(row);
+      }
+      if (!drawer) {
+        drawer = document.createElement('div');
+        drawer.setAttribute('data-ag-patch-update-drawer', '1');
+        card.appendChild(drawer);
+      }
+      if (row.getAttribute('data-ag-update-sig') === sig) return;
+      row.setAttribute('data-ag-update-sig', sig);
+
+      row.className = hasActiveUpdate ? `${baseRowClass} ag-patch-update-row--stacked` : baseRowClass;
+      row.innerHTML = '';
+      drawer.innerHTML = '';
+      drawer.hidden = !(hasActiveUpdate && updateChangelogOpen);
+
+      const curVer = st.currentVersion || '6.0.6';
+      const latVer = st.latestVersion || curVer;
+      const checkedTime = formatUpdateCheckedTime(st.checkedAt);
+      const sizeText = formatUpdateBundleBytes(st.bundleBytes);
+
+      if (hasActiveUpdate) {
+        row.setAttribute('data-ag-update-state', 'available');
+        const head = document.createElement('div');
+        head.className = 'ag-patch-update-head';
+
+        const titleWrap = document.createElement('div');
+        titleWrap.className = 'ag-patch-update-title-wrap';
+        const lbl = document.createElement('span');
+        lbl.className = 'ag-patch-update-label';
+        lbl.textContent = uiStr.updateRowLabel;
+        const badge = document.createElement('span');
+        badge.className = 'ag-patch-ver-badge is-available';
+        badge.textContent = `v${curVer} → v${latVer}`;
+        titleWrap.appendChild(lbl);
+        titleWrap.appendChild(badge);
+        head.appendChild(titleWrap);
+
+        const dismissBtn = document.createElement('button');
+        dismissBtn.type = 'button';
+        dismissBtn.className = 'ag-patch-update-btn ag-patch-update-btn--ghost';
+        dismissBtn.textContent = uiStr.updateDismissBtn;
+        dismissBtn.addEventListener('click', (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          updateChangelogOpen = false;
+          sendUpdateAction('dismiss', { version: latVer });
+        });
+        head.appendChild(dismissBtn);
+
+        const desc = document.createElement('div');
+        desc.className = 'ag-patch-update-desc';
+        const parts = [];
+        if (sizeText) parts.push(`${sizeText}`);
+        if (st.source) parts.push(st.source);
+        parts.push(uiStr.updateNoRestartNote);
+        desc.textContent = parts.join(' · ');
+
+        const actions = document.createElement('div');
+        actions.className = 'ag-patch-update-actions';
+
+        const copyBtn = document.createElement('button');
+        copyBtn.type = 'button';
+        copyBtn.className = 'ag-patch-update-btn ag-patch-update-btn--primary';
+        copyBtn.textContent = updateCopyDone ? uiStr.updateCopiedBtn : uiStr.updateCopyCmdBtn;
+        copyBtn.addEventListener('click', (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          copyTextToClipboardSafe(st.upgradeCommand || 'node ~/.gemini/antigravity/theme-patch/install.mjs upgrade');
+          updateCopyDone = true;
+          row.removeAttribute('data-ag-update-sig');
+          syncAppearanceUpdateRowOnCard(card, baseThemeRow);
+          if (updateCopyTimer) clearTimeout(updateCopyTimer);
+          updateCopyTimer = setTimeout(() => {
+            updateCopyDone = false;
+            updateCopyTimer = null;
+            if (row.isConnected) {
+              row.removeAttribute('data-ag-update-sig');
+              syncAppearanceUpdateRowOnCard(card, baseThemeRow);
+            }
+          }, 1800);
+        });
+        actions.appendChild(copyBtn);
+
+        const clBtn = document.createElement('button');
+        clBtn.type = 'button';
+        clBtn.className = 'ag-patch-update-btn';
+        clBtn.textContent = updateChangelogOpen ? uiStr.updateHideChangelogBtn : uiStr.updateChangelogBtn;
+        clBtn.addEventListener('click', (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          updateChangelogOpen = !updateChangelogOpen;
+          row.removeAttribute('data-ag-update-sig');
+          syncAppearanceUpdateRowOnCard(card, baseThemeRow);
+        });
+        actions.appendChild(clBtn);
+
+        const relBtn = document.createElement('button');
+        relBtn.type = 'button';
+        relBtn.className = 'ag-patch-update-btn';
+        relBtn.textContent = uiStr.updateReleaseBtn;
+        relBtn.addEventListener('click', (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          sendUpdateAction('openRelease', { url: st.releaseUrl });
+        });
+        actions.appendChild(relBtn);
+
+        const recheckBtn = document.createElement('button');
+        recheckBtn.type = 'button';
+        recheckBtn.className = 'ag-patch-update-btn ag-patch-update-btn--ghost';
+        recheckBtn.disabled = Boolean(st.checking);
+        recheckBtn.textContent = st.checking ? uiStr.updateCheckingBtn : uiStr.updateCheckBtn;
+        recheckBtn.addEventListener('click', (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          sendUpdateAction('check');
+        });
+        actions.appendChild(recheckBtn);
+
+        row.appendChild(head);
+        row.appendChild(desc);
+        row.appendChild(actions);
+
+        if (updateChangelogOpen) {
+          drawer.hidden = false;
+          const clItems = Array.isArray(st.changelog) ? st.changelog : [];
+          if (clItems.length > 0) {
+            const ul = document.createElement('ul');
+            ul.className = 'ag-patch-update-cl-list';
+            for (const item of clItems) {
+              const li = document.createElement('li');
+              li.textContent = item;
+              ul.appendChild(li);
+            }
+            drawer.appendChild(ul);
+          }
+          const cmdBox = document.createElement('div');
+          cmdBox.className = 'ag-patch-update-cmd-box';
+          cmdBox.textContent = st.upgradeCommand || 'node ~/.gemini/antigravity/theme-patch/install.mjs upgrade';
+          drawer.appendChild(cmdBox);
+        }
+      } else {
+        row.setAttribute('data-ag-update-state', st.updateAvailable && st.dismissed ? 'dismissed' : 'latest');
+        const leftCol = document.createElement('div');
+        leftCol.className = 'ag-patch-update-left flex-1 flex flex-col gap-0.5';
+
+        const titleWrap = document.createElement('div');
+        titleWrap.className = 'ag-patch-update-title-wrap';
+        const lbl = document.createElement('span');
+        lbl.className = 'ag-patch-update-label';
+        lbl.textContent = uiStr.updateRowLabel;
+        const badge = document.createElement('span');
+        badge.className = st.updateAvailable && st.dismissed ? 'ag-patch-ver-badge is-ignored' : 'ag-patch-ver-badge is-ok';
+        badge.textContent =
+          st.updateAvailable && st.dismissed
+            ? `v${curVer} → v${latVer}${uiStr.updateDismissedSuffix}`
+            : `v${curVer} · ${uiStr.updateUpToDate}`;
+        titleWrap.appendChild(lbl);
+        titleWrap.appendChild(badge);
+        leftCol.appendChild(titleWrap);
+
+        const desc = document.createElement('div');
+        desc.className = 'ag-patch-update-desc';
+        desc.textContent = checkedTime ? `${uiStr.updateCheckedPrefix}${checkedTime}` : uiStr.updateNotChecked;
+        leftCol.appendChild(desc);
+
+        const rightCol = document.createElement('div');
+        rightCol.className = 'ag-patch-update-right shrink-0 flex items-center gap-1.5';
+
+        if (st.updateAvailable && st.dismissed) {
+          const showBtn = document.createElement('button');
+          showBtn.type = 'button';
+          showBtn.className = 'ag-patch-update-btn';
+          showBtn.textContent = uiStr.updateShowNewBtn;
+          showBtn.addEventListener('click', (ev) => {
+            ev.preventDefault();
+            ev.stopPropagation();
+            sendUpdateAction('clearDismiss');
+          });
+          rightCol.appendChild(showBtn);
+        }
+
+        const checkBtn = document.createElement('button');
+        checkBtn.type = 'button';
+        checkBtn.className = 'ag-patch-update-btn';
+        checkBtn.disabled = Boolean(st.checking);
+        checkBtn.textContent = st.checking ? uiStr.updateCheckingBtn : uiStr.updateCheckBtn;
+        checkBtn.addEventListener('click', (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          sendUpdateAction('check');
+        });
+        rightCol.appendChild(checkBtn);
+
+        row.appendChild(leftCol);
+        row.appendChild(rightCol);
+      }
+    }
+
+    function syncAllAppearanceUpdateUi() {
+      syncSettingsAppearanceUpdateDot();
+      const themeGroups = document.querySelectorAll('[data-slot="toggle-group"][data-ag-theme-toggle-group="1"]');
+      for (let i = 0; i < themeGroups.length; i++) {
+        const g = themeGroups[i];
+        const themeRow = g.closest ? g.closest('.agy-card > div') : null;
+        const card = themeRow ? themeRow.parentElement : null;
+        if (card) {
+          const existingRow = card.querySelector('[data-ag-patch-update-row="1"]');
+          if (existingRow) existingRow.removeAttribute('data-ag-update-sig');
+          syncAppearanceUpdateRowOnCard(card, themeRow);
+        }
+      }
     }
 
     function ensureAppearanceWarmNightToggle(root, forceRemount = false) {
@@ -3350,6 +3749,8 @@
       }
       if (mountedAny) {
         syncAppearanceWarmNightToggle();
+      } else {
+        syncSettingsAppearanceUpdateDot();
       }
     }
 

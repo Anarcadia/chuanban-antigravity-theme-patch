@@ -78,8 +78,8 @@
 > 4. 检查输出中的 `cdpStatus`（以及 Windows 新装字体后的 `restartAntigravityRequired`）：若为 `"missing_opt_in_flag"` 或 Windows 刚新装完字体，**如果你当前正在 Antigravity 内部对话中运行，请勿执行 `--force` 强行重启自断会话**，只需把空闲时执行的命令 `node ~/.gemini/antigravity/theme-patch/install.mjs relaunch`（Windows 为 `node "$HOME\.gemini\antigravity\theme-patch\install.mjs" relaunch`，或提示我手动退出重开一次客户端）发给我；如果你在外部独立终端运行且客户端空闲，请直接执行 `node install.mjs relaunch`。
 > 5. 在端口就绪后运行 `node install.mjs verify`，确认 `"ok": true`、`"hasStyle": true` 且 `fonts.allRequiredInstalled: true` 即完成验收。
 
-### 二、老用户升级至 v6.0.6
-`node install.mjs install` 会自动备份旧版 `core/` 内核、将旧版默认浅色预设平滑迁移至 `"morandi"`，并完整保留 `user/` 目录下的个人自定义设置：
+### 二、老用户升级至 v6.0.6（支持 `upgrade` 一键增量热升级）
+若本机已安装主题补丁，后续版本可直接执行 **`node install.mjs upgrade`**（或先加 `--check` 只读检查）：安装器会从 Cloudflare R2 / GitHub Release 自动拉取 `~350 KB` 增量更新包并校验双重 SHA-256、备份旧版 `core/` 与保留 `user/` 配置后由新版脚本自举接管完成热重注（验收不通过自动回滚，**绝不强杀重启客户端**）。若需离线全量覆盖安装，依然可使用 `node install.mjs install`：
 
 > **💬 复制发给 Agent（老用户无缝升级）**：  
 > 请帮我拉取最新的 `https://github.com/Anarcadia/chuanban-antigravity-theme-patch.git`（或读取最新解压目录），阅读其中的 `SKILL.md` 后直接运行 `node install.mjs install` 升级至 `v6.0.6`（若我此前使用的是早期单文件版脚本且有自定义字号/配色，请先迁移到 `~/.gemini/antigravity/theme-patch/user/`）。若安装后 `cdpStatus` 为 `"missing_opt_in_flag"` 且你正在 Antigravity 内部会话中运行，请勿直接中断当前对话，告诉我空闲时运行 `node ~/.gemini/antigravity/theme-patch/install.mjs relaunch`（或手动重开一次客户端）即可；端口已就绪则直接运行 `node install.mjs verify` 验收。
@@ -88,7 +88,7 @@
 - **🎨 切换风格、语言或微调字号**：日常切换主题与中英文可直接在「系统设置 → 外观界面」点击对应按钮；如需修改扩展预设或字号，可让 Agent 按 `SKILL.md` 修改 `user/config.json`（如调大 `"--ag-chat-font-size"`）。
 - **🇨🇳 自定义词条覆盖**：在 `~/.gemini/antigravity/theme-patch/user/i18n.override.json` 中写入 `"英文原词": "自定义中文"`，保存后自动热生效。
 - **🔤 字体缺失或事后重新修复安装**：若首次安装跳过了字体、更换新电脑或 Windows 提示字体未注册，可在浏览器打开 **[飞书国内免代理字体下载页](https://www.feishu.cn/wiki/V2lbwB8ykiLLXrkzY41cXjQ1nXc)** 将全部字体文件下载到同一目录（无需解压），再让 Agent 运行 `node ~/.gemini/antigravity/theme-patch/install.mjs install-fonts --from "<下载目录>"` 一键补装注册。
-- **🔍 故障定界、回滚与卸载**：可让 Agent 依次运行 `node install.mjs doctor` 与 `node install.mjs verify --safe-mode` 排查配置冲突；退回上一版本运行 `node install.mjs rollback`，彻底卸载还原运行 `node install.mjs uninstall`。
+- **🔍 故障定界、一键更新、回滚与卸载**：可让 Agent 运行 `node install.mjs upgrade --check` / `upgrade` 检查并事务性升级补丁（也可在「系统设置 → 外观界面」底部版本行随时查看或关闭 `modules.updateCheck`）；运行 `node install.mjs doctor` 与 `node install.mjs verify --safe-mode` 排查配置冲突；退回上一版本运行 `node install.mjs rollback`，彻底卸载还原运行 `node install.mjs uninstall`。
 
 ---
 
