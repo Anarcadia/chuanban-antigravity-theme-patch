@@ -1704,7 +1704,7 @@ function rebuildBundleIfNeeded(opts = {}) {
     normalizedSelectors.excludeI18n.trim() &&
     !normalizedSelectors.excludeI18n.includes('.code-line .line-content')
   ) {
-    normalizedSelectors.excludeI18n += ', .code-line .line-content, .code-line .token';
+    normalizedSelectors.excludeI18n += ', .view-lines, .code-line .line-content, .code-line .token';
   }
 
   const DEFAULT_ALLOWED_ORIGINS = [

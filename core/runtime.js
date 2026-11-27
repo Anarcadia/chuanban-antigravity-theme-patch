@@ -243,7 +243,7 @@
   }
 
   const DEFAULT_EXCLUDE_I18N =
-    'code, pre, kbd, samp, textarea, input, style, script, noscript, [contenteditable="true"], [data-markdown-root], [data-testid="user-message-content"], .agy-user-bubble, .monaco-editor, .monaco-diff-editor, .xterm, .code-line .line-content, .code-line .token, [class*="onyx-key"], .prose, .markdown, [class*="chat-message"], [class*="group/file-title"], [data-uri^="file:"], [data-uri^="vscode-"], a.inline-pill[href^="file:"], a.inline-pill[href^="vscode-"], [data-testid="conversation-row-sidebar"] a[href^="/c/"], [data-testid="conversation-row-sidebar"] span.truncate, [data-testid="conversation-row-history"] a[href^="/c/"], [data-testid="conversation-row-history"] span.truncate, [data-testid^="conversation-group-"], [data-testid^="conversation-project-"], [data-testid^="sidebar-agent-row-"] span.truncate, [data-testid="sidebar-agent-hover-card-title"], [data-testid="coordinator-hover-card-title"], [data-testid="coordinator-card-title"], [data-testid="coordinator-card-latest-line"], [data-testid="context-provider-hover-card-title"], [data-testid="ask-question-header-text"], [data-testid="ask-question-option-text"], [data-testid="doc-row-title"], [data-testid="conversation-navigator-turn"], [data-testid="side-question-followup-user"], [data-testid="comment-card-text"], [data-testid="automation-name"], [data-testid="automation-instructions-text"], [data-testid="step-plan-item"], [data-testid="live-transcript"], [data-testid="voice-transcript-summary-lead"], [data-testid="voice-transcript-summary-point"], [data-testid="project-header"] span.truncate, .msg-body, #raw, [data-testid="swarm-raw"], #swarm-title, #ag-live-metrics-pill, .ag-live-metrics-pill, [data-ag-metrics-pill], #ag-live-metrics-tooltip, #ag-token-nav-section, #ag-token-analytics-panel, #ag-ta-tooltip, [data-ag-token-ui], [data-ag-lang-row="1"], [data-ag-sys-follow-row="1"]';
+    'code, pre, kbd, samp, textarea, input, style, script, noscript, [contenteditable="true"], [data-markdown-root], [data-testid="user-message-content"], .agy-user-bubble, .monaco-editor, .monaco-diff-editor, .view-lines, .xterm, .code-line .line-content, .code-line .token, [class*="onyx-key"], .prose, .markdown, [class*="chat-message"], [class*="group/file-title"], [data-uri^="file:"], [data-uri^="vscode-"], a.inline-pill[href^="file:"], a.inline-pill[href^="vscode-"], [data-testid="conversation-row-sidebar"] a[href^="/c/"], [data-testid="conversation-row-sidebar"] span.truncate, [data-testid="conversation-row-history"] a[href^="/c/"], [data-testid="conversation-row-history"] span.truncate, [data-testid^="conversation-group-"], [data-testid^="conversation-project-"], [data-testid^="sidebar-agent-row-"] span.truncate, [data-testid="sidebar-agent-hover-card-title"], [data-testid="coordinator-hover-card-title"], [data-testid="coordinator-card-title"], [data-testid="coordinator-card-latest-line"], [data-testid="context-provider-hover-card-title"], [data-testid="ask-question-header-text"], [data-testid="ask-question-option-text"], [data-testid="doc-row-title"], [data-testid="conversation-navigator-turn"], [data-testid="side-question-followup-user"], [data-testid="comment-card-text"], [data-testid="automation-name"], [data-testid="automation-instructions-text"], [data-testid="step-plan-item"], [data-testid="live-transcript"], [data-testid="voice-transcript-summary-lead"], [data-testid="voice-transcript-summary-point"], [data-testid="project-header"] span.truncate, .msg-body, #raw, [data-testid="swarm-raw"], #swarm-title, #ag-live-metrics-pill, .ag-live-metrics-pill, [data-ag-metrics-pill], #ag-live-metrics-tooltip, #ag-token-nav-section, #ag-token-analytics-panel, #ag-ta-tooltip, [data-ag-token-ui], [data-ag-lang-row="1"], [data-ag-sys-follow-row="1"]';
 
   function cleanupTokenAnalyticsDom() {
     try {
@@ -3385,7 +3385,7 @@
         } catch (e) {}
       }
       const APPEARANCE_SKIP_SELECTOR =
-        '[data-markdown-root], [data-testid="user-message-content"], .agy-user-bubble, .prose, .markdown, pre, code, .monaco-editor, .xterm, #ag-live-metrics-pill, .ag-live-metrics-pill, [data-ag-metrics-pill], [data-testid="conversation-list-sidebar"], [data-testid="conversation-row-sidebar"], [data-testid="conversation-row-history"], [data-testid^="sidebar-agent-row-"]';
+        '[data-markdown-root], [data-testid="user-message-content"], .agy-user-bubble, .prose, .markdown, pre, code, .monaco-editor, .monaco-diff-editor, .view-lines, .code-line, .xterm, #ag-live-metrics-pill, .ag-live-metrics-pill, [data-ag-metrics-pill], [data-testid="conversation-list-sidebar"], [data-testid="conversation-row-sidebar"], [data-testid="conversation-row-history"], [data-testid^="sidebar-agent-row-"]';
       const scheduleAppearanceGroupScan = () => {
         if (document.hidden || typeof requestAnimationFrame !== 'function') {
           if (!window.__ag_appearance_scan_timer) {
@@ -4558,7 +4558,7 @@
   }
 
   const METRICS_DOM_SKIP_SEL =
-    '[data-markdown-root], [data-testid="user-message-content"], .agy-user-bubble, .prose, .markdown, pre, code, .monaco-editor, .monaco-diff-editor, .xterm, #ag-live-metrics-pill, .ag-live-metrics-pill, [data-ag-metrics-pill], #ag-live-metrics-tooltip, [data-testid="conversation-list-sidebar"]';
+    '[data-markdown-root], [data-testid="user-message-content"], .agy-user-bubble, .prose, .markdown, pre, code, .monaco-editor, .monaco-diff-editor, .view-lines, .code-line, .xterm, #ag-live-metrics-pill, .ag-live-metrics-pill, [data-ag-metrics-pill], #ag-live-metrics-tooltip, [data-testid="conversation-list-sidebar"]';
 
   function isMetricsRelevantNode(node, rawInputId, watchDescendantSel) {
     if (!node || node.nodeType !== 1) return 0;
@@ -4875,7 +4875,7 @@
     }
 
     const CONTAINER_IMMUTABLE_EXCLUDE_SELECTOR =
-      'code, pre, kbd, samp, style, script, noscript, [data-markdown-root], [data-testid="user-message-content"], .agy-user-bubble, .monaco-editor, .monaco-diff-editor, .xterm, .code-line .line-content, .code-line .token, [data-uri^="file:"], [data-uri^="vscode-"], a.inline-pill[href^="file:"], a.inline-pill[href^="vscode-"], [data-testid="side-question-followup-user"], [data-testid="comment-card-text"], [data-testid="automation-name"], [data-testid="automation-instructions-text"], [data-testid="step-plan-item"], [data-testid="live-transcript"], [data-testid="voice-transcript-summary-lead"], [data-testid="voice-transcript-summary-point"], [data-testid="project-header"] span.truncate, #ag-live-metrics-pill, .ag-live-metrics-pill, [data-ag-metrics-pill], #ag-live-metrics-tooltip, #ag-token-nav-section, #ag-token-analytics-panel, #ag-ta-tooltip, [data-ag-token-ui], .msg-body, #raw, [data-testid="swarm-raw"], #swarm-title';
+      'code, pre, kbd, samp, style, script, noscript, [data-markdown-root], [data-testid="user-message-content"], .agy-user-bubble, .monaco-editor, .monaco-diff-editor, .view-lines, .xterm, .code-line .line-content, .code-line .token, [data-uri^="file:"], [data-uri^="vscode-"], a.inline-pill[href^="file:"], a.inline-pill[href^="vscode-"], [data-testid="side-question-followup-user"], [data-testid="comment-card-text"], [data-testid="automation-name"], [data-testid="automation-instructions-text"], [data-testid="step-plan-item"], [data-testid="live-transcript"], [data-testid="voice-transcript-summary-lead"], [data-testid="voice-transcript-summary-point"], [data-testid="project-header"] span.truncate, #ag-live-metrics-pill, .ag-live-metrics-pill, [data-ag-metrics-pill], #ag-live-metrics-tooltip, #ag-token-nav-section, #ag-token-analytics-panel, #ag-ta-tooltip, [data-ag-token-ui], .msg-body, #raw, [data-testid="swarm-raw"], #swarm-title';
     const TEXT_IMMUTABLE_EXCLUDE_SELECTOR =
       'textarea, input, [contenteditable="true"], [data-testid="conversation-navigator-turn"], ' +
       CONTAINER_IMMUTABLE_EXCLUDE_SELECTOR;
@@ -5268,7 +5268,7 @@
         el.matches &&
         el.matches(MARKDOWN_UI_ATTR_SELECTOR) &&
         el.closest('[data-markdown-root]') &&
-        !el.closest('pre, code, .monaco-editor, .monaco-diff-editor, .xterm, .code-line .line-content, .code-line .token')
+        !el.closest('pre, code, .monaco-editor, .monaco-diff-editor, .view-lines, .xterm, .code-line .line-content, .code-line .token')
       );
     }
 
@@ -6273,7 +6273,7 @@
       const els = container.querySelectorAll(MARKDOWN_UI_ATTR_SELECTOR);
       for (let i = 0; i < els.length; i++) {
         const el = els[i];
-        if (!el.closest('pre, code, .monaco-editor, .monaco-diff-editor, .xterm, .code-line .line-content, .code-line .token')) {
+        if (!el.closest('pre, code, .monaco-editor, .monaco-diff-editor, .view-lines, .xterm, .code-line .line-content, .code-line .token')) {
           translateElementAttrs(el);
         }
       }
@@ -6804,7 +6804,7 @@
           if (m.target && m.target.nodeType === 1 && isExcludedElement(m.target, batchSafeSet)) {
             if (
               m.target.closest &&
-              !m.target.closest('pre, code, .monaco-editor, .monaco-diff-editor, .xterm, .code-line .line-content, .code-line .token') &&
+              !m.target.closest('pre, code, .monaco-editor, .monaco-diff-editor, .view-lines, .xterm, .code-line .line-content, .code-line .token') &&
               m.target.closest('[data-markdown-root]')
             ) {
               for (let j = 0; j < m.addedNodes.length; j++) {
@@ -7125,12 +7125,19 @@
     window.__ag_apply_i18n_dom_state = applyI18nDomState;
 
     if (document.body) {
-      try {
-        const excludedCodeNodes = document.body.querySelectorAll('.code-line .line-content, .code-line .token');
-        for (let i = 0; i < excludedCodeNodes.length; i++) {
-          restoreAllTranslations(excludedCodeNodes[i]);
-        }
-      } catch (e) {}
+      if (!isUiEnglish()) {
+        try {
+          const restoredRootSelector = '.code-line .line-content, .code-line .token, .view-lines';
+          const excludedCodeNodes = document.body.querySelectorAll(restoredRootSelector);
+          for (let i = 0; i < excludedCodeNodes.length; i++) {
+            const codeNode = excludedCodeNodes[i];
+            if (codeNode.parentElement && codeNode.parentElement.closest(restoredRootSelector)) {
+              continue;
+            }
+            restoreAllTranslations(codeNode);
+          }
+        } catch (e) {}
+      }
       applyI18nDomState();
     }
   } else {
@@ -9280,7 +9287,7 @@
       }
 
       const MODAL_FAST_SKIP_SEL =
-        '[data-markdown-root], [data-testid="conversation-view"], [id="antigravity.agentSidePanelInputBox"], .monaco-editor, .monaco-diff-editor, .xterm, [data-ag-token-ui], [data-ag-metrics-pill], #ag-live-metrics-pill, #ag-live-metrics-tooltip';
+        '[data-markdown-root], [data-testid="conversation-view"], [id="antigravity.agentSidePanelInputBox"], .monaco-editor, .monaco-diff-editor, .view-lines, .code-line, .xterm, [data-ag-token-ui], [data-ag-metrics-pill], #ag-live-metrics-pill, #ag-live-metrics-tooltip';
       const MODAL_RELEVANT_SEL =
         '.settings-modal-container, .settings-modal-backdrop, [data-testid="settings-sidebar"], [role="dialog"]';
       const observedModalEls = typeof WeakSet !== 'undefined' ? new WeakSet() : null;
