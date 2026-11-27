@@ -1,9 +1,9 @@
 ---
 name: chuanban-antigravity-theme-patch
-description: 船板的 Antigravity 2.0 主题、字体与汉化补丁（v6.0.5 · 适配 Antigravity 2.35.2+ / 2.35.0 / 2.34.0+ macOS / Windows / Linux 单图标 M1+M2 零子进程空闲短路启动接力与 OS 分层参数/代理保留 + Windows TimeTrigger 5 分钟全时段保活 + 一键自动直链字体下载/ZIP 解压与 Windows UTF-16 注册表写入 + 全新默认「莫兰迪古典矿物 (morandi)」冷暖互补配色体系与烟岚石青单层合并输入框 + 外观面板五段式主题秒切 `[ A 原版配色 | ✳️ Absolutely！ | MO 莫兰迪色 | 📖 暖纸深色 | 🌙 深色 ]` 与独立「跟随系统」日夜配对开关 + 外观 `[ EN | 中文 ]` 一键零重刷语言切换 + UI 西文 Google Sans Flex 可变字体引擎 × 中文更纱黑体映射 + 对话正文 Anthropic Serif 衬线 + 2,228 条零冲突词典 + Swarm 1.5s 轮询零闪烁翻译护盾 + 分屏/支线提问(/btw)/子Agent侧栏独立实时指标胶囊 + 系统设置「本地扩展 → Token 统计」磁盘持久化毫秒级分析面板）。采用「core/ 只读内核 + user/ 永不覆盖改装层 + install.mjs CLI」，支持 Agent 一键部署、2.5 秒热重载定制与 --safe-mode 沙箱排障。当用户提到“安装船板 Antigravity 主题”、“升级/修复 Antigravity 汉化与字体”、“定制 Antigravity 界面样式或汉化词条”时触发。
+description: 船板的 Antigravity 2.0 主题、字体与汉化补丁（v6.0.6 · 适配 Antigravity 2.35.2+ / 2.35.0 / 2.34.0+ macOS / Windows / Linux 单图标 M1+M2 零子进程空闲短路启动接力与 OS 分层参数/代理保留 + Windows TimeTrigger 5 分钟全时段保活 + 一键自动直链字体下载/ZIP 解压与 Windows UTF-16 注册表写入 + 全新默认「莫兰迪古典矿物 (morandi)」冷暖互补配色体系与烟岚石青单层合并输入框 + 外观面板五段式主题秒切 `[ A 原版配色 | ✳️ Absolutely！ | MO 莫兰迪色 | 📖 暖纸深色 | 🌙 深色 ]` 与独立「跟随系统」日夜配对开关 + 外观 `[ EN | 中文 ]` 一键零重刷语言切换 + UI 西文 Google Sans Flex 可变字体引擎 × 中文更纱黑体映射 + 对话正文 Anthropic Serif 衬线 + 2,228 条零冲突词典 + Swarm 1.5s 轮询零闪烁翻译护盾 + 分屏/支线提问(/btw)/子Agent侧栏独立实时指标胶囊 + 系统设置「本地扩展 → Token 统计」磁盘持久化毫秒级分析面板）。采用「core/ 只读内核 + user/ 永不覆盖改装层 + install.mjs CLI」，支持 Agent 一键部署、2.5 秒热重载定制与 --safe-mode 沙箱排障。当用户提到“安装船板 Antigravity 主题”、“升级/修复 Antigravity 汉化与字体”、“定制 Antigravity 界面样式或汉化词条”时触发。
 ---
 
-# 船板的 Antigravity 主题、字体与汉化补丁（v6.0.5 · AI Agent 部署与改装契约）
+# 船板的 Antigravity 主题、字体与汉化补丁（v6.0.6 · AI Agent 部署与改装契约）
 
 > **核心摘要（致执行端 AI Agent）**：
 > - **功能边界**：纯运行时本地回环 CDP 注入（不改 `.asar`、不破系统签名、零第三方 npm 依赖），适配 Google Antigravity **`2.35.2+` / `2.35.0` / `2.34.0+`**：
@@ -69,7 +69,7 @@ chuanban-antigravity-theme-patch/
 ├── CHANGELOG.md                # 版本演进记录
 ├── LICENSE                     # MIT 开源许可协议
 ├── core/                       # 【只读内核】随版本升级原子替换，Agent 严禁直接修改
-│   ├── manifest.json           # 版本号（6.0.5）、三端地址与 core/* 四件套 SHA-256 校验清单
+│   ├── manifest.json           # 版本号（6.0.6）、三端地址与 core/* 四件套 SHA-256 校验清单
 │   ├── daemon.mjs              # Node CDP 守护进程（宿主独占指纹门禁、2.33.0+~2.35.2+ M2 冷启动自动接力重启与 OS 分层启动参数/Windows 系统代理保留、Windows .lnk 限深更新自愈、NTFS 原子写盘退避防锁、SingletonLock/lockfile 全平台零子进程空闲短路、SQLite O(1) 增量胶囊与全量 Token 统计归因、WSL2 双轨只读读取、Swarm 子帧同步与载荷裁剪、2.5s 热重载感知）
 │   ├── runtime.js              # 浏览器端注入引擎（五段式外观主题 +「跟随系统」日夜配对开关 + `[ EN | 中文 ]` 二元语言零重刷切换、#ag-font-faces 常驻字库防缺字、Windows TitleBarOverlay 零过渡污染同步、Swarm 子帧 1.5s 轮询零闪烁护盾与原版底色还原、O(1) 观察器短路、指标胶囊 260ms 悬浮意图与 rAF 合批）
 │   ├── theme.css               # 样式表（莫兰迪古典矿物默认视觉、烟岚石青/火漆单层 `2px` 合并输入框、`Absolutely！` 与双深色预设、2.35.0+ 自绘窗口控制键高对比适配、指标胶囊与 Token 统计 `@container` 自适应面板）

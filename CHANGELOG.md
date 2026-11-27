@@ -4,6 +4,19 @@
 
 ---
 
+## [v6.0.6] - 2026-11-27
+
+> **适用版本**：Antigravity `2.35.2+` / `2.35.1` / `2.35.0` / `2.34.0+`（macOS `2.35.2` `CL=1029311855` × Windows 11 `2.35.2+`）  
+> **社区致谢**：特别感谢 [@valeamoris](https://github.com/valeamoris)（[Issue #50](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/issues/50) & [PR #51](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/pull/51) `Review / Diff` 虚拟化代码行标识符误汉化根因定位与修复 PR）！
+
+### Fixed & Optimized
+- **修复 `Review / Working Directory / Agent Edits` Diff 视图中代码标识符被汉化词典误替换的问题（`core/runtime.js` / `core/daemon.mjs`，修复 [#50](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/issues/50)，合入并收口 [#51](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/pull/51)）**：
+  - **代码行精准隔离与旧配置迁移**：针对 Antigravity 自定义虚拟化代码行容器（`.code-line .line-content` / `.code-line .token`）及 `.view-lines`，将其同步纳入 `DEFAULT_EXCLUDE_I18N`、`CONTAINER_IMMUTABLE_EXCLUDE_SELECTOR`、`[data-markdown-root]` 内嵌属性守卫与 `daemon.mjs` 旧版 `selectors.excludeI18n` 自动迁移兜底，彻底阻断语法高亮拆分 `<span class="token">` 后英文标识符（如 `Allow`、`Copy`、`Default` 等）命中 UI 词典被渲染为中文的问题，同时保留外层 `Review` 栏与文件头操作控件的正常汉化；
+  - **免重启热恢复与祖先去重**：升级重注入时对当前已打开 Diff 视图中的代码节点自动执行 `restoreAllTranslations` 原位还原英文代码，并引入 `!isUiEnglish()` 门控与父级 `closest(...)` 祖先去重守卫，消除单行内多个 `.token` 子节点的重复 `TreeWalker` 遍历；
+  - **Diff 虚拟滚动全局观察器加速**：将 `.code-line` 与 `.view-lines`（含 `.monaco-diff-editor`）同步补入 `APPEARANCE_SKIP_SELECTOR`、`METRICS_DOM_SKIP_SEL` 与 `MODAL_FAST_SKIP_SEL` 三处全局 `MutationObserver` 的 O(1) 快速短路列表，消除大文件 Diff 高频虚拟滚动时的无关子树扫描。
+
+---
+
 ## [v6.0.5] - 2026-11-26
 
 > **适用版本**：Antigravity `2.35.2+` / `2.35.1` / `2.35.0` / `2.34.0+`（macOS `2.35.2` `CL=1029311855` × Windows 11 `2.35.2+`）  
