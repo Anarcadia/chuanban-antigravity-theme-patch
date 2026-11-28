@@ -4,6 +4,23 @@
 
 ---
 
+## [v6.0.7] - 2026-11-28
+
+> **适用版本**：Antigravity `2.36.0+` / `2.35.x` / `2.34.0+`（macOS `2.36.0` `CL=1031268331` × Windows 11 `2.36.0+` × Linux）  
+> **社区致谢**：特别感谢 [@shixiaogaoya](https://github.com/shixiaogaoya)（[PR #53](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/pull/53) 内置 `/` 斜杠命令与技能描述汉化、[PR #54](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/pull/54) 双镜像低频更新检测、外观面板一键热升级与 CLI 事务性自举升级）与 [@wysxxx](https://github.com/wysxxx)（[Issue #52](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/issues/52) `user/` 层侧边栏效率衍生组件分享）！
+
+### Added, Fixed & Optimized
+- **新增双镜像低频只读更新检测、外观面板一键原地热升级与 CLI 两阶段事务性自举升级（`install.mjs` / `core/daemon.mjs` / `core/runtime.js` / `core/theme.css`，合入并深度加固 [#54](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/pull/54)）**：
+  - **轻量增量包与双源并发探测**：`install.mjs pack` 新增产出 `~350 KB` `core-update-v<version>.zip` 与 `dist/latest.json`（包级 + `core/*` 四件套双重 SHA-256 校验、防路径穿越与符号链接/Junction 拦截）；守护进程每 24 小时最多执行一次低频只读检测（支持 `modules.updateCheck: false` 完整关闭），外观卡片底部新增版本提示行、「立即热升级」、「更新内容」抽屉与「忽略此版本」；
+  - **两阶段实机验活交接与自动回滚加固**：重构 `node install.mjs upgrade` 为「阶段 A `--skip-service-restart` 仅替换 `core/` 并单次重注 → 阶段 B 强校验目标窗口真实版本号 `-v<toVersion>-`（兼容 `enabled: false` `-disabled` 禁用态，拦截旧 DOM 假阳性）→ 阶段 C 验收通过后再落盘状态并平滑重启系统常驻服务」，避免提前重启服务杀死父守护进程导致回滚报错丢失，并将结构化结果持久化至 `.cache/last-upgrade-result.json`；同步补齐远端与暂存包双重 `manifest.name` 防跨仓串包强校验、Linux Insiders 宿主版本探测、侧栏 `Appearance / General` 提示圆点双兼容及自绘更新节点观察器/免翻隔离。
+- **全面适配 Antigravity `2.36.0`（`CL=1031268331`）最大化副栏悬浮输入框、设置搜索框、模型配额面板与 `2,368` 条零冲突词典（`core/theme.css` / `core/runtime.js` / `core/daemon.mjs` / `core/i18n.json`，合入 [#53](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/pull/53)）**：
+  - **修复最大化副栏悬浮胶囊 `.agy-floating-composer-pill` 圆角裁切与展开框适配**：排除收起态 `0fr` 状态折叠架 `.agy-floating-composer-shelf-wrap:not([data-open="true"])`，根治常态悬浮胶囊顶部被削成直角与多余底边线问题，对齐常态（`22px`）与带状态栏（`18px`）同心圆角、展开框顶栏配色及分屏 `resolveBoxCascadeId` 会话 UUID 反查；
+  - **修复系统设置顶部搜索框与「本地扩展 → Token 统计」Tab 切换死锁**：支持点击搜索下拉选项 `<li role="option">` 或在搜索框按 `Enter` 回车自动退出 Token 统计页显示目标设置项，并排除点击搜索框 `×` 清空按钮误退页；
+  - **气泡代码底色防覆盖与新增用户敏感字段免翻隔离**：为 `[data-testid="agent-message-bubble"]` 下的行内代码补齐 `!important` 主题底色以压过宿主 `!bg-background/70`；将 `Credentials` 凭据作用域/允许域名、`@mention` 芯片与会话发言人纳入 `DEFAULT_EXCLUDE_I18N`；
+  - **词典零冲突扩充至 `2,368` 条（`+140` 条）**：合入 `18` 条内置 `/` 斜杠命令描述，新增 `122` 条 `2.36.0` 模型配额面板、悬浮输入框、设置搜索、`Credentials` 凭据管理、`File/Zoom` 菜单、Git Worktree 分叉、侧栏 Agent 显隐及 Feeds / 讨论串词条与 4 组零回溯动态模板。
+
+---
+
 ## [v6.0.6] - 2026-11-27
 
 > **适用版本**：Antigravity `2.35.2+` / `2.35.1` / `2.35.0` / `2.34.0+`（macOS `2.35.2` `CL=1029311855` × Windows 11 `2.35.2+`）  

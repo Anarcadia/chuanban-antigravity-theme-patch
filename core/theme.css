@@ -507,29 +507,38 @@ body[data-agy-theme][data-newux-theme="onyx"] .surface-composer:focus-within > .
   border-radius: calc(var(--nux-composer-frame-radius, 21px) - var(--ag-composer-bw, 2px)) !important;
 }
 
-:is(#antigravity\.agentSidePanelInputBox, [id="antigravity.agentSidePanelInputBox"], .surface-composer) > div:not(.surface-composer-card):not([aria-hidden="true"]):not(.voice-glow-ring):not(:empty):not([hidden]) ~ .surface-composer-card {
+/* 2.36.0 最大化副栏悬浮迷你胶囊：对齐常态 22px 与展开状态栏 18px 同心圆角 */
+.agy-floating-composer-pill.surface-composer {
+  --nux-composer-frame-radius: 22px;
+}
+
+.agy-floating-composer-pill.surface-composer[data-has-status="true"] {
+  --nux-composer-frame-radius: 18px;
+}
+
+:is(#antigravity\.agentSidePanelInputBox, [id="antigravity.agentSidePanelInputBox"], .surface-composer) > div:not(.surface-composer-card):not([aria-hidden="true"]):not(.voice-glow-ring):not(.agy-floating-composer-shelf-wrap:not([data-open="true"])):not(:empty):not([hidden]) ~ .surface-composer-card {
   border-top-left-radius: 0 !important;
   border-top-right-radius: 0 !important;
 }
 
-/* 当普通对话存在展开的非空顶部附加栏（如排队消息或引用块）时，仅作底部分隔线而不产生外围套框（兼容 voice-glow-ring 挂载为首子节点） */
-:is(#antigravity\.agentSidePanelInputBox, [id="antigravity.agentSidePanelInputBox"], .surface-composer) > div:nth-child(1 of div:not(.surface-composer-card):not([aria-hidden="true"]):not(.voice-glow-ring):not(:empty):not([hidden])) {
+/* 当普通对话存在展开的非空顶部附加栏（如排队消息或引用块）时，仅作底部分隔线而不产生外围套框（兼容 voice-glow-ring 挂载为首子节点与 2.36.0 收起态 0fr 悬浮状态架） */
+:is(#antigravity\.agentSidePanelInputBox, [id="antigravity.agentSidePanelInputBox"], .surface-composer) > div:nth-child(1 of div:not(.surface-composer-card):not([aria-hidden="true"]):not(.voice-glow-ring):not(.agy-floating-composer-shelf-wrap:not([data-open="true"])):not(:empty):not([hidden])) {
   background-color: var(--ag-composer-tray-bg, #EAE4D8) !important;
   border-bottom: 1px solid var(--ag-composer-tray-divider, rgba(154, 71, 50, 0.15)) !important;
   border-radius: calc(var(--nux-composer-frame-radius, 21px) - var(--ag-composer-bw, 2px)) calc(var(--nux-composer-frame-radius, 21px) - var(--ag-composer-bw, 2px)) 0 0 !important;
 }
 
 /* 新建对话主界面（项目/环境/分支选择顶栏）：保留上部托盘深色底，仅消除中间 1px 水平分界线（依托 runtime.js 维护的 data-ag-page-type="home"，彻底避免全局 :nth-child():has() 桶拖慢虚拟滚动） */
-html[data-ag-page-type="home"] :is(#antigravity\.agentSidePanelInputBox, [id="antigravity.agentSidePanelInputBox"], .surface-composer) > div:nth-child(1 of div:not(.surface-composer-card):not([aria-hidden="true"]):not(.voice-glow-ring):not(:empty):not([hidden])) {
+html[data-ag-page-type="home"] :is(#antigravity\.agentSidePanelInputBox, [id="antigravity.agentSidePanelInputBox"], .surface-composer) > div:nth-child(1 of div:not(.surface-composer-card):not([aria-hidden="true"]):not(.voice-glow-ring):not(.agy-floating-composer-shelf-wrap:not([data-open="true"])):not(:empty):not([hidden])) {
   border-bottom: 0 solid transparent !important;
 }
 
-/* 输入框顶部工具栏（排除 .surface-composer-card 与 .voice-glow-ring）、底部按钮与发送/取消按钮 */
-[id="antigravity.agentSidePanelInputBox"] > div:not(.surface-composer-card):not(.voice-glow-ring) :is(button, span, svg) {
+/* 输入框顶部工具栏（排除 .surface-composer-card 与 .voice-glow-ring）、底部按钮与发送/取消按钮（含 2.36.0 展开态悬浮框顶栏） */
+:is([id="antigravity.agentSidePanelInputBox"], .agy-floating-composer-expanded .surface-composer) > div:not(.surface-composer-card):not(.voice-glow-ring) :is(button, span, svg) {
   color: var(--ag-composer-top-fg, #383431) !important;
 }
 
-[id="antigravity.agentSidePanelInputBox"] > div:not(.surface-composer-card):not(.voice-glow-ring) button:hover {
+:is([id="antigravity.agentSidePanelInputBox"], .agy-floating-composer-expanded .surface-composer) > div:not(.surface-composer-card):not(.voice-glow-ring) button:hover {
   background-color: var(--ag-composer-top-hover-bg, rgba(217, 119, 87, 0.08)) !important;
   color: var(--ag-composer-top-hover-fg, #1F1E1D) !important;
 }
@@ -1061,11 +1070,20 @@ html:not([data-ag-preset="absolutely"]):not([data-ag-theme-mode="dark"]) body:no
 }
 
 html:not([data-ag-preset="absolutely"]):not([data-ag-theme-mode="dark"]) body:not(.dark) :is([data-markdown-root], .select-text, .prose, .markdown) :not(pre) > code {
-  background-color: rgba(63, 110, 122, 0.085);
-  border: 1px solid rgba(63, 110, 122, 0.19);
+  background-color: rgba(63, 110, 122, 0.085) !important;
+  border: 1px solid rgba(63, 110, 122, 0.19) !important;
   border-radius: 5px;
   padding: 0.1em 0.34em;
   color: #2C535E !important;
+}
+
+html[data-ag-preset="absolutely"]:not([data-ag-theme-mode="dark"]) body:not(.dark) [data-testid="agent-message-bubble"] :is([data-markdown-root], .select-text, .prose, .markdown) :not(pre) > code {
+  background-color: rgba(154, 71, 50, 0.08) !important;
+  border: 1px solid rgba(154, 71, 50, 0.18) !important;
+}
+
+html:not([data-ag-preset="native"]) [data-testid="agent-message-bubble"] .md-code-surface {
+  background-color: var(--card) !important;
 }
 
 html:not([data-ag-preset="absolutely"]):not([data-ag-theme-mode="dark"]) body:not(.dark) :is(a.inline-pill[href^="file:"], a.inline-pill[href^="vscode-"], .inline-pill[data-uri^="file:"], .inline-pill[data-uri^="vscode-"]) {
@@ -1435,8 +1453,8 @@ body[data-agy-theme][data-newux-theme="onyx"].dark .agy-sidebar-row[data-selecte
 }
 
 :is(html[data-ag-theme-mode="dark"] body, body.dark, body.theme-dark) :is([data-markdown-root], .select-text, .prose, .markdown) :not(pre) > code {
-  background-color: rgba(122, 166, 178, 0.11);
-  border: 1px solid rgba(122, 166, 178, 0.22);
+  background-color: rgba(122, 166, 178, 0.11) !important;
+  border: 1px solid rgba(122, 166, 178, 0.22) !important;
   border-radius: 5px;
   padding: 0.12em 0.36em;
   color: #B4D2DC !important;
@@ -1580,8 +1598,8 @@ html[data-ag-dark-preset="claude-warm"] body[data-agy-theme][data-newux-theme="o
 }
 
 :is(html[data-ag-dark-preset="claude-warm"][data-ag-theme-mode="dark"] body, html[data-ag-dark-preset="claude-warm"] body.dark, html[data-ag-dark-preset="claude-warm"] body.theme-dark) :is([data-markdown-root], .select-text, .prose, .markdown) :not(pre) > code {
-  background-color: rgba(217, 119, 87, 0.12);
-  border: 1px solid rgba(217, 119, 87, 0.24);
+  background-color: rgba(217, 119, 87, 0.12) !important;
+  border: 1px solid rgba(217, 119, 87, 0.24) !important;
   color: #F0B89E !important;
 }
 
@@ -1813,8 +1831,8 @@ html[data-ag-preset="native"] body.dark [role="switch"][data-ag-sys-follow-switc
   transform: translateX(15px);
 }
 
-/* 外观卡片「主题补丁版本 / Patch Version」轻量提示行与侧栏指示小点（位于 #ag-ui-widgets，全预设统一协调） */
-[data-testid="settings-nav-item-Appearance"] [data-ag-update-nav-dot="1"] {
+/* 外观卡片「主题补丁版本 / Patch Version」轻量提示行与侧栏指示小点（位于 #ag-ui-widgets，兼容 Appearance 与 General 侧栏项） */
+:is([data-testid="settings-nav-item-Appearance"], [data-testid="settings-nav-item-General"]) [data-ag-update-nav-dot="1"] {
   display: inline-block;
   width: 6px;
   height: 6px;
@@ -1825,23 +1843,23 @@ html[data-ag-preset="native"] body.dark [role="switch"][data-ag-sys-follow-switc
   box-shadow: 0 0 0 2.5px rgba(63, 110, 122, 0.16);
 }
 
-html[data-ag-preset="absolutely"] [data-testid="settings-nav-item-Appearance"] [data-ag-update-nav-dot="1"] {
+html[data-ag-preset="absolutely"] :is([data-testid="settings-nav-item-Appearance"], [data-testid="settings-nav-item-General"]) [data-ag-update-nav-dot="1"] {
   background: #D97757;
   box-shadow: 0 0 0 2.5px rgba(217, 119, 87, 0.18);
 }
 
-html[data-ag-preset="native"] [data-testid="settings-nav-item-Appearance"] [data-ag-update-nav-dot="1"] {
+html[data-ag-preset="native"] :is([data-testid="settings-nav-item-Appearance"], [data-testid="settings-nav-item-General"]) [data-ag-update-nav-dot="1"] {
   background: var(--primary, #2F71E3);
   box-shadow: 0 0 0 2.5px rgba(47, 113, 227, 0.18);
 }
 
-:is(html[data-ag-theme-mode="dark"] body, body.dark) [data-testid="settings-nav-item-Appearance"] [data-ag-update-nav-dot="1"] {
+:is(html[data-ag-theme-mode="dark"] body, body.dark) :is([data-testid="settings-nav-item-Appearance"], [data-testid="settings-nav-item-General"]) [data-ag-update-nav-dot="1"] {
   background: #7FAAB6;
   box-shadow: 0 0 0 2.5px rgba(127, 170, 182, 0.2);
 }
 
-html[data-ag-dark-preset="claude-warm"]:not([data-ag-preset="native"])[data-ag-theme-mode="dark"] [data-testid="settings-nav-item-Appearance"] [data-ag-update-nav-dot="1"],
-html[data-ag-dark-preset="claude-warm"]:not([data-ag-preset="native"]) body.dark [data-testid="settings-nav-item-Appearance"] [data-ag-update-nav-dot="1"] {
+html[data-ag-dark-preset="claude-warm"]:not([data-ag-preset="native"])[data-ag-theme-mode="dark"] :is([data-testid="settings-nav-item-Appearance"], [data-testid="settings-nav-item-General"]) [data-ag-update-nav-dot="1"],
+html[data-ag-dark-preset="claude-warm"]:not([data-ag-preset="native"]) body.dark :is([data-testid="settings-nav-item-Appearance"], [data-testid="settings-nav-item-General"]) [data-ag-update-nav-dot="1"] {
   background: #D97757;
   box-shadow: 0 0 0 2.5px rgba(217, 119, 87, 0.22);
 }

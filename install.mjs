@@ -254,9 +254,14 @@ function buildManifest(baseDir = __dirname) {
       bytes: stat.size
     };
   }
+  const targetVersion = '6.0.7';
+  const daemonSrc = fs.readFileSync(path.join(coreDir, 'daemon.mjs'), 'utf8');
+  if (!daemonSrc.includes(`-v${targetVersion}`)) {
+    throw new Error(`core/daemon.mjs BASE_VERSION does not match manifest version v${targetVersion}`);
+  }
   const manifest = {
     name: 'chuanban-antigravity-theme-patch',
-    version: '6.0.6',
+    version: targetVersion,
     minNodeVersion: '22.0.0',
     minAntigravityVersion: '2.34.0',
     fullMetricsNodeVersion: '22.13.0',
@@ -701,7 +706,16 @@ function readHostVersionAndProcesses(channel = 'auto') {
     const desktopOverride = path.join(home, '.local', 'share', 'applications', 'antigravity.desktop');
     launcherInstalled =
       fs.existsSync(desktopOverride) && fs.readFileSync(desktopOverride, 'utf8').includes('--remote-debugging-port');
-    const pkgCandidates = ['/usr/share/antigravity/resources/app/package.json', '/opt/Antigravity/resources/app/package.json'];
+    const pkgCandidates = [];
+    if (allowStable) {
+      pkgCandidates.push('/usr/share/antigravity/resources/app/package.json', '/opt/Antigravity/resources/app/package.json');
+    }
+    if (allowInsiders) {
+      pkgCandidates.push(
+        '/usr/share/antigravity-insiders/resources/app/package.json',
+        '/opt/Antigravity - Insiders/resources/app/package.json'
+      );
+    }
     for (const pkgPath of pkgCandidates) {
       if (fs.existsSync(pkgPath)) {
         try {
@@ -1258,6 +1272,7 @@ async function inspectLiveWindow(portFileOrEnv, fallbackPort = 9222) {
   let selected = null;
   let firstHostCandidate = null;
   let firstNullCandidate = null;
+  const hostPages = [];
 
   for (const candidate of pages) {
     const rawState = await evaluatePageState(candidate);
@@ -1271,9 +1286,9 @@ async function inspectLiveWindow(portFileOrEnv, fallbackPort = 9222) {
     const cleanState = { ...rawState };
     delete cleanState.__isHost;
     if (isHost) {
-      if (cleanState.hasStyle === true) {
+      hostPages.push({ targetId: candidate.id, title: candidate.title, state: cleanState });
+      if (!selected && cleanState.hasStyle === true) {
         selected = { page: candidate, state: cleanState };
-        break;
       }
       if (!firstHostCandidate) {
         firstHostCandidate = { page: candidate, state: cleanState };
@@ -1285,12 +1300,14 @@ async function inspectLiveWindow(portFileOrEnv, fallbackPort = 9222) {
     selected = firstHostCandidate || firstNullCandidate;
   }
   if (!selected) {
-    return { reachable: true, port, pages: 0, reason: 'No active workbench page target' };
+    return { reachable: true, port, pages: 0, hostPages: [], reason: 'No active workbench page target' };
   }
 
   return {
     reachable: true,
     port,
+    pages: hostPages.length > 0 ? hostPages.length : 1,
+    hostPages,
     targetId: selected.page.id,
     title: selected.page.title,
     state: selected.state
@@ -1382,7 +1399,7 @@ function ensureCdpLaunchers(channel = 'auto', options = {}) {
           '  <key>CFBundlePackageType</key>',
           '  <string>APPL</string>',
           '  <key>CFBundleShortVersionString</key>',
-          '  <string>6.0.6</string>',
+          '  <string>6.0.7</string>',
           '  <key>CFBundleVersion</key>',
           '  <string>606</string>',
           ...(iconBase ? ['  <key>CFBundleIconFile</key>', `  <string>${iconBase}</string>`] : []),
@@ -2716,8 +2733,12 @@ async function runInstall() {
       { encoding: 'utf8', mode: 0o755 }
     );
 
-    // 注册/更新跨平台自启服务
-    serviceInfo = registerSystemService(targetDir, wrapperDaemon);
+    // 注册/更新跨平台自启服务（热升级阶段 A 传入 --skip-service-restart 时先执行 --once 实机验活，验收通过后再由外层统一重启服务）
+    if (hasFlag('--skip-service-restart')) {
+      serviceInfo = { skipped: true, reason: 'skip-service-restart' };
+    } else {
+      serviceInfo = registerSystemService(targetDir, wrapperDaemon);
+    }
 
     // 立即执行一次 --once 同步注入
     spawnSync(process.execPath, ['--disable-warning=ExperimentalWarning', realDaemon, '--once'], {
@@ -3502,36 +3523,39 @@ async function runRollback() {
   // 重启守护进程并立即执行一次 --once 重新注入（沙箱 --target-dir 隔离模式下跳过全局服务干预）
   const realDaemon = path.join(targetCore, 'daemon.mjs');
   const wrapperDaemon = path.join(os.homedir(), '.gemini', 'antigravity', 'scripts', 'antigravity-font-daemon.mjs');
+  const skipServiceRestart = hasFlag('--skip-service-restart');
   if (!isCustomSandboxTarget) {
-    if (process.platform === 'darwin') {
-      const uid = process.getuid ? process.getuid() : 501;
-      try {
-        execSync(`launchctl kickstart -k gui/${uid}/com.antigravity.customfont 2>/dev/null || launchctl kickstart -k gui/${uid}/com.antigravity.theme 2>/dev/null || true`);
-      } catch {}
-    } else if (process.platform === 'linux') {
-      try {
-        execSync('systemctl --user restart antigravity-theme.service 2>/dev/null || true');
-      } catch {}
-    } else if (process.platform === 'win32') {
-      stopRunningDaemonProcesses();
-      let restartedViaTask = false;
-      try {
-        const r = spawnSync('schtasks', ['/Run', '/TN', 'AntigravityThemeDaemon'], {
-          stdio: 'ignore',
-          windowsHide: true
-        });
-        restartedViaTask = r.status === 0;
-      } catch {}
-      if (!restartedViaTask) {
+    if (!skipServiceRestart) {
+      if (process.platform === 'darwin') {
+        const uid = process.getuid ? process.getuid() : 501;
         try {
-          const child = spawn(process.execPath, ['--disable-warning=ExperimentalWarning', fs.existsSync(wrapperDaemon) ? wrapperDaemon : realDaemon], {
-            cwd: os.homedir(),
-            detached: true,
+          execSync(`launchctl kickstart -k gui/${uid}/com.antigravity.customfont 2>/dev/null || launchctl kickstart -k gui/${uid}/com.antigravity.theme 2>/dev/null || true`);
+        } catch {}
+      } else if (process.platform === 'linux') {
+        try {
+          execSync('systemctl --user restart antigravity-theme.service 2>/dev/null || true');
+        } catch {}
+      } else if (process.platform === 'win32') {
+        stopRunningDaemonProcesses();
+        let restartedViaTask = false;
+        try {
+          const r = spawnSync('schtasks', ['/Run', '/TN', 'AntigravityThemeDaemon'], {
             stdio: 'ignore',
             windowsHide: true
           });
-          child.unref();
+          restartedViaTask = r.status === 0;
         } catch {}
+        if (!restartedViaTask) {
+          try {
+            const child = spawn(process.execPath, ['--disable-warning=ExperimentalWarning', fs.existsSync(wrapperDaemon) ? wrapperDaemon : realDaemon], {
+              cwd: os.homedir(),
+              detached: true,
+              stdio: 'ignore',
+              windowsHide: true
+            });
+            child.unref();
+          } catch {}
+        }
       }
     }
     spawnSync(process.execPath, ['--disable-warning=ExperimentalWarning', realDaemon, '--once'], {
@@ -4167,17 +4191,26 @@ function acquireUpgradeLock(targetDir) {
   const cacheDir = path.join(targetDir, '.cache');
   const lockPath = path.join(cacheDir, 'upgrade.lock');
   fs.mkdirSync(cacheDir, { recursive: true });
-  const payload = `${JSON.stringify({ pid: process.pid, startedAt: new Date().toISOString() })}\n`;
+  const startedAt = new Date().toISOString();
+  const buildPayload = (phase) => `${JSON.stringify({ pid: process.pid, phase, startedAt })}\n`;
 
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       const fd = fs.openSync(lockPath, 'wx');
       try {
-        fs.writeFileSync(fd, payload, 'utf8');
+        fs.writeFileSync(fd, buildPayload('download'), 'utf8');
       } finally {
         fs.closeSync(fd);
       }
       let released = false;
+      const setPhase = (nextPhase) => {
+        if (released) return;
+        try {
+          const tmpLock = `${lockPath}.tmp-${process.pid}-${Date.now()}`;
+          fs.writeFileSync(tmpLock, buildPayload(nextPhase), 'utf8');
+          fs.renameSync(tmpLock, lockPath);
+        } catch {}
+      };
       const release = () => {
         if (released) return;
         released = true;
@@ -4190,7 +4223,7 @@ function acquireUpgradeLock(targetDir) {
           }
         } catch {}
       };
-      return { ok: true, lockPath, release };
+      return { ok: true, lockPath, setPhase, release };
     } catch (err) {
       if (!err || err.code !== 'EEXIST') {
         return { ok: false, error: `Failed to acquire upgrade lock: ${err?.message || err}` };
@@ -4263,7 +4296,44 @@ async function runUpgrade() {
   }
 
   const remoteManifest = remote.manifest;
+  if (
+    remoteManifest.name &&
+    currentManifest.name &&
+    String(remoteManifest.name).trim() !== String(currentManifest.name).trim()
+  ) {
+    console.error(
+      JSON.stringify(
+        {
+          ok: false,
+          step: 'package_mismatch',
+          expectedName: currentManifest.name,
+          actualName: remoteManifest.name,
+          error: `Remote update package name mismatch: expected "${currentManifest.name}", got "${remoteManifest.name}"`
+        },
+        null,
+        2
+      )
+    );
+    process.exit(1);
+  }
   const toVersion = String(remoteManifest.version || '').replace(/^v/i, '');
+  const MIN_HOT_UPGRADE_TARGET_VERSION = '6.0.7';
+  if (requestedVersion && !semverSatisfiesMin(toVersion, MIN_HOT_UPGRADE_TARGET_VERSION) && !force) {
+    console.error(
+      JSON.stringify(
+        {
+          ok: false,
+          step: 'downgrade_unsupported',
+          requestedVersion: toVersion,
+          minSupportedTargetVersion: MIN_HOT_UPGRADE_TARGET_VERSION,
+          error: `Target v${toVersion} predates two-phase hot upgrade (< v${MIN_HOT_UPGRADE_TARGET_VERSION}). Use "node install.mjs rollback" or full repository "install" instead.`
+        },
+        null,
+        2
+      )
+    );
+    process.exit(1);
+  }
   const semverNewer = isUpdateAvailableVersion(fromVersion, toVersion);
   const requiredMinAgVersion =
     typeof remoteManifest.minAntigravityVersion === 'string' && remoteManifest.minAntigravityVersion.trim()
@@ -4511,7 +4581,7 @@ async function runUpgrade() {
 
     const stagedIntegrity = verifyCoreIntegrity(stagedRoot);
     const stagedManifest = readInstalledCoreManifest(stagedRoot);
-    if (!stagedIntegrity.ok || !stagedManifest || stagedManifest.name !== 'chuanban-antigravity-theme-patch') {
+    if (!stagedIntegrity.ok || !stagedManifest || !stagedManifest.name) {
       cleanupStaging();
       console.error(
         JSON.stringify(
@@ -4520,6 +4590,26 @@ async function runUpgrade() {
             step: 'staged_integrity',
             error: 'Staged package failed core manifest SHA-256 verification',
             stagedIntegrity
+          },
+          null,
+          2
+        )
+      );
+      process.exit(1);
+    }
+    if (
+      currentManifest.name &&
+      String(stagedManifest.name).trim() !== String(currentManifest.name).trim()
+    ) {
+      cleanupStaging();
+      console.error(
+        JSON.stringify(
+          {
+            ok: false,
+            step: 'package_mismatch',
+            expectedName: currentManifest.name,
+            actualName: stagedManifest.name,
+            error: `Staged update package name mismatch: expected "${currentManifest.name}", got "${stagedManifest.name}"`
           },
           null,
           2
@@ -4581,6 +4671,26 @@ async function runUpgrade() {
       process.exit(1);
     }
 
+    const writeLastUpgradeResult = (payload) => {
+      try {
+        const cacheDir = path.join(targetDir, '.cache');
+        fs.mkdirSync(cacheDir, { recursive: true });
+        const resultPath = path.join(cacheDir, 'last-upgrade-result.json');
+        const tmpPath = `${resultPath}.tmp-${process.pid}-${Date.now()}`;
+        fs.writeFileSync(tmpPath, JSON.stringify(payload, null, 2) + '\n', 'utf8');
+        fs.renameSync(tmpPath, resultPath);
+      } catch {}
+    };
+
+    let patchEnabledExpected = true;
+    try {
+      const userCfgPath = path.join(targetDir, 'user', 'config.json');
+      if (fs.existsSync(userCfgPath)) {
+        const userCfgBefore = JSON.parse(fs.readFileSync(userCfgPath, 'utf8'));
+        patchEnabledExpected = userCfgBefore?.enabled !== false;
+      }
+    } catch {}
+
     let preUpgradeLiveReachable = false;
     if (!isCustomSandboxTarget) {
       const preEnv = hostEnv || (await detectEnvironment('auto'));
@@ -4596,12 +4706,170 @@ async function runUpgrade() {
       fs.copyFileSync(currentInstallScript, backupInstallScriptPath);
     }
 
-    // 仅 Windows 提前停守护进程释放 NTFS 文件锁；macOS(launchd)/Linux(systemd) 由 handoff 落盘后的服务重启原子接管，避免 cgroup/KeepAlive 自杀或并发抢占
+    let winDaemonStopped = false;
+    const restoreWindowsDaemonIfNeeded = () => {
+      if (!winDaemonStopped || isCustomSandboxTarget || process.platform !== 'win32') return;
+      winDaemonStopped = false;
+      const realDaemon = path.join(targetDir, 'core', 'daemon.mjs');
+      const wrapperDaemon = path.join(os.homedir(), '.gemini', 'antigravity', 'scripts', 'antigravity-font-daemon.mjs');
+      let restartedViaTask = false;
+      try {
+        const r = spawnSync('schtasks', ['/Run', '/TN', 'AntigravityThemeDaemon'], {
+          stdio: 'ignore',
+          windowsHide: true
+        });
+        restartedViaTask = r.status === 0;
+      } catch {}
+      if (!restartedViaTask) {
+        try {
+          const entryScript = fs.existsSync(wrapperDaemon) ? wrapperDaemon : realDaemon;
+          if (fs.existsSync(entryScript)) {
+            const child = spawn(process.execPath, ['--disable-warning=ExperimentalWarning', entryScript], {
+              cwd: os.homedir(),
+              detached: true,
+              stdio: 'ignore',
+              windowsHide: true
+            });
+            child.unref();
+          }
+        } catch {}
+      }
+    };
+
+    // 进入本地替换提交阶段：通知守护进程看门狗严禁中途 SIGKILL，同时挂起旧守护进程 2.5s sync 抢注与 Win32 PT5M 保活抢锁
+    lock.setPhase?.('commit');
+
+    // 仅 Windows 提前停守护进程释放 NTFS 文件锁；macOS(launchd)/Linux(systemd) 依托 upgrade.lock 暂停旧守护重注，待阶段 C 再原子重启服务
     if (!isCustomSandboxTarget && process.platform === 'win32') {
       stopRunningDaemonProcesses();
+      winDaemonStopped = true;
     }
 
-    // 先写入升级完成态缓存，使 handoff 内的 --once 与新启动守护进程首帧即读到最新状态（失败时自动恢复）
+    // 阶段 A（Bootstrap Handoff）：由暂存区新版 install.mjs 替换 core/ 并执行 --once 单次重注，暂不重启后台服务（防止提前杀死父守护进程）
+    const handoffArgs = [path.join(stagedRoot, 'install.mjs'), 'install', '--target-dir', targetDir];
+    if (!isCustomSandboxTarget) {
+      handoffArgs.push('--register-service', '--skip-service-restart');
+    }
+    const handoffRes = spawnSync(process.execPath, handoffArgs, {
+      cwd: stagedRoot,
+      encoding: 'utf8',
+      windowsHide: true,
+      maxBuffer: 10 * 1024 * 1024
+    });
+
+    // 阶段 B：校验磁盘 core/ SHA-256 与全部已打开实机宿主页真实注入版本号（兼容 enabled:false 禁用态，杜绝单页漏检与旧 DOM 假阳性）
+    const postIntegrity = verifyCoreIntegrity(targetDir);
+    let postLiveOk = true;
+    let postLiveReport = null;
+    let postLiveReason = null;
+    if (!isCustomSandboxTarget && preUpgradeLiveReachable) {
+      const postEnv = await detectEnvironment('auto');
+      postLiveReport = await inspectLiveWindow(postEnv);
+      if (!postLiveReport.reachable) {
+        postLiveOk = false;
+        postLiveReason = 'Live Antigravity CDP window became unreachable after staging';
+      } else {
+        const pagesToVerify =
+          Array.isArray(postLiveReport.hostPages) && postLiveReport.hostPages.length > 0
+            ? postLiveReport.hostPages
+            : postLiveReport.state
+              ? [{ targetId: postLiveReport.targetId, title: postLiveReport.title, state: postLiveReport.state }]
+              : [];
+        for (const hp of pagesToVerify) {
+          const liveVer = String(hp.state?.version || '');
+          const hasTargetVer = liveVer.includes(`-v${toVersion}-`);
+          if (!hasTargetVer) {
+            postLiveOk = false;
+            postLiveReason = `Live window (${hp.targetId || 'page'}) runtime did not advance to v${toVersion} (reported: ${liveVer || 'none'})`;
+            break;
+          }
+          if (patchEnabledExpected) {
+            if (!hp.state?.hasStyle || liveVer.endsWith('-disabled')) {
+              postLiveOk = false;
+              postLiveReason = `Live window (${hp.targetId || 'page'}) missing active theme style after upgrade`;
+              break;
+            }
+          } else if (!liveVer.endsWith('-disabled')) {
+            postLiveOk = false;
+            postLiveReason = `Expected disabled runtime marker for v${toVersion} on ${hp.targetId || 'page'} (got: ${liveVer})`;
+            break;
+          }
+        }
+      }
+    }
+
+    if (handoffRes.status !== 0 || !postIntegrity.ok || !postLiveOk) {
+      writeUpdateCheckCache(targetDir, preUpgradeCacheSnapshot);
+      wrotePostUpgradeCache = false;
+      restoreInstallScriptBackup();
+      let rollbackOk = false;
+      const installedAfterFail = readInstalledCoreManifest(targetDir)?.version || null;
+      const postFailManifestSha = fs.existsSync(preUpgradeManifestPath) ? sha256File(preUpgradeManifestPath) : null;
+      const coreWasModified =
+        !postIntegrity.ok ||
+        installedAfterFail !== fromVersion ||
+        (preUpgradeManifestSha && postFailManifestSha !== preUpgradeManifestSha);
+      if (coreWasModified) {
+        try {
+          lock.setPhase?.('service_handoff');
+          const rbTarget = path.join(targetDir, 'install.mjs');
+          const rbArgs = [rbTarget, 'rollback', '--target-dir', targetDir];
+          if (!isCustomSandboxTarget) {
+            rbArgs.push('--register-service');
+            if (process.platform !== 'win32') {
+              rbArgs.push('--skip-service-restart');
+            }
+          }
+          const rbRes = spawnSync(process.execPath, rbArgs, { encoding: 'utf8', windowsHide: true });
+          rollbackOk = rbRes.status === 0;
+          if (rollbackOk && process.platform === 'win32') {
+            winDaemonStopped = false;
+          }
+        } catch {}
+      } else {
+        rollbackOk = true;
+      }
+      lock.setPhase?.('service_handoff');
+      restoreWindowsDaemonIfNeeded();
+      const failSummary =
+        postLiveReason ||
+        (!postIntegrity.ok ? 'Post-install core integrity verification failed' : '') ||
+        String(handoffRes.stderr || '').trim().split(/\r?\n/).pop() ||
+        `Handoff exited with code ${handoffRes.status}`;
+      writeLastUpgradeResult({
+        ts: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'),
+        ok: false,
+        fromVersion,
+        attemptedVersion: toVersion,
+        rolledBack: rollbackOk,
+        error: String(failSummary).slice(0, 180)
+      });
+      cleanupStaging();
+      releaseLockOnce();
+      console.error(
+        JSON.stringify(
+          {
+            ok: false,
+            upgraded: false,
+            rolledBack: rollbackOk,
+            fromVersion,
+            attemptedVersion: toVersion,
+            error: failSummary,
+            handoffExitCode: handoffRes.status,
+            postIntegrity,
+            postLiveOk,
+            postLiveReport,
+            stderr: String(handoffRes.stderr || '').trim().slice(0, 600)
+          },
+          null,
+          2
+        )
+      );
+      process.exit(1);
+    }
+
+    // 阶段 C：验收全部通过后先切锁至 service_handoff 放行新守护进程启动，落盘完成态缓存，重启系统常驻服务，最后释放升级锁
+    lock.setPhase?.('service_handoff');
     const upgradedIso = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
     writeUpdateCheckCache(targetDir, {
       checkedAt: upgradedIso,
@@ -4622,70 +4890,23 @@ async function runUpgrade() {
     });
     wrotePostUpgradeCache = true;
 
-    // Bootstrap Handoff：由暂存区的新版 install.mjs 接管安装事务
-    const handoffArgs = [path.join(stagedRoot, 'install.mjs'), 'install', '--target-dir', targetDir];
+    let serviceInfo = { skipped: true, reason: 'custom-target-dir' };
     if (!isCustomSandboxTarget) {
-      handoffArgs.push('--register-service');
+      const wrapperDaemon = path.join(os.homedir(), '.gemini', 'antigravity', 'scripts', 'antigravity-font-daemon.mjs');
+      serviceInfo = registerSystemService(targetDir, wrapperDaemon);
+      winDaemonStopped = false;
     }
-    const handoffRes = spawnSync(process.execPath, handoffArgs, {
-      cwd: stagedRoot,
-      encoding: 'utf8',
-      windowsHide: true,
-      maxBuffer: 10 * 1024 * 1024
+
+    const serviceWarning =
+      !isCustomSandboxTarget && serviceInfo && typeof serviceInfo === 'object' ? serviceInfo.taskUpdateWarning || null : null;
+    writeLastUpgradeResult({
+      ts: upgradedIso,
+      ok: true,
+      fromVersion,
+      toVersion,
+      upgradedAt: upgradedIso,
+      ...(serviceWarning ? { warning: serviceWarning } : {})
     });
-
-    const postIntegrity = verifyCoreIntegrity(targetDir);
-    let postLiveOk = true;
-    let postLiveReport = null;
-    if (!isCustomSandboxTarget && preUpgradeLiveReachable) {
-      const postEnv = await detectEnvironment('auto');
-      postLiveReport = await inspectLiveWindow(postEnv);
-      postLiveOk = Boolean(postLiveReport.reachable && (postLiveReport.pages === 0 || postLiveReport.state?.hasStyle));
-    }
-
-    if (handoffRes.status !== 0 || !postIntegrity.ok || !postLiveOk) {
-      writeUpdateCheckCache(targetDir, preUpgradeCacheSnapshot);
-      wrotePostUpgradeCache = false;
-      restoreInstallScriptBackup();
-      let rollbackOk = false;
-      const installedAfterFail = readInstalledCoreManifest(targetDir)?.version || null;
-      const postFailManifestSha = fs.existsSync(preUpgradeManifestPath) ? sha256File(preUpgradeManifestPath) : null;
-      const coreWasModified =
-        !postIntegrity.ok ||
-        installedAfterFail !== fromVersion ||
-        (preUpgradeManifestSha && postFailManifestSha !== preUpgradeManifestSha);
-      if (coreWasModified) {
-        try {
-          const rbTarget = path.join(targetDir, 'install.mjs');
-          const rbArgs = [rbTarget, 'rollback', '--target-dir', targetDir];
-          if (!isCustomSandboxTarget) rbArgs.push('--register-service');
-          const rbRes = spawnSync(process.execPath, rbArgs, { encoding: 'utf8', windowsHide: true });
-          rollbackOk = rbRes.status === 0;
-        } catch {}
-      } else {
-        rollbackOk = true;
-      }
-      cleanupStaging();
-      console.error(
-        JSON.stringify(
-          {
-            ok: false,
-            upgraded: false,
-            rolledBack: rollbackOk,
-            fromVersion,
-            attemptedVersion: toVersion,
-            handoffExitCode: handoffRes.status,
-            postIntegrity,
-            postLiveOk,
-            postLiveReport,
-            stderr: String(handoffRes.stderr || '').trim().slice(0, 600)
-          },
-          null,
-          2
-        )
-      );
-      process.exit(1);
-    }
 
     cleanupStaging();
     releaseLockOnce();
@@ -4700,6 +4921,8 @@ async function runUpgrade() {
           mirror: dlRes.mirror || remote.source,
           bundleBytes: dlRes.bytes,
           coreIntegrity: postIntegrity,
+          serviceInfo,
+          ...(serviceWarning ? { warning: serviceWarning } : {}),
           userPreserved: true,
           clientRestarted: false,
           ...(postLiveReport ? { liveWindow: postLiveReport } : {})
@@ -4712,6 +4935,26 @@ async function runUpgrade() {
     if (wrotePostUpgradeCache) {
       writeUpdateCheckCache(targetDir, preUpgradeCacheSnapshot);
     }
+    try {
+      lock.setPhase?.('service_handoff');
+      if (process.platform === 'win32' && !isCustomSandboxTarget) {
+        const realDaemon = path.join(targetDir, 'core', 'daemon.mjs');
+        const wrapperDaemon = path.join(os.homedir(), '.gemini', 'antigravity', 'scripts', 'antigravity-font-daemon.mjs');
+        const r = spawnSync('schtasks', ['/Run', '/TN', 'AntigravityThemeDaemon'], { stdio: 'ignore', windowsHide: true });
+        if (r.status !== 0) {
+          const entryScript = fs.existsSync(wrapperDaemon) ? wrapperDaemon : realDaemon;
+          if (fs.existsSync(entryScript)) {
+            const child = spawn(process.execPath, ['--disable-warning=ExperimentalWarning', entryScript], {
+              cwd: os.homedir(),
+              detached: true,
+              stdio: 'ignore',
+              windowsHide: true
+            });
+            child.unref();
+          }
+        }
+      }
+    } catch {}
     cleanupStaging();
     releaseLockOnce();
     console.error(JSON.stringify({ ok: false, error: err?.message || String(err) }, null, 2));

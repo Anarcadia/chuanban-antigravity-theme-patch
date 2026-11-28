@@ -488,14 +488,38 @@ function resolveActiveChannelEndpoints(channelMode = 'auto', userCfg = {}) {
 // ============================================================================
 // 2. 动态构建注入载荷（支持 core/ + user/ 实时合并与热更新签名）
 // ============================================================================
-const BASE_VERSION = '20261127-v6.0.6';
+const BASE_VERSION = '20261128-v6.0.7';
 let cachedBundleSig = '';
 let cachedInjectScript = '';
 let cachedIframeInjectScript = '';
 let cachedPatchVersion = '';
 
 const UPDATE_CACHE_FILE = path.join(CACHE_DIR, 'update-check.json');
+const UPDATE_LOCK_FILE = path.join(CACHE_DIR, 'upgrade.lock');
+const UPDATE_LAST_RESULT_FILE = path.join(CACHE_DIR, 'last-upgrade-result.json');
 const UPDATE_UPGRADE_LOG_FILE = path.join(CACHE_DIR, 'last-upgrade.log');
+
+function readActiveUpgradeLock() {
+  try {
+    if (!fs.existsSync(UPDATE_LOCK_FILE)) return { active: false, pid: 0, phase: '' };
+    const st = fs.statSync(UPDATE_LOCK_FILE);
+    if (Date.now() - st.mtimeMs > 15 * 60 * 1000) return { active: false, pid: 0, phase: '' };
+    const parsed = JSON.parse(fs.readFileSync(UPDATE_LOCK_FILE, 'utf8'));
+    const pid = Number(parsed?.pid) || 0;
+    if (pid <= 0) return { active: false, pid: 0, phase: '' };
+    let alive = false;
+    try {
+      process.kill(pid, 0);
+      alive = true;
+    } catch (err) {
+      if (err && err.code === 'EPERM') alive = true;
+    }
+    if (!alive) return { active: false, pid: 0, phase: '' };
+    return { active: true, pid, phase: typeof parsed?.phase === 'string' ? parsed.phase : 'download' };
+  } catch {
+    return { active: false, pid: 0, phase: '' };
+  }
+}
 const UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
 const UPDATE_CHECK_ERROR_BACKOFF_MS = 60 * 60 * 1000;
 const UPDATE_MANUAL_COOLDOWN_MS = 2000;
@@ -666,7 +690,7 @@ async function resolveHostAppVersionAsync({ force = false } = {}) {
 let lastObservedUpdateDiskSig = '';
 
 function computeUpdateDiskSig() {
-  return `${getFileMtimeSig(UPDATE_CACHE_FILE)}|${getFileMtimeSig(path.join(CORE_DIR, 'manifest.json'))}`;
+  return `${getFileMtimeSig(UPDATE_CACHE_FILE)}|${getFileMtimeSig(UPDATE_LAST_RESULT_FILE)}|${getFileMtimeSig(path.join(CORE_DIR, 'manifest.json'))}`;
 }
 
 function readUpdateCacheFromDisk() {
@@ -695,6 +719,16 @@ function readUpdateCacheFromDisk() {
     };
   } else {
     updateCheckState.loaded = true;
+  }
+  const lastRes = readJsonSafe(UPDATE_LAST_RESULT_FILE, null);
+  if (lastRes && typeof lastRes === 'object' && !Array.isArray(lastRes)) {
+    const curInstalled = getInstalledCurrentVersion();
+    const attempted = typeof lastRes.attemptedVersion === 'string' ? lastRes.attemptedVersion.replace(/^v/i, '') : '';
+    if (lastRes.ok === false && typeof lastRes.error === 'string' && lastRes.error.trim() && (!attempted || attempted !== curInstalled)) {
+      lastUpgradeError = lastRes.error.trim().slice(0, 140);
+    } else if (lastRes.ok === true) {
+      lastUpgradeError = '';
+    }
   }
   lastObservedUpdateDiskSig = computeUpdateDiskSig();
   return updateCheckState;
@@ -735,7 +769,7 @@ function getInstalledCurrentVersion() {
     return manifest.version.trim().replace(/^v/i, '');
   }
   const m = String(BASE_VERSION || '').match(/(\d+\.\d+\.\d+)/);
-  return m ? m[1] : '6.0.6';
+  return m ? m[1] : '6.0.7';
 }
 
 function getPublicUpdateStatus() {
@@ -988,7 +1022,7 @@ async function resolveGithubLatestTagAsync(timeoutMs = 6000, signal = null, prox
 async function checkForPatchUpdateAsync({ force = false } = {}) {
   if (SAFE_MODE || RUN_ONCE || daemonExiting) return false;
   if (activeConfig?.modules?.updateCheck === false) return false;
-  if (updateCheckInFlight) return false;
+  if (updateCheckInFlight || updateUpgradeInFlight || readActiveUpgradeLock().active) return false;
 
   const now = Date.now();
   if (force) {
@@ -1015,7 +1049,13 @@ async function checkForPatchUpdateAsync({ force = false } = {}) {
       if (!txt) return null;
       try {
         const parsed = JSON.parse(txt.replace(/^\uFEFF/, ''));
-        if (parsed && typeof parsed === 'object' && typeof parsed.version === 'string' && parsed.coreUpdateBundle) {
+        if (
+          parsed &&
+          typeof parsed === 'object' &&
+          (!parsed.name || String(parsed.name).trim() === 'chuanban-antigravity-theme-patch') &&
+          typeof parsed.version === 'string' &&
+          parsed.coreUpdateBundle
+        ) {
           const cleanVer = parsed.version.trim().replace(/^v/i, '');
           const releaseUrl =
             typeof parsed.fullReleaseUrl === 'string' && isAllowedOfficialReleasePageUrl(parsed.fullReleaseUrl)
@@ -1220,7 +1260,7 @@ function triggerInPlaceHotUpgradeAsync() {
 
   let child = null;
   try {
-    child = spawn(process.execPath, [installScript, 'upgrade'], {
+    child = spawn(process.execPath, [installScript, 'upgrade', '--target-dir', ROOT_DIR], {
       cwd: ROOT_DIR,
       detached: true,
       windowsHide: true,
@@ -1286,45 +1326,54 @@ function triggerInPlaceHotUpgradeAsync() {
     }
   };
 
-  updateUpgradeWatchdog = setTimeout(() => {
-    updateUpgradeWatchdog = null;
-    if (settled || !updateUpgradeInFlight) return;
-    timedOut = true;
-    // 超时后显式终止仍在运行的升级子进程树，避免释放状态后与下一次重试并发改写 core/
-    try {
-      if (process.platform === 'win32' && child.pid) {
-        execFile('taskkill', ['/PID', String(child.pid), '/T', '/F'], { windowsHide: true }, () => {});
-      } else if (child.pid) {
-        try {
-          process.kill(-child.pid, 'SIGTERM');
-        } catch {
-          try {
-            child.kill('SIGTERM');
-          } catch {}
-        }
+  const scheduleUpgradeWatchdog = (delayMs) => {
+    updateUpgradeWatchdog = setTimeout(() => {
+      updateUpgradeWatchdog = null;
+      if (settled || !updateUpgradeInFlight) return;
+      const lk = readActiveUpgradeLock();
+      // 若子进程已进入 commit / service_handoff 本地替换提交阶段，严禁中途 SIGKILL 造成半替换残损，给予 60s 提交/回滚收敛宽限
+      if (lk.active && (lk.phase === 'commit' || lk.phase === 'service_handoff')) {
+        scheduleUpgradeWatchdog(60000);
+        return;
       }
-    } catch {}
-    forceKillFallbackTimer = setTimeout(() => {
-      forceKillFallbackTimer = null;
-      if (settled) return;
-      if (process.platform !== 'win32' && child.pid) {
-        try {
-          process.kill(-child.pid, 'SIGKILL');
-        } catch {
+      timedOut = true;
+      // 仅在下载阶段卡死时显式终止升级子进程树，避免释放状态后与下一次重试并发改写 core/
+      try {
+        if (process.platform === 'win32' && child.pid) {
+          execFile('taskkill', ['/PID', String(child.pid), '/T', '/F'], { windowsHide: true }, () => {});
+        } else if (child.pid) {
           try {
-            child.kill('SIGKILL');
-          } catch {}
+            process.kill(-child.pid, 'SIGTERM');
+          } catch {
+            try {
+              child.kill('SIGTERM');
+            } catch {}
+          }
         }
+      } catch {}
+      forceKillFallbackTimer = setTimeout(() => {
+        forceKillFallbackTimer = null;
+        if (settled) return;
+        if (process.platform !== 'win32' && child.pid) {
+          try {
+            process.kill(-child.pid, 'SIGKILL');
+          } catch {
+            try {
+              child.kill('SIGKILL');
+            } catch {}
+          }
+        }
+        finishUpgrade(1, 'Timed out waiting for hot upgrade');
+      }, 4000);
+      if (typeof forceKillFallbackTimer.unref === 'function') {
+        forceKillFallbackTimer.unref();
       }
-      finishUpgrade(1, 'Timed out waiting for hot upgrade');
-    }, 4000);
-    if (typeof forceKillFallbackTimer.unref === 'function') {
-      forceKillFallbackTimer.unref();
+    }, delayMs);
+    if (typeof updateUpgradeWatchdog.unref === 'function') {
+      updateUpgradeWatchdog.unref();
     }
-  }, UPDATE_UPGRADE_TIMEOUT_MS);
-  if (typeof updateUpgradeWatchdog.unref === 'function') {
-    updateUpgradeWatchdog.unref();
-  }
+  };
+  scheduleUpgradeWatchdog(UPDATE_UPGRADE_TIMEOUT_MS);
 
   child.once('error', (err) => {
     finishUpgrade(1, err?.message || String(err));
@@ -2557,6 +2606,14 @@ function rebuildBundleIfNeeded(opts = {}) {
     normalizedSelectors.excludeI18n +=
       ', [data-ag-patch-update-row="1"], [data-ag-patch-update-drawer="1"], [data-ag-update-nav-dot="1"]';
   }
+  if (
+    typeof normalizedSelectors.excludeI18n === 'string' &&
+    normalizedSelectors.excludeI18n.trim() &&
+    !normalizedSelectors.excludeI18n.includes('credential-host-chips')
+  ) {
+    normalizedSelectors.excludeI18n +=
+      ', [data-testid^="credential-row-"] [data-testid="credential-scope-display"], [data-testid="credential-host-chips"], [data-testid="chat-credential-card-hosts"], [data-testid="chat-mention-chip"], [data-testid^="chat-mention-option-"], [data-testid="session-speaker-label"], [data-testid="session-ref-title"]';
+  }
 
   const DEFAULT_ALLOWED_ORIGINS = [
     'http://127.0.0.1',
@@ -2993,6 +3050,12 @@ function checkPidFileOwnership() {
 }
 
 if (!RUN_ONCE) {
+  if (KEEP_ALIVE_ONLY) {
+    const activeLock = readActiveUpgradeLock();
+    if (activeLock.active && activeLock.phase !== 'service_handoff') {
+      process.exit(0);
+    }
+  }
   try {
     let prevPid = 0;
     let prevPidState = 'none';
@@ -10059,6 +10122,9 @@ async function sync() {
       Date.now() - cachedExternalEditors.probedAt >= EXTERNAL_EDITOR_PROBE_TTL_MS
     ) {
       await refreshInstalledExternalEditorsAsync({ force: true });
+    }
+    if (!RUN_ONCE && readActiveUpgradeLock().active) {
+      return;
     }
     syncUpdateDiskStateIfChanged();
     const bundleChanged = rebuildBundleIfNeeded();

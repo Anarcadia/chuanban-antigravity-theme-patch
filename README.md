@@ -1,7 +1,7 @@
-# 船板的 Antigravity 主题、字体与汉化补丁 (v6.0.6)
+# 船板的 Antigravity 主题、字体与汉化补丁 (v6.0.7)
 
-[![Version](https://img.shields.io/badge/version-6.0.6-3D6470.svg)](https://github.com/Anarcadia/chuanban-antigravity-theme-patch)
-[![Antigravity](https://img.shields.io/badge/Antigravity-2.35.2%2B-3F6E7A.svg)](https://github.com/Anarcadia/chuanban-antigravity-theme-patch)
+[![Version](https://img.shields.io/badge/version-6.0.7-3D6470.svg)](https://github.com/Anarcadia/chuanban-antigravity-theme-patch)
+[![Antigravity](https://img.shields.io/badge/Antigravity-2.36.0%2B-3F6E7A.svg)](https://github.com/Anarcadia/chuanban-antigravity-theme-patch)
 [![Node](https://img.shields.io/badge/node-%3E%3D22.0.0%20(22.13%2B%20Full)-339933.svg)](https://nodejs.org/)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey.svg)](https://github.com/Anarcadia/chuanban-antigravity-theme-patch)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -10,7 +10,7 @@
 >
 > **🇨🇳 中国大陆免代理直连镜像（飞书公开知识库 · 免登录）**：**[主题图文整体落地页](https://www.feishu.cn/wiki/EQyqwJEqmi1LH3k11tzcmkMHnYd)** · **[配套字体国内高速下载页](https://www.feishu.cn/wiki/V2lbwB8ykiLLXrkzY41cXjQ1nXc)**（若终端自动拉取字体过慢、遇阻或需事后补装修复，直接用浏览器打开下载后交给脚本安装即可）
 
-面向 Google Antigravity（支持 `2.35.2+` / `2.35.1` / `2.35.0` / `2.34.0+`）的轻量级外观、排版、汉化与本地只读统计增强补丁。专注于纯粹的界面审美与信息可读性优化，由 AI Agent 一键部署，支持热重载个性化定制与随时无损还原。
+面向 Google Antigravity（支持 `2.36.0+` / `2.35.x` / `2.34.0+`）的轻量级外观、排版、汉化与本地只读统计增强补丁。专注于纯粹的界面审美与信息可读性优化，由 AI Agent 一键部署，支持热重载个性化定制、双镜像一键原地热升级与随时无损还原。
 
 > 供 AI Agent 读取的完整部署与改装契约见仓库根目录 **[`SKILL.md`](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/blob/main/SKILL.md)**，历史版本记录见 **[`CHANGELOG.md`](CHANGELOG.md)**。
 
@@ -19,7 +19,7 @@
 ## ✨ 核心特性
 
 - **多套打磨风格与系统日夜自动跟随**：内置温润耐看的**莫兰迪古典矿物风格**（默认）、深度打磨的**仿 Claude 书卷暖白风格（`Absolutely！`）**、护眼的**温润书卷夜间风格**与深海冷碳深色模式，提供独立的**「跟随系统」**自动日夜配对开关，并支持在设置面板一键切回**官方原版风格**（同步恢复官方原版字体）。
-- **母语级汉化与中英一键双切**：内置 **`2,228` 条**覆盖主界面、设置项、编排器、Swarm 蜂群工作台与子 Agent 面板的自然中文汉化，严格隔离代码块、终端与文件名避免误翻；外观面板提供 **`[ EN | 中文 ]`** 独立按钮，可随时一键退回纯英文原版界面。
+- **母语级汉化与中英一键双切**：内置 **`2,368` 条**覆盖主界面、设置项、`/` 斜杠命令描述、编排器、Swarm 蜂群工作台与子 Agent 面板的自然中文汉化，严格隔离代码块、终端、凭据键名与文件名避免误翻；外观面板提供 **`[ EN | 中文 ]`** 独立按钮，可随时一键退回纯英文原版界面。
 - **字体美化与润墨感特效**：精选书卷衬线长文、现代无衬线界面与人文等宽代码字体组合，并在浅色纸面融入细腻的活字微润墨效果，柔化电子屏笔画生硬感，增加典雅温润的层次质感。
 - **精细中西文混排调校**：按界面 UI、对话正文、代码终端与输入框分层桥接中西文字重比例，消除中英文混排发虚与字重断层。
 - **极简美观的上下文信息胶囊**：在输入框底栏内嵌低干扰状态胶囊，支持主窗口、分屏、支线提问与子 Agent 独立显示生成速率、首字延迟与上下文占用圆环，悬停即可查看当轮与会话级精简指标。
@@ -78,11 +78,11 @@
 > 4. 检查输出中的 `cdpStatus`（以及 Windows 新装字体后的 `restartAntigravityRequired`）：若为 `"missing_opt_in_flag"` 或 Windows 刚新装完字体，**如果你当前正在 Antigravity 内部对话中运行，请勿执行 `--force` 强行重启自断会话**，只需把空闲时执行的命令 `node ~/.gemini/antigravity/theme-patch/install.mjs relaunch`（Windows 为 `node "$HOME\.gemini\antigravity\theme-patch\install.mjs" relaunch`，或提示我手动退出重开一次客户端）发给我；如果你在外部独立终端运行且客户端空闲，请直接执行 `node install.mjs relaunch`。
 > 5. 在端口就绪后运行 `node install.mjs verify`，确认 `"ok": true`、`"hasStyle": true` 且 `fonts.allRequiredInstalled: true` 即完成验收。
 
-### 二、老用户升级至 v6.0.6（支持 `upgrade` 一键增量热升级）
-已部署包含 `upgrade` 能力的版本后，后续更新可直接点击「系统设置 → 外观界面」底部版本行的 **「立即热升级」** 或执行 **`node install.mjs upgrade`**（加 `--check` 可仅做只读检查）：安装器会从 Cloudflare R2 / GitHub Release 自动拉取 `~350 KB` 增量更新包并校验双重 SHA-256、备份旧版 `core/` 与保留 `user/` 配置后由新版脚本自举接管完成热重注（验收不通过自动回滚，**绝不强杀重启客户端**）。若当前环境早于该机制、尚未内置 `upgrade` 子命令，首次接入仍按下方引导拉取仓库执行一次 `node install.mjs install` 即可启用：
+### 二、老用户升级至 v6.0.7（支持 `upgrade` 一键增量热升级）
+已部署包含 `upgrade` 能力的版本后，后续更新可直接点击「系统设置 → 外观界面」底部版本行的 **「立即热升级」** 或执行 **`node install.mjs upgrade`**（加 `--check` 可仅做只读检查）：安装器会从 Cloudflare R2 / GitHub Release 自动拉取 `~350 KB` 增量更新包并校验双重 SHA-256、备份旧版 `core/` 与保留 `user/` 配置后由新版脚本自举接管完成热重注（实机验活目标版本号不通过自动回滚，**绝不强杀重启客户端**）。若当前环境早于该机制、尚未内置 `upgrade` 子命令，首次接入仍按下方引导拉取仓库执行一次 `node install.mjs install` 即可启用：
 
 > **💬 复制发给 Agent（老用户无缝升级）**：  
-> 请帮我拉取最新的 `https://github.com/Anarcadia/chuanban-antigravity-theme-patch.git`（或读取最新解压目录），阅读其中的 `SKILL.md` 后直接运行 `node install.mjs install` 升级至 `v6.0.6`（若我此前使用的是早期单文件版脚本且有自定义字号/配色，请先迁移到 `~/.gemini/antigravity/theme-patch/user/`）。若安装后 `cdpStatus` 为 `"missing_opt_in_flag"` 且你正在 Antigravity 内部会话中运行，请勿直接中断当前对话，告诉我空闲时运行 `node ~/.gemini/antigravity/theme-patch/install.mjs relaunch`（或手动重开一次客户端）即可；端口已就绪则直接运行 `node install.mjs verify` 验收。
+> 请帮我拉取最新的 `https://github.com/Anarcadia/chuanban-antigravity-theme-patch.git`（或读取最新解压目录），阅读其中的 `SKILL.md` 后直接运行 `node install.mjs install` 升级至 `v6.0.7`（若我此前使用的是早期单文件版脚本且有自定义字号/配色，请先迁移到 `~/.gemini/antigravity/theme-patch/user/`）。若安装后 `cdpStatus` 为 `"missing_opt_in_flag"` 且你正在 Antigravity 内部会话中运行，请勿直接中断当前对话，告诉我空闲时运行 `node ~/.gemini/antigravity/theme-patch/install.mjs relaunch`（或手动重开一次客户端）即可；端口已就绪则直接运行 `node install.mjs verify` 验收。
 
 ### 三、日常定制与排障话术
 - **🎨 切换风格、语言或微调字号**：日常切换主题与中英文可直接在「系统设置 → 外观界面」点击对应按钮；如需修改扩展预设或字号，可让 Agent 按 `SKILL.md` 修改 `user/config.json`（如调大 `"--ag-chat-font-size"`）。
@@ -131,6 +131,19 @@
    - 安装或更新：将其内部的**子目录** `guiyulou-antigravity-sidebar/`（内含 `plugin.json`、`rules/`、`sidecars/`，注意勿多套外层仓库根目录）完整复制覆盖至 `~/.gemini/config/plugins/guiyulou-antigravity-sidebar/`（更新时注意保留其中已有的用户批注 `notes.json` / `notes.md`），完成后可输出 `[侧边栏](customization://guiyulou-antigravity-sidebar)` 方便用户在客户端面板直接查看或随时启停。
    - 无损卸载：删除 `~/.gemini/config/plugins/guiyulou-antigravity-sidebar/` 目录（或引导用户在 Customizations 页面禁用/卸载），不影响本主题补丁任何文件。
 3. **技术原理与免责说明**：该插件由社区作者「西塞山的鳜鱼篓」（[@guiyulou](https://github.com/guiyulou)）独立开发维护。启用期间会拉起本地回环 Sidecar 文件服务、向会话注入 `[Ref n]` 查阅规则（`rules/AGENTS.md`），并通过 CDP 向主窗口输入框插入引用文本及调整全屏浮起层级（多开客户端窗口时建议单窗口使用以免焦点落入首窗口；**切勿在面板内直接预览来源不明的本地 HTML 文件**）。主仓仅做生态互补索引，不对其后续代码变更、本地文件接口安全性及兼容性承担担保；Agent 拉取新版本前建议审阅其 `server.mjs` 与 `sidecar.json` 变更。
+
+### 3. 侧边栏「最近」时间分组视图与折叠项目状态角标 — [`wysxxx/antigravity-sidebar-enhance`](https://github.com/wysxxx/antigravity-sidebar-enhance)（by [@wysxxx](https://github.com/wysxxx)）
+
+#### 👤 选择添加这个插件，你能获得什么？
+- **「项目管理」一键原位切换「最近（15 条）」**：在侧边栏标题右侧新增同风格小铃铛按钮（零额外占高），点击即可将会话列表原位切换为按 **进行中 / 今天 / 昨天 / 更早** 分组的单行视图（右侧附带所属项目名，悬停与右键菜单完整对齐原生 7 项操作）。
+- **折叠项目行内状态角标**：项目折叠时紧贴项目名右侧聚合展示待授权、运行中动画及已完成未读角标，悬停时与原生 `⋮` / `+` 零重叠。
+- **外观面板独立开关**：在「系统设置 → 常规设置 → 外观」卡片提供两个独立开关，完整跟随本补丁 5 套日夜配色与 `[ EN | 中文 ]` 即时切换。
+- **想要安装或卸载？** 直接对你的 Agent 说：*“帮我按船板主题补丁 README 的扩展说明，安装（或卸载）`wysxxx/antigravity-sidebar-enhance` 侧边栏增强插件”* 即可。
+
+#### 🤖 面向 AI Agent：技术接入说明与免责边界
+1. **前置确认**：确认本机已部署 `chuanban-antigravity-theme-patch >= 6.0.0` 且 `user/config.json` 中 `enabled`、`modules.customCss`、`modules.customJs` 未被禁用（WSL 操作 Windows 宿主时传 `--target-dir` 指向 Windows 用户目录）。
+2. **幂等安装 / 更新 / 卸载**：克隆 `https://github.com/wysxxx/antigravity-sidebar-enhance.git` 后执行 `node install.mjs install --json`（以 `__AG_PLUGIN_SIDEBAR_ENHANCE_START__` 标记块原子维护 `user/custom.{js,css}`，与 `ghang-antigravity-local-ui` 标记块互不冲突，守护进程 `2.5s` 自动热生效）；查看状态或无损卸载运行 `node install.mjs status --json` / `uninstall --json`。
+3. **技术原理与免责说明**：该插件由 [@wysxxx](https://github.com/wysxxx) 独立开发维护，通过只读遍历前端 React Fiber / Redux Store 聚合会话状态并复用宿主自身路由回调（零外部网络请求、通过 `ctx.onCleanup` 回收监听）。主仓仅做友情索引，不对其后续提交及客户端大版本内部 Store 结构变更风险承担担保。
 
 ---
 
