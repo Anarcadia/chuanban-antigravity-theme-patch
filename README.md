@@ -52,8 +52,8 @@
 ### 1. 默认标准主界面：莫兰迪风格（`MO`）与上下文信息胶囊详情卡
 ![默认莫兰迪古典矿物主界面与遥测详情卡演示](assets/preview-morandi-workbench.png)
 
-### 2. 外观与语言切换面板：五段式皮肤选择 + `[ EN | 中文 ]` 一键双切
-![外观五段式皮肤预设与中英语言切换面板](assets/preview-theme-lang-switcher.png)
+### 2. 外观与语言切换面板：七段式皮肤选择 + `[ EN | 中文 ]` 一键双切
+![外观皮肤预设与中英语言切换面板](assets/preview-theme-lang-switcher.png)
 
 ### 3. `Absolutely！` 主题演示：仿 Claude 书卷暖白工作台与子 Agent 汉化副栏
 ![Absolutely！主题主界面与子 Agent 汉化演示](assets/preview-absolutely-workbench.png)

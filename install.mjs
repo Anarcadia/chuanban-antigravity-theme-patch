@@ -3566,12 +3566,25 @@ async function runRollback() {
 
   const env = await detectEnvironment('auto');
   const live = isCustomSandboxTarget ? { skipped: true, reason: 'custom-target-dir' } : await inspectLiveWindow(env);
+  let presetFallbackNote = null;
+  try {
+    const restoredManifest = JSON.parse(fs.readFileSync(path.join(targetCore, 'manifest.json'), 'utf8'));
+    const userCfgPath = path.join(targetDir, 'user', 'config.json');
+    if (fs.existsSync(userCfgPath) && compareSemver(restoredManifest.version || '0.0.0', '6.1.0') < 0) {
+      const ucfg = JSON.parse(fs.readFileSync(userCfgPath, 'utf8'));
+      if (ucfg && (ucfg.preset === 'meadow' || ucfg.darkPreset === 'forest-night')) {
+        presetFallbackNote =
+          'user/config.json retains v6.1.0 preset ("meadow"/"forest-night"); older core safely renders fallback ("morandi"/"onyx") until switched.';
+      }
+    }
+  } catch {}
   console.log(
     JSON.stringify(
       {
         ok: true,
         restoredFrom: restoreSource,
         restoredTo: targetCore,
+        ...(presetFallbackNote ? { presetFallbackNote } : {}),
         live
       },
       null,

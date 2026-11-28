@@ -39,7 +39,7 @@ description: 船板的 Antigravity 2.0 主题、字体与汉化补丁（v6.1.0 �
 
 ### 实机样式基准参考
 - **默认莫兰迪浅色主界面视图（暖宣纸画布 + 烟岚石青单线输入框 + 实时遥测悬停详情卡）**：[`assets/preview-morandi-workbench.png`](assets/preview-morandi-workbench.png)
-- **外观五段式皮肤预设与 `[ EN | 中文 ]` 语言切换视图**：[`assets/preview-theme-lang-switcher.png`](assets/preview-theme-lang-switcher.png)
+- **外观皮肤预设与 `[ EN | 中文 ]` 语言切换视图（`v6.1.0` 已扩展为七段式）**：[`assets/preview-theme-lang-switcher.png`](assets/preview-theme-lang-switcher.png)
 - **`Absolutely！` 主题主界面视图（书卷暖白高对比工作台 + 暖橙蜡封输入框 + 子 Agent 副栏汉化）**：[`assets/preview-absolutely-workbench.png`](assets/preview-absolutely-workbench.png)
 - **黑夜界面视图（暖纸深色 / 深海碳黑 + 代码审阅 Diff 视图）**：[`assets/preview-dark-workbench.png`](assets/preview-dark-workbench.png)
 

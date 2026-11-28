@@ -591,6 +591,7 @@
           `html[data-ag-os][data-ag-wax-seal]:not([data-ag-disabled])[data-ag-theme-mode="dark"], html[data-ag-os][data-ag-wax-seal]:not([data-ag-disabled])[data-ag-theme-mode="dark"] body, html[data-ag-os][data-ag-wax-seal]:not([data-ag-disabled]) body.dark { ${darkDecls.join(' ')} }`
         );
       }
+      // 常态主防线位于 theme.css；此处仅在存在用户自定义 themeVars/darkThemeVars 时作为后置 #ag-user-theme-vars 同表尾部纵深兜底
       if (DETECTED_OS === 'win32') {
         const winZeroInk =
           '--ag-ink-shadow-xs: none !important; --ag-ink-shadow-sm: none !important; --ag-ink-shadow-md: none !important; --ag-ink-shadow-prose: none !important; --ag-ink-shadow-prose-bold: none !important;';
@@ -1205,7 +1206,7 @@
   // 三段式物理隔离：
   // 1) #ag-font-faces（纯 @font-face 注册表，常驻永不 disabled，杜绝切换时销毁重建 CSSFontFace / Skia 字形纹理缓存引发的缺字空白）
   // 2) #ag-custom-fonts（纯主题色彩与字体选择器规则，点「原版配色」时一键 disabled=true 零开销退回原版）
-  // 3) #ag-ui-widgets（五段式胶囊按钮、底部圆环小胶囊、Token 统计面板，常驻在线）
+  // 3) #ag-ui-widgets（七段式胶囊按钮、底部圆环小胶囊、Token 统计面板，常驻在线）
   const THEME_RULES_SPLIT_MARKER = '/* __AG_THEME_RULES_START__ */';
   const WIDGETS_CSS_SPLIT_MARKER = '/* __AG_WIDGETS_CSS_START__ */';
   const rulesSplitIdx = CSS_TEXT.indexOf(THEME_RULES_SPLIT_MARKER);

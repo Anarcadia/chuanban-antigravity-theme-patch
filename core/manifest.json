@@ -15,12 +15,12 @@
       "bytes": 393369
     },
     "runtime.js": {
-      "sha256": "a36b7476093b63e54cf9724358ef36a5c605826b7bc982bbbc97cc313d2fd54a",
-      "bytes": 508258
+      "sha256": "255912e7d77a2c94b5ca7988ccd5943b8876a2c30dbeac3ebe84fb4c0a56e2fb",
+      "bytes": 508420
     },
     "theme.css": {
-      "sha256": "0edee9b309d41352f3d947826c5b7a13a2e6834b505fb5d7ee10020adfd68f26",
-      "bytes": 265451
+      "sha256": "03b5d697ff38683264a37950b74bb7ff69eafbe6dcc0d5d9a15846037eb86993",
+      "bytes": 265736
     },
     "i18n.json": {
       "sha256": "69abe1604b0d2ef743c327054002af55186e67628c77bffa3d261b13e6ac8d46",
