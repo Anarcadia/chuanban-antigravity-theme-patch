@@ -204,6 +204,7 @@ node install.mjs verify
 
 ### 4. 前端自定义 JS 扩展（`user/custom.js`）
 在独立 `try/catch` 沙箱执行，入参 `ctx` 提供 `ctx.version`、`ctx.preset`、`ctx.config`、`ctx.modules`、`ctx.dict`、`ctx.metrics`、`ctx.syncPreset()`、`ctx.ensureMetricsPill(true)` 与 `ctx.onCleanup(fn)`。
+- **`user/` 社区插件免误翻与观察器零开销旁路契约**：第三方或用户自建 `user/` UI 组件只需在挂载容器上声明 **`data-ag-plugin-ui="1"`** 或 **`data-ag-no-i18n="1"`**（内核已内置兼容社区插件 `[data-ag-sb-ui]` 与 `[data-ag-quota-ui]`），主仓 `MutationObserver` 即自动将其整棵子树纳入 `DEFAULT_EXCLUDE_I18N` 与弹窗快速跳过白名单，既防止英文会话标题/项目名被词典误翻，也彻底消除观察器互踩开销。
 
 ### 5. 故障定界、回滚与卸载
 ```bash

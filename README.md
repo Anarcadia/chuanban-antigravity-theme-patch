@@ -143,7 +143,7 @@
 #### 🤖 面向 AI Agent：技术接入说明与免责边界
 1. **前置确认**：确认本机已部署 `chuanban-antigravity-theme-patch >= 6.0.0` 且 `user/config.json` 中 `enabled`、`modules.customCss`、`modules.customJs` 未被禁用（WSL 操作 Windows 宿主时传 `--target-dir` 指向 Windows 用户目录）。
 2. **幂等安装 / 更新 / 卸载**：克隆 `https://github.com/wysxxx/antigravity-sidebar-enhance.git` 后执行 `node install.mjs install --json`（以 `__AG_PLUGIN_SIDEBAR_ENHANCE_START__` 标记块原子维护 `user/custom.{js,css}`，与 `ghang-antigravity-local-ui` 标记块互不冲突，守护进程 `2.5s` 自动热生效）；查看状态或无损卸载运行 `node install.mjs status --json` / `uninstall --json`。
-3. **技术原理与免责说明**：该插件由 [@wysxxx](https://github.com/wysxxx) 独立开发维护，通过只读遍历前端 React Fiber / Redux Store 聚合会话状态并复用宿主自身路由回调（零外部网络请求、通过 `ctx.onCleanup` 回收监听）。主仓仅做友情索引，不对其后续提交及客户端大版本内部 Store 结构变更风险承担担保。
+3. **技术原理与免责说明**：该插件由 [@wysxxx](https://github.com/wysxxx) 独立开发维护，通过只读遍历前端 React Fiber / Redux Store 聚合会话状态并复用宿主自身路由回调（零外部网络请求、通过 `ctx.onCleanup` 回收监听；本主仓 `>= v6.0.7` 已在底座层为 `[data-ag-sb-ui]` / `[data-ag-plugin-ui]` / `[data-ag-quota-ui]` 内置免误翻保护与观察器零开销旁路）。主仓仅做友情索引，不对其后续提交及客户端大版本内部 Store 结构变更风险承担担保。
 
 ---
 

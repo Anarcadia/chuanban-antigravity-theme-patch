@@ -16,7 +16,7 @@
 - **全面适配 Antigravity `2.36.0`（`CL=1031268331`）最大化副栏悬浮输入框、设置搜索框、模型配额面板与 `2,371` 条零冲突词典（`core/theme.css` / `core/runtime.js` / `core/daemon.mjs` / `core/i18n.json`，合入 [#53](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/pull/53)）**：
   - **修复最大化副栏悬浮胶囊 `.agy-floating-composer-pill` 圆角裁切与展开框适配**：排除收起态 `0fr` 状态折叠架 `.agy-floating-composer-shelf-wrap:not([data-open="true"])`，根治常态悬浮胶囊顶部被削成直角与多余底边线问题，对齐常态（`22px`）与带状态栏（`18px`）同心圆角、展开框顶栏配色及分屏 `resolveBoxCascadeId` 会话 UUID 反查；
   - **修复系统设置顶部搜索框与「本地扩展 → Token 统计」Tab 切换死锁**：支持点击搜索下拉选项 `<li role="option">` 或在搜索框按 `Enter` 回车自动退出 Token 统计页显示目标设置项，并排除点击搜索框 `×` 清空按钮（`Clear search` / `清除搜索`）误退页；
-  - **气泡代码底色 `@layer base` 防覆盖与新增用户敏感字段免翻隔离**：针对 `2.36.0` Tailwind v4 `@layer utilities` 内置 `!bg-background/70`（Cascade L5 分层 `!important` 优先级反转），在 `@layer base` 中为 `[data-testid="agent-message-bubble"]` 下的行内代码与 `.md-code-surface` 统一补齐四套主题 `!important` 底色；将 `Credentials` 凭据作用域/允许域名、`@mention` 芯片与会话发言人纳入 `DEFAULT_EXCLUDE_I18N`；
+  - **气泡代码底色 `@layer base` 防覆盖与新增用户敏感字段/社区插件免翻隔离**：针对 `2.36.0` Tailwind v4 `@layer utilities` 内置 `!bg-background/70`（Cascade L5 分层 `!important` 优先级反转），在 `@layer base` 中为 `[data-testid="agent-message-bubble"]` 下的行内代码与 `.md-code-surface` 统一补齐四套主题 `!important` 底色并开放 `--ag-bubble-*` 自定义变量；将 `Credentials` 凭据作用域/允许域名、`@mention` 芯片、会话发言人以及 `user/` 社区插件标准隔离属性（`[data-ag-plugin-ui]` / `[data-ag-no-i18n]` / `[data-ag-sb-ui]` / `[data-ag-quota-ui]`，同步收录社区扩展 [#52](https://github.com/Anarcadia/chuanban-antigravity-theme-patch/issues/52)）纳入 `DEFAULT_EXCLUDE_I18N` 与观察器快速旁路；
   - **词典零冲突扩充至 `2,371` 条（`+143` 条）**：合入 `18` 条内置 `/` 斜杠命令描述，新增 `125` 条 `2.36.0` 模型配额面板、悬浮输入框、设置搜索、`Credentials` 凭据管理、`File/Zoom` 菜单（含上下文作用域守卫）、Git Worktree 分叉、侧栏 Agent 显隐及 Feeds / 讨论串词条与 5 组零回溯动态模板。
 
 ---
