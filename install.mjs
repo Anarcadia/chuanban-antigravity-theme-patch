@@ -3,7 +3,7 @@
  * chuanban-antigravity-theme-patch · 一键安装、自检、CDP 接力重启、安全模式验证、打包与回滚 CLI (install.mjs)
  *
  * 支持子命令：
- *   node install.mjs install        [--channel auto|stable|insiders] [--preset native|morandi|absolutely|claude-desktop-purewhite|vintage-deep] [--dark-preset onyx|claude-warm] [--sync-user] [--with-launcher] [--target-dir <dir>]
+ *   node install.mjs install        [--channel auto|stable|insiders] [--preset native|morandi|absolutely|meadow|claude-desktop-purewhite|vintage-deep] [--dark-preset onyx|claude-warm|forest-night] [--sync-user] [--with-launcher] [--target-dir <dir>]
  *   node install.mjs upgrade        [--check] [--dry-run] [--version <vX.Y.Z>] [--mirror cloudflare-r2|github-release] [--force] [--target-dir <dir>] [--manifest-url <url>]
  *   node install.mjs relaunch       [--channel auto|stable|insiders] [--force] [--target-dir <dir>]
  *   node install.mjs download-fonts [--dir <download-dir>] [--all] [--force] [--super-ttc]
@@ -254,7 +254,7 @@ function buildManifest(baseDir = __dirname) {
       bytes: stat.size
     };
   }
-  const targetVersion = '6.0.7';
+  const targetVersion = '6.1.0';
   const daemonSrc = fs.readFileSync(path.join(coreDir, 'daemon.mjs'), 'utf8');
   if (!daemonSrc.includes(`-v${targetVersion}`)) {
     throw new Error(`core/daemon.mjs BASE_VERSION does not match manifest version v${targetVersion}`);
@@ -1399,9 +1399,9 @@ function ensureCdpLaunchers(channel = 'auto', options = {}) {
           '  <key>CFBundlePackageType</key>',
           '  <string>APPL</string>',
           '  <key>CFBundleShortVersionString</key>',
-          '  <string>6.0.7</string>',
+          '  <string>6.1.0</string>',
           '  <key>CFBundleVersion</key>',
-          '  <string>606</string>',
+          '  <string>610</string>',
           ...(iconBase ? ['  <key>CFBundleIconFile</key>', `  <string>${iconBase}</string>`] : []),
           '  <key>LSMinimumSystemVersion</key>',
           '  <string>12.0</string>',
@@ -2551,19 +2551,20 @@ async function runInstall() {
     'native',
     'morandi',
     'absolutely',
+    'meadow',
     'high-contrast',
     'claude-desktop-purewhite',
     'vintage-deep'
   ]);
-  const VALID_DARK_PRESETS = new Set(['onyx', 'claude-warm']);
+  const VALID_DARK_PRESETS = new Set(['onyx', 'claude-warm', 'forest-night']);
   if (preset && !VALID_LIGHT_PRESETS.has(preset)) {
     console.error(
-      `[ERROR] Invalid --preset "${preset}". Expected one of: native, morandi, absolutely, claude-desktop-purewhite, vintage-deep.`
+      `[ERROR] Invalid --preset "${preset}". Expected one of: native, morandi, absolutely, meadow, claude-desktop-purewhite, vintage-deep.`
     );
     process.exit(1);
   }
   if (darkPreset && !VALID_DARK_PRESETS.has(darkPreset)) {
-    console.error(`[ERROR] Invalid --dark-preset "${darkPreset}". Expected one of: onyx, claude-warm.`);
+    console.error(`[ERROR] Invalid --dark-preset "${darkPreset}". Expected one of: onyx, claude-warm, forest-night.`);
     process.exit(1);
   }
 
@@ -6167,7 +6168,7 @@ switch (subcommand) {
     break;
   default:
     console.log(`Usage:
-  node install.mjs install          [--channel auto|stable|insiders] [--preset native|morandi|absolutely|claude-desktop-purewhite|vintage-deep] [--dark-preset onyx|claude-warm] [--sync-user] [--with-launcher]
+  node install.mjs install          [--channel auto|stable|insiders] [--preset native|morandi|absolutely|meadow|claude-desktop-purewhite|vintage-deep] [--dark-preset onyx|claude-warm|forest-night] [--sync-user] [--with-launcher]
   node install.mjs upgrade          [--check] [--version <vX.Y.Z>] [--mirror cloudflare-r2|github-release] [--force]
   node install.mjs relaunch         [--channel auto|stable|insiders] [--force]
   node install.mjs download-fonts   [--dir <download-dir>] [--all] [--force] [--super-ttc]

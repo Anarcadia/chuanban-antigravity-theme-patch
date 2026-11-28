@@ -1,6 +1,6 @@
-# 船板的 Antigravity 主题、字体与汉化补丁 (v6.0.7)
+# 船板的 Antigravity 主题、字体与汉化补丁 (v6.1.0)
 
-[![Version](https://img.shields.io/badge/version-6.0.7-3D6470.svg)](https://github.com/Anarcadia/chuanban-antigravity-theme-patch)
+[![Version](https://img.shields.io/badge/version-6.1.0-3D6470.svg)](https://github.com/Anarcadia/chuanban-antigravity-theme-patch)
 [![Antigravity](https://img.shields.io/badge/Antigravity-2.36.0%2B-3F6E7A.svg)](https://github.com/Anarcadia/chuanban-antigravity-theme-patch)
 [![Node](https://img.shields.io/badge/node-%3E%3D22.0.0%20(22.13%2B%20Full)-339933.svg)](https://nodejs.org/)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey.svg)](https://github.com/Anarcadia/chuanban-antigravity-theme-patch)
@@ -18,7 +18,7 @@
 
 ## ✨ 核心特性
 
-- **多套打磨风格与系统日夜自动跟随**：内置温润耐看的**莫兰迪古典矿物风格**（默认）、深度打磨的**仿 Claude 书卷暖白风格（`Absolutely！`）**、护眼的**温润书卷夜间风格**与深海冷碳深色模式，提供独立的**「跟随系统」**自动日夜配对开关，并支持在设置面板一键切回**官方原版风格**（同步恢复官方原版字体）。
+- **多套打磨风格与系统日夜自动跟随**：内置温润耐看的**莫兰迪古典矿物风格**（默认）、清爽现代的**草墨石砚（`🌱` 细磨灰石微肌理 × 森草绿无衬线）**与**幽林深色（`🌲` 暖松炭黑草木夜间）**、深度打磨的**仿 Claude 书卷暖白风格（`Absolutely！`）**、护眼的**温润书卷夜间风格**与深海冷碳深色模式，提供独立的**「跟随系统」**自动日夜配对开关，并支持在设置面板一键切回**官方原版风格**（同步恢复官方原版字体）。
 - **母语级汉化与中英一键双切**：内置 **`2,371` 条**覆盖主界面、设置项、`/` 斜杠命令描述、编排器、Swarm 蜂群工作台与子 Agent 面板的自然中文汉化，严格隔离代码块、终端、凭据键名与文件名避免误翻；外观面板提供 **`[ EN | 中文 ]`** 独立按钮，可随时一键退回纯英文原版界面。
 - **字体美化与润墨感特效**：精选书卷衬线长文、现代无衬线界面与人文等宽代码字体组合，并在浅色纸面融入细腻的活字微润墨效果，柔化电子屏笔画生硬感，增加典雅温润的层次质感。
 - **精细中西文混排调校**：按界面 UI、对话正文、代码终端与输入框分层桥接中西文字重比例，消除中英文混排发虚与字重断层。
@@ -33,12 +33,14 @@
 
 ## 🎨 配色与主题体系
 
-在「系统设置 → 外观界面」可直接通过五段式胶囊 **`[ A | ✳️ | MO | 📖 | 🌙 ]`** 切换全局风格，并可开启独立的 **「跟随系统」** 开关自动按系统昼夜切换你偏好的浅色/深色预设配对（点击相反极性预设可即时预览并自动退出跟随）：
+在「系统设置 → 外观界面」可直接通过七段式胶囊 **`[ A | ✳️ | MO | 🌱 | 🌲 | 📖 | 🌙 ]`** 切换全局风格，并可开启独立的 **「跟随系统」** 开关自动按系统昼夜自由组合你偏好的浅色/深色预设配对（点击相反极性预设可即时预览并自动退出跟随）：
 
 | 按钮 | 预设名称 | 风格定位 |
 | :---: | :--- | :--- |
-| **`MO`** *(默认)* | **莫兰迪色** (`morandi`) | **暖底冷器 · 耐看静物感**：暖宣纸浅灰画布搭配亚麻侧栏，输入框与主按钮采用沉稳醒目的烟岚石青单线收口。 |
+| **`MO`** *(默认)* | **莫兰迪色** (`morandi`) | **暖底冷器 · 耐看静物感**：暖宣纸浅灰画布搭配亚麻侧栏，对话采用书卷衬线体，输入框与主按钮采用沉稳醒目的烟岚石青单线收口。 |
+| **`🌱`** | **草墨石砚** (`meadow`) | **细磨石砚 · 清爽草木现代风**：潜意识级细磨灰石微肌理画布搭配石砚青灰外框侧栏、森草绿 `1px` 扁平输入框与现代无衬线正文（macOS 开启活字润墨，Windows 严格零晕墨保持 DirectWrite 锐利清脆）。 |
 | **`✳️`** | **Absolutely！** (`absolutely`) | **仿 Claude 经典暖白**：微暖亮白纸面配暖燕麦侧栏，搭配信封火漆暖橙输入框与陶土橙按钮，对比鲜明。 |
+| **`🌲`** | **幽林深色** (`forest-night`) | **暖松炭黑 · 草木扁平夜间**：深林松针炭底配苔藓实色浮层、翠草绿点缀与现代无衬线正文，彻底去除毛玻璃与霓虹光污染。 |
 | **`📖`** | **暖纸深色** (`claude-warm`) | **温润书卷夜间**：仿 Claude 暖炭纸底配象牙白字色与陶土暖橙点缀，适合夜间长时间沉浸阅读与写作。 |
 | **`🌙`** | **深色** (`onyx`) | **深海冷碳夜间**：深海青黛暗底配石青点缀，冷静克制，适合代码审阅与暗光环境。 |
 | **`A`** | **原版配色** (`native`) | **官方原貌直通**：一键旁路补丁配色与自定义字体，回归客户端原生白/黑外观，同时保留汉化与统计组件可用。 |
@@ -78,11 +80,11 @@
 > 4. 检查输出中的 `cdpStatus`（以及 Windows 新装字体后的 `restartAntigravityRequired`）：若为 `"missing_opt_in_flag"` 或 Windows 刚新装完字体，**如果你当前正在 Antigravity 内部对话中运行，请勿执行 `--force` 强行重启自断会话**，只需把空闲时执行的命令 `node ~/.gemini/antigravity/theme-patch/install.mjs relaunch`（Windows 为 `node "$HOME\.gemini\antigravity\theme-patch\install.mjs" relaunch`，或提示我手动退出重开一次客户端）发给我；如果你在外部独立终端运行且客户端空闲，请直接执行 `node install.mjs relaunch`。
 > 5. 在端口就绪后运行 `node install.mjs verify`，确认 `"ok": true`、`"hasStyle": true` 且 `fonts.allRequiredInstalled: true` 即完成验收。
 
-### 二、老用户升级至 v6.0.7（支持 `upgrade` 一键增量热升级）
-已部署包含 `upgrade` 能力的版本后，后续更新可直接点击「系统设置 → 外观界面」底部版本行的 **「立即热升级」** 或执行 **`node install.mjs upgrade`**（加 `--check` 可仅做只读检查）：安装器会从 Cloudflare R2 / GitHub Release 自动拉取 `~350 KB` 增量更新包并校验双重 SHA-256、备份旧版 `core/` 与保留 `user/` 配置后由新版脚本自举接管完成热重注（实机验活目标版本号不通过自动回滚，**绝不强杀重启客户端**）。若当前环境早于该机制、尚未内置 `upgrade` 子命令，首次接入仍按下方引导拉取仓库执行一次 `node install.mjs install` 即可启用：
+### 二、老用户升级至 v6.1.0（支持 `upgrade` 一键增量热升级）
+已部署包含 `upgrade` 能力的版本后，后续更新可直接点击「系统设置 → 外观界面」底部版本行的 **「立即热升级」** 或执行 **`node install.mjs upgrade`**（加 `--check` 可仅做只读检查）：安装器会从 Cloudflare R2 / GitHub Release 自动拉取 `~360 KB` 增量更新包并校验双重 SHA-256、备份旧版 `core/` 与保留 `user/` 配置后由新版脚本自举接管完成热重注（实机验活目标版本号不通过自动回滚，**绝不强杀重启客户端**）。若当前环境早于该机制、尚未内置 `upgrade` 子命令，首次接入仍按下方引导拉取仓库执行一次 `node install.mjs install` 即可启用：
 
 > **💬 复制发给 Agent（老用户无缝升级）**：  
-> 请帮我拉取最新的 `https://github.com/Anarcadia/chuanban-antigravity-theme-patch.git`（或读取最新解压目录），阅读其中的 `SKILL.md` 后直接运行 `node install.mjs install` 升级至 `v6.0.7`（若我此前使用的是早期单文件版脚本且有自定义字号/配色，请先迁移到 `~/.gemini/antigravity/theme-patch/user/`）。若安装后 `cdpStatus` 为 `"missing_opt_in_flag"` 且你正在 Antigravity 内部会话中运行，请勿直接中断当前对话，告诉我空闲时运行 `node ~/.gemini/antigravity/theme-patch/install.mjs relaunch`（或手动重开一次客户端）即可；端口已就绪则直接运行 `node install.mjs verify` 验收。
+> 请帮我拉取最新的 `https://github.com/Anarcadia/chuanban-antigravity-theme-patch.git`（或读取最新解压目录），阅读其中的 `SKILL.md` 后直接运行 `node install.mjs install` 升级至 `v6.1.0`（若我此前使用的是早期单文件版脚本且有自定义字号/配色，请先迁移到 `~/.gemini/antigravity/theme-patch/user/`）。若安装后 `cdpStatus` 为 `"missing_opt_in_flag"` 且你正在 Antigravity 内部会话中运行，请勿直接中断当前对话，告诉我空闲时运行 `node ~/.gemini/antigravity/theme-patch/install.mjs relaunch`（或手动重开一次客户端）即可；端口已就绪则直接运行 `node install.mjs verify` 验收。
 
 ### 三、日常定制与排障话术
 - **🎨 切换风格、语言或微调字号**：日常切换主题与中英文可直接在「系统设置 → 外观界面」点击对应按钮；如需修改扩展预设或字号，可让 Agent 按 `SKILL.md` 修改 `user/config.json`（如调大 `"--ag-chat-font-size"`）。

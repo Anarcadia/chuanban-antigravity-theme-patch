@@ -106,7 +106,7 @@
     }
   }
 
-  const PATCH_VERSION = boot.version || '20261128-v6.0.7';
+  const PATCH_VERSION = boot.version || '20261128-v6.1.0';
   const DETECTED_OS =
     boot.platform || (/Win/i.test(navigator.platform || '') ? 'win32' : /Mac/i.test(navigator.platform || '') ? 'darwin' : 'linux');
   const ENABLED = boot.enabled !== false;
@@ -158,6 +158,8 @@
         native: '原版配色',
         absolutely: 'Absolutely！',
         morandi: '莫兰迪色',
+        meadow: '草墨石砚',
+        forestNight: '幽林深色',
         pureWhite: '素绢浅雾',
         vintageDeep: '敦煌古壁',
         warmDark: '暖纸深色',
@@ -206,6 +208,8 @@
         native: '純正テーマ',
         absolutely: 'Absolutely!',
         morandi: 'モランディ',
+        meadow: '草墨石硯',
+        forestNight: 'フォレストダーク',
         pureWhite: 'ピュアホワイト',
         vintageDeep: 'ヴィンテージ',
         warmDark: '暖色ダーク',
@@ -253,6 +257,8 @@
       native: 'Original Theme',
       absolutely: 'Absolutely!',
       morandi: 'Morandi',
+      meadow: 'Meadow Inkstone',
+      forestNight: 'Forest Night',
       pureWhite: 'Pure White',
       vintageDeep: 'Vintage Deep',
       warmDark: 'Warm Dark',
@@ -722,25 +728,41 @@
       const defaultLightBg =
         curPreset === 'native'
           ? '#FAFAFA'
-          : curPreset === 'absolutely'
-            ? '#F7F5F0'
-            : curPreset === 'vintage-deep'
-              ? '#E3D9C8'
-              : curPreset === 'claude-desktop-purewhite'
-                ? '#EFECE5'
-                : '#E8E3D9';
+          : curPreset === 'meadow'
+            ? '#E9EDE9'
+            : curPreset === 'absolutely'
+              ? '#F7F5F0'
+              : curPreset === 'vintage-deep'
+                ? '#E3D9C8'
+                : curPreset === 'claude-desktop-purewhite'
+                  ? '#EFECE5'
+                  : '#E8E3D9';
       const defaultDarkBg =
-        curPreset === 'native' ? '#18181A' : curDarkPreset === 'claude-warm' ? '#1B1A18' : '#101417';
+        curPreset === 'native'
+          ? '#18181A'
+          : curDarkPreset === 'claude-warm'
+            ? '#1B1A18'
+            : curDarkPreset === 'forest-night'
+              ? '#131614'
+              : '#101417';
       const defaultLightFg =
         curPreset === 'native'
           ? '#0A0A0C'
-          : curPreset === 'absolutely' || curPreset === 'claude-desktop-purewhite'
-            ? '#1F1E1D'
-            : curPreset === 'vintage-deep'
-              ? '#26221C'
-              : '#24221F';
+          : curPreset === 'meadow'
+            ? '#141614'
+            : curPreset === 'absolutely' || curPreset === 'claude-desktop-purewhite'
+              ? '#1F1E1D'
+              : curPreset === 'vintage-deep'
+                ? '#26221C'
+                : '#24221F';
       const defaultDarkFg =
-        curPreset === 'native' ? '#FAFAFA' : curDarkPreset === 'claude-warm' ? '#F3F0E4' : '#E4E8E9';
+        curPreset === 'native'
+          ? '#FAFAFA'
+          : curDarkPreset === 'claude-warm'
+            ? '#F3F0E4'
+            : curDarkPreset === 'forest-night'
+              ? '#EAEFEA'
+              : '#E4E8E9';
       const fbBg = (customFallbacks && customFallbacks.bg) || (isDark ? defaultDarkBg : defaultLightBg);
       const fbFg = (customFallbacks && customFallbacks.fg) || (isDark ? defaultDarkFg : defaultLightFg);
       // 优先读取不参与 CSS transition 插值的自定义属性 --sidebar / --foreground，从根源避开切换瞬间 2.4%~60% 半过渡色帧（Issue #42）
@@ -872,7 +894,7 @@
       if (document.documentElement) {
         document.documentElement.removeAttribute('data-ag-lang');
       }
-      document.querySelectorAll('button[data-ag-warm-night-btn], button[data-ag-morandi-btn]').forEach((el) => el.remove());
+      document.querySelectorAll('button[data-ag-warm-night-btn], button[data-ag-morandi-btn], button[data-ag-meadow-btn], button[data-ag-forest-night-btn]').forEach((el) => el.remove());
       document.querySelectorAll('svg[data-ag-agy-logo="1"], svg[data-ag-claude-spark="1"]').forEach((el) => el.remove());
       document.querySelectorAll('button[data-ag-native-theme-slot="system"]').forEach((btn) => {
         btn.removeAttribute('data-ag-grad-id');
@@ -1840,6 +1862,7 @@
     NATIVE: 'native',
     MORANDI: 'morandi',
     ABSOLUTELY: 'absolutely',
+    MEADOW: 'meadow',
     HIGH_CONTRAST: 'high-contrast',
     CLAUDE_PUREWHITE: 'claude-desktop-purewhite',
     VINTAGE_DEEP: 'vintage-deep',
@@ -1850,10 +1873,22 @@
 
   const DARK_PRESETS = {
     ONYX: 'onyx',
-    CLAUDE_WARM: 'claude-warm'
+    CLAUDE_WARM: 'claude-warm',
+    FOREST_NIGHT: 'forest-night'
   };
 
   const ALL_CUSTOM_PRESET_NAMES = new Set(Object.values(PRESETS));
+  const CUSTOM_DARK_PRESET_NAMES = new Set([DARK_PRESETS.CLAUDE_WARM, DARK_PRESETS.FOREST_NIGHT]);
+  window.__ag_custom_light_preset_set = ALL_CUSTOM_PRESET_NAMES;
+  window.__ag_custom_dark_preset_set = CUSTOM_DARK_PRESET_NAMES;
+
+  function isKnownDarkPreset(val) {
+    return (
+      val === DARK_PRESETS.CLAUDE_WARM ||
+      val === DARK_PRESETS.ONYX ||
+      val === DARK_PRESETS.FOREST_NIGHT
+    );
+  }
 
   function resolveNormalizedLightPreset(rawVal) {
     const s = String(rawVal || '').trim().toLowerCase();
@@ -1862,6 +1897,16 @@
     }
     if (s === PRESETS.ABSOLUTELY || s === 'claude-orange' || s === 'absolutely!' || s === 'absolutely！') {
       return PRESETS.ABSOLUTELY;
+    }
+    if (
+      s === PRESETS.MEADOW ||
+      s === 'qoder' ||
+      s === 'qoder-light' ||
+      s === 'grass-green' ||
+      s === '草墨石砚' ||
+      s === '清野草绿'
+    ) {
+      return PRESETS.MEADOW;
     }
     if (s === PRESETS.CLAUDE_PUREWHITE || s === PRESETS.LEGACY_OFFICIAL || s === 'claudedesktop 净白') {
       return PRESETS.CLAUDE_PUREWHITE;
@@ -1906,10 +1951,9 @@
     } catch (e) {}
   }
   const effectiveBootDarkPreset =
-    IS_SWARM_PLUGIN_FRAME &&
-    (window.__ag_host_dark_preset === DARK_PRESETS.CLAUDE_WARM || window.__ag_host_dark_preset === DARK_PRESETS.ONYX)
+    IS_SWARM_PLUGIN_FRAME && isKnownDarkPreset(window.__ag_host_dark_preset)
       ? window.__ag_host_dark_preset
-      : DEFAULT_DARK_PRESET;
+      : resolveNormalizedDarkPreset(DEFAULT_DARK_PRESET);
   if (!hasPendingDarkPersist && effectiveBootDarkPreset && window.__ag_last_boot_dark_preset !== effectiveBootDarkPreset) {
     window.__ag_last_boot_dark_preset = effectiveBootDarkPreset;
     window.__ag_runtime_dark_preset = effectiveBootDarkPreset;
@@ -1928,6 +1972,14 @@
     ) {
       return DARK_PRESETS.CLAUDE_WARM;
     }
+    if (
+      s === DARK_PRESETS.FOREST_NIGHT ||
+      s === 'qoder-dark' ||
+      s === 'forest-dark' ||
+      s === '幽林深色'
+    ) {
+      return DARK_PRESETS.FOREST_NIGHT;
+    }
     return DARK_PRESETS.ONYX;
   }
 
@@ -1944,7 +1996,7 @@
         } catch (e) {}
       }
       const storedDark = Storage.prototype.getItem.call(localStorage, 'theme-preset-dark');
-      if (ALL_CUSTOM_PRESET_NAMES.has(storedDark)) {
+      if (CUSTOM_DARK_PRESET_NAMES.has(storedDark) || ALL_CUSTOM_PRESET_NAMES.has(storedDark)) {
         try {
           Storage.prototype.setItem.call(localStorage, 'theme-preset-dark', 'Default Dark');
         } catch (e) {}
@@ -1981,9 +2033,7 @@
         storedDarkFlavor = Storage.prototype.getItem.call(localStorage, 'theme-dark-flavor');
       } catch (e) {}
       const liveHostDarkPreset =
-        IS_SWARM_PLUGIN_FRAME &&
-        (window.__ag_host_dark_preset === DARK_PRESETS.CLAUDE_WARM ||
-          window.__ag_host_dark_preset === DARK_PRESETS.ONYX)
+        IS_SWARM_PLUGIN_FRAME && isKnownDarkPreset(window.__ag_host_dark_preset)
           ? window.__ag_host_dark_preset
           : null;
       const targetDarkPreset = resolveNormalizedDarkPreset(
@@ -2047,11 +2097,15 @@
           const PATCH_SWARM_BGS = new Set([
             '#F4F1EA',
             '#FCFCFB',
+            '#FAFBF9',
+            '#E9EDE9',
             '#EFE8DC',
             '#F8F6F1',
             '#F3EAD8',
             '#F8F7F4',
             '#15191C',
+            '#181B18',
+            '#131614',
             '#242320',
             '#21201D',
             '#1B1A18'
@@ -2302,30 +2356,35 @@
     } catch (e) {}
   };
 
-  if (!window.__ag_preset_hook_installed) {
+  if (!window.__ag_preset_hook_installed_v2) {
+    window.__ag_preset_hook_installed_v2 = true;
     window.__ag_preset_hook_installed = true;
     try {
-      const origGetItem = localStorage.getItem.bind(localStorage);
+      const rawGetItem = Storage.prototype.getItem.bind(localStorage);
       localStorage.getItem = function (key) {
-        const val = origGetItem(key);
-        if (key === 'theme-preset-light' && ALL_CUSTOM_PRESET_NAMES.has(val)) {
+        const val = rawGetItem(key);
+        const lightSet = window.__ag_custom_light_preset_set || ALL_CUSTOM_PRESET_NAMES;
+        const darkSet = window.__ag_custom_dark_preset_set || CUSTOM_DARK_PRESET_NAMES;
+        if (key === 'theme-preset-light' && lightSet.has(val)) {
           return 'Default Light';
         }
-        if (key === 'theme-preset-dark' && ALL_CUSTOM_PRESET_NAMES.has(val)) {
+        if (key === 'theme-preset-dark' && (darkSet.has(val) || lightSet.has(val))) {
           return 'Default Dark';
         }
         return val;
       };
 
-      const origSetItem = localStorage.setItem.bind(localStorage);
+      const rawSetItem = Storage.prototype.setItem.bind(localStorage);
       localStorage.setItem = function (key, val) {
-        if (key === 'theme-preset-light' && ALL_CUSTOM_PRESET_NAMES.has(val)) {
+        const lightSet = window.__ag_custom_light_preset_set || ALL_CUSTOM_PRESET_NAMES;
+        const darkSet = window.__ag_custom_dark_preset_set || CUSTOM_DARK_PRESET_NAMES;
+        if (key === 'theme-preset-light' && lightSet.has(val)) {
           val = 'Default Light';
         }
-        if (key === 'theme-preset-dark' && ALL_CUSTOM_PRESET_NAMES.has(val)) {
+        if (key === 'theme-preset-dark' && (darkSet.has(val) || lightSet.has(val))) {
           val = 'Default Dark';
         }
-        origSetItem(key, val);
+        rawSetItem(key, val);
         if (
           key === 'theme-preset-light' ||
           key === 'theme-preset-dark' ||
@@ -2636,6 +2695,11 @@
       'M1.35 12.45V3.55h1.9l2.75 5.35 2.75-5.35h1.9v8.9H9.0V6.5L6.52 11.3H5.48L3.0 6.5v5.95H1.35Z';
     const MO_BADGE_PATH_O =
       'M16.55 3.4c2.48 0 4.18 1.9 4.18 4.6s-1.7 4.6-4.18 4.6-4.18-1.9-4.18-4.6 1.7-4.6 4.18-4.6Zm0 1.6c-1.42 0-2.42 1.2-2.42 3.0s1.0 3.0 2.42 3.0 2.42-1.2 2.42-3.0-1.0-3.0-2.42-3.0Z';
+    const MEADOW_LEAF_OUTLINE_PATH =
+      'M19.5 4.5C13.2 4.5 7.5 8.1 6.2 14.3C5.9 15.8 6.1 17.2 6.7 18.3C7.8 18.9 9.2 19.1 10.7 18.8C16.9 17.5 20.5 11.8 20.5 5.5C20.5 4.95 20.05 4.5 19.5 4.5Z';
+    const MEADOW_LEAF_VEIN_PATH = 'M4.5 20.5L13.5 11.5';
+    const FOREST_PINE_CROWN_PATH = 'M12 3L6.2 10.5H9.6L5 16.8H19L14.4 10.5H17.8L12 3Z';
+    const FOREST_PINE_TRUNK_PATH = 'M12 16.8V21';
 
     function identifyNativeThemeButtons(group) {
       if (!group || group.nodeType !== 1) return null;
@@ -2646,7 +2710,9 @@
           ch &&
           ch.tagName === 'BUTTON' &&
           !ch.hasAttribute('data-ag-warm-night-btn') &&
-          !ch.hasAttribute('data-ag-morandi-btn')
+          !ch.hasAttribute('data-ag-morandi-btn') &&
+          !ch.hasAttribute('data-ag-meadow-btn') &&
+          !ch.hasAttribute('data-ag-forest-night-btn')
         ) {
           nativeBtns.push(ch);
         }
@@ -2719,13 +2785,19 @@
       let lightName = uiStr.themeTooltips.morandi;
       if (currentPreset === PRESETS.ABSOLUTELY) {
         lightName = uiStr.themeTooltips.absolutely;
+      } else if (currentPreset === PRESETS.MEADOW) {
+        lightName = uiStr.themeTooltips.meadow;
       } else if (currentPreset === PRESETS.CLAUDE_PUREWHITE) {
         lightName = uiStr.themeTooltips.pureWhite;
       } else if (currentPreset === PRESETS.VINTAGE_DEEP) {
         lightName = uiStr.themeTooltips.vintageDeep;
       }
       const darkName =
-        currentDarkPreset === DARK_PRESETS.CLAUDE_WARM ? uiStr.themeTooltips.warmDark : uiStr.themeTooltips.onyx;
+        currentDarkPreset === DARK_PRESETS.CLAUDE_WARM
+          ? uiStr.themeTooltips.warmDark
+          : currentDarkPreset === DARK_PRESETS.FOREST_NIGHT
+            ? uiStr.themeTooltips.forestNight
+            : uiStr.themeTooltips.onyx;
       return `${uiStr.followSystemLightPrefix}${lightName}${uiStr.followSystemPairSep}${uiStr.followSystemDarkPrefix}${darkName}`;
     }
 
@@ -2734,16 +2806,26 @@
       const currentDarkPreset = document.documentElement.getAttribute('data-ag-dark-preset') || DEFAULT_DARK_PRESET;
       const isNativePreset = currentPreset === PRESETS.NATIVE;
       const isWarmNight = currentDarkPreset === DARK_PRESETS.CLAUDE_WARM;
+      const isForestNight = currentDarkPreset === DARK_PRESETS.FOREST_NIGHT;
       const isDarkNow = isCurrentThemeModeDark();
 
-      // 单一真值源：5 选 1 互斥穷举，从根源上消除双高亮或全灭
+      // 单一真值源：7 选 1 互斥穷举，从根源上消除双高亮或全灭
       let activeSlot = PRESETS.MORANDI;
       if (isNativePreset) {
         activeSlot = PRESETS.NATIVE;
       } else if (isDarkNow) {
-        activeSlot = isWarmNight ? DARK_PRESETS.CLAUDE_WARM : DARK_PRESETS.ONYX;
+        activeSlot = isWarmNight
+          ? DARK_PRESETS.CLAUDE_WARM
+          : isForestNight
+            ? DARK_PRESETS.FOREST_NIGHT
+            : DARK_PRESETS.ONYX;
       } else {
-        activeSlot = currentPreset === PRESETS.ABSOLUTELY ? PRESETS.ABSOLUTELY : PRESETS.MORANDI;
+        activeSlot =
+          currentPreset === PRESETS.ABSOLUTELY
+            ? PRESETS.ABSOLUTELY
+            : currentPreset === PRESETS.MEADOW
+              ? PRESETS.MEADOW
+              : PRESETS.MORANDI;
       }
 
       const uiStr = getSelfUiStrings();
@@ -2759,6 +2841,8 @@
           anyFollowSystem = true;
         }
         const morandiBtn = group.querySelector('button[data-ag-morandi-btn="1"]');
+        const meadowBtn = group.querySelector('button[data-ag-meadow-btn="1"]');
+        const forestNightBtn = group.querySelector('button[data-ag-forest-night-btn="1"]');
         const bookBtn = group.querySelector('button[data-ag-warm-night-btn="1"]');
 
         if (morandiBtn) {
@@ -2769,6 +2853,28 @@
           } else {
             if (morandiBtn.hasAttribute('data-pressed')) morandiBtn.removeAttribute('data-pressed');
             if (morandiBtn.getAttribute('aria-pressed') !== 'false') morandiBtn.setAttribute('aria-pressed', 'false');
+          }
+        }
+
+        if (meadowBtn) {
+          const mdOn = activeSlot === PRESETS.MEADOW;
+          if (mdOn) {
+            if (!meadowBtn.hasAttribute('data-pressed')) meadowBtn.setAttribute('data-pressed', '');
+            if (meadowBtn.getAttribute('aria-pressed') !== 'true') meadowBtn.setAttribute('aria-pressed', 'true');
+          } else {
+            if (meadowBtn.hasAttribute('data-pressed')) meadowBtn.removeAttribute('data-pressed');
+            if (meadowBtn.getAttribute('aria-pressed') !== 'false') meadowBtn.setAttribute('aria-pressed', 'false');
+          }
+        }
+
+        if (forestNightBtn) {
+          const fnOn = activeSlot === DARK_PRESETS.FOREST_NIGHT;
+          if (fnOn) {
+            if (!forestNightBtn.hasAttribute('data-pressed')) forestNightBtn.setAttribute('data-pressed', '');
+            if (forestNightBtn.getAttribute('aria-pressed') !== 'true') forestNightBtn.setAttribute('aria-pressed', 'true');
+          } else {
+            if (forestNightBtn.hasAttribute('data-pressed')) forestNightBtn.removeAttribute('data-pressed');
+            if (forestNightBtn.getAttribute('aria-pressed') !== 'false') forestNightBtn.setAttribute('aria-pressed', 'false');
           }
         }
 
@@ -2808,6 +2914,18 @@
           const wantMoAria = uiStr.themeTooltips.morandi;
           if (morandiBtn.getAttribute('aria-label') !== wantMoAria) {
             morandiBtn.setAttribute('aria-label', wantMoAria);
+          }
+        }
+        if (meadowBtn) {
+          const wantMdAria = uiStr.themeTooltips.meadow;
+          if (meadowBtn.getAttribute('aria-label') !== wantMdAria) {
+            meadowBtn.setAttribute('aria-label', wantMdAria);
+          }
+        }
+        if (forestNightBtn) {
+          const wantFnAria = uiStr.themeTooltips.forestNight;
+          if (forestNightBtn.getAttribute('aria-label') !== wantFnAria) {
+            forestNightBtn.setAttribute('aria-label', wantFnAria);
           }
         }
         if (bookBtn) {
@@ -3022,8 +3140,8 @@
       const isFollowSystem = isThemeBtnPressed(sysBtn);
       const isDarkNow = isCurrentThemeModeDark();
 
-      if (kind === PRESETS.MORANDI) {
-        setRuntimeLightPreset(PRESETS.MORANDI, true);
+      if (kind === PRESETS.MORANDI || kind === PRESETS.MEADOW) {
+        setRuntimeLightPreset(kind, true);
         const liveLightBtn = group.querySelector('button[data-ag-native-theme-slot="light"]');
         const sunPressed = isThemeBtnPressed(liveLightBtn);
         if (liveLightBtn && !sunPressed && !(isFollowSystem && !isDarkNow)) {
@@ -3034,11 +3152,11 @@
             window.__ag_internal_sun_click = false;
           }
         }
-      } else if (kind === DARK_PRESETS.CLAUDE_WARM) {
+      } else if (kind === DARK_PRESETS.CLAUDE_WARM || kind === DARK_PRESETS.FOREST_NIGHT) {
         if (document.documentElement.getAttribute('data-ag-preset') === PRESETS.NATIVE) {
           setRuntimeLightPreset(window.__ag_last_non_native_light || PRESETS.MORANDI, true);
         }
-        setRuntimeDarkPreset(DARK_PRESETS.CLAUDE_WARM, true);
+        setRuntimeDarkPreset(kind, true);
         const liveDarkBtn = group.querySelector('button[data-ag-native-theme-slot="dark"]');
         const moonPressed = isThemeBtnPressed(liveDarkBtn);
         if (liveDarkBtn && !moonPressed && !(isFollowSystem && isDarkNow)) {
@@ -3255,7 +3373,107 @@
         group.appendChild(morandiBtn);
       }
 
-      // 第 4 格：书卷「暖纸深色」按钮
+      // 第 4 格：「草墨石砚（meadow）」浅色独立皮肤按钮（单叶新芽线性图标）
+      let meadowBtn = group.querySelector('button[data-ag-meadow-btn="1"]');
+      if (!meadowBtn) {
+        meadowBtn = document.createElement('button');
+        meadowBtn.type = 'button';
+        meadowBtn.setAttribute('data-ag-meadow-btn', '1');
+        meadowBtn.setAttribute('aria-label', getSelfUiStrings().themeTooltips.meadow);
+        meadowBtn.setAttribute('aria-pressed', 'false');
+        meadowBtn.className = lightBtn.className;
+
+        const mdSpan = document.createElement('span');
+        mdSpan.className = 'shrink-0 flex items-center';
+        const mdSvg = document.createElementNS(svgNS, 'svg');
+        mdSvg.setAttribute('xmlns', svgNS);
+        mdSvg.setAttribute('width', '16');
+        mdSvg.setAttribute('height', '16');
+        mdSvg.setAttribute('viewBox', '0 0 24 24');
+        mdSvg.setAttribute('fill', 'none');
+        mdSvg.setAttribute('aria-hidden', 'true');
+        const leafPath = document.createElementNS(svgNS, 'path');
+        leafPath.setAttribute('d', MEADOW_LEAF_OUTLINE_PATH);
+        leafPath.setAttribute('stroke', 'currentColor');
+        leafPath.setAttribute('stroke-width', '1.9');
+        leafPath.setAttribute('stroke-linecap', 'round');
+        leafPath.setAttribute('stroke-linejoin', 'round');
+        const veinPath = document.createElementNS(svgNS, 'path');
+        veinPath.setAttribute('d', MEADOW_LEAF_VEIN_PATH);
+        veinPath.setAttribute('stroke', 'currentColor');
+        veinPath.setAttribute('stroke-width', '1.9');
+        veinPath.setAttribute('stroke-linecap', 'round');
+        mdSvg.appendChild(leafPath);
+        mdSvg.appendChild(veinPath);
+        mdSpan.appendChild(mdSvg);
+        meadowBtn.appendChild(mdSpan);
+
+        meadowBtn.addEventListener('mouseenter', () => {
+          scheduleThemeBtnTooltip(meadowBtn, getSelfUiStrings().themeTooltips.meadow, false);
+        });
+        meadowBtn.addEventListener('mouseleave', hideThemeBtnTooltip);
+        meadowBtn.addEventListener('focus', () => {
+          scheduleThemeBtnTooltip(meadowBtn, getSelfUiStrings().themeTooltips.meadow, false);
+        });
+        meadowBtn.addEventListener('blur', hideThemeBtnTooltip);
+        meadowBtn.addEventListener('click', (ev) => {
+          window.__ag_handle_custom_theme_btn_click?.(ev, group, PRESETS.MEADOW);
+        });
+
+        group.appendChild(meadowBtn);
+      }
+
+      // 第 5 格：「幽林深色（forest-night）」深色独立皮肤按钮（双层松林线性图标）
+      let forestNightBtn = group.querySelector('button[data-ag-forest-night-btn="1"]');
+      if (!forestNightBtn) {
+        forestNightBtn = document.createElement('button');
+        forestNightBtn.type = 'button';
+        forestNightBtn.setAttribute('data-ag-forest-night-btn', '1');
+        forestNightBtn.setAttribute('aria-label', getSelfUiStrings().themeTooltips.forestNight);
+        forestNightBtn.setAttribute('aria-pressed', 'false');
+        forestNightBtn.className = lightBtn.className;
+
+        const fnSpan = document.createElement('span');
+        fnSpan.className = 'shrink-0 flex items-center';
+        const fnSvg = document.createElementNS(svgNS, 'svg');
+        fnSvg.setAttribute('xmlns', svgNS);
+        fnSvg.setAttribute('width', '16');
+        fnSvg.setAttribute('height', '16');
+        fnSvg.setAttribute('viewBox', '0 0 24 24');
+        fnSvg.setAttribute('fill', 'none');
+        fnSvg.setAttribute('aria-hidden', 'true');
+        const crownPath = document.createElementNS(svgNS, 'path');
+        crownPath.setAttribute('d', FOREST_PINE_CROWN_PATH);
+        crownPath.setAttribute('stroke', 'currentColor');
+        crownPath.setAttribute('stroke-width', '1.85');
+        crownPath.setAttribute('stroke-linecap', 'round');
+        crownPath.setAttribute('stroke-linejoin', 'round');
+        const trunkPath = document.createElementNS(svgNS, 'path');
+        trunkPath.setAttribute('d', FOREST_PINE_TRUNK_PATH);
+        trunkPath.setAttribute('stroke', 'currentColor');
+        trunkPath.setAttribute('stroke-width', '1.85');
+        trunkPath.setAttribute('stroke-linecap', 'round');
+        fnSvg.appendChild(crownPath);
+        fnSvg.appendChild(trunkPath);
+        fnSpan.appendChild(fnSvg);
+        forestNightBtn.appendChild(fnSpan);
+
+        forestNightBtn.addEventListener('mouseenter', () => {
+          scheduleThemeBtnTooltip(forestNightBtn, getSelfUiStrings().themeTooltips.forestNight, false);
+        });
+        forestNightBtn.addEventListener('mouseleave', hideThemeBtnTooltip);
+        forestNightBtn.addEventListener('focus', () => {
+          scheduleThemeBtnTooltip(forestNightBtn, getSelfUiStrings().themeTooltips.forestNight, false);
+        });
+        forestNightBtn.addEventListener('blur', hideThemeBtnTooltip);
+        forestNightBtn.addEventListener('click', (ev) => {
+          window.__ag_handle_custom_theme_btn_click?.(ev, group, DARK_PRESETS.FOREST_NIGHT);
+        });
+
+        group.appendChild(forestNightBtn);
+      }
+
+      // 第 6 格：书卷「暖纸深色」按钮
       let bookBtn = group.querySelector('button[data-ag-warm-night-btn="1"]');
       if (!bookBtn) {
         bookBtn = document.createElement('button');
@@ -3597,7 +3815,7 @@
       drawer.innerHTML = '';
       drawer.hidden = !(hasActiveUpdate && hasChangelog && updateChangelogOpen);
 
-      const curVer = st.currentVersion || '6.0.7';
+      const curVer = st.currentVersion || '6.1.0';
       const latVer = st.latestVersion || curVer;
       const checkedTime = formatUpdateCheckedTime(st.checkedAt);
       const sizeText = formatUpdateBundleBytes(st.bundleBytes);

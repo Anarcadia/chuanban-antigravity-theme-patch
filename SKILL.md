@@ -1,18 +1,18 @@
 ---
 name: chuanban-antigravity-theme-patch
-description: 船板的 Antigravity 2.0 主题、字体与汉化补丁（v6.0.7 · 适配 Antigravity 2.36.0+ / 2.35.x / 2.34.0+ macOS / Windows / Linux 单图标 M1+M2 零子进程空闲短路启动接力与 OS 分层参数/代理保留 + 双镜像低频更新检测与外观面板一键事务性原地热升级/失败自动回滚 + Windows TimeTrigger 5 分钟全时段保活 + 一键自动直链字体下载/ZIP 解压与 Windows UTF-16 注册表写入 + 全新默认「莫兰迪古典矿物 (morandi)」冷暖互补配色体系与烟岚石青单层合并输入框 + 外观面板五段式主题秒切 `[ A 原版配色 | ✳️ Absolutely！ | MO 莫兰迪色 | 📖 暖纸深色 | 🌙 深色 ]` 与独立「跟随系统」日夜配对开关 + 外观 `[ EN | 中文 ]` 一键零重刷语言切换 + UI 西文 Google Sans Flex 可变字体引擎 × 中文更纱黑体映射 + 对话正文 Anthropic Serif 衬线 + 2,371 条零冲突词典 + Swarm 1.5s 轮询零闪烁翻译护盾 + 分屏/支线提问(/btw)/子Agent侧栏独立实时指标胶囊 + 系统设置「本地扩展 → Token 统计」磁盘持久化毫秒级分析面板）。采用「core/ 只读内核 + user/ 永不覆盖改装层 + install.mjs CLI」，支持 Agent 一键部署、2.5 秒热重载定制与 --safe-mode 沙箱排障。当用户提到“安装船板 Antigravity 主题”、“升级/修复 Antigravity 汉化与字体”、“定制 Antigravity 界面样式或汉化词条”时触发。
+description: 船板的 Antigravity 2.0 主题、字体与汉化补丁（v6.1.0 · 适配 Antigravity 2.36.0+ / 2.35.x / 2.34.0+ macOS / Windows / Linux 单图标 M1+M2 零子进程空闲短路启动接力与 OS 分层参数/代理保留 + 双镜像低频更新检测与外观面板一键事务性原地热升级/失败自动回滚 + Windows TimeTrigger 5 分钟全时段保活 + 一键自动直链字体下载/ZIP 解压与 Windows UTF-16 注册表写入 + 默认「莫兰迪古典矿物 (morandi)」冷暖互补色系 + 全新「草墨石砚 (meadow)」细磨灰石微肌理无衬线浅色皮肤与「幽林深色 (forest-night)」现代扁平草绿夜间皮肤 + 外观面板七段式主题秒切 `[ A 原版配色 | ✳️ Absolutely！ | MO 莫兰迪色 | 🌱 草墨石砚 | 🌲 幽林深色 | 📖 暖纸深色 | 🌙 深色 ]` 与独立「跟随系统」日夜配对开关 + 外观 `[ EN | 中文 ]` 一键零重刷语言切换 + UI 西文 Google Sans Flex 可变字体引擎 × 中文更纱黑体映射 + 对话正文 Anthropic Serif 衬线 / Google Sans Flex 无衬线随皮肤自动切换 + 2,371 条零冲突词典 + Swarm 1.5s 轮询零闪烁翻译护盾 + 分屏/支线提问(/btw)/子Agent侧栏独立实时指标胶囊 + 系统设置「本地扩展 → Token 统计」磁盘持久化毫秒级分析面板）。采用「core/ 只读内核 + user/ 永不覆盖改装层 + install.mjs CLI」，支持 Agent 一键部署、2.5 秒热重载定制与 --safe-mode 沙箱排障。当用户提到“安装船板 Antigravity 主题”、“升级/修复 Antigravity 汉化与字体”、“定制 Antigravity 界面样式或汉化词条”时触发。
 ---
 
-# 船板的 Antigravity 主题、字体与汉化补丁（v6.0.7 · AI Agent 部署与改装契约）
+# 船板的 Antigravity 主题、字体与汉化补丁（v6.1.0 · AI Agent 部署与改装契约）
 
 > **核心摘要（致执行端 AI Agent）**：
 > - **功能边界**：纯运行时本地回环 CDP 注入（不改 `.asar`、不破系统签名、零第三方 npm 依赖），适配 Google Antigravity **`2.36.0+` / `2.35.x` / `2.34.0+`**：
->   - **五段式主题、跟随系统开关、双语热切换与一键热升级**：默认启用 **`"morandi"`（莫兰迪古典矿物：暖宣纸底 × 烟岚石青单层 `2px` 输入框与按钮）**；在「系统设置 → 外观界面」嵌入 **`[ A 原版配色 | ✳️ Absolutely！ | MO 莫兰迪色 | 📖 暖纸深色 | 🌙 深色 ]`** 五段式切换（`A` 原版配色 `<1ms` 零开销回退官方配色与原版字体）、独立 **「跟随系统」** 日夜配对开关（保留浅色 `preset` 与深色 `darkPreset` 配对，点击相反极性预设即时预览并自动退出跟随）、独立 **`[ EN | 中文 ]`** 二元语言切换（`EN` 态观察器零开销休眠）及底部 **「主题补丁版本 / 立即热升级」** 行（支持 CLI `node install.mjs upgrade` 两阶段实机验活与失败自动回滚，绝不强杀重启客户端），自动持久化至 `user/config.json` 并同步 Windows 原生标题栏（含 `--custom-window-controls` 高对比自绘控制键）与 `Swarm` 子帧；
->   - **四层排版与双层遥测**：UI 西文直连官方 `Google Sans Flex` 可变字体（`#ag-font-faces` 常驻隔离防切换缺字）× 中文 `AgSarasaUI` 更纱黑体字重桥接；对话正文采用 `Anthropic Serif` + `Sarasa Mono Slab SC` 衬线；代码与 `.inline-pill[data-uri]` 文件胶囊采用 `Anthropic Mono` 等宽；输入框采用打字机粗衬线配 `2px` 单层合并边框（完整适配 `2.36.0` 最大化副栏悬浮胶囊）；内置 `2,371` 条零冲突汉化（含 `/` 斜杠命令描述与 Swarm 面板 `1.5s` 轮询零闪烁实例级护盾）、多路分屏/`/btw`/子 Agent 侧栏独立 SQLite 实时指标胶囊（`260ms` 悬浮意图防误触 + Remote SSH 无本地库自动隐身），以及「系统设置 → 本地扩展 → Token 统计」全量多维归因面板（支持 `modules.tokenAnalytics: false` 动态裁剪 ~100 KB 载荷）。
+>   - **七段式主题、跟随系统开关、双语热切换与一键热升级**：默认启用 **`"morandi"`（莫兰迪古典矿物：暖宣纸底 × 烟岚石青单层 `2px` 输入框与按钮）**，并新增现代扁平草木双皮肤 **`"meadow"`（草墨石砚：潜意识级细磨石灰石画布 × 石砚青灰外框 × 森草绿 `1px` 扁平输入框与无衬线正文，macOS 开启活字润墨、Windows 严格零晕墨清脆渲染）** 与 **`"forest-night"`（幽林深色：暖松炭黑 × 翠草绿扁平夜间模式，Windows 严格零晕墨）**；在「系统设置 → 外观界面」嵌入 **`[ A 原版配色 | ✳️ Absolutely！ | MO 莫兰迪色 | 🌱 草墨石砚 | 🌲 幽林深色 | 📖 暖纸深色 | 🌙 深色 ]`** 七段式切换（`A` 原版配色 `<1ms` 零开销回退官方配色与原版字体）、独立 **「跟随系统」** 日夜配对开关（保留浅色 `preset` 与深色 `darkPreset` 任意自由配对，点击相反极性预设即时预览并自动退出跟随）、独立 **`[ EN | 中文 ]`** 二元语言切换（`EN` 态观察器零开销休眠）及底部 **「主题补丁版本 / 立即热升级」** 行（支持 CLI `node install.mjs upgrade` 两阶段实机验活与失败自动回滚，绝不强杀重启客户端），自动持久化至 `user/config.json` 并同步 Windows 原生标题栏（含 `--custom-window-controls` 高对比自绘控制键）与 `Swarm` 子帧；
+>   - **四层排版与双层遥测**：UI 西文直连官方 `Google Sans Flex` 可变字体（`#ag-font-faces` 常驻隔离防切换缺字）× 中文 `AgSarasaUI` 更纱黑体字重桥接；对话正文在书卷系皮肤下采用 `Anthropic Serif` + `Sarasa Mono Slab SC` 衬线，在 `草墨石砚` / `幽林深色` 下自动切换为 `Google Sans Flex`（释放 `wdth: 100` 舒展轴与 `slnt: -10` 斜体轴）+ 更纱黑体现代无衬线；代码与 `.inline-pill[data-uri]` 文件胶囊采用 `Anthropic Mono` 等宽；输入框采用单层合并边框（完整适配 `2.36.0` 最大化副栏悬浮胶囊）；内置 `2,371` 条零冲突汉化（含 `/` 斜杠命令描述与 Swarm 面板 `1.5s` 轮询零闪烁实例级护盾）、多路分屏/`/btw`/子 Agent 侧栏独立 SQLite 实时指标胶囊（`260ms` 悬浮意图防误触 + Remote SSH 无本地库自动隐身），以及「系统设置 → 本地扩展 → Token 统计」全量多维归因面板（支持 `modules.tokenAnalytics: false` 动态裁剪 ~100 KB 载荷）。
 > - **真注入肉眼验真三特征（防 `2.33.0` 原生 `Google Sans Flex` 视觉假象）**：
->   1. 对话正文与 Markdown 为 `Anthropic Serif` 衬线体（`A` 原版配色除外）；
->   2. 主输入框为单层 `2px` 合并粗线（`MO` 下为烟岚石青 `#A3B5BA → #3D6470`，`Absolutely！` 下为暖橙火漆 `#DFAC98 → #A64229`）；
->   3. 输入框底栏挂载实时指标胶囊（`.ag-live-metrics-pill`），外观面板显示五段式主题与 `界面语言 [ EN | 中文 ]` 行。
+>   1. 对话正文在 `MO` / `Absolutely！` / `暖纸深色` / `深色` 下为 `Anthropic Serif` 衬线体，在 `🌱 草墨石砚` / `🌲 幽林深色` 下为现代无衬线配草木绿点缀（`A` 原版配色恢复原生外观）；
+>   2. 主输入框为单层合并边框（`MO` 下为 `2px` 烟岚石青 `#A3B5BA → #3D6470`，`Absolutely！` 下为 `2px` 暖橙火漆 `#DFAC98 → #A64229`，`草墨石砚` 下为 `1px` 细磨森草绿 `#CBD4CB → #386B4B`）；
+>   3. 输入框底栏挂载实时指标胶囊（`.ag-live-metrics-pill`），外观面板显示七段式主题与 `界面语言 [ EN | 中文 ]` 行。
 > - **两条执行红线**：
 >   1. **严禁从头手写或篡改 `core/` 内核**：全部样式、词典、DOM 引擎与守护进程已预封装在 `core/`（受 `core/manifest.json` SHA-256 校验保护），直接通过 `node install.mjs` 部署；
 >   2. **所有个性化定制仅在 `user/` 层修改**：`user/` 目录升级时永不覆盖，保存后守护进程在 `2.5s` 内自动检测 `mtimeMs` 热重载生效。
@@ -49,7 +49,7 @@ description: 船板的 Antigravity 2.0 主题、字体与汉化补丁（v6.0.7 �
 
 > **多版本环境提示**：若用户电脑装有 `nvm` / `fnm` / `volta` / Homebrew Node，请优先选用 **`Node.js >= 22.13.0`** 执行 `node install.mjs install`（安装器会将当前 `process.execPath` 绝对路径固化写入系统自启服务）。
 
-| 运行时版本 | 五段式主题 + 跟随系统 / 单线矿物框 / 四层字体 | 2,228 条汉化 + `[ EN \| 中文 ]` 零重刷切换 | 死锁/冷启动自愈 + M2 端口与参数接力 + 缩放修复 | SQLite 实时指标胶囊 + 设置「Token 统计」 (`node:sqlite`) |
+| 运行时版本 | 七段式主题 + 跟随系统 / 单线边框 / 四层字体 | 2,371 条汉化 + `[ EN \| 中文 ]` 零重刷切换 | 死锁/冷启动自愈 + M2 端口与参数接力 + 缩放修复 | SQLite 实时指标胶囊 + 设置「Token 统计」 (`node:sqlite`) |
 | :--- | :---: | :---: | :---: | :---: |
 | **Node.js `>= 22.13.0`**（推荐） | ✅ 全量启用 | ✅ 全量启用 | ✅ 全量启用 | ✅ **自动启用**（实时胶囊 + 全量多维 Token 归因统计） |
 | **Node.js `22.0.0 ~ 22.12.x`** | ✅ 全量启用 | ✅ 全量启用 | ✅ 全量启用 | ⚠️ 自动优雅关闭（后台零报错） |
@@ -69,10 +69,10 @@ chuanban-antigravity-theme-patch/
 ├── CHANGELOG.md                # 版本演进记录
 ├── LICENSE                     # MIT 开源许可协议
 ├── core/                       # 【只读内核】随版本升级原子替换，Agent 严禁直接修改
-│   ├── manifest.json           # 版本号（6.0.7）、三端地址与 core/* 四件套 SHA-256 校验清单
+│   ├── manifest.json           # 版本号（6.1.0）、三端地址与 core/* 四件套 SHA-256 校验清单
 │   ├── daemon.mjs              # Node CDP 守护进程（宿主独占指纹门禁、2.33.0+~2.36.0+ M2 冷启动自动接力重启与 OS 分层启动参数/Windows 系统代理保留、双镜像低频只读更新检测与一键热升级桥接、Windows .lnk 限深更新自愈、NTFS 原子写盘退避防锁、SingletonLock/lockfile 全平台零子进程空闲短路、SQLite O(1) 增量胶囊与全量 Token 统计归因、WSL2 双轨只读读取、Swarm 子帧同步与载荷裁剪、2.5s 热重载感知）
-│   ├── runtime.js              # 浏览器端注入引擎（五段式外观主题 +「跟随系统」日夜配对开关 + `[ EN | 中文 ]` 二元语言零重刷切换 + 补丁版本行与一键热升级、#ag-font-faces 常驻字库防缺字、Windows TitleBarOverlay 零过渡污染同步、Swarm 子帧 1.5s 轮询零闪烁护盾与原版底色还原、O(1) 观察器短路、指标胶囊 260ms 悬浮意图与 rAF 合批）
-│   ├── theme.css               # 样式表（莫兰迪古典矿物默认视觉、烟岚石青/火漆单层 `2px` 合并输入框与 2.36.0 悬浮胶囊同心圆角适配、`Absolutely！` 与双深色预设、2.35.0+ 自绘窗口控制键高对比适配、指标胶囊与 Token 统计 `@container` 自适应面板）
+│   ├── runtime.js              # 浏览器端注入引擎（七段式外观主题 +「跟随系统」日夜配对开关 + `[ EN | 中文 ]` 二元语言零重刷切换 + 补丁版本行与一键热升级、#ag-font-faces 常驻字库防缺字、Windows TitleBarOverlay 零过渡污染同步、Swarm 子帧 1.5s 轮询零闪烁护盾与原版底色还原、O(1) 观察器短路、指标胶囊 260ms 悬浮意图与 rAF 合批）
+│   ├── theme.css               # 样式表（莫兰迪古典矿物默认视觉、草墨石砚无损细磨石纹无衬线浅色皮肤与幽林深色草木夜间皮肤、烟岚石青/火漆/森草绿单层合并输入框与 2.36.0 悬浮胶囊同心圆角适配、`Absolutely！` 与暖纸/深海深色预设、2.35.0+ 自绘窗口控制键高对比适配、指标胶囊与 Token 统计 `@container` 自适应面板）
 │   └── i18n.json               # 2,371 条零冲突标准 JSON 基准词典（兼容 PowerShell 5.1 ConvertFrom-Json，挂载至 Object.create(null)）
 └── user/                       # 【用户改装层】升级 100% 保留，守护进程每 2.5s 检测 mtimeMs 热重载注入
     ├── config.json             # 开关配置（enabled / channel / preset / darkPreset / contextLimit / contextLimitOverride / modules / themeVars / darkThemeVars）
@@ -153,7 +153,7 @@ node install.mjs install --sync-user
 ```bash
 node install.mjs verify
 ```
-当输出 `"ok": true`、`"bodyReady": true`、`"hasStyle": true`、`"dictCount": 2228` 且 `fonts.allRequiredInstalled: true`（在源码仓库目录运行 `doctor` 时还会返回 `sourceSync.inSync: true` 校验仓库与已安装内核是否一致）时，代表主题、字体、汉化与指标胶囊已全部实机生效。
+当输出 `"ok": true`、`"bodyReady": true`、`"hasStyle": true`、`"dictCount": 2371` 且 `fonts.allRequiredInstalled: true`（在源码仓库目录运行 `doctor` 时还会返回 `sourceSync.inSync: true` 校验仓库与已安装内核是否一致）时，代表主题、字体、汉化与指标胶囊已全部实机生效。
 
 ---
 
@@ -189,8 +189,8 @@ node install.mjs verify
   }
 }
 ```
-- **`preset`（浅色与原版预设）**：`"morandi"`（默认莫兰迪古典矿物）、`"absolutely"`（致敬 Claude 书卷暖白）、`"native"`（官方原版配色与原版字体）、`"claude-desktop-purewhite"`（莫兰迪素绢浅雾）、`"vintage-deep"`（莫兰迪敦煌古壁）；旧版 `"high-contrast"` 升级时自动平滑映射至 `"morandi"`。
-- **`darkPreset`（黑夜配色预设）**：默认 `"onyx"`（深海石青碳黑）；设为 `"claude-warm"`（或在外观面板点击 **📖 书卷按钮**）启用暖纸深色并自动持久化。
+- **`preset`（浅色与原版预设）**：`"morandi"`（默认莫兰迪古典矿物）、`"meadow"`（**草墨石砚**：潜意识级细磨灰石画布 × 石砚青灰外框 × 森草绿现代扁平配无衬线正文，macOS 开启活字润墨、Windows 严格零晕墨）、`"absolutely"`（致敬 Claude 书卷暖白）、`"native"`（官方原版配色与原版字体）、`"claude-desktop-purewhite"`（莫兰迪素绢浅雾）、`"vintage-deep"`（莫兰迪敦煌古壁）；旧版 `"high-contrast"` 升级时自动平滑映射至 `"morandi"`。
+- **`darkPreset`（黑夜配色预设）**：默认 `"onyx"`（深海石青碳黑）；设为 `"forest-night"`（**幽林深色**：暖松炭黑 × 翠草绿现代扁平无衬线夜间，外观面板 **🌲 松树按钮**）或 `"claude-warm"`（**暖纸深色**：书卷暖炭夜间，外观面板 **📖 书卷按钮**）并自动持久化。
 - **`modules.i18n`（界面汉化开关）**：默认 `true`（也可直接在外观界面点击 **`[ EN | 中文 ]`** 一键切换并自动落盘，无需重新编译注入包）。
 - **`contextLimit` / `contextLimitOverride`**：默认从会话元数据动态识别真实模型上下文窗口（`256k` / `512k` / `840k` / `1M+`），缺失时回退 `contextLimit`；如需全局强制锁定固定上限，可设正整数 `"contextLimitOverride": 1000000`。
 - **`modules`**：支持独立开关各模块（如设 `"tokenAnalytics": false` 关闭设置弹窗「Token 统计」Tab 并动态剥离 ~100 KB CSS/JS 注入载荷，设 `"contextMenu": false` 关闭主题化右键菜单并还原原生系统菜单，设 `"updateCheck": false` 关闭每 24 小时一次的后台只读更新检测、外观面板版本行与一键「立即热升级」入口，设 `"cdpAutoRelaunch": false` 关闭冷启动自动补参重拉，或将顶层 `"enabled": false` 保存以在 `2.5s` 内无损卸载全部样式并还原英文界面）。

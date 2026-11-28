@@ -4,7 +4,7 @@
  *
  * 架构特性（v6.0.3）：
  * 1. 动态 Node 分级：
- *    - Node >= 22.0：完整启用昼夜双模式独立主题（暖纸浅色三预设 + 深色 onyx / claude-warm 双预设 + 外观「跟随系统」开关）、Google Sans Flex 原生西文引擎 × 更纱黑体 UI 精密字重桥接 + Anthropic Serif 正文、输入框三态、2226条母语级汉化（含原生右键菜单跨隔离世界零 GC 汉化）、宿主独占指纹门禁、死锁与冷启动兜底包自愈及 2.33.0+ ~ 2.35.2+ CDP Opt-in 自动接力（M2 · SingletonLock/lockfile 零子进程空闲短路 + OS 分层启动参数与代理保留）。
+ *    - Node >= 22.0：完整启用昼夜双模式独立主题（浅色四预设 morandi / absolutely / meadow 等 + 深色 onyx / claude-warm / forest-night 三预设 + 外观「跟随系统」开关）、Google Sans Flex 原生西文引擎 × 更纱黑体 UI 精密字重桥接 + Anthropic Serif / 无衬线正文、输入框三态、2226条母语级汉化（含原生右键菜单跨隔离世界零 GC 汉化）、宿主独占指纹门禁、死锁与冷启动兜底包自愈及 2.33.0+ ~ 2.35.2+ CDP Opt-in 自动接力（M2 · SingletonLock/lockfile 零子进程空闲短路 + OS 分层启动参数与代理保留）。
  *    - Node >= 22.13：动态 `await import('node:sqlite')` 解锁底部实时会话指标胶囊（O(1) 增量尾行解析 + WSL2 双轨只读读取）；低版本优雅降级绝不崩溃。
  * 2. 模块化与热重载：
  *    - 周期性检测 `user/config.json`、`user/custom.css`、`user/i18n.override.json`、`user/custom.js` 的 mtime，
@@ -488,7 +488,7 @@ function resolveActiveChannelEndpoints(channelMode = 'auto', userCfg = {}) {
 // ============================================================================
 // 2. 动态构建注入载荷（支持 core/ + user/ 实时合并与热更新签名）
 // ============================================================================
-const BASE_VERSION = '20261128-v6.0.7';
+const BASE_VERSION = '20261128-v6.1.0';
 let cachedBundleSig = '';
 let cachedInjectScript = '';
 let cachedIframeInjectScript = '';
@@ -769,7 +769,7 @@ function getInstalledCurrentVersion() {
     return manifest.version.trim().replace(/^v/i, '');
   }
   const m = String(BASE_VERSION || '').match(/(\d+\.\d+\.\d+)/);
-  return m ? m[1] : '6.0.7';
+  return m ? m[1] : '6.1.0';
 }
 
 function formatCliPathArg(filePath) {
@@ -1485,10 +1485,17 @@ const HOST_CONFIG_PATH = path.join(os.homedir(), '.gemini', 'config', 'config.js
 let cachedHostCfgFileSig = '';
 let cachedHostThemeMode = null;
 
+function isValidDarkPresetName(val) {
+  return val === 'claude-warm' || val === 'onyx' || val === 'forest-night';
+}
+
 function normalizeDarkPresetValue(rawVal) {
   const s = String(rawVal || '').trim().toLowerCase();
   if (s === 'claude-warm' || s === 'warm-paper-night' || s === 'claude-night' || s === '暖炭') {
     return 'claude-warm';
+  }
+  if (s === 'forest-night' || s === 'qoder-dark' || s === 'forest-dark' || s === '幽林深色') {
+    return 'forest-night';
   }
   return 'onyx';
 }
@@ -1498,6 +1505,16 @@ function normalizeLightPresetValue(rawVal) {
   if (s === 'native' || s === 'stock' || s === 'original' || s === '原版配色') return 'native';
   if (s === 'absolutely' || s === 'claude-orange' || s === 'absolutely!' || s === 'absolutely！') {
     return 'absolutely';
+  }
+  if (
+    s === 'meadow' ||
+    s === 'qoder' ||
+    s === 'qoder-light' ||
+    s === 'grass-green' ||
+    s === '草墨石砚' ||
+    s === '清野草绿'
+  ) {
+    return 'meadow';
   }
   if (s === 'claude-desktop-purewhite' || s === 'claude-desktop-official' || s === 'claudedesktop 净白') {
     return 'claude-desktop-purewhite';
@@ -7788,7 +7805,7 @@ function attachTarget(target, endpoint) {
         const parentDarkPreset = resolveParentDarkPreset(target, endpoint) || '';
         const parentLightPreset = resolveParentLightPreset(target, endpoint) || '';
         const modeVal = parentMode === 'dark' || parentMode === 'light' ? parentMode : null;
-        const darkVal = parentDarkPreset === 'claude-warm' || parentDarkPreset === 'onyx' ? parentDarkPreset : null;
+        const darkVal = isValidDarkPresetName(parentDarkPreset) ? parentDarkPreset : null;
         const lightVal = parentLightPreset ? normalizeLightPresetValue(parentLightPreset) : null;
         return {
           script: `window.__ag_host_theme_mode=${modeVal ? JSON.stringify(modeVal) : 'null'};\nwindow.__ag_host_dark_preset=${darkVal ? JSON.stringify(darkVal) : 'null'};\nwindow.__ag_host_light_preset=${lightVal ? JSON.stringify(lightVal) : 'null'};\nwindow.__ag_host_ui_lang=${JSON.stringify(uiLangVal)};\n${cachedIframeInjectScript}`,
@@ -8098,7 +8115,7 @@ function attachTarget(target, endpoint) {
                   syncThemeToChildIframes(target.id, checkVal.mode);
                 }
               }
-              if (checkVal.darkPreset === 'claude-warm' || checkVal.darkPreset === 'onyx') {
+              if (isValidDarkPresetName(checkVal.darkPreset)) {
                 const prevDarkPreset = targetDarkPresets.get(target.id);
                 targetDarkPresets.set(target.id, checkVal.darkPreset);
                 if (prevDarkPreset !== checkVal.darkPreset) {
@@ -8180,7 +8197,7 @@ function attachTarget(target, endpoint) {
                 syncThemeToChildIframes(target.id, state.mode);
               }
             }
-            if (state.darkPreset === 'claude-warm' || state.darkPreset === 'onyx') {
+            if (isValidDarkPresetName(state.darkPreset)) {
               const prevDarkPreset = targetDarkPresets.get(target.id);
               targetDarkPresets.set(target.id, state.darkPreset);
               if (prevDarkPreset !== state.darkPreset) {
