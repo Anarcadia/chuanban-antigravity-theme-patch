@@ -31,35 +31,42 @@
 
 ---
 
-## 🎨 配色与主题体系
+## 🎨 配色体系与实机预览
 
-在「系统设置 → 外观界面」可直接通过七段式胶囊 **`[ A | ✳️ | MO | 🌱 | 🌲 | 📖 | 🌙 ]`** 切换全局风格，并可开启独立的 **「跟随系统」** 开关自动按系统昼夜切换你偏好的浅色/深色预设配对（点击相反极性预设可即时预览并自动退出跟随）：
+在「系统设置 → 外观界面」可直接通过七段式胶囊 **`[ A | ✳️ | MO | 🌱 | 🌲 | 📖 | 🌙 ]`** 秒切全局风格，并可开启独立的 **「跟随系统」** 开关自动按系统昼夜自由组合浅色/深色预设（点击相反极性预设可即时预览并自动退出跟随；点击下方缩略图可查看高清原图）：
 
-| 按钮 | 预设名称 | 风格定位 |
-| :---: | :--- | :--- |
-| **`MO`** *(默认)* | **莫兰迪色** (`morandi`) | **暖底冷器 · 耐看静物感**：暖宣纸浅灰画布搭配亚麻侧栏，输入框与主按钮采用沉稳醒目的烟岚石青单线收口。 |
-| **`🌱`** | **草墨石砚** (`meadow`) | **细磨石砚 · 清爽草木现代风**：极微细磨灰石画布配石砚青灰外框、森草绿 `1px` 扁平输入框与现代无衬线正文（macOS 开启活字润墨，Windows 严格零晕墨保持清脆）。 |
-| **`✳️`** | **Absolutely！** (`absolutely`) | **仿 Claude 经典暖白**：微暖亮白纸面配暖燕麦侧栏，搭配信封火漆暖橙输入框与陶土橙按钮，对比鲜明。 |
-| **`🌲`** | **幽林深色** (`forest-night`) | **暖松炭黑 · 草木扁平夜间**：深林松针炭底配苔藓实色浮层、翠草绿点缀与现代无衬线正文，彻底去除毛玻璃与光污染。 |
-| **`📖`** | **暖纸深色** (`claude-warm`) | **温润书卷夜间**：仿 Claude 暖炭纸底配象牙白字色与陶土暖橙点缀，适合夜间长时间沉浸阅读与写作。 |
-| **`🌙`** | **深色** (`onyx`) | **深海冷碳夜间**：深海青黛暗底配石青点缀，冷静克制，适合代码审阅与暗光环境。 |
-| **`A`** | **原版配色** (`native`) | **官方原貌直通**：一键旁路补丁配色与自定义字体，回归客户端原生白/黑外观，同时保留汉化与统计组件可用。 |
-
----
-
-## 🖼️ 实机效果
-
-### 1. 默认标准主界面：莫兰迪风格（`MO`）与上下文信息胶囊详情卡
-![默认莫兰迪古典矿物主界面与遥测详情卡演示](assets/preview-morandi-workbench.png)
-
-### 2. 外观与语言切换面板：七段式皮肤选择 + `[ EN | 中文 ]` 一键双切
-![外观皮肤预设与中英语言切换面板](assets/preview-theme-lang-switcher.png)
-
-### 3. `Absolutely！` 主题演示：仿 Claude 书卷暖白工作台与子 Agent 汉化副栏
-![Absolutely！主题主界面与子 Agent 汉化演示](assets/preview-absolutely-workbench.png)
-
-### 4. 夜间界面与代码审阅视图（支持 `📖 暖纸深色` / `🌙 深色` 切换）
-![黑夜模式与代码审阅视图](assets/preview-dark-workbench.png)
+<table width="100%">
+  <tr>
+    <td width="50%" valign="top">
+      <a href="assets/preview-meadow-workbench.png"><img src="assets/preview-meadow-workbench.png" width="100%" alt="草墨石砚主界面与绿色遥测详情卡演示" /></a>
+      <p><b><code>🌱</code> 草墨石砚</b> (<code>meadow</code>) — <b>细磨石砚 · 清爽草木现代风</b><br/>极微细磨灰石画布配石砚青灰外框、森草绿 <code>1px</code> 扁平输入框与现代无衬线正文（macOS 开启活字润墨，Windows 严格零晕墨保持清脆），胶囊悬停展开全绿色系指标卡。</p>
+    </td>
+    <td width="50%" valign="top">
+      <a href="assets/preview-forest-night-workbench.png"><img src="assets/preview-forest-night-workbench.png" width="100%" alt="幽林深色夜间主界面演示" /></a>
+      <p><b><code>🌲</code> 幽林深色</b> (<code>forest-night</code>) — <b>暖松炭黑 · 草木扁平夜间</b><br/>深林松针炭底配苔藓实色浮层、翠草绿点缀与现代无衬线正文，100% 去除毛玻璃与荧光污染，可与任意浅色预设自由日夜配对。</p>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <a href="assets/preview-morandi-workbench.png"><img src="assets/preview-morandi-workbench.png" width="100%" alt="默认莫兰迪古典矿物主界面与遥测详情卡演示" /></a>
+      <p><b><code>MO</code> 莫兰迪色</b> (<code>morandi</code> · <em>默认</em>) — <b>暖底冷器 · 耐看静物感</b><br/>暖宣纸浅灰画布搭配亚麻侧栏，对话采用书卷衬线体，输入框与主按钮采用沉稳醒目的烟岚石青单线收口，长时间读写温润不刺眼。</p>
+    </td>
+    <td width="50%" valign="top">
+      <a href="assets/preview-absolutely-workbench.png"><img src="assets/preview-absolutely-workbench.png" width="100%" alt="Absolutely！主题主界面与子 Agent 汉化演示" /></a>
+      <p><b><code>✳️</code> Absolutely！</b> (<code>absolutely</code>) — <b>仿 Claude 经典暖白</b><br/>微暖亮白纸面配暖燕麦侧栏，搭配信封火漆暖橙输入框与陶土橙按钮，明快鲜明，完整覆盖分屏与子 Agent 汉化副栏。</p>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <a href="assets/preview-dark-workbench.png"><img src="assets/preview-dark-workbench.png" width="100%" alt="暖纸深色与深色夜间模式及代码审阅视图" /></a>
+      <p><b><code>📖</code> 暖纸深色</b> (<code>claude-warm</code>) / <b><code>🌙</code> 深色</b> (<code>onyx</code>) — <b>经典双夜间模式</b><br/><code>📖</code> 仿 Claude 暖炭纸底配象牙白字色与陶土暖橙点缀，适合夜间沉浸写作；<code>🌙</code> 深海青黛暗底配石青点缀，冷静克制，适合代码 Diff 审阅。</p>
+    </td>
+    <td width="50%" valign="top">
+      <a href="assets/preview-theme-lang-switcher.png"><img src="assets/preview-theme-lang-switcher.png" width="100%" alt="外观皮肤预设与中英语言切换面板" /></a>
+      <p><b><code>A</code> 原版配色</b> (<code>native</code>) &amp; <b>外观双切面板</b> — <b>官方直通与一键双切</b><br/><code>A</code> 键 <code>&lt;1ms</code> 旁路补丁配色与自定义字体回归官方原貌（保留汉化与统计可用）；同面板集成「跟随系统」开关、<code>[ EN | 中文 ]</code> 零重刷双切与一键原地热升级。</p>
+    </td>
+  </tr>
+</table>
 
 ---
 
