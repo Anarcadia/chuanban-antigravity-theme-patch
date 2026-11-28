@@ -2366,5 +2366,8 @@
   "Our servers are experiencing high traffic right now, please try again in a minute.": "当前服务器访问量较高，请一分钟后再试。",
   "Agent execution terminated due to error.": "Agent 因错误已终止执行。",
   "Link copied to clipboard": "链接已复制到剪贴板",
-  "Latest screenshot": "最新截图"
+  "Latest screenshot": "最新截图",
+  "Exit fullscreen": "退出全屏",
+  "Hide non-admin": "隐藏非管理员项",
+  "Refresh gcert Credentials": "刷新 gcert 凭据"
 }

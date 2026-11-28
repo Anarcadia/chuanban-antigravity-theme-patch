@@ -772,6 +772,14 @@ function getInstalledCurrentVersion() {
   return m ? m[1] : '6.0.7';
 }
 
+function formatCliPathArg(filePath) {
+  const s = String(filePath || '');
+  if (process.platform === 'win32') {
+    return `"${s.replace(/\\+$/, (m) => m + m).replace(/"/g, '\\"')}"`;
+  }
+  return `"${s.replace(/(["\\$`])/g, '\\$1')}"`;
+}
+
 function getPublicUpdateStatus() {
   if (!updateCheckState.loaded) {
     readUpdateCacheFromDisk();
@@ -824,7 +832,7 @@ function getPublicUpdateStatus() {
     changelog: updateCheckState.changelog,
     bundleBytes: updateCheckState.bundleBytes,
     releaseUrl: updateCheckState.releaseUrl || UPDATE_OFFICIAL_GH_LATEST_URL,
-    upgradeCommand: `node ${JSON.stringify(path.join(ROOT_DIR, 'install.mjs'))} upgrade`,
+    upgradeCommand: `node ${formatCliPathArg(path.join(ROOT_DIR, 'install.mjs'))} upgrade`,
     checking: updateCheckInFlight,
     upgrading: updateUpgradeInFlight,
     upgradeError: lastUpgradeError || null

@@ -3598,14 +3598,45 @@ function readUpdateCheckCache(targetDir) {
   }
 }
 
+function atomicRenameWithWinRetrySync(tmpPath, destPath) {
+  try {
+    for (let attempt = 0; attempt < 5; attempt++) {
+      try {
+        fs.renameSync(tmpPath, destPath);
+        return;
+      } catch (err) {
+        const retryable =
+          process.platform === 'win32' &&
+          err &&
+          (err.code === 'EPERM' || err.code === 'EBUSY' || err.code === 'EACCES');
+        if (!retryable) throw err;
+        sleepSync(35 * (attempt + 1));
+      }
+    }
+    fs.copyFileSync(tmpPath, destPath);
+  } finally {
+    try {
+      if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath);
+    } catch {}
+  }
+}
+
+function formatCliPathArg(filePath) {
+  const s = String(filePath || '');
+  if (process.platform === 'win32') {
+    return `"${s.replace(/\\+$/, (m) => m + m).replace(/"/g, '\\"')}"`;
+  }
+  return `"${s.replace(/(["\\$`])/g, '\\$1')}"`;
+}
+
 function writeUpdateCheckCache(targetDir, data) {
   const cachePath = getUpdateCheckCachePath(targetDir);
   const cacheDir = path.dirname(cachePath);
   fs.mkdirSync(cacheDir, { recursive: true });
-  const tmpPath = `${cachePath}.tmp-${process.pid}-${Date.now()}`;
+  const tmpPath = `${cachePath}.tmp-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
   try {
     fs.writeFileSync(tmpPath, JSON.stringify(data, null, 2) + '\n', 'utf8');
-    fs.renameSync(tmpPath, cachePath);
+    atomicRenameWithWinRetrySync(tmpPath, cachePath);
   } catch {
     try {
       if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath);
@@ -3674,7 +3705,7 @@ function buildDoctorUpdateSection(targetDir, env = null) {
     checkedAt: cache?.checkedAt || null,
     source: cache?.source || null,
     releaseUrl: cache?.releaseUrl || GITHUB_RELEASES_LATEST_URL,
-    upgradeCommand: `node ${JSON.stringify(path.join(targetDir, 'install.mjs'))} upgrade`
+    upgradeCommand: `node ${formatCliPathArg(path.join(targetDir, 'install.mjs'))} upgrade`
   };
 }
 
@@ -4205,11 +4236,15 @@ function acquireUpgradeLock(targetDir) {
       let released = false;
       const setPhase = (nextPhase) => {
         if (released) return;
+        const tmpLock = `${lockPath}.tmp-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
         try {
-          const tmpLock = `${lockPath}.tmp-${process.pid}-${Date.now()}`;
           fs.writeFileSync(tmpLock, buildPayload(nextPhase), 'utf8');
-          fs.renameSync(tmpLock, lockPath);
-        } catch {}
+          atomicRenameWithWinRetrySync(tmpLock, lockPath);
+        } catch {
+          try {
+            if (fs.existsSync(tmpLock)) fs.unlinkSync(tmpLock);
+          } catch {}
+        }
       };
       const release = () => {
         if (released) return;
@@ -4527,7 +4562,121 @@ async function runUpgrade() {
     }
   };
 
+  const writeLastUpgradeResult = (payload) => {
+    const cacheDir = path.join(targetDir, '.cache');
+    const resultPath = path.join(cacheDir, 'last-upgrade-result.json');
+    const tmpPath = `${resultPath}.tmp-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    try {
+      fs.mkdirSync(cacheDir, { recursive: true });
+      fs.writeFileSync(tmpPath, JSON.stringify(payload, null, 2) + '\n', 'utf8');
+      atomicRenameWithWinRetrySync(tmpPath, resultPath);
+    } catch {
+      try {
+        if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath);
+      } catch {}
+    }
+  };
+
+  let winDaemonStopped = false;
+  const restoreWindowsDaemonIfNeeded = () => {
+    if (!winDaemonStopped || isCustomSandboxTarget || process.platform !== 'win32') return;
+    winDaemonStopped = false;
+    const realDaemon = path.join(targetDir, 'core', 'daemon.mjs');
+    const wrapperDaemon = path.join(os.homedir(), '.gemini', 'antigravity', 'scripts', 'antigravity-font-daemon.mjs');
+    let restartedViaTask = false;
+    try {
+      const r = spawnSync('schtasks', ['/Run', '/TN', 'AntigravityThemeDaemon'], {
+        stdio: 'ignore',
+        windowsHide: true
+      });
+      restartedViaTask = r.status === 0;
+    } catch {}
+    if (!restartedViaTask) {
+      try {
+        const entryScript = fs.existsSync(wrapperDaemon) ? wrapperDaemon : realDaemon;
+        if (fs.existsSync(entryScript)) {
+          const child = spawn(process.execPath, ['--disable-warning=ExperimentalWarning', entryScript], {
+            cwd: os.homedir(),
+            detached: true,
+            stdio: 'ignore',
+            windowsHide: true
+          });
+          child.unref();
+        }
+      } catch {}
+    }
+  };
+
+  const extractHandoffStderrSummary = (rawStderr) => {
+    const text = String(rawStderr || '').trim();
+    if (!text) return '';
+    const lastBrace = text.lastIndexOf('}');
+    if (lastBrace >= 0) {
+      let openPos = text.lastIndexOf('\n{', lastBrace);
+      openPos = openPos >= 0 ? openPos + 1 : text.startsWith('{') ? 0 : -1;
+      if (openPos >= 0) {
+        try {
+          const parsed = JSON.parse(text.slice(openPos, lastBrace + 1));
+          const jsonMsg =
+            (typeof parsed?.error === 'string' && parsed.error.trim()) ||
+            (typeof parsed?.reason === 'string' && parsed.reason.trim()) ||
+            '';
+          if (jsonMsg) return jsonMsg;
+        } catch {}
+      }
+    }
+    const lines = text
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .filter(Boolean);
+    for (let i = lines.length - 1; i >= 0; i--) {
+      if (/^(?:\[ERROR\]|[A-Za-z]*Error(?:\s*\[[A-Z0-9_]+\])?:)/.test(lines[i])) return lines[i];
+    }
+    for (let i = lines.length - 1; i >= 0; i--) {
+      if (
+        !/^at\s+/.test(lines[i]) &&
+        !/^Node\.js\s+v\d/i.test(lines[i]) &&
+        lines[i] !== '^' &&
+        !/^[{}[\],]+$/.test(lines[i])
+      ) {
+        return lines[i];
+      }
+    }
+    return lines[lines.length - 1] || '';
+  };
+
+  let handoffAttempted = false;
   let wrotePostUpgradeCache = false;
+  const rollbackCoreAndInstallScriptIfModified = () => {
+    restoreInstallScriptBackup();
+    if (!handoffAttempted) return true;
+    let rollbackOk = false;
+    try {
+      const postIntegrityNow = verifyCoreIntegrity(targetDir);
+      const installedNow = readInstalledCoreManifest(targetDir)?.version || null;
+      const postManifestSha = fs.existsSync(preUpgradeManifestPath) ? sha256File(preUpgradeManifestPath) : null;
+      const coreWasModified =
+        !postIntegrityNow.ok ||
+        installedNow !== fromVersion ||
+        (preUpgradeManifestSha && postManifestSha !== preUpgradeManifestSha);
+      if (!coreWasModified) return true;
+      lock.setPhase?.('service_handoff');
+      const rbTarget = path.join(targetDir, 'install.mjs');
+      const rbArgs = [rbTarget, 'rollback', '--target-dir', targetDir];
+      if (!isCustomSandboxTarget) {
+        rbArgs.push('--register-service');
+        if (process.platform !== 'win32') {
+          rbArgs.push('--skip-service-restart');
+        }
+      }
+      const rbRes = spawnSync(process.execPath, rbArgs, { encoding: 'utf8', windowsHide: true });
+      rollbackOk = rbRes.status === 0;
+      if (rollbackOk && process.platform === 'win32') {
+        winDaemonStopped = false;
+      }
+    } catch {}
+    return rollbackOk;
+  };
   try {
     fs.mkdirSync(stagingRoot, { recursive: true });
     const downloadAssetSpec = {
@@ -4671,17 +4820,6 @@ async function runUpgrade() {
       process.exit(1);
     }
 
-    const writeLastUpgradeResult = (payload) => {
-      try {
-        const cacheDir = path.join(targetDir, '.cache');
-        fs.mkdirSync(cacheDir, { recursive: true });
-        const resultPath = path.join(cacheDir, 'last-upgrade-result.json');
-        const tmpPath = `${resultPath}.tmp-${process.pid}-${Date.now()}`;
-        fs.writeFileSync(tmpPath, JSON.stringify(payload, null, 2) + '\n', 'utf8');
-        fs.renameSync(tmpPath, resultPath);
-      } catch {}
-    };
-
     let patchEnabledExpected = true;
     try {
       const userCfgPath = path.join(targetDir, 'user', 'config.json');
@@ -4706,43 +4844,13 @@ async function runUpgrade() {
       fs.copyFileSync(currentInstallScript, backupInstallScriptPath);
     }
 
-    let winDaemonStopped = false;
-    const restoreWindowsDaemonIfNeeded = () => {
-      if (!winDaemonStopped || isCustomSandboxTarget || process.platform !== 'win32') return;
-      winDaemonStopped = false;
-      const realDaemon = path.join(targetDir, 'core', 'daemon.mjs');
-      const wrapperDaemon = path.join(os.homedir(), '.gemini', 'antigravity', 'scripts', 'antigravity-font-daemon.mjs');
-      let restartedViaTask = false;
-      try {
-        const r = spawnSync('schtasks', ['/Run', '/TN', 'AntigravityThemeDaemon'], {
-          stdio: 'ignore',
-          windowsHide: true
-        });
-        restartedViaTask = r.status === 0;
-      } catch {}
-      if (!restartedViaTask) {
-        try {
-          const entryScript = fs.existsSync(wrapperDaemon) ? wrapperDaemon : realDaemon;
-          if (fs.existsSync(entryScript)) {
-            const child = spawn(process.execPath, ['--disable-warning=ExperimentalWarning', entryScript], {
-              cwd: os.homedir(),
-              detached: true,
-              stdio: 'ignore',
-              windowsHide: true
-            });
-            child.unref();
-          }
-        } catch {}
-      }
-    };
-
     // 进入本地替换提交阶段：通知守护进程看门狗严禁中途 SIGKILL，同时挂起旧守护进程 2.5s sync 抢注与 Win32 PT5M 保活抢锁
     lock.setPhase?.('commit');
 
     // 仅 Windows 提前停守护进程释放 NTFS 文件锁；macOS(launchd)/Linux(systemd) 依托 upgrade.lock 暂停旧守护重注，待阶段 C 再原子重启服务
     if (!isCustomSandboxTarget && process.platform === 'win32') {
-      stopRunningDaemonProcesses();
       winDaemonStopped = true;
+      stopRunningDaemonProcesses();
     }
 
     // 阶段 A（Bootstrap Handoff）：由暂存区新版 install.mjs 替换 core/ 并执行 --once 单次重注，暂不重启后台服务（防止提前杀死父守护进程）
@@ -4750,6 +4858,7 @@ async function runUpgrade() {
     if (!isCustomSandboxTarget) {
       handoffArgs.push('--register-service', '--skip-service-restart');
     }
+    handoffAttempted = true;
     const handoffRes = spawnSync(process.execPath, handoffArgs, {
       cwd: stagedRoot,
       encoding: 'utf8',
@@ -4757,12 +4866,12 @@ async function runUpgrade() {
       maxBuffer: 10 * 1024 * 1024
     });
 
-    // 阶段 B：校验磁盘 core/ SHA-256 与全部已打开实机宿主页真实注入版本号（兼容 enabled:false 禁用态，杜绝单页漏检与旧 DOM 假阳性）
+    // 阶段 B：校验磁盘 core/ SHA-256 与全部已打开实机宿主页真实注入版本号（仅当阶段 A 正常完成时执行实机验活，防止阶段 A 自身报错被掩盖为版本未推进）
     const postIntegrity = verifyCoreIntegrity(targetDir);
     let postLiveOk = true;
     let postLiveReport = null;
     let postLiveReason = null;
-    if (!isCustomSandboxTarget && preUpgradeLiveReachable) {
+    if (!isCustomSandboxTarget && preUpgradeLiveReachable && handoffRes.status === 0 && postIntegrity.ok) {
       const postEnv = await detectEnvironment('auto');
       postLiveReport = await inspectLiveWindow(postEnv);
       if (!postLiveReport.reachable) {
@@ -4801,40 +4910,16 @@ async function runUpgrade() {
     if (handoffRes.status !== 0 || !postIntegrity.ok || !postLiveOk) {
       writeUpdateCheckCache(targetDir, preUpgradeCacheSnapshot);
       wrotePostUpgradeCache = false;
-      restoreInstallScriptBackup();
-      let rollbackOk = false;
-      const installedAfterFail = readInstalledCoreManifest(targetDir)?.version || null;
-      const postFailManifestSha = fs.existsSync(preUpgradeManifestPath) ? sha256File(preUpgradeManifestPath) : null;
-      const coreWasModified =
-        !postIntegrity.ok ||
-        installedAfterFail !== fromVersion ||
-        (preUpgradeManifestSha && postFailManifestSha !== preUpgradeManifestSha);
-      if (coreWasModified) {
-        try {
-          lock.setPhase?.('service_handoff');
-          const rbTarget = path.join(targetDir, 'install.mjs');
-          const rbArgs = [rbTarget, 'rollback', '--target-dir', targetDir];
-          if (!isCustomSandboxTarget) {
-            rbArgs.push('--register-service');
-            if (process.platform !== 'win32') {
-              rbArgs.push('--skip-service-restart');
-            }
-          }
-          const rbRes = spawnSync(process.execPath, rbArgs, { encoding: 'utf8', windowsHide: true });
-          rollbackOk = rbRes.status === 0;
-          if (rollbackOk && process.platform === 'win32') {
-            winDaemonStopped = false;
-          }
-        } catch {}
-      } else {
-        rollbackOk = true;
-      }
+      const rollbackOk = rollbackCoreAndInstallScriptIfModified();
       lock.setPhase?.('service_handoff');
       restoreWindowsDaemonIfNeeded();
+      const handoffSpawnErr = handoffRes.error ? String(handoffRes.error.message || handoffRes.error) : '';
       const failSummary =
         postLiveReason ||
+        (handoffRes.status !== 0 ? extractHandoffStderrSummary(handoffRes.stderr) : '') ||
+        handoffSpawnErr ||
         (!postIntegrity.ok ? 'Post-install core integrity verification failed' : '') ||
-        String(handoffRes.stderr || '').trim().split(/\r?\n/).pop() ||
+        extractHandoffStderrSummary(handoffRes.stderr) ||
         `Handoff exited with code ${handoffRes.status}`;
       writeLastUpgradeResult({
         ts: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'),
@@ -4935,29 +5020,23 @@ async function runUpgrade() {
     if (wrotePostUpgradeCache) {
       writeUpdateCheckCache(targetDir, preUpgradeCacheSnapshot);
     }
+    const rolledBack = rollbackCoreAndInstallScriptIfModified();
+    const errMsg = String(err?.message || err);
     try {
       lock.setPhase?.('service_handoff');
-      if (process.platform === 'win32' && !isCustomSandboxTarget) {
-        const realDaemon = path.join(targetDir, 'core', 'daemon.mjs');
-        const wrapperDaemon = path.join(os.homedir(), '.gemini', 'antigravity', 'scripts', 'antigravity-font-daemon.mjs');
-        const r = spawnSync('schtasks', ['/Run', '/TN', 'AntigravityThemeDaemon'], { stdio: 'ignore', windowsHide: true });
-        if (r.status !== 0) {
-          const entryScript = fs.existsSync(wrapperDaemon) ? wrapperDaemon : realDaemon;
-          if (fs.existsSync(entryScript)) {
-            const child = spawn(process.execPath, ['--disable-warning=ExperimentalWarning', entryScript], {
-              cwd: os.homedir(),
-              detached: true,
-              stdio: 'ignore',
-              windowsHide: true
-            });
-            child.unref();
-          }
-        }
-      }
+      restoreWindowsDaemonIfNeeded();
     } catch {}
+    writeLastUpgradeResult({
+      ts: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'),
+      ok: false,
+      fromVersion,
+      attemptedVersion: toVersion,
+      rolledBack,
+      error: errMsg.slice(0, 180)
+    });
     cleanupStaging();
     releaseLockOnce();
-    console.error(JSON.stringify({ ok: false, error: err?.message || String(err) }, null, 2));
+    console.error(JSON.stringify({ ok: false, rolledBack, error: errMsg }, null, 2));
     process.exit(1);
   }
 }

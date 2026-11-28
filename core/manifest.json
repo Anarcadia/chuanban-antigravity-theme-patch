@@ -11,20 +11,20 @@
   },
   "files": {
     "daemon.mjs": {
-      "sha256": "264cbf3f4b78fe5ae63a6d3c381ba4cc9d34d469adf4859abbc64df9c62382cf",
-      "bytes": 392719
+      "sha256": "e6b7289738593181bfde6e5d1c8e211494769308fe04b8774bc77540b7b92631",
+      "bytes": 392961
     },
     "runtime.js": {
-      "sha256": "fc1f6762550f967d55b66ae8a76b1fc082b05ce7b2160b044132c6152dc6e0d1",
-      "bytes": 495004
+      "sha256": "f2acf7bf9664148e144a39ce5a81de7705466d521e7b1e5b8ecf551c3232cb02",
+      "bytes": 496607
     },
     "theme.css": {
-      "sha256": "37c4fca4b13c69f01205f0d762eefbf8b54a8057992d0e0d127531e0aa0e4434",
-      "bytes": 178018
+      "sha256": "0b6353a891aa4921ce753649e7d4802bdd037bd1a957f65ec92d92e0abe1ba1d",
+      "bytes": 179939
     },
     "i18n.json": {
-      "sha256": "96cb6665c7dbf82c29135560a0a925df17c9fd5e007c4035ba4223ddfbc35a52",
-      "bytes": 147727
+      "sha256": "69abe1604b0d2ef743c327054002af55186e67628c77bffa3d261b13e6ac8d46",
+      "bytes": 147863
     }
   }
 }

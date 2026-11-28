@@ -5865,6 +5865,27 @@
       return href.startsWith('/c/') || href.startsWith('/p/');
     }
 
+    const MENU_SCOPED_SHORT_WORDS = new Set(['file', 'zoom']);
+    function isMenuScopedShortWordAllowed(word, el) {
+      const core = String(word || '')
+        .replace(/(?:\.{1,3}|\u2026|[:\uFF1A])+$/, '')
+        .trim()
+        .toLowerCase();
+      if (!MENU_SCOPED_SHORT_WORDS.has(core)) return true;
+      if (Array.isArray(boot.i18nOverrideKeys)) {
+        for (let i = 0; i < boot.i18nOverrideKeys.length; i++) {
+          if (String(boot.i18nOverrideKeys[i] || '').trim().toLowerCase() === core) return true;
+        }
+      }
+      if (IS_SWARM_PLUGIN_FRAME) return true;
+      if (!el || !el.closest) return false;
+      return Boolean(
+        el.closest(
+          'button, [role="button"], [role="menu"], [role="menuitem"], [role="menubar"], [role="toolbar"], [data-testid^="app-logo-menu"], [data-testid^="title-menu-bar"], .segmented, header, nav'
+        )
+      );
+    }
+
     function computeTextTranslation(raw, contextEl, textNode = null) {
       if (!raw) return null;
       const trimmed = raw.trim();
@@ -5872,8 +5893,9 @@
       if (isUserEntityBreadcrumbText(contextEl)) return null;
 
       // 1. 无原型静态词典 O(1) 精确匹配（附句尾句号自动回退；函数式 replace 防止 $&/$1 二次展开）
-      let replacement = dictLookup(trimmed);
-      if (typeof replacement !== 'string' && trimmed.endsWith('.')) {
+      const scopedShortOk = isMenuScopedShortWordAllowed(trimmed, contextEl);
+      let replacement = scopedShortOk ? dictLookup(trimmed) : undefined;
+      if (scopedShortOk && typeof replacement !== 'string' && trimmed.endsWith('.')) {
         const withoutDot = dictLookup(trimmed.slice(0, -1));
         if (typeof withoutDot === 'string') {
           replacement = withoutDot.endsWith('。') ? withoutDot : withoutDot + '。';
@@ -6585,7 +6607,7 @@
         ? null
         : customResolver
         ? customResolver(trimmed, el)
-        : typeof dictLookup(trimmed) === 'string'
+        : isMenuScopedShortWordAllowed(trimmed, el) && typeof dictLookup(trimmed) === 'string'
         ? dictLookup(trimmed)
         : null;
       if (typeof nextVal === 'string') {
@@ -6606,8 +6628,16 @@
     }
 
     function resolveAttrTranslation(atrim, el) {
-      const directHit = dictLookup(atrim);
+      const directHit = isMenuScopedShortWordAllowed(atrim, el) ? dictLookup(atrim) : undefined;
       if (typeof directHit === 'string') return directHit;
+      if (atrim.length < 160 && /\u2014\s*restore split view$/i.test(atrim)) {
+        const mRestoreSplit = atrim.match(/^(.+?)\s*\u2014\s*restore split view$/i);
+        if (mRestoreSplit) {
+          const lblRaw = mRestoreSplit[1].trim();
+          const lblZh = dictLookup(lblRaw) || computeTextTranslation(lblRaw, el) || lblRaw;
+          return lblZh + ' — 恢复分屏视图';
+        }
+      }
       const mModel = atrim.match(RE_ARIA_MODEL);
       if (mModel) {
         let mName = mModel[1].trim();
@@ -9774,7 +9804,7 @@
               if (!(t instanceof Element) || t.closest('[data-ag-token-ui]')) return;
               if (
                 t.closest(
-                  '[data-testid="settings-search-input"], button[aria-label="Clear search"], button[aria-label="清空搜索"], [data-testid="settings-app-version-copy"], [data-testid="settings-app-version-caption"], [data-testid="settings-upload-debug-bundle-button"]'
+                  '[data-testid="settings-search-input"], button[aria-label="Clear search"], button[aria-label="清除搜索"], button[aria-label="清空搜索"], button[data-ag-orig-aria-label="Clear search"], [data-testid="settings-app-version-copy"], [data-testid="settings-app-version-caption"], [data-testid="settings-upload-debug-bundle-button"]'
                 )
               ) {
                 return;

@@ -1077,13 +1077,32 @@ html:not([data-ag-preset="absolutely"]):not([data-ag-theme-mode="dark"]) body:no
   color: #2C535E !important;
 }
 
-html[data-ag-preset="absolutely"]:not([data-ag-theme-mode="dark"]) body:not(.dark) [data-testid="agent-message-bubble"] :is([data-markdown-root], .select-text, .prose, .markdown) :not(pre) > code {
-  background-color: rgba(154, 71, 50, 0.08) !important;
-  border: 1px solid rgba(154, 71, 50, 0.18) !important;
+/* 2.36.0 boxed 气泡通过 Tailwind v4 @layer utilities 挂载 !bg-background/70 与 ring-1（Cascade L5 中分层 !important 高于未分层 !important），需在更早声明的 @layer base 内用 !important 覆盖四套主题底色；同时开放 --ag-bubble-inline-code-bg / --ag-bubble-inline-code-border / --ag-bubble-code-surface-bg 变量供 user/custom.css 免分层覆写 */
+html:not([data-ag-preset="native"]) [data-testid="agent-message-bubble"] :is([data-markdown-root], .select-text, .prose, .markdown) :not(pre) > code {
+  box-shadow: none !important;
 }
 
-html:not([data-ag-preset="native"]) [data-testid="agent-message-bubble"] .md-code-surface {
-  background-color: var(--card) !important;
+@layer base {
+  html:not([data-ag-preset="native"]):not([data-ag-preset="absolutely"]):not([data-ag-theme-mode="dark"]) body:not(.dark) [data-testid="agent-message-bubble"] :is([data-markdown-root], .select-text, .prose, .markdown) :not(pre) > code {
+    background-color: var(--ag-bubble-inline-code-bg, rgba(63, 110, 122, 0.085)) !important;
+  }
+
+  html[data-ag-preset="absolutely"]:not([data-ag-theme-mode="dark"]) body:not(.dark) [data-testid="agent-message-bubble"] :is([data-markdown-root], .select-text, .prose, .markdown) :not(pre) > code {
+    background-color: var(--ag-bubble-inline-code-bg, rgba(154, 71, 50, 0.08)) !important;
+    border: var(--ag-bubble-inline-code-border, 1px solid rgba(154, 71, 50, 0.18)) !important;
+  }
+
+  :is(html:not([data-ag-preset="native"])[data-ag-theme-mode="dark"] body, html:not([data-ag-preset="native"]) body.dark, html:not([data-ag-preset="native"]) body.theme-dark) [data-testid="agent-message-bubble"] :is([data-markdown-root], .select-text, .prose, .markdown) :not(pre) > code {
+    background-color: var(--ag-bubble-inline-code-bg, rgba(122, 166, 178, 0.11)) !important;
+  }
+
+  :is(html[data-ag-dark-preset="claude-warm"]:not([data-ag-preset="native"])[data-ag-theme-mode="dark"] body, html[data-ag-dark-preset="claude-warm"]:not([data-ag-preset="native"]) body.dark, html[data-ag-dark-preset="claude-warm"]:not([data-ag-preset="native"]) body.theme-dark) [data-testid="agent-message-bubble"] :is([data-markdown-root], .select-text, .prose, .markdown) :not(pre) > code {
+    background-color: var(--ag-bubble-inline-code-bg, rgba(217, 119, 87, 0.12)) !important;
+  }
+
+  html:not([data-ag-preset="native"]) [data-testid="agent-message-bubble"] .md-code-surface {
+    background-color: var(--ag-bubble-code-surface-bg, var(--card)) !important;
+  }
 }
 
 html:not([data-ag-preset="absolutely"]):not([data-ag-theme-mode="dark"]) body:not(.dark) :is(a.inline-pill[href^="file:"], a.inline-pill[href^="vscode-"], .inline-pill[data-uri^="file:"], .inline-pill[data-uri^="vscode-"]) {
