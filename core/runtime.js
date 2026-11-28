@@ -591,6 +591,13 @@
           `html[data-ag-os][data-ag-wax-seal]:not([data-ag-disabled])[data-ag-theme-mode="dark"], html[data-ag-os][data-ag-wax-seal]:not([data-ag-disabled])[data-ag-theme-mode="dark"] body, html[data-ag-os][data-ag-wax-seal]:not([data-ag-disabled]) body.dark { ${darkDecls.join(' ')} }`
         );
       }
+      if (DETECTED_OS === 'win32') {
+        const winZeroInk =
+          '--ag-ink-shadow-xs: none !important; --ag-ink-shadow-sm: none !important; --ag-ink-shadow-md: none !important; --ag-ink-shadow-prose: none !important; --ag-ink-shadow-prose-bold: none !important;';
+        blocks.push(
+          `html[data-ag-os="win32"]:is(*, [data-ag-wax-seal]):not([data-ag-disabled])[data-ag-preset="meadow"]:not([data-ag-theme-mode="dark"]), html[data-ag-os="win32"]:is(*, [data-ag-wax-seal]):not([data-ag-disabled])[data-ag-preset="meadow"]:not([data-ag-theme-mode="dark"]) body:not(.dark):not(.theme-dark), html[data-ag-os="win32"]:is(*, [data-ag-wax-seal]):not([data-ag-disabled])[data-ag-dark-preset="forest-night"]:not([data-ag-preset="native"])[data-ag-theme-mode="dark"], html[data-ag-os="win32"]:is(*, [data-ag-wax-seal]):not([data-ag-disabled])[data-ag-dark-preset="forest-night"]:not([data-ag-preset="native"])[data-ag-theme-mode="dark"] body, html[data-ag-os="win32"]:is(*, [data-ag-wax-seal]):not([data-ag-disabled])[data-ag-dark-preset="forest-night"]:not([data-ag-preset="native"]) body.dark, html[data-ag-os="win32"]:is(*, [data-ag-wax-seal]):not([data-ag-disabled])[data-ag-dark-preset="forest-night"]:not([data-ag-preset="native"]) body.theme-dark { ${winZeroInk} }`
+        );
+      }
       const nextCss = blocks.join('\n');
       if (varStyle.textContent !== nextCss) {
         varStyle.textContent = nextCss;

@@ -1303,13 +1303,13 @@ html[data-ag-os="darwin"] :is(
   text-shadow: var(--ag-ink-shadow-prose-bold);
 }
 
-/* Windows (win32) 专属铁律：草墨石砚与幽林深色严格禁用一切晕墨阴影（含阻断 user/config.json 变量覆盖与子元素残留） */
-html[data-ag-os="win32"][data-ag-preset="meadow"]:not([data-ag-theme-mode="dark"]),
-html[data-ag-os="win32"][data-ag-preset="meadow"]:not([data-ag-theme-mode="dark"]) body:not(.dark):not(.theme-dark),
-html[data-ag-os="win32"][data-ag-dark-preset="forest-night"]:not([data-ag-preset="native"])[data-ag-theme-mode="dark"],
-html[data-ag-os="win32"][data-ag-dark-preset="forest-night"]:not([data-ag-preset="native"])[data-ag-theme-mode="dark"] body,
-html[data-ag-os="win32"][data-ag-dark-preset="forest-night"]:not([data-ag-preset="native"]) body.dark,
-html[data-ag-os="win32"][data-ag-dark-preset="forest-night"]:not([data-ag-preset="native"]) body.theme-dark {
+/* Windows (win32) 专属铁律：草墨石砚与幽林深色严格禁用一切晕墨阴影（高权重压过 #ag-user-theme-vars 自定义变量覆盖并覆盖全部 UI/正文子选择器） */
+html[data-ag-os="win32"]:is(*, [data-ag-wax-seal]):not([data-ag-disabled])[data-ag-preset="meadow"]:not([data-ag-theme-mode="dark"]),
+html[data-ag-os="win32"]:is(*, [data-ag-wax-seal]):not([data-ag-disabled])[data-ag-preset="meadow"]:not([data-ag-theme-mode="dark"]) body:not(.dark):not(.theme-dark),
+html[data-ag-os="win32"]:is(*, [data-ag-wax-seal]):not([data-ag-disabled])[data-ag-dark-preset="forest-night"]:not([data-ag-preset="native"])[data-ag-theme-mode="dark"],
+html[data-ag-os="win32"]:is(*, [data-ag-wax-seal]):not([data-ag-disabled])[data-ag-dark-preset="forest-night"]:not([data-ag-preset="native"])[data-ag-theme-mode="dark"] body,
+html[data-ag-os="win32"]:is(*, [data-ag-wax-seal]):not([data-ag-disabled])[data-ag-dark-preset="forest-night"]:not([data-ag-preset="native"]) body.dark,
+html[data-ag-os="win32"]:is(*, [data-ag-wax-seal]):not([data-ag-disabled])[data-ag-dark-preset="forest-night"]:not([data-ag-preset="native"]) body.theme-dark {
   --ag-ink-shadow-xs: none !important;
   --ag-ink-shadow-sm: none !important;
   --ag-ink-shadow-md: none !important;
@@ -1323,7 +1323,7 @@ html[data-ag-os="win32"] :is(
   html[data-ag-dark-preset="forest-night"]:not([data-ag-preset="native"])[data-ag-theme-mode="dark"] body,
   html[data-ag-dark-preset="forest-night"]:not([data-ag-preset="native"]) body.dark,
   html[data-ag-dark-preset="forest-night"]:not([data-ag-preset="native"]) body.theme-dark
-) :is([data-markdown-root], [data-markdown-root] *, [data-testid="user-message-content"], [data-testid="user-message-content"] *, .agy-user-bubble, .agy-user-bubble *, .agy-composer-footer, .agy-sidebar-row, [role="menu"], [role="listbox"], [role="dialog"]) {
+) :is([data-markdown-root], [data-markdown-root] *, [data-testid="user-message-content"], [data-testid="user-message-content"] *, .agy-user-bubble, .agy-user-bubble *, .agy-composer-footer, .agy-composer-footer :is(button, span, [class*="text-secondary-foreground"]), [data-testid="input-box-bottom-toolbar"], [data-testid="input-box-bottom-toolbar"] :is(button, span, [class*="text-secondary-foreground"]), #antigravity\.agentSidePanelInputBox > :not(.surface-composer-card) :is(button, span), [id="antigravity.agentSidePanelInputBox"] > :not(.surface-composer-card) :is(button, span), #antigravity\.agentSidePanelInputBox .surface-composer-card .border-b :is(button, span), [id="antigravity.agentSidePanelInputBox"] .surface-composer-card .border-b :is(button, span), .agy-sidebar-row, .bg-sidebar :is(a, button, span, [class*="truncate"], [class*="text-sm"], [class*="text-xs"]), aside :is(a, button, span), button[data-testid="project-header"], button[data-testid="project-header"] span, button[data-project-card="true"], button[data-project-card="true"] span, [data-project-label], [data-subtext] span, [data-testid="conversation-row-sidebar"], [data-testid="conversation-row-sidebar"] span, [data-testid="conversation-row-history"], [data-testid="conversation-row-history"] span, [role="menu"], [role="menuitem"], [role="listbox"], [role="option"], [role="dialog"], [role="dialog"] span) {
   text-shadow: none !important;
 }
 
@@ -2826,6 +2826,15 @@ html[data-ag-dark-preset="forest-night"]:not([data-ag-preset="native"]) body.dar
   box-shadow: 0 0 0 2.5px rgba(116, 207, 123, 0.24);
 }
 
+html[data-ag-preset="meadow"]:not([data-ag-theme-mode="dark"]) [data-ag-patch-update-row="1"][data-ag-update-state="available"] {
+  background: linear-gradient(90deg, rgba(88, 168, 80, 0.085), transparent 72%);
+}
+
+html[data-ag-dark-preset="forest-night"]:not([data-ag-preset="native"])[data-ag-theme-mode="dark"] [data-ag-patch-update-row="1"][data-ag-update-state="available"],
+html[data-ag-dark-preset="forest-night"]:not([data-ag-preset="native"]) body.dark [data-ag-patch-update-row="1"][data-ag-update-state="available"] {
+  background: linear-gradient(90deg, rgba(92, 184, 112, 0.11), transparent 72%);
+}
+
 html[data-ag-preset="meadow"]:not([data-ag-theme-mode="dark"]) .ag-patch-ver-badge,
 html[data-ag-preset="meadow"]:not([data-ag-theme-mode="dark"]) .ag-patch-ver-badge.is-available {
   border-color: #C6E8C1;
@@ -2855,6 +2864,11 @@ html[data-ag-dark-preset="forest-night"]:not([data-ag-preset="native"])[data-ag-
 html[data-ag-dark-preset="forest-night"]:not([data-ag-preset="native"]) body.dark .ag-patch-update-btn--primary {
   background: #469155;
   color: #F7FBF7;
+}
+
+html[data-ag-dark-preset="forest-night"]:not([data-ag-preset="native"])[data-ag-theme-mode="dark"] .ag-patch-update-btn--primary:hover:not(:disabled),
+html[data-ag-dark-preset="forest-night"]:not([data-ag-preset="native"]) body.dark .ag-patch-update-btn--primary:hover:not(:disabled) {
+  background: #54A364;
 }
 
 .ag-patch-update-btn--ghost {
@@ -3487,6 +3501,7 @@ html[data-ag-preset^="claude-desktop"]:not([data-ag-theme-mode="dark"]) body:not
   stroke: #D97757 !important;
 }
 
+html[data-ag-preset="meadow"]:not([data-ag-theme-mode="dark"]) body:not(.dark):not(.theme-dark) :is(#antigravity\.agentSidePanelInputBox, [id="antigravity.agentSidePanelInputBox"]) :is(#ag-live-metrics-pill, .ag-live-metrics-pill) .ag-sub-badge,
 html[data-ag-preset="meadow"]:not([data-ag-theme-mode="dark"]) body:not(.dark):not(.theme-dark) :is(#ag-live-metrics-pill, .ag-live-metrics-pill) .ag-sub-badge {
   background-color: #EAF7E7 !important;
   border-color: #BEE5B8 !important;
@@ -3505,6 +3520,7 @@ html[data-ag-preset="meadow"]:not([data-ag-theme-mode="dark"]) body:not(.dark):n
   stroke: #386B4B !important;
 }
 
+html[data-ag-preset="meadow"]:not([data-ag-theme-mode="dark"]) body:not(.dark):not(.theme-dark) :is(#antigravity\.agentSidePanelInputBox, [id="antigravity.agentSidePanelInputBox"]) :is(#ag-live-metrics-pill, .ag-live-metrics-pill) :is(.ag-ctx-warn, .ag-zh-warn-dot),
 html[data-ag-preset="meadow"]:not([data-ag-theme-mode="dark"]) body:not(.dark):not(.theme-dark) :is(#ag-live-metrics-pill, .ag-live-metrics-pill) :is(.ag-ctx-warn, .ag-zh-warn-dot) {
   color: #386B4B !important;
 }
@@ -3514,10 +3530,25 @@ html[data-ag-preset="meadow"]:not([data-ag-theme-mode="dark"]) body:not(.dark):n
   border-left-color: #2E372F !important;
 }
 
+:is(html[data-ag-dark-preset="forest-night"]:not([data-ag-preset="native"])[data-ag-theme-mode="dark"] body, html[data-ag-dark-preset="forest-night"]:not([data-ag-preset="native"]) body.dark) :is(#ag-live-metrics-pill, .ag-live-metrics-pill):hover,
+:is(html[data-ag-dark-preset="forest-night"]:not([data-ag-preset="native"])[data-ag-theme-mode="dark"] body, html[data-ag-dark-preset="forest-night"]:not([data-ag-preset="native"]) body.dark) :is(#ag-live-metrics-pill, .ag-live-metrics-pill):hover :is(#ag-live-metrics-text, .ag-live-metrics-text) {
+  color: #F5FAF5 !important;
+}
+
+:is(html[data-ag-dark-preset="forest-night"]:not([data-ag-preset="native"])[data-ag-theme-mode="dark"] body, html[data-ag-dark-preset="forest-night"]:not([data-ag-preset="native"]) body.dark) :is(#ag-live-metrics-pill, .ag-live-metrics-pill)[data-ag-row-mode="bottom"] {
+  border-top-color: #2E372F !important;
+}
+
+:is(html[data-ag-dark-preset="forest-night"]:not([data-ag-preset="native"])[data-ag-theme-mode="dark"] body, html[data-ag-dark-preset="forest-night"]:not([data-ag-preset="native"]) body.dark) :is(#antigravity\.agentSidePanelInputBox, [id="antigravity.agentSidePanelInputBox"]) :is(#ag-live-metrics-pill, .ag-live-metrics-pill) .ag-sub-badge,
 :is(html[data-ag-dark-preset="forest-night"]:not([data-ag-preset="native"])[data-ag-theme-mode="dark"] body, html[data-ag-dark-preset="forest-night"]:not([data-ag-preset="native"]) body.dark) :is(#ag-live-metrics-pill, .ag-live-metrics-pill) .ag-sub-badge {
   background-color: #1E3324 !important;
   border-color: #3C6347 !important;
   color: #B2ECC3 !important;
+}
+
+:is(html[data-ag-dark-preset="forest-night"]:not([data-ag-preset="native"])[data-ag-theme-mode="dark"] body, html[data-ag-dark-preset="forest-night"]:not([data-ag-preset="native"]) body.dark) :is(#antigravity\.agentSidePanelInputBox, [id="antigravity.agentSidePanelInputBox"]) :is(#ag-live-metrics-pill, .ag-live-metrics-pill) :is(.ag-ctx-warn, .ag-zh-warn-dot),
+:is(html[data-ag-dark-preset="forest-night"]:not([data-ag-preset="native"])[data-ag-theme-mode="dark"] body, html[data-ag-dark-preset="forest-night"]:not([data-ag-preset="native"]) body.dark) :is(#ag-live-metrics-pill, .ag-live-metrics-pill) :is(.ag-ctx-warn, .ag-zh-warn-dot) {
+  color: #74CF7B !important;
 }
 
 :is(html[data-ag-dark-preset="forest-night"]:not([data-ag-preset="native"])[data-ag-theme-mode="dark"] body, html[data-ag-dark-preset="forest-night"]:not([data-ag-preset="native"]) body.dark) :is(#ag-live-metrics-pill, .ag-live-metrics-pill) .ag-ctx-ring-track {
@@ -3537,6 +3568,10 @@ html[data-ag-preset="meadow"]:not([data-ag-theme-mode="dark"]) body:not(.dark):n
 
 :is(html[data-ag-theme-mode="dark"] body, body.dark) :is(#ag-live-metrics-pill, .ag-live-metrics-pill) .ag-ctx-ring.ag-ctx-warn .ag-ctx-ring-fill {
   stroke: #D6B475 !important;
+}
+
+:is(html[data-ag-dark-preset="forest-night"]:not([data-ag-preset="native"])[data-ag-theme-mode="dark"] body, html[data-ag-dark-preset="forest-night"]:not([data-ag-preset="native"]) body.dark) :is(#ag-live-metrics-pill, .ag-live-metrics-pill) .ag-ctx-ring.ag-ctx-warn .ag-ctx-ring-fill {
+  stroke: #5CB870 !important;
 }
 
 :is(html[data-ag-theme-mode="dark"] body, body.dark) :is(#ag-live-metrics-pill, .ag-live-metrics-pill) .ag-ctx-ring.ag-ctx-crit .ag-ctx-ring-fill {
